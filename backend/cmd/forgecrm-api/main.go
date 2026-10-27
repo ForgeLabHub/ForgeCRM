@@ -22,24 +22,16 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/geff1778/forgecrm/internal/ai"
 	"github.com/geff1778/forgecrm/internal/api"
 	"github.com/geff1778/forgecrm/internal/audit"
 	"github.com/geff1778/forgecrm/internal/authn"
 	"github.com/geff1778/forgecrm/internal/config"
-	"github.com/geff1778/forgecrm/internal/crm"
 	"github.com/geff1778/forgecrm/internal/database"
-	"github.com/geff1778/forgecrm/internal/events"
-	"github.com/geff1778/forgecrm/internal/importx"
-	"github.com/geff1778/forgecrm/internal/integrations"
-	"github.com/geff1778/forgecrm/internal/jobs"
 	"github.com/geff1778/forgecrm/internal/logging"
 	"github.com/geff1778/forgecrm/internal/migrate"
-	"github.com/geff1778/forgecrm/internal/migratex"
-	"github.com/geff1778/forgecrm/internal/notify"
-	"github.com/geff1778/forgecrm/internal/outbox"
 	"github.com/geff1778/forgecrm/internal/rbac"
 	"github.com/geff1778/forgecrm/internal/secrets"
+	"github.com/geff1778/forgecrm/internal/wiring"
 )
 
 // version is overridden at build time with -ldflags.
@@ -119,7 +111,7 @@ func run() error {
 		return bootstrapAdmin(ctx, db, keyring, cfg, log, *bootstrapEmail)
 	}
 
-	services, err := buildServices(cfg, db, keyring, log)
+	services, err := wiring.Build(cfg, db, keyring, log)
 	if err != nil {
 		return err
 	}
@@ -129,21 +121,21 @@ func run() error {
 		Log:          log,
 		DB:           db,
 		Keyring:      keyring,
-		Audit:        services.audit,
-		Auth:         services.auth,
-		RBAC:         services.rbac,
-		CRM:          services.crm,
-		Jobs:         services.jobs,
-		Outbox:       services.outbox,
-		Imports:      services.imports,
-		Migrations:   services.migrations,
-		Integrations: services.integrations,
-		Events:       services.events,
-		Dispatcher:   services.dispatcher,
-		Email:        services.email,
-		Telegram:     services.telegram,
-		AI:           services.ai,
-		Tools:        services.tools,
+		Audit:        services.Audit,
+		Auth:         services.Auth,
+		RBAC:         services.RBAC,
+		CRM:          services.CRM,
+		Jobs:         services.Jobs,
+		Outbox:       services.Outbox,
+		Imports:      services.Imports,
+		Migrations:   services.Migrations,
+		Integrations: services.Integrations,
+		Events:       services.Events,
+		Dispatcher:   services.Dispatcher,
+		Email:        services.Email,
+		Telegram:     services.Telegram,
+		AI:           services.AI,
+		Tools:        services.Tools,
 		StartedAt:    time.Now(),
 		Version:      version,
 		BuildCommit:  commit,
@@ -186,57 +178,6 @@ func run() error {
 	}
 	log.Info("shutdown complete")
 	return nil
-}
-
-// services bundles the constructed dependencies.
-type services struct {
-	audit        *audit.Logger
-	auth         *authn.Service
-	rbac         *rbac.Service
-	crm          *crm.Service
-	jobs         *jobs.Queue
-	outbox       *outbox.Store
-	imports      *importx.Service
-	migrations   *migratex.Service
-	integrations *integrations.Hub
-	events       *events.Gateway
-	dispatcher   *events.Dispatcher
-	email        *notify.EmailService
-	telegram     *notify.TelegramService
-	ai           *ai.Service
-	tools        *ai.ToolRegistry
-}
-
-func buildServices(cfg *config.Config, db *database.DB, keyring *secrets.Keyring,
-	log *slog.Logger) (*services, error) {
-
-	auditLog := audit.New(db)
-	rbacSvc := rbac.NewService(db)
-	crmSvc := crm.NewService(db, auditLog, outbox.NewStore(db))
-	queue := jobs.NewQueue(db, log)
-
-	imports, err := importx.NewService(db, cfg, auditLog, outbox.NewStore(db), crmSvc, queue, cfg.ImportStorageDir)
-	if err != nil {
-		return nil, fmt.Errorf("initialise the import service: %w", err)
-	}
-
-	return &services{
-		audit:        auditLog,
-		auth:         authn.NewService(db, cfg, keyring, auditLog, rbacSvc),
-		rbac:         rbacSvc,
-		crm:          crmSvc,
-		jobs:         queue,
-		outbox:       outbox.NewStore(db),
-		imports:      imports,
-		migrations:   migratex.NewService(db, auditLog, keyring),
-		integrations: integrations.NewHub(db, auditLog, keyring),
-		events:       events.NewGateway(db, auditLog),
-		dispatcher:   events.NewDispatcher(db, auditLog),
-		email:        notify.NewEmailService(&cfg.Email, db, log),
-		telegram:     notify.NewTelegramService(&cfg.Telegram, db, log, auditLog, keyring),
-		ai:           ai.NewService(&cfg.AI, db, auditLog),
-		tools:        ai.NewToolRegistry(crmSvc, auditLog),
-	}, nil
 }
 
 // bootstrapAdmin creates the first platform administrator.
