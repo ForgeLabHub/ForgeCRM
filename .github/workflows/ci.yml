@@ -89,6 +89,38 @@ jobs:
           /tmp/forgecrm-api -migrate
           /tmp/forgecrm-api -migrate   # a second run must be a no-op
 
+  frontend:
+    name: Frontend (lint, typecheck, test, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # `npm ci` installs exactly the locked tree, so CI cannot silently pass on
+      # a different dependency version than a developer has.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
   security:
     name: Security (dependencies, secrets, static analysis)
     runs-on: ubuntu-latest
@@ -160,6 +192,7 @@ jobs:
             docs/ARCHITECTURE.md
             docs/ROADMAP.md
             docs/ACCEPTANCE_CRITERIA.md
+            docs/development/frontend.md
           )
           for f in "${required[@]}"; do
             if [[ -s "${f}" ]]; then

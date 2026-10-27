@@ -12,24 +12,28 @@ integration enabled. Every integration is opt-in and configurable.
 ## Status
 
 Under active development on the `feat/platform-foundation` branch. The backend,
-database schema and Import Center are implemented and verified against a real
-PostgreSQL instance. The web administration panel is not built yet; the API is the
-current interface.
+database schema, Import Center and the web interface are implemented and verified
+against a real PostgreSQL instance.
 
-Verified today (see [docs/PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md) for evidence):
+Verified (see [docs/PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md) for evidence):
 
 | Area | State |
 | --- | --- |
-| Go API, migrations, PostgreSQL schema | Working, 5 migrations applied |
+| Go API, migrations, PostgreSQL schema | Working, 6 migrations applied |
 | Authentication, sessions, CSRF, TOTP | Working |
-| RBAC: 80 permissions, 28 role records | Working, enforcement verified |
+| RBAC: 81 permissions, 28 role records | Working, enforcement verified |
 | Audit log and security events | Working |
 | CRM entities (contacts, accounts, deals, tasks, tickets, ...) | Working |
 | Import Center: CSV, TSV, JSON, JSONL, XLSX, XML, archives | Working |
 | Background jobs and transactional outbox | Working |
+| Web interface: sign-in, CRM, Import Center, administration | Working, verified in a browser |
 | Docker Compose deployment | Verified end to end |
-| Web administration panel | Not started |
 | AI and MCP layer | Backend only, no UI |
+
+The web interface covers sign-in with second factor, the CRM workspace, the Import
+Center including the mapping wizard, integrations, events and webhooks, background
+jobs, and the administration pages for users, roles, organizations, teams, email,
+Telegram, audit, security and diagnostics.
 
 ## Quick start
 
@@ -74,6 +78,7 @@ host environment first.
 - [Architecture](docs/ARCHITECTURE.md) - module boundaries and data flow
 - [Roadmap](docs/ROADMAP.md) - staged plan
 - [Acceptance criteria](docs/ACCEPTANCE_CRITERIA.md) - definition of done
+- [Frontend development](docs/development/frontend.md) - stack, layout, checks
 - [Deployment](docs/deployment/) - configuration and production checklist
 - [Operations](docs/operations/) - backup, restore, troubleshooting
 
@@ -98,6 +103,10 @@ backend/            Go API and worker
     ai/             model provider abstraction
     migrate/        schema migrations
     database/       connection pool and transactions
+frontend/           React + TypeScript web interface (Vite)
+  src/api/          one module per backend area, plus the HTTP client
+  src/components/   shell, table list, permission gate, primitives
+  src/pages/        one file per route; admin pages in pages/admin/
 deploy/             reverse proxy configuration
 docs/               architecture, security, operations
 scripts/            setup, migrate, backup, restore, smoke test
@@ -118,6 +127,14 @@ Integration tests run against a real database:
 ```bash
 FORGECRM_TEST_DATABASE_URL='postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_test?sslmode=disable' \
   go test -tags=integration ./...
+```
+
+The frontend has its own checks:
+
+```bash
+cd frontend
+npm ci
+npm run typecheck && npm run lint && npm run test && npm run build
 ```
 
 ## License

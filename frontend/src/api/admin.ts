@@ -1,0 +1,102 @@
+/** Administration: users' roles, teams, organizations, audit and diagnostics. */
+import { api, type ListResponse, type PaginationParams } from './client'
+import type {
+  AuditEntry,
+  Capabilities,
+  Job,
+  Permission,
+  Role,
+  SecurityEvent,
+  Session,
+  SystemInfo,
+  Team,
+  User,
+} from '../types/api'
+
+export interface OrganizationRow {
+  id: string
+  name: string
+  slug: string
+  status: string
+  created_at: string
+}
+
+export interface TeamRow {
+  id: string
+  name: string
+  description?: string
+  created_at: string
+  member_count: number
+}
+
+export const rolesApi = {
+  list: () => api.get<{ items: Role[] }>('/api/v1/roles'),
+  permissions: () => api.get<{ items: Permission[] }>('/api/v1/roles/permissions'),
+  create: (body: { key: string; name: string; description?: string }) =>
+    api.post<Role>('/api/v1/roles', body),
+  setPermissions: (id: string, permissions: string[]) =>
+    api.put<Role>(`/api/v1/roles/${id}/permissions`, { permissions }),
+}
+
+export const organizationsApi = {
+  list: () => api.get<{ items: OrganizationRow[] }>('/api/v1/organizations'),
+  create: (body: { name: string; slug: string }) =>
+    api.post<OrganizationRow>('/api/v1/organizations', body),
+}
+
+export const teamsApi = {
+  list: () => api.get<{ items: TeamRow[] }>('/api/v1/teams'),
+  create: (body: { name: string; description?: string }) => api.post<Team>('/api/v1/teams', body),
+  addMember: (id: string, userId: string) =>
+    api.post(`/api/v1/teams/${id}/members`, { user_id: userId }),
+}
+
+export const auditApi = {
+  list: (params?: PaginationParams & { action?: string; actor_user_id?: string; from?: string; to?: string }) =>
+    api.get<ListResponse<AuditEntry>>('/api/v1/audit', params),
+  securityEvents: (params?: PaginationParams & { type?: string; from?: string; to?: string }) =>
+    api.get<ListResponse<SecurityEvent>>('/api/v1/security-events', params),
+}
+
+export interface LogLine {
+  time: string
+  level: string
+  component?: string
+  message: string
+  actor_user_id?: string
+  organization_id?: string
+  correlation_id?: string
+}
+
+export const diagnosticsApi = {
+  logs: (params?: PaginationParams & { level?: string; component?: string; from?: string; to?: string }) =>
+    api.get<ListResponse<LogLine>>('/api/v1/admin/logs', params),
+  metrics: () => api.get<Record<string, unknown>>('/api/v1/admin/metrics'),
+  diagnostics: () => api.get<Record<string, unknown>>('/api/v1/admin/diagnostics'),
+  settings: () => api.get<{ items: Record<string, { value: unknown; updated_at: string }> }>(
+    '/api/v1/admin/settings',
+  ),
+  updateSetting: (key: string, value: unknown) =>
+    api.put(`/api/v1/admin/settings`, { key, value }),
+}
+
+export const systemApi = {
+  info: () => api.get<SystemInfo>('/api/v1/system/info'),
+  capabilities: () => api.get<Capabilities>('/api/v1/system/capabilities'),
+}
+
+export const jobsApi = {
+  list: (params?: PaginationParams & { kind?: string; status?: string }) =>
+    api.get<ListResponse<Job>>('/api/v1/jobs', params),
+  stats: () => api.get<Record<string, number>>('/api/v1/jobs/stats'),
+  get: (id: string) => api.get<Job>(`/api/v1/jobs/${id}`),
+  cancel: (id: string) => api.post(`/api/v1/jobs/${id}/cancel`),
+  retry: (id: string) => api.post(`/api/v1/jobs/${id}/retry`),
+}
+
+export const sessionsApi = {
+  list: () => api.get<ListResponse<Session>>('/api/v1/auth/sessions'),
+  revoke: (id: string) => api.delete(`/api/v1/auth/sessions/${id}`),
+}
+
+export type { User }

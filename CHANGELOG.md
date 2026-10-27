@@ -10,6 +10,21 @@ once it reaches 1.0.
 
 ### Added
 
+- **Web interface.** React 19 + TypeScript single-page application built with Vite,
+  served by the same Nginx instance as the API so every request stays same-origin.
+  Covers sign-in with second-factor verification, the CRM workspace (accounts,
+  contacts, leads, deals, tasks, support tickets, reports), the Import Center with
+  the field-mapping wizard, integrations, migrations, events and webhooks,
+  background jobs, the AI and MCP status page, and the administration pages for
+  users, roles, organizations, teams, email, Telegram, audit, security and
+  diagnostics. Authorisation is enforced by the server on every request; the
+  interface only decides what to show.
+- **Frontend tests.** 31 Vitest tests covering the HTTP client (CSRF handling,
+  error envelopes, session expiry), the paginated list component and the
+  permission gate and sign-in flow. `fetch` is stubbed at the boundary so the
+  client, auth context and components all run for real.
+- **ESLint flat configuration** for the frontend, wired into the checks above.
+
 - **Platform foundation.** Go API and worker with PostgreSQL, `chi` routing, `pgx`
   connection pooling, structured logging, request correlation and graceful shutdown.
 - **Schema and migrations.** Five migrations covering platform, CRM, platform modules,
