@@ -1,0 +1,15 @@
+DROP TABLE IF EXISTS ai_tasks;
+DROP TABLE IF EXISTS ai_providers;
+DROP TABLE IF EXISTS telegram_links;
+DROP TABLE IF EXISTS email_log;
+DROP TABLE IF EXISTS webhook_deliveries;
+DROP TABLE IF EXISTS webhook_subscriptions;
+DROP TABLE IF EXISTS events_inbox;
+DROP TABLE IF EXISTS integration_runs;
+DROP TABLE IF EXISTS integrations;
+DROP TABLE IF EXISTS migration_reconciliations;
+DROP TABLE IF EXISTS migration_jobs;
+DROP TABLE IF EXISTS export_jobs;
+DROP TABLE IF EXISTS import_templates;
+DROP TABLE IF EXISTS import_row_errors;
+DROP TABLE IF EXISTS import_jobs;

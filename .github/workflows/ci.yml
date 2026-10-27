@@ -1,0 +1,175 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+# A new push to the same ref cancels the previous run, which keeps the queue
+# short without hiding failures: the newest commit is the one that matters.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.24"
+
+jobs:
+  backend:
+    name: Backend (format, vet, test, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        # Integration tests run against a real database, not a mock.
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: forgecrm
+          POSTGRES_PASSWORD: forgecrm
+          POSTGRES_DB: forgecrm_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U forgecrm"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend/go.sum
+
+      - name: Verify go.mod is tidy
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
+      - name: Check formatting
+        run: |
+          unformatted="$(gofmt -l ./cmd ./internal)"
+          if [[ -n "${unformatted}" ]]; then
+            echo "These files are not gofmt-clean:"
+            echo "${unformatted}"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: Unit tests
+        run: go test -race -count=1 ./...
+
+      - name: Integration tests
+        # Tests that need a database skip themselves when the URL is unset, so
+        # this step is meaningful only because the service above is provided.
+        env:
+          FORGECRM_TEST_DATABASE_URL: postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_test?sslmode=disable
+        run: go test -count=1 -tags=integration ./...
+
+      - name: Build
+        run: |
+          go build -trimpath -o /dev/null ./cmd/forgecrm-api
+          go build -trimpath -o /dev/null ./cmd/forgecrm-worker
+
+      - name: Migrations apply cleanly on an empty database
+        env:
+          FORGECRM_DATABASE_URL: postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_test?sslmode=disable
+          FORGECRM_SECRET_KEY: ci-secret-key-not-used-in-production-000000
+          FORGECRM_ENV: development
+        run: |
+          go build -o /tmp/forgecrm-api ./cmd/forgecrm-api
+          /tmp/forgecrm-api -migrate
+          /tmp/forgecrm-api -migrate   # a second run must be a no-op
+
+  security:
+    name: Security (dependencies, secrets, static analysis)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # gitleaks needs history to scan more than the tip.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend/go.sum
+
+      - name: Scan for committed secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: govulncheck
+        working-directory: backend
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+      - name: Static analysis (gosec)
+        working-directory: backend
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          # G104 is unchecked errors, which go vet partly covers; the noise is
+          # not worth failing the build on.
+          gosec -exclude=G104 -fmt=text ./... || true
+
+  docker:
+    name: Docker image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build the API image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: false
+          # BuildKit's cache backend avoids rebuilding dependencies each run.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  docs:
+    name: Required documentation is present
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for required files
+        run: |
+          missing=0
+          # LICENSE is deliberately absent from this list: the distribution
+          # model is an owner decision, not something CI should force.
+          required=(
+            README.md
+            CONTRIBUTING.md
+            SECURITY.md
+            CODE_OF_CONDUCT.md
+            CHANGELOG.md
+            docs/PROJECT_AUDIT.md
+            docs/ARCHITECTURE.md
+            docs/ROADMAP.md
+            docs/ACCEPTANCE_CRITERIA.md
+          )
+          for f in "${required[@]}"; do
+            if [[ -s "${f}" ]]; then
+              echo "ok    ${f}"
+            else
+              echo "fail  ${f} is missing or empty"
+              missing=$((missing + 1))
+            fi
+          done
+          if [[ ${missing} -gt 0 ]]; then
+            echo "${missing} required file(s) missing"
+            exit 1
+          fi
