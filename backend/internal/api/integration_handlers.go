@@ -37,7 +37,7 @@ func (s *Server) handleListIntegrations(w http.ResponseWriter, r *http.Request) 
 		s.respondDomainError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, map[string]any{"items": items})
+	httpx.WriteJSONList(w, items)
 }
 
 // handleListIntegrationKinds documents which adapter kinds exist, so an operator

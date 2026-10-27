@@ -391,6 +391,18 @@ func NewListResponse[T any](items []T, total int64, p Pagination) ListResponse[T
 	return ListResponse[T]{Items: items, Total: total, Limit: p.Limit, Offset: p.Offset}
 }
 
+// WriteJSONList writes a non-paginated collection.
+//
+// Small, bounded collections (pipelines, tags) do not need pagination, but they
+// must still serialise as [] rather than null: a client that maps over the array
+// would crash on null, and the shape would differ from every other collection.
+func WriteJSONList[T any](w http.ResponseWriter, items []T) {
+	if items == nil {
+		items = []T{}
+	}
+	WriteJSON(w, map[string]any{"items": items})
+}
+
 // SortSpec is a validated ORDER BY request.
 type SortSpec struct {
 	Column string

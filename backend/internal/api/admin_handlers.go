@@ -528,7 +528,7 @@ func (s *Server) handleListRoles(w http.ResponseWriter, r *http.Request) {
 		s.respondDomainError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, map[string]any{"items": roles})
+	httpx.WriteJSONList(w, roles)
 }
 
 func (s *Server) handleListPermissions(w http.ResponseWriter, r *http.Request) {
@@ -537,7 +537,7 @@ func (s *Server) handleListPermissions(w http.ResponseWriter, r *http.Request) {
 	for _, perm := range perms {
 		out = append(out, map[string]string{"key": string(perm)})
 	}
-	httpx.WriteJSON(w, map[string]any{"items": out})
+	httpx.WriteJSONList(w, out)
 }
 
 type createRoleRequest struct {
@@ -699,7 +699,7 @@ func (s *Server) handleListOrganizations(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	defer rows.Close()
-	var out []map[string]any
+	out := make([]map[string]any, 0)
 	for rows.Next() {
 		var (
 			id        uuid.UUID
@@ -716,7 +716,7 @@ func (s *Server) handleListOrganizations(w http.ResponseWriter, r *http.Request)
 			"id": id, "name": name, "slug": slug, "status": status, "created_at": createdAt,
 		})
 	}
-	httpx.WriteJSON(w, map[string]any{"items": out})
+	httpx.WriteJSONList(w, out)
 }
 
 type createOrganizationRequest struct {
@@ -797,7 +797,7 @@ func (s *Server) handleListTeams(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer rows.Close()
-	var out []map[string]any
+	out := make([]map[string]any, 0)
 	for rows.Next() {
 		var (
 			id          uuid.UUID
@@ -815,7 +815,7 @@ func (s *Server) handleListTeams(w http.ResponseWriter, r *http.Request) {
 			"created_at": createdAt, "member_count": members,
 		})
 	}
-	httpx.WriteJSON(w, map[string]any{"items": out})
+	httpx.WriteJSONList(w, out)
 }
 
 type createTeamRequest struct {
@@ -964,7 +964,7 @@ func (s *Server) handleListAudit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer rows.Close()
-	var out []map[string]any
+	out := make([]map[string]any, 0)
 	for rows.Next() {
 		var (
 			id         int64
@@ -1038,7 +1038,7 @@ func (s *Server) handleListSecurityEvents(w http.ResponseWriter, r *http.Request
 		return
 	}
 	defer rows.Close()
-	var out []map[string]any
+	out := make([]map[string]any, 0)
 	for rows.Next() {
 		var (
 			id        int64
@@ -1110,7 +1110,7 @@ func (s *Server) handleListLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer rows.Close()
-	var out []map[string]any
+	out := make([]map[string]any, 0)
 	for rows.Next() {
 		var (
 			id        int64

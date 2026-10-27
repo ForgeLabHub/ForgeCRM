@@ -543,7 +543,7 @@ func (s *Server) handleListPipelines(w http.ResponseWriter, r *http.Request) {
 		s.respondDomainError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, map[string]any{"items": pipelines})
+	httpx.WriteJSONList(w, pipelines)
 }
 
 type createPipelineRequest struct {
@@ -725,7 +725,7 @@ func (s *Server) handleDealHistory(w http.ResponseWriter, r *http.Request) {
 		s.respondDomainError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, map[string]any{"items": history})
+	httpx.WriteJSONList(w, history)
 }
 
 // ---------------------------------------------------------------------------
@@ -917,7 +917,7 @@ func (s *Server) handleListTags(w http.ResponseWriter, r *http.Request) {
 		s.respondDomainError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, map[string]any{"items": tags})
+	httpx.WriteJSONList(w, tags)
 }
 
 type createTagRequest struct {
@@ -990,7 +990,7 @@ func (s *Server) handleListComments(w http.ResponseWriter, r *http.Request) {
 		s.respondDomainError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, map[string]any{"items": comments})
+	httpx.WriteJSONList(w, comments)
 }
 
 type createCommentRequest struct {
@@ -1037,7 +1037,7 @@ func (s *Server) handleListCustomFields(w http.ResponseWriter, r *http.Request) 
 		s.respondDomainError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, map[string]any{"items": fields})
+	httpx.WriteJSONList(w, fields)
 }
 
 func (s *Server) handleCreateCustomField(w http.ResponseWriter, r *http.Request) {
@@ -1110,7 +1110,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		// Always return a JSON array so clients can iterate without a null check.
 		results = []crm.SearchResult{}
 	}
-	httpx.WriteJSON(w, map[string]any{"items": results})
+	httpx.WriteJSONList(w, results)
 }
 
 func (s *Server) handleSalesSummary(w http.ResponseWriter, r *http.Request) {

@@ -34,7 +34,7 @@ func (s *Server) handleListMigrations(w http.ResponseWriter, r *http.Request) {
 		s.respondDomainError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, map[string]any{"items": items})
+	httpx.WriteJSONList(w, items)
 }
 
 // createMigrationRequest carries the connection configuration. The password is a
@@ -147,5 +147,5 @@ func (s *Server) handleListReconciliations(w http.ResponseWriter, r *http.Reques
 		s.respondDomainError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, map[string]any{"items": items})
+	httpx.WriteJSONList(w, items)
 }

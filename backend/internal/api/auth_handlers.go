@@ -152,6 +152,11 @@ type meResponse struct {
 	Organization orgSummary        `json:"organization"`
 	Permissions  []rbac.Permission `json:"permissions"`
 	Teams        []string          `json:"teams"`
+	// CSRFToken lets a client that reloads the page keep making mutations
+	// without signing in again. It is derived from the session secret, so it
+	// grants nothing on its own: a caller still needs the session cookie, and
+	// the token only proves the request did not originate from another site.
+	CSRFToken string `json:"csrf_token,omitempty"`
 }
 
 type orgSummary struct {
@@ -178,11 +183,17 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	for _, t := range p.TeamIDs {
 		teams = append(teams, t.String())
 	}
+	// The session is resolved by middleware and carries the derived CSRF token.
+	var csrfToken string
+	if sess, ok := sessionFrom(r.Context()); ok && sess != nil {
+		csrfToken = sess.CSRFToken
+	}
 	httpx.WriteJSON(w, meResponse{
 		User:         user,
 		Organization: orgSummary{ID: p.OrganizationID.String(), Name: orgName},
 		Permissions:  p.Permissions(),
 		Teams:        teams,
+		CSRFToken:    csrfToken,
 	})
 }
 
@@ -202,7 +213,7 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 			sess["current"] = id.String() == p.SessionID.String()
 		}
 	}
-	httpx.WriteJSON(w, map[string]any{"items": sessions})
+	httpx.WriteJSONList(w, sessions)
 }
 
 func (s *Server) handleRevokeSession(w http.ResponseWriter, r *http.Request) {

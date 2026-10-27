@@ -52,7 +52,7 @@ func (s *Server) handleListWebhooks(w http.ResponseWriter, r *http.Request) {
 		s.respondDomainError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, map[string]any{"items": items})
+	httpx.WriteJSONList(w, items)
 }
 
 func (s *Server) handleCreateWebhook(w http.ResponseWriter, r *http.Request) {
