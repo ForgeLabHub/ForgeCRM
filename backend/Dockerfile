@@ -3,7 +3,7 @@
 # ---------------------------------------------------------------------------
 # Build stage: compile both binaries with the module cache warm.
 # ---------------------------------------------------------------------------
-FROM golang:1.26-alpine AS build
+FROM golang:1.26.10-alpine AS build
 
 WORKDIR /src
 

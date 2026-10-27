@@ -8,6 +8,15 @@ once it reaches 1.0.
 
 ## [Unreleased]
 
+### Security
+
+- **Patched GO-2026-6809 (CVE-2026-111943) in the Go standard library.** The
+  vulnerability affects `crypto/x509.Certificate.Verify` and is reachable from
+  this codebase through the SMTP TLS handshake in `internal/notify/email.go`,
+  so it is a real exposure rather than an unused transitive finding. The
+  toolchain is now pinned to Go 1.26.10 (the first fixed 1.26 release) in
+  `go.mod`, the build image and CI.
+
 ### Added
 
 - **Web interface.** React 19 + TypeScript single-page application built with Vite,
