@@ -41,6 +41,17 @@ FORGECRM_TEST_DATABASE_URL='postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm
 `internal/testsupport` drops and rebuilds the `public` schema on every test, so it
 must only ever point at a scratch database.
 
+The frontend is a separate npm project:
+
+```bash
+cd frontend
+npm ci
+npm run typecheck   # tsc -b --noEmit
+npm run lint        # eslint
+npm run test        # vitest run
+npm run build       # tsc -b && vite build
+```
+
 ## Running locally
 
 ```bash
@@ -71,6 +82,19 @@ schema change requires a rebuild, not just a restart.
 - **`.env` holds `FORGECRM_SECRET_KEY`** and is gitignored. Never commit it.
 - **`.env` in this workspace already has a generated key** and `FORGECRM_HTTP_PORT`
   may be overridden; check before assuming port 8080.
+- **The Go toolchain is pinned in three places** and they must move together:
+  `go.mod`'s `go` directive, `backend/Dockerfile` and `GO_VERSION` in CI. A
+  stdlib CVE is fixed by bumping all three; bumping only one lets a fix pass in
+  one place and be missing in another.
+- **The audit log is append-only**, so a user who has acted can never be deleted
+  — the FK cascade is blocked by a trigger. Disable the account instead
+  (`status` must be one of `invited`, `active`, `suspended`, `blocked`).
+- **Frontend response types are hand-written** in `src/types/api.ts`. Check a
+  changed handler's real JSON before editing them; several fields were guessed
+  wrong the first time (audit ids are integers, not UUIDs).
+- **The frontend is served same-origin by Nginx.** Do not add a CORS
+  configuration or move the session token into `localStorage`; the cookie plus
+  CSRF double-submit depends on same-origin.
 
 ## Conventions
 
@@ -83,6 +107,9 @@ schema change requires a rebuild, not just a restart.
 ## Status
 
 Backend, schema, RBAC, auth, audit, jobs, outbox, CRM domain, Import Center,
-integrations, events, notifications and the AI layer exist. Deployment, docs and
-CI are in place. The frontend does not exist. No license has been chosen — do not
-add one without asking the owner.
+integrations, events, notifications and the AI layer exist. The web interface
+covers sign-in with second factor, the CRM workspace, the Import Center, and the
+administration pages. Deployment, docs and CI are in place; CI runs a frontend
+job as well as the backend. The AI layer is backend-only — there is no AI page
+beyond the status screen. No license has been chosen — do not add one without
+asking the owner.
