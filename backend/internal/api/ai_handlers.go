@@ -1,6 +1,7 @@
 package api
 
 import (
+	"io"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -121,11 +122,60 @@ type principalAdapter struct{ p *rbac.Principal }
 func (a principalAdapter) GetUserID() uuidType         { return a.p.UserID }
 func (a principalAdapter) GetOrganizationID() uuidType { return a.p.OrganizationID }
 
-// mountMCP registers the MCP endpoint.
+// mountMCP registers the MCP endpoints.
+//
+// Three surfaces, deliberately distinct:
+//
+//	POST /mcp          the MCP protocol (JSON-RPC 2.0), for standard clients
+//	POST /mcp/call     a one-call convenience shape for the admin UI
+//	GET  /mcp/tools    the tool catalogue, with the permission each tool needs
+//
+// The first is the protocol. The other two are conveniences for this
+// application's own interface, which is not an MCP client and should not have to
+// implement one to invoke a tool.
 func (s *Server) mountMCP(r chi.Router) {
 	r.With(s.perm(rbac.PermAIRead)).Get("/mcp/tools", s.handleMCPTools)
-	r.With(s.perm(rbac.PermAIToolsExecute)).Post("/mcp", s.handleMCPCall)
+	r.With(s.perm(rbac.PermAIToolsExecute)).Post("/mcp", s.handleMCPProtocol)
+	r.With(s.perm(rbac.PermAIToolsExecute)).Post("/mcp/call", s.handleMCPCall)
 }
+
+// handleMCPProtocol serves the Model Context Protocol over JSON-RPC 2.0.
+//
+// Authorization is the caller's own session: every tool call reaches the same
+// permission check the REST API applies, so the protocol is a transport and not a
+// privilege. A permission failure comes back as a JSON-RPC error with the HTTP
+// status preserved in `data`, so a client can tell a refusal from a bad argument.
+func (s *Server) handleMCPProtocol(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.mustPrincipal(w, r)
+	if !ok {
+		return
+	}
+	// The body is bounded: an unbounded read here would let an unauthenticated
+	// caller exhaust memory before the size of the message is ever considered.
+	body, err := io.ReadAll(io.LimitReader(r.Body, mcpMaxBodyBytes))
+	if err != nil {
+		httpx.WriteError(w, r, httpx.NewError(400, httpx.CodeBadRequest, "the request body could not be read"))
+		return
+	}
+	if int64(len(body)) >= mcpMaxBodyBytes {
+		httpx.WriteError(w, r, httpx.NewError(413, httpx.CodePayloadTooLarge,
+			"the request body exceeds the MCP limit"))
+		return
+	}
+
+	resp, reply := s.deps.MCP.Handle(r.Context(), p, body)
+	if !reply {
+		// A notification is acknowledged by an empty 202; replying with a result
+		// would be a protocol error.
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
+	httpx.WriteJSON(w, resp)
+}
+
+// mcpMaxBodyBytes bounds an MCP request body. Tool arguments are small by design,
+// so a body beyond this is a mistake or an attack, not a legitimate call.
+const mcpMaxBodyBytes = 1 << 20
 
 // handleMCPTools publishes the tool catalogue.
 func (s *Server) handleMCPTools(w http.ResponseWriter, r *http.Request) {
@@ -138,11 +188,20 @@ func (s *Server) handleMCPTools(w http.ResponseWriter, r *http.Request) {
 type mcpCallRequest struct {
 	Method string         `json:"method"`
 	Params map[string]any `json:"params"`
+	// Name and Arguments are the convenience shape used by the admin UI.
+	Name      string         `json:"name"`
+	Arguments map[string]any `json:"arguments"`
 	// Confirm acknowledges that a mutating tool will change data.
 	Confirm bool `json:"confirm"`
 }
 
 // handleMCPCall dispatches an MCP tools/list or tools/call request.
+//
+// It accepts the one-call shape the admin UI sends ({name, arguments}) as well as
+// the explicit {method, params} shape. The two were once inconsistent — the UI
+// posted the first and this handler decoded the second, so every call from the
+// interface arrived with an empty method and failed — and normalising here, in one
+// place, is what keeps them from drifting apart again.
 //
 // Authorization is the caller's own: the registry checks the same permission the
 // REST API would require, so MCP is not a privileged back door.
@@ -163,10 +222,25 @@ func (s *Server) handleMCPCall(w http.ResponseWriter, r *http.Request) {
 	if params == nil {
 		params = map[string]any{}
 	}
-	// A top-level confirm flag is folded into the params so that the registry's
-	// dangerous-operation check applies uniformly.
+	// Fold the convenience shape into the canonical params, without overwriting
+	// anything the caller already placed there.
+	if req.Name != "" {
+		if _, exists := params["name"]; !exists {
+			params["name"] = req.Name
+		}
+	}
+	if req.Arguments != nil {
+		if _, exists := params["arguments"]; !exists {
+			params["arguments"] = req.Arguments
+		}
+	}
 	if req.Confirm {
-		params["confirm"] = true
+		args, _ := params["arguments"].(map[string]any)
+		if args == nil {
+			args = map[string]any{}
+			params["arguments"] = args
+		}
+		args["confirm"] = true
 	}
 	result, err := s.deps.Tools.CallMCP(r.Context(), p, req.Method, params)
 	if err != nil {

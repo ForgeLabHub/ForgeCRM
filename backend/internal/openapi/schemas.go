@@ -76,7 +76,7 @@ func ref(name string) map[string]any {
 // because every operation can fail the same ways and the copies would drift. The
 // success response is described by shape, since the generator does not know which
 // entity a given action returns.
-func responsesFor(rt Route, isAnonymous bool) map[string]response {
+func responsesFor(rt Route, isAnonymous bool, c Contract, reg *registry) map[string]response {
 	out := map[string]response{}
 
 	success := http.StatusOK
@@ -95,12 +95,7 @@ func responsesFor(rt Route, isAnonymous bool) map[string]response {
 	if success == http.StatusNoContent {
 		out["204"] = response{Description: "The operation succeeded. No body is returned."}
 	} else {
-		out[fmt.Sprint(success)] = response{
-			Description: "Success. The body shape depends on the resource.",
-			Content: map[string]mediaType{
-				"application/json": {Schema: map[string]any{"type": "object"}},
-			},
-		}
+		out[fmt.Sprint(success)] = successResponse(rt, c, reg)
 	}
 
 	out["400"] = problemResponse("The request was malformed: bad JSON, an unknown field, or a missing required parameter.")
@@ -114,6 +109,30 @@ func responsesFor(rt Route, isAnonymous bool) map[string]response {
 	out["429"] = problemResponse("Too many requests. Retry after the interval in `Retry-After`.")
 	out["500"] = problemResponse("Unexpected failure. The detail is deliberately generic; the cause is in the server log.")
 	return out
+}
+
+// successResponse describes a successful body.
+//
+// When the contract names the type, the schema is derived from it, so a client
+// knows the shape. When it does not, the response is documented as a free-form
+// object and the description says so, rather than inventing fields. Saying "an
+// object" is honest; listing fields nobody verified is not.
+func successResponse(rt Route, c Contract, reg *registry) response {
+	if t, ok := c.ResponseType(rt.Key()); ok {
+		return response{
+			Description: "Success.",
+			Content: map[string]mediaType{
+				"application/json": {Schema: c.schemaForResponse(t, reg)},
+			},
+		}
+	}
+	return response{
+		Description: "Success. This operation's response body is not yet described by a schema; " +
+			"the shape is whatever the handler returns.",
+		Content: map[string]mediaType{
+			"application/json": {Schema: map[string]any{"type": "object"}},
+		},
+	}
 }
 
 func problemResponse(description string) response {

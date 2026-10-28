@@ -123,8 +123,10 @@ The prior report is treated as a list of hypotheses. Each was checked:
 
 **Corrections to the prior report's framing:**
 
-- The report described the MCP surface as a "server". It is an HTTP endpoint
-  speaking a custom JSON shape, not the MCP protocol. See finding B.
+- The report described the MCP surface as a "server". It was then an HTTP endpoint
+  speaking a custom JSON shape, not the MCP protocol. Finding B records the fix;
+  the endpoint now speaks the protocol, and the admin UI's own shape is a separate
+  endpoint.
 - The report listed three PRs as containing "unique changes". They are one linear
   stack, so all three were integrated by a single fast-forward. See §3.
 
@@ -157,7 +159,18 @@ negotiates no `protocolVersion`, and is not reachable by any standard MCP client
 The tool registry, permission checks and audit are real and reused from the domain
 layer, so the *logic* is sound. The *transport* is not MCP.
 
-**Status:** Open. Tracked as Phase 3 work.
+**Status:** Fixed. `POST /api/v1/mcp` now speaks JSON-RPC 2.0: `initialize` with
+`protocolVersion` negotiation, `notifications/initialized`, `ping`, `tools/list`
+and `tools/call`, with the specification's error codes for a parse failure, an
+invalid request, an unknown method and invalid parameters. Notifications are
+answered with an empty `202`. The protocol view publishes `inputSchema`; the
+admin view keeps `input_schema`. `internal/ai/mcp_protocol.go` implements the
+transport and `internal/api/ai_handlers.go` wires it. Verified by
+`internal/ai/mcp_protocol_test.go` and, over the real HTTP stack with a real
+session and database, by `internal/api/mcp_integration_test.go`. What remains is a
+dedicated MCP credential (Phase 3, item 3.3): the transport authenticates with the
+caller's browser session, so there is no separate revocable key with its own
+read/write scope. See `docs/mcp/`.
 
 ### C. Rate limiting is per process — **Medium**
 

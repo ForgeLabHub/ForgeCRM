@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -254,8 +255,9 @@ type parameter struct {
 }
 
 type requestBody struct {
-	Required bool                 `json:"required"`
-	Content  map[string]mediaType `json:"content"`
+	Required    bool                 `json:"required"`
+	Description string               `json:"description,omitempty"`
+	Content     map[string]mediaType `json:"content"`
 }
 
 type response struct {
@@ -277,11 +279,29 @@ type components struct {
 // perms maps a route key to the permission it requires; it comes from parsing the
 // route registrations in source. A route missing from both perms and Public makes
 // Build return an error rather than emitting an undocumented operation.
-func Build(routes []Route, perms map[string]string, in Info, servers []Server) ([]byte, error) {
+//
+// c supplies the request and response types. It is checked against the route table
+// in both directions: a key it names that no route serves, or a route it names with
+// a type the router cannot reach, stops generation rather than producing a document
+// that describes an API other than the one that exists.
+func Build(routes []Route, perms map[string]string, c Contract, in Info, servers []Server) ([]byte, error) {
 	if len(routes) == 0 {
 		return nil, fmt.Errorf("no routes: refusing to emit an empty specification")
 	}
 
+	served := map[string]bool{}
+	for _, rt := range routes {
+		served[rt.Key()] = true
+	}
+	for _, key := range sortedKeys(c.keys()) {
+		if !served[key] {
+			return nil, fmt.Errorf(
+				"the API contract names %s, which the router does not serve: "+
+					"remove the entry or fix the route", key)
+		}
+	}
+
+	reg := newRegistry(c.TypeNames, c.discover())
 	paths := map[string]pathItem{}
 	tagsSeen := map[string]bool{}
 
@@ -289,7 +309,7 @@ func Build(routes []Route, perms map[string]string, in Info, servers []Server) (
 		group := Group(rt.Path)
 		tagsSeen[group] = true
 
-		op, err := operationFor(rt, group, perms)
+		op, err := operationFor(rt, group, perms, c, reg)
 		if err != nil {
 			return nil, err
 		}
@@ -309,6 +329,13 @@ func Build(routes []Route, perms map[string]string, in Info, servers []Server) (
 	}
 	sort.Slice(tags, func(i, j int) bool { return tags[i].Name < tags[j].Name })
 
+	// The registry is closed only after every operation has declared its types, so a
+	// component referenced by any endpoint is present.
+	componentSchemas := schemas()
+	for name, s := range reg.build() {
+		componentSchemas[name] = s
+	}
+
 	doc := document{
 		OpenAPI: "3.1.0",
 		Info:    in,
@@ -316,7 +343,7 @@ func Build(routes []Route, perms map[string]string, in Info, servers []Server) (
 		Tags:    tags,
 		Paths:   paths,
 		Components: components{
-			Schemas: schemas(),
+			Schemas: componentSchemas,
 			SecuritySchemes: map[string]any{
 				"sessionCookie": map[string]any{
 					"type": "apiKey",
@@ -350,7 +377,7 @@ func marshalDeterministic(v any) ([]byte, error) {
 }
 
 // operationFor builds one operation.
-func operationFor(rt Route, group string, perms map[string]string) (operation, error) {
+func operationFor(rt Route, group string, perms map[string]string, c Contract, reg *registry) (operation, error) {
 	perm := perms[rt.Key()]
 	_, isAnonymous := Anonymous[rt.Key()]
 	_, isSessionOnly := SessionOnly[rt.Key()]
@@ -385,7 +412,11 @@ func operationFor(rt Route, group string, perms map[string]string) (operation, e
 		Tags:        []string{TagFor(group)},
 		Summary:     summary,
 		Description: desc,
-		Responses:   responsesFor(rt, isAnonymous),
+		Responses:   responsesFor(rt, isAnonymous, c, reg),
+	}
+
+	if bodyType, ok := c.BodyType(rt.Key()); ok {
+		op.RequestBody = requestBodyFor(rt.Key(), bodyType, c, reg)
 	}
 
 	for _, name := range pathParams(rt.Path) {
@@ -393,8 +424,22 @@ func operationFor(rt Route, group string, perms map[string]string) (operation, e
 			Name: name, In: "path", Required: true, Schema: pathParamSchema(name),
 		})
 	}
+
+	// Collection query parameters: the shared pagination contract plus anything the
+	// resource declares.
 	if rt.Method == http.MethodGet && !strings.Contains(rt.Path, "{") {
 		op.Parameters = append(op.Parameters, listParams()...)
+	}
+	for _, q := range c.QueryParams[rt.Key()] {
+		op.Parameters = append(op.Parameters, parameter{
+			Name: q.Name, In: "query", Required: q.Required,
+			Schema: q.Schema, Description: q.Description,
+		})
+	}
+	// A declared sort allowlist becomes an enum, so a client cannot send a column the
+	// server will reject, and the accepted set is visible rather than discovered.
+	if cols := c.SortColumns[rt.Key()]; len(cols) > 0 {
+		op.Parameters = addSortEnum(op.Parameters, cols)
 	}
 
 	// An anonymous operation must override the document-level security with an
@@ -408,6 +453,65 @@ func operationFor(rt Route, group string, perms map[string]string) (operation, e
 		op.Security = &none
 	}
 	return op, nil
+}
+
+// addSortEnum narrows the shared `sort` parameter to the columns the resource allows.
+func addSortEnum(params []parameter, cols []string) []parameter {
+	sorted := append([]string(nil), cols...)
+	sort.Strings(sorted)
+	for i := range params {
+		if params[i].Name == "sort" && params[i].In == "query" {
+			params[i].Schema = map[string]any{"type": "string", "enum": sorted}
+			params[i].Description = "Field to sort by. Any other value is rejected."
+			return params
+		}
+	}
+	return params
+}
+
+// requestBodyFor builds a request body from the real type the handler decodes.
+func requestBodyFor(key string, t reflect.Type, c Contract, reg *registry) *requestBody {
+	name, ok := c.BodyNames[key]
+	if !ok {
+		name = componentName(t, reg, modeRequest)
+	}
+	reg.addRequest(name, t, c.requiredForBody(name))
+
+	desc := requiredDescription(t)
+	if d, ok := c.BodyDescriptions[key]; ok {
+		// A route-level description adds to, rather than replaces, the rule derived
+		// from the type: one route may need both.
+		if desc != "" {
+			desc = desc + "\n\n" + d
+		} else {
+			desc = d
+		}
+	}
+	return &requestBody{
+		Required:    true,
+		Description: desc,
+		Content: map[string]mediaType{
+			"application/json": {Schema: ref(name)},
+		},
+	}
+}
+
+// requiredDescription states any rule that a required-field list cannot express.
+//
+// Some validations are not "this field must be present" but "one of these must be",
+// or "these two go together". Encoding that as a required list would be wrong, and
+// leaving it out would hide a rule a client must satisfy, so it is stated in prose.
+func requiredDescription(t reflect.Type) string {
+	switch t.Name() {
+	case "ContactInput":
+		return "At least one of `first_name`, `last_name` or `email` is required. " +
+			"`external_source` and `external_id` must be supplied together or not at all."
+	case "ActivityInput":
+		return "The activity must reference at least one of `account_id`, `contact_id`, " +
+			"`deal_id` or `ticket_id`."
+	default:
+		return ""
+	}
 }
 
 // accessDescription returns the description text: the hand-written line from the

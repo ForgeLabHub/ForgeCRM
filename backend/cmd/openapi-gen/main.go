@@ -137,7 +137,7 @@ func generate(version string) ([]byte, error) {
 	}
 	perms = openapi.PrefixAPI(perms)
 
-	return openapi.Build(routes, perms, openapi.Info{
+	return openapi.Build(routes, perms, api.APIContract(), openapi.Info{
 		Title:       "ForgeCRM API",
 		Version:     version,
 		Description: openapi.DefaultDescription,

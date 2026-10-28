@@ -71,6 +71,12 @@ type capabilitiesResponse struct {
 	MFA      bool `json:"mfa"`
 	Webhooks bool `json:"webhooks"`
 	ToolAPI  bool `json:"tool_api"`
+	// MCP reports whether a standard MCP client can connect. It can: the protocol
+	// transport (JSON-RPC 2.0, initialize, tools/list, tools/call) is implemented
+	// in internal/ai/mcp_protocol.go. It is separate from ToolAPI because the two
+	// are different promises — tool_api is this application's own HTTP shape,
+	// which no MCP client speaks.
+	MCP bool `json:"mcp"`
 
 	// OIDCConfigured reports whether OIDC settings are present. It is deliberately
 	// not called "oidc": the sign-in flow is not implemented, so a client must not
@@ -92,12 +98,13 @@ func (s *Server) handleCapabilities(w http.ResponseWriter, r *http.Request) {
 		MFA: true,
 		// Webhook subscriptions and delivery are implemented in internal/events.
 		Webhooks: true,
-		// The tool API exposes tools/list and tools/call over HTTP. It is not a
-		// full MCP server: there is no initialize handshake, no protocol version
-		// negotiation and no stdio or SSE transport, so an off-the-shelf MCP client
-		// cannot connect. The flag says what exists, not what a reader might assume
-		// from the name.
+		// The tool API exposes tools/list and tools/call over HTTP in this
+		// application's own shape. It is kept separate from the MCP flag below: this
+		// is not the protocol, and a client that needs the protocol must read `mcp`.
 		ToolAPI: true,
+		// A standard MCP client can connect: the JSON-RPC 2.0 transport, the
+		// initialize handshake and tools/list and tools/call are implemented.
+		MCP: true,
 		// Reported, but the authorisation-code flow that would use it is not
 		// implemented. Named for what it is so the interface cannot mistake a
 		// setting for a working feature.

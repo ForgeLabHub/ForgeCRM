@@ -47,6 +47,8 @@ type Services struct {
 	Telegram     *notify.TelegramService
 	AI           *ai.Service
 	Tools        *ai.ToolRegistry
+	// MCP is the protocol transport over Tools.
+	MCP *ai.MCPServer
 }
 
 // Build constructs every service from the given configuration and database.
@@ -66,6 +68,8 @@ func Build(cfg *config.Config, db *database.DB, keyring *secrets.Keyring, log *s
 		return nil, fmt.Errorf("initialise the import service: %w", err)
 	}
 
+	tools := ai.NewToolRegistry(crmSvc, auditLog)
+
 	return &Services{
 		Audit:        auditLog,
 		Auth:         authn.NewService(db, cfg, keyring, auditLog, rbacSvc),
@@ -81,6 +85,7 @@ func Build(cfg *config.Config, db *database.DB, keyring *secrets.Keyring, log *s
 		Email:        notify.NewEmailService(&cfg.Email, db, log),
 		Telegram:     notify.NewTelegramService(&cfg.Telegram, db, log, auditLog, keyring),
 		AI:           ai.NewService(&cfg.AI, db, auditLog),
-		Tools:        ai.NewToolRegistry(crmSvc, auditLog),
+		Tools:        tools,
+		MCP:          ai.NewMCPServer(tools),
 	}, nil
 }

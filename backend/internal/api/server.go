@@ -59,6 +59,10 @@ type Deps struct {
 	Telegram     *notify.TelegramService
 	AI           *ai.Service
 	Tools        *ai.ToolRegistry
+	// MCP speaks the Model Context Protocol over JSON-RPC 2.0. It is built from
+	// Tools, so it cannot grant more authority than the tool registry already
+	// enforces.
+	MCP *ai.MCPServer
 	// StartedAt is used by the system info endpoint.
 	StartedAt time.Time
 	Version   string
