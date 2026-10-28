@@ -1,0 +1,25 @@
+# Gitleaks configuration.
+#
+# The default rule set is kept in full; this file only narrows one false
+# positive. See https://github.com/gitleaks/gitleaks for the rule definitions.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fixed CI-only placeholder keys, never used outside a CI job"
+
+# The `e2e` job needs a secret key to derive session tokens. The value below is
+# a literal that exists nowhere but that job's environment; it protects nothing,
+# because the job runs against a throwaway database in an ephemeral runner.
+#
+# An earlier revision of this file used a random-looking string instead. The
+# `generic-api-key` rule matched it, correctly: a random-looking value is
+# indistinguishable from a real credential by shape alone. That revision is in
+# the history and cannot be removed without rewriting it, which this repository
+# does not do to a shared branch.
+#
+# The allowlist is deliberately narrow. It matches one exact string, and only in
+# this one path, so any other value that looks like a key is still reported.
+regexes = ['''e2e-secret-key-long-enough-for-hkdf-derivation-0000''']
+paths = ['''.github/workflows/ci.yml''']
