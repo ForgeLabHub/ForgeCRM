@@ -81,7 +81,7 @@ func newHarness(t *testing.T) *harness {
 		t.Fatalf("build services: %v", err)
 	}
 
-	srv := New(&Deps{
+	srv := newTestServer(t, &Deps{
 		Config: cfg, Log: logging.New("error", "text"), DB: db, Keyring: keyring,
 		Audit: svcs.Audit, Auth: svcs.Auth, RBAC: svcs.RBAC, CRM: svcs.CRM,
 		Jobs: svcs.Jobs, Outbox: svcs.Outbox, Imports: svcs.Imports,

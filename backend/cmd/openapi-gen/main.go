@@ -27,7 +27,9 @@ import (
 
 	"github.com/geff1778/forgecrm/internal/api"
 	"github.com/geff1778/forgecrm/internal/config"
+	"github.com/geff1778/forgecrm/internal/httpx"
 	"github.com/geff1778/forgecrm/internal/openapi"
+	"github.com/geff1778/forgecrm/internal/ratelimit"
 )
 
 func main() {
@@ -121,10 +123,13 @@ func generate(version string) ([]byte, error) {
 		version = "0.1.0"
 	}
 
-	srv := api.New(&api.Deps{
+	srv, err := api.New(&api.Deps{
 		Config: cfg,
 		Log:    slog.New(slog.NewTextHandler(io.Discard, nil)),
-	})
+	}, ratelimit.NewMemoryStore(), httpx.TrustedProxies{})
+	if err != nil {
+		return nil, fmt.Errorf("build server: %w", err)
+	}
 
 	routes, err := openapi.Routes(srv.Router())
 	if err != nil {

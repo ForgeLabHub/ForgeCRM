@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
+
 	"net/http"
 	"strconv"
 	"strings"
@@ -349,89 +349,6 @@ func SecurityHeadersMiddleware(next http.Handler) http.Handler {
 		h.Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
 		next.ServeHTTP(w, r)
 	})
-}
-
-// ---------------------------------------------------------------------------
-// Rate limiting
-// ---------------------------------------------------------------------------
-
-// RateLimiter is a fixed-window per-key limiter. It is intentionally in-process:
-// a single instance is the supported deployment shape for this cycle.
-type RateLimiter struct {
-	limit  int
-	window time.Duration
-	hits   map[string]*window
-}
-
-type window struct {
-	count int
-	start time.Time
-}
-
-// NewRateLimiter creates a limiter allowing limit requests per window.
-func NewRateLimiter(limit int, per time.Duration) *RateLimiter {
-	return &RateLimiter{limit: limit, window: per, hits: make(map[string]*window)}
-}
-
-// Allow reports whether key may proceed, and how long to wait if not.
-func (rl *RateLimiter) Allow(key string, now time.Time) (bool, time.Duration) {
-	w, ok := rl.hits[key]
-	if !ok || now.Sub(w.start) >= rl.window {
-		rl.hits[key] = &window{count: 1, start: now}
-		return true, 0
-	}
-	w.count++
-	if w.count > rl.limit {
-		return false, rl.window - now.Sub(w.start)
-	}
-	return true, 0
-}
-
-// Sweep removes expired windows to bound memory.
-func (rl *RateLimiter) Sweep(now time.Time) {
-	for k, w := range rl.hits {
-		if now.Sub(w.start) >= rl.window {
-			delete(rl.hits, k)
-		}
-	}
-}
-
-// RateLimitMiddleware applies the limiter keyed by client IP.
-func RateLimitMiddleware(rl *RateLimiter) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if rl == nil {
-				next.ServeHTTP(w, r)
-				return
-			}
-			ok, retry := rl.Allow(ClientIP(r), time.Now())
-			if !ok {
-				w.Header().Set("Retry-After", strconv.Itoa(int(retry.Seconds())+1))
-				WriteError(w, r, NewError(http.StatusTooManyRequests, CodeRateLimited,
-					"too many requests"))
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
-// ClientIP extracts the client address, honouring a single proxy hop.
-func ClientIP(r *http.Request) string {
-	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-		parts := strings.Split(fwd, ",")
-		if ip := strings.TrimSpace(parts[0]); ip != "" {
-			return ip
-		}
-	}
-	if rip := r.Header.Get("X-Real-Ip"); rip != "" {
-		return strings.TrimSpace(rip)
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }
 
 // ---------------------------------------------------------------------------

@@ -39,6 +39,19 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 12
+      redis:
+        # The distributed limiter is tested against a real server, because the
+        # properties that matter — atomic increment and a window shared between
+        # processes — are the ones a fake would satisfy by construction. Tests
+        # that need it skip when FORGECRM_TEST_REDIS_URL is unset.
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
     steps:
       - uses: actions/checkout@v4
 
@@ -84,6 +97,7 @@ jobs:
         # ("relation \"users\" does not exist").
         env:
           FORGECRM_TEST_DATABASE_URL: postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_test?sslmode=disable
+          FORGECRM_TEST_REDIS_URL: redis://127.0.0.1:6379/1
         run: go test -count=1 -p 1 -tags=integration ./...
 
       - name: Build

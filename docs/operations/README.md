@@ -89,3 +89,90 @@ The administration API exposes filtered views of application logs, the audit log
 security events, job history, integration runs and webhook deliveries at
 `/api/v1/audit`, `/api/v1/security-events` and `/api/v1/admin/logs`. These require the
 corresponding permissions.
+
+## Rate limiting
+
+Requests to `/api/v1` are limited per client address. Authentication endpoints
+have their own, tighter budget so that password guessing is bounded separately
+from ordinary API traffic. Both are configurable:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `FORGECRM_RATE_LIMIT_PER_MIN` | 300 | API requests per client address per minute |
+| `FORGECRM_LOGIN_RATE_LIMIT_PER_MIN` | 60 | Authentication attempts per client address per minute |
+
+A refusal is `429` with `Retry-After`, `RateLimit-Limit`, `RateLimit-Remaining`
+and `RateLimit-Reset`. The older `X-RateLimit-*` names are sent as well.
+
+### Choosing where the counters live
+
+`FORGECRM_RATE_LIMIT_STORE` decides:
+
+- `memory` (default) keeps counters in the API process. Each replica then
+  enforces its own budget, so **N replicas grant N times the configured limit**.
+  This is correct for the default single-container deployment.
+- `redis` shares counters across replicas, so the configured value is the actual
+  budget. It requires `FORGECRM_REDIS_URL`, for example
+  `redis://:password@redis:6379/0`.
+
+```bash
+# Start the optional Redis service and point the API at it.
+docker compose --profile redis up -d
+# then in .env:
+#   FORGECRM_RATE_LIMIT_STORE=redis
+#   FORGECRM_REDIS_URL=redis://redis:6379/0
+```
+
+The API refuses to start when `redis` is selected but the server cannot be
+reached. That is deliberate: starting anyway would leave the limit unenforced and
+report it only as a per-request warning.
+
+### Behaviour when the counter store is unavailable
+
+The two policies fail in opposite directions, because they protect different
+things:
+
+- **General API traffic fails open.** A request is allowed and the decision is
+  marked degraded. A broken counter must not take the whole API down.
+- **Authentication fails closed.** A request is refused. If the counter cannot be
+  read, there is no barrier to password guessing.
+
+Both cases log a warning and are visible in the metrics; neither is reported as a
+`429`, because a `429` tells the client to slow down when the truth is that the
+server cannot count.
+
+### Client address behind a proxy
+
+By default the client address is the connection address, and forwarding headers
+are ignored. Set `FORGECRM_TRUSTED_PROXIES` to a comma-separated list of the
+proxies in front of the API:
+
+```
+FORGECRM_TRUSTED_PROXIES=10.0.0.0/8,192.168.0.0/16
+```
+
+This is a security setting, not a convenience. `X-Forwarded-For` is a request
+header that any client can set. When the connection does not come from a listed
+proxy, the header is ignored, which is what stops a caller from moving itself
+into a fresh rate-limit bucket on every request or forging its entry in the
+authentication log.
+
+If the API is reachable only through the proxy, `*` trusts every peer. That
+accepts the header from anyone and lets a caller choose its own address, so the
+API logs a warning at startup when it is set. The proxy chain is read
+right-to-left, skipping addresses in the trusted list; the first untrusted entry
+is the client, because that is the address the last trusted hop observed and the
+client cannot have written it.
+
+### Troubleshooting
+
+**A limit is configured but a client is not being refused.** Check which store is
+in use in the startup log (`rate limiter configured`). With `memory` and several
+replicas, the effective limit is the configured value times the replica count.
+
+**Every client shares one bucket.** The proxy is not in
+`FORGECRM_TRUSTED_PROXIES`, so all requests are attributed to the proxy's
+address. Add the proxy's network to the list.
+
+**A 429 appears with `degraded` in the logs.** The counter store is unreachable.
+For authentication that is a refusal; for general traffic it is an allow.
