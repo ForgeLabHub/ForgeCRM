@@ -27,6 +27,7 @@ func (s *Server) mountCRM(r chi.Router) {
 	r.Route("/accounts", func(r chi.Router) {
 		r.With(s.perm(rbac.PermAccountsRead)).Get("/", s.handleListAccounts)
 		r.With(s.perm(rbac.PermAccountsCreate)).Post("/", s.handleCreateAccount)
+		r.With(s.perm(rbac.PermAccountsArchive)).Post("/bulk-archive", s.handleBulkArchiveAccounts)
 		r.Route("/{id}", func(r chi.Router) {
 			r.With(s.perm(rbac.PermAccountsRead)).Get("/", s.handleGetAccount)
 			r.With(s.perm(rbac.PermAccountsUpdate)).Put("/", s.handleUpdateAccount)
@@ -41,6 +42,7 @@ func (s *Server) mountCRM(r chi.Router) {
 	r.Route("/contacts", func(r chi.Router) {
 		r.With(s.perm(rbac.PermContactsRead)).Get("/", s.handleListContacts)
 		r.With(s.perm(rbac.PermContactsCreate)).Post("/", s.handleCreateContact)
+		r.With(s.perm(rbac.PermContactsArchive)).Post("/bulk-archive", s.handleBulkArchiveContacts)
 		r.Route("/{id}", func(r chi.Router) {
 			r.With(s.perm(rbac.PermContactsRead)).Get("/", s.handleGetContact)
 			r.With(s.perm(rbac.PermContactsUpdate)).Put("/", s.handleUpdateContact)
@@ -70,6 +72,7 @@ func (s *Server) mountCRM(r chi.Router) {
 	r.Route("/deals", func(r chi.Router) {
 		r.With(s.perm(rbac.PermDealsRead)).Get("/", s.handleListDeals)
 		r.With(s.perm(rbac.PermDealsCreate)).Post("/", s.handleCreateDeal)
+		r.With(s.perm(rbac.PermDealsArchive)).Post("/bulk-archive", s.handleBulkArchiveDeals)
 		r.Route("/{id}", func(r chi.Router) {
 			r.With(s.perm(rbac.PermDealsRead)).Get("/", s.handleGetDeal)
 			r.With(s.perm(rbac.PermDealsUpdate)).Put("/", s.handleUpdateDeal)
@@ -1156,4 +1159,67 @@ func parseUUID(raw string) (uuid.UUID, bool) {
 // parseInt parses an integer from a query string value.
 func parseInt(raw string) (int, error) {
 	return strconv.Atoi(strings.TrimSpace(raw))
+}
+
+// ---------------------------------------------------------------------------
+// Bulk archive
+// ---------------------------------------------------------------------------
+
+// bulkArchiveResponse is the reply to a bulk archive.
+//
+// Both lists are always present, possibly empty. A caller that sent five ids and
+// received two in `archived` should not have to infer the fate of the other three
+// from a missing field.
+type bulkArchiveResponse struct {
+	Archived []string             `json:"archived"`
+	Failed   []bulkArchiveFailure `json:"failed"`
+}
+
+type bulkArchiveFailure struct {
+	ID     string `json:"id"`
+	Reason string `json:"reason"`
+}
+
+func (s *Server) handleBulkArchiveAccounts(w http.ResponseWriter, r *http.Request) {
+	s.handleBulkArchive(w, r, "accounts")
+}
+
+func (s *Server) handleBulkArchiveContacts(w http.ResponseWriter, r *http.Request) {
+	s.handleBulkArchive(w, r, "contacts")
+}
+
+func (s *Server) handleBulkArchiveDeals(w http.ResponseWriter, r *http.Request) {
+	s.handleBulkArchive(w, r, "deals")
+}
+
+// handleBulkArchive is the shared implementation. The route that reached it
+// already checked the entity's archive permission, so this function does not
+// re-check one: it cannot be reached without that check, and a second check here
+// would be a second place to keep correct.
+func (s *Server) handleBulkArchive(w http.ResponseWriter, r *http.Request, entity string) {
+	p, ok := s.mustPrincipal(w, r)
+	if !ok {
+		return
+	}
+	var in crm.BulkArchiveInput
+	if err := decodeBody(w, r, &in); err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	result, err := s.deps.CRM.BulkArchive(r.Context(), p, entity, in)
+	if err != nil {
+		s.respondDomainError(w, r, err)
+		return
+	}
+	out := bulkArchiveResponse{
+		Archived: make([]string, 0, len(result.Archived)),
+		Failed:   make([]bulkArchiveFailure, 0, len(result.Failed)),
+	}
+	for _, id := range result.Archived {
+		out.Archived = append(out.Archived, id.String())
+	}
+	for _, f := range result.Failed {
+		out.Failed = append(out.Failed, bulkArchiveFailure{ID: f.ID.String(), Reason: f.Reason})
+	}
+	httpx.WriteJSON(w, out)
 }

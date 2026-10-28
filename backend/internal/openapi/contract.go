@@ -72,6 +72,17 @@ type Contract struct {
 	// that this package cannot import; the generator checks the declaration against
 	// the handler at generation time so the two cannot drift.
 	SortColumns map[string][]string
+
+	// SuccessStatus overrides the status code a successful call returns.
+	//
+	// The generator otherwise assumes the convention: 201 for a POST that creates,
+	// 200 for a POST that acts on an existing resource, 204 for a DELETE. The
+	// convention is right most of the time and wrong for actions that create nothing
+	// and return a result — a bulk operation reporting per-record outcomes, a logout
+	// returning an acknowledgement. Declaring the code here keeps the specification
+	// honest about those instead of forcing the handler to return a status that
+	// misdescribes what it did.
+	SuccessStatus map[string]int
 }
 
 // QueryParam describes one query parameter.
@@ -80,6 +91,12 @@ type QueryParam struct {
 	Description string
 	Schema      map[string]any
 	Required    bool
+}
+
+// SuccessStatusFor returns the declared success status for a route, if any.
+func (c Contract) SuccessStatusFor(key string) (int, bool) {
+	code, ok := c.SuccessStatus[key]
+	return code, ok
 }
 
 // ResponseType returns the declared response type for a route, if any.

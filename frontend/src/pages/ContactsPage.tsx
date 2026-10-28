@@ -7,6 +7,7 @@ import { errorMessage, fieldErrors } from '../api/client'
 import type { Contact, ContactInput } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
 import { ResourceList, type Column } from '../components/ResourceList'
+import { BulkArchiveButton } from '../components/BulkArchiveButton'
 import {
   Alert,
   Card,
@@ -73,6 +74,18 @@ export function ContactsPage() {
         emptyText="Add a contact to start recording interactions against a person."
         searchable
         searchPlaceholder="Search by name or email…"
+        bulkActions={
+          can('contacts.archive')
+            ? (selected, clear) => (
+                <BulkArchiveButton
+                  ids={selected}
+                  entityLabel="contacts"
+                  archive={contactsApi.bulkArchive}
+                  onDone={clear}
+                />
+              )
+            : undefined
+        }
         actions={
           can('contacts.create') ? (
             <button type="button" className="btn btn--primary btn--sm" onClick={() => setCreating(true)}>

@@ -7,6 +7,7 @@ import { errorMessage, fieldErrors } from '../api/client'
 import type { Account, AccountInput } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
 import { ResourceList, type Column } from '../components/ResourceList'
+import { BulkArchiveButton } from '../components/BulkArchiveButton'
 import {
   Alert,
   Card,
@@ -76,6 +77,18 @@ export function AccountsPage() {
         emptyText="Accounts are the companies you do business with. Create one to get started."
         searchable
         searchPlaceholder="Search accounts…"
+        bulkActions={
+          can('accounts.archive')
+            ? (selected, clear) => (
+                <BulkArchiveButton
+                  ids={selected}
+                  entityLabel="accounts"
+                  archive={accountsApi.bulkArchive}
+                  onDone={clear}
+                />
+              )
+            : undefined
+        }
         actions={
           can('accounts.create') ? (
             <button type="button" className="btn btn--primary btn--sm" onClick={() => setCreating(true)}>

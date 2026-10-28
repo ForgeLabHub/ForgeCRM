@@ -19,6 +19,16 @@ once it reaches 1.0.
 
 ### Added
 
+- **Bulk archive for accounts, contacts and deals.** `POST
+  /api/v1/{accounts,contacts,deals}/bulk-archive` takes up to 200 ids and returns
+  which records were archived and which were not, with a reason for each. A
+  record that is missing or already archived is reported in `failed` rather than
+  failing the request, so one bad id cannot discard the rest of the batch. Every
+  record is archived through the same org-scoped path as the single-record
+  endpoint, so it emits the same events and writes the same audit entries. The
+  lists gained a checkbox column and a bulk action that keeps a partial result
+  visible instead of collapsing it into a success message.
+
 - **RFC 9457 Problem Details in every error response.** The error envelope now
   carries `type`, `title`, `status`, `detail` and `instance` alongside the
   existing `error` object, so a generic client or gateway can consume a failure

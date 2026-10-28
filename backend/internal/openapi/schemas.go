@@ -91,6 +91,11 @@ func responsesFor(rt Route, isAnonymous bool, c Contract, reg *registry) map[str
 	if rt.Method == http.MethodDelete {
 		success = http.StatusNoContent
 	}
+	// A declared status wins over the convention, for the actions the convention
+	// describes wrongly.
+	if declared, ok := c.SuccessStatusFor(rt.Key()); ok {
+		success = declared
+	}
 
 	if success == http.StatusNoContent {
 		out["204"] = response{Description: "The operation succeeded. No body is returned."}

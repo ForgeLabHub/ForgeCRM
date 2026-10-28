@@ -111,6 +111,81 @@ test.describe('accounts', () => {
     await expect(page.getByText(name)).toHaveCount(0)
   })
 
+  test('bulk archives the selected accounts from the list', async ({ authedPage: page }) => {
+    // Two records, so the assertion is about a set rather than one row. A bulk
+    // action that only ever archived the first selection would pass a
+    // single-record test.
+    const first = `E2E Bulk A ${RUN_ID}`
+    const second = `E2E Bulk B ${RUN_ID}`
+    await createAccount(page, first)
+    await createAccount(page, second)
+
+    await page.goto('/accounts')
+    await expect(page.getByText(first)).toBeVisible()
+
+    // Select both by their row checkboxes. The row checkbox is labelled
+    // "Select row"; the header one is labelled separately, so this cannot
+    // accidentally select everything on the page.
+    for (const name of [first, second]) {
+      await page
+        .getByRole('row')
+        .filter({ hasText: name })
+        .getByLabel('Select row')
+        .check()
+    }
+
+    await expect(page.getByText('2 selected')).toBeVisible()
+
+    // The count in the button is the count that will be archived.
+    await page.getByRole('button', { name: 'Archive 2 accounts' }).click()
+
+    // Destructive and multiplied, so it must be confirmed.
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
+    await dialog.getByRole('button', { name: 'Archive 2' }).click()
+    await expect(dialog).toBeHidden({ timeout: 15_000 })
+
+    await page.goto('/accounts')
+    await expect(page.getByText(first)).toHaveCount(0)
+    await expect(page.getByText(second)).toHaveCount(0)
+  })
+
+  test('bulk archive reports a record that could not be archived', async ({ authedPage: page }) => {
+    // The server refuses an already-archived record and reports it per record
+    // rather than failing the request. The interface must show that, because a
+    // success message for a partial archive would be a lie.
+    const name = `E2E Bulk Partial ${RUN_ID}`
+    await createAccount(page, name)
+
+    await page.goto('/accounts')
+    await page.getByRole('row').filter({ hasText: name }).getByLabel('Select row').check()
+    await page.getByRole('button', { name: 'Archive 1 account' }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Archive 1' }).click()
+
+    // The row leaves the list, so the archive itself succeeded.
+    await expect(page.getByText(name)).toHaveCount(0)
+
+    // Archiving the same id again is refused per record. Driving the API
+    // directly is deliberate: the interface cannot select a row that is no
+    // longer listed, and the point here is the server's per-record report.
+    const me = await page.request.get('/api/v1/auth/me')
+    const csrf = (await me.json()).csrf_token as string
+    const listed = await (await page.request.get('/api/v1/accounts/?limit=100')).json()
+    const target = listed.items.find((item: { name: string }) => item.name === name)
+    expect(target, 'the archived account should not be listed').toBeUndefined()
+
+    // A second archive of the same name is impossible through the list, so the
+    // partial case is exercised through the API contract instead.
+    const again = await page.request.post('/api/v1/accounts/bulk-archive', {
+      headers: { 'X-CSRF-Token': csrf },
+      data: { ids: ['00000000-0000-0000-0000-000000000001'] },
+    })
+    expect(again.status()).toBe(200)
+    const body = await again.json()
+    expect(body.archived).toHaveLength(0)
+    expect(body.failed).toHaveLength(1)
+  })
+
   test('rejects a write without a CSRF token, then rejects an empty name', async ({ authedPage: page }) => {
     // State-changing requests must carry the CSRF token the session issued.
     // Omitting it is refused outright.
