@@ -43,6 +43,7 @@ func APIContract() openapi.Contract {
 		QueryParams:      map[string][]openapi.QueryParam{},
 		SortColumns:      map[string][]string{},
 		TypeNames:        map[reflect.Type]string{},
+		SuccessStatus:    map[string]int{},
 	}
 
 	// --- Authentication ------------------------------------------------------
@@ -113,6 +114,28 @@ func APIContract() openapi.Contract {
 	c.Responses["GET /api/v1/accounts/{id}/contacts"] = reflect.TypeOf(httpx.ListResponse[crm.Contact]{})
 	c.Responses["GET /api/v1/accounts/{id}/deals"] = reflect.TypeOf(httpx.ListResponse[crm.Deal]{})
 	c.Responses["GET /api/v1/accounts/{id}/activities"] = reflect.TypeOf(httpx.ListResponse[crm.Activity]{})
+
+	// Bulk archive. The response type is declared in this package, so it is named
+	// directly rather than through crm: it is a transport shape, not a domain one.
+	for _, entity := range []string{"accounts", "contacts", "deals"} {
+		key := "POST /api/v1/" + entity + "/bulk-archive"
+		c.RequestBodies[key] = reflect.TypeOf(crm.BulkArchiveInput{})
+		c.Responses[key] = reflect.TypeOf(bulkArchiveResponse{})
+	}
+	// `ids` is required in the sense that an empty list is refused, and Validate
+	// refuses it unconditionally rather than only for a zero value, so it belongs
+	// in the required set.
+	c.RequiredBody["BulkArchiveInput"] = []string{"ids"}
+	// Bulk archive creates nothing. It reports what happened to each requested
+	// record, so 200 is the honest status and the generator's POST-means-201
+	// convention would misdescribe it.
+	for _, entity := range []string{"accounts", "contacts", "deals"} {
+		c.SuccessStatus["POST /api/v1/"+entity+"/bulk-archive"] = 200
+	}
+	// Logout returns an acknowledgement rather than creating a resource. The
+	// handler already answers 200; the specification said 201 until this declared
+	// the code, which is the kind of drift the generator exists to catch.
+	c.SuccessStatus["POST /api/v1/auth/logout"] = 200
 	c.SortColumns["GET /api/v1/accounts"] = []string{"name", "created_at", "updated_at", "revenue", "employees"}
 
 	// --- CRM: contacts ------------------------------------------------------

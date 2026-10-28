@@ -87,6 +87,7 @@ var validationDTOs = []struct {
 	{"TaskInput", func() any { return &crm.TaskInput{} }},
 	{"ActivityInput", func() any { return &crm.ActivityInput{} }},
 	{"TicketInput", func() any { return &crm.TicketInput{} }},
+	{"BulkArchiveInput", func() any { return &crm.BulkArchiveInput{} }},
 }
 
 // conditionalRequired names the validation error keys that are not plain "this
