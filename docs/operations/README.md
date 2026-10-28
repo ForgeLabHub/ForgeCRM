@@ -90,6 +90,44 @@ security events, job history, integration runs and webhook deliveries at
 `/api/v1/audit`, `/api/v1/security-events` and `/api/v1/admin/logs`. These require the
 corresponding permissions.
 
+## Webhook delivery
+
+A subscription receives every matching event. Delivery is **at-least-once**, not
+exactly-once: a worker that dies after the endpoint accepted the POST but before the row
+was marked delivered leaves the claim to expire and the delivery is sent again. Every
+payload therefore carries a stable `event_id` for the receiver to de-duplicate on.
+
+A delivery that keeps failing is retried with exponential backoff up to the
+subscription's `max_attempts`, then moves to the terminal `dead` state. Dead is visible,
+not silent:
+
+- the transition writes one `webhooks.delivery_dead_lettered` audit entry, once per
+  transition, so an alert built on it does not repeat for a single failure;
+- `dead_lettered_at` records when it happened;
+- `GET /api/v1/admin/metrics` reports three counters.
+
+| Counter | Meaning | Alert on it? |
+| --- | --- | --- |
+| `webhook_deliveries_dead_total` | Deliveries in the terminal dead state right now. Falls when a delivery is replayed or swept. | No — it is a level, not an event. |
+| `webhook_deliveries_dead_lettered_total` | Transitions into the dead state, ever. Read from the audit trail, so it only rises. | Yes — a rate over this is the signal. |
+| `webhook_deliveries_pending_total` | Deliveries still eligible for an attempt. | If it grows without draining. |
+
+All three are read from the database rather than a per-process counter, so they are
+correct when several workers and API replicas run at once. None is labelled: a tenant id
+or target URL in a metric label would multiply the series without bound and leak a
+customer's endpoint into the monitoring system. The per-organization view is in the audit
+page.
+
+### Replaying a delivery
+
+`POST /api/v1/webhooks/{id}/deliveries/{deliveryID}/replay` re-arms a delivery. It
+resets the per-window attempt count, which grants a fresh retry budget, and increments
+`replay_count` — never reset — so an operator can tell a delivery that has just died from
+one that has already exhausted several budgets. The dead-letter marker is cleared and the
+replay is audited. A delivery that is not this organization's, or that is already pending,
+is reported as not found, so an id from another organization is not distinguishable from
+one that does not exist.
+
 ## Rate limiting
 
 Requests to `/api/v1` are limited per client address. Authentication endpoints

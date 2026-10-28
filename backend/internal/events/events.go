@@ -366,10 +366,12 @@ type Delivery struct {
 	EventType      string     `json:"event_type"`
 	Status         string     `json:"status"`
 	Attempts       int        `json:"attempts"`
+	ReplayCount    int        `json:"replay_count"`
 	ResponseStatus *int       `json:"response_status,omitempty"`
 	LastError      *string    `json:"last_error,omitempty"`
 	NextAttemptAt  time.Time  `json:"next_attempt_at"`
 	DeliveredAt    *time.Time `json:"delivered_at,omitempty"`
+	DeadLetteredAt *time.Time `json:"dead_lettered_at,omitempty"`
 	CreatedAt      time.Time  `json:"created_at"`
 }
 
@@ -387,8 +389,8 @@ func (g *Gateway) ListDeliveries(ctx context.Context, p *rbac.Principal, subID u
 		return nil, 0, err
 	}
 	const q = `
-		SELECT id, subscription_id, event_type, status, attempts, response_status,
-		       last_error, next_attempt_at, delivered_at, created_at
+		SELECT id, subscription_id, event_type, status, attempts, replay_count, response_status,
+		       last_error, next_attempt_at, delivered_at, dead_lettered_at, created_at
 		FROM webhook_deliveries WHERE subscription_id = $1
 		ORDER BY created_at DESC LIMIT $2 OFFSET $3`
 	rows, err := g.db.Q(ctx).Query(ctx, q, subID, limit, offset)
@@ -400,7 +402,8 @@ func (g *Gateway) ListDeliveries(ctx context.Context, p *rbac.Principal, subID u
 	for rows.Next() {
 		var dl Delivery
 		if err := rows.Scan(&dl.ID, &dl.SubscriptionID, &dl.EventType, &dl.Status, &dl.Attempts,
-			&dl.ResponseStatus, &dl.LastError, &dl.NextAttemptAt, &dl.DeliveredAt, &dl.CreatedAt); err != nil {
+			&dl.ReplayCount, &dl.ResponseStatus, &dl.LastError, &dl.NextAttemptAt, &dl.DeliveredAt,
+			&dl.DeadLetteredAt, &dl.CreatedAt); err != nil {
 			return nil, 0, err
 		}
 		out = append(out, dl)
@@ -408,24 +411,55 @@ func (g *Gateway) ListDeliveries(ctx context.Context, p *rbac.Principal, subID u
 	return out, total, rows.Err()
 }
 
-// Replay resets a delivery so it will be attempted again.
+// Replay re-arms a delivery so the sender will attempt it again.
+//
+// Three properties are deliberate:
+//
+//  1. It is org-scoped in the same statement that mutates the row, so a caller
+//     cannot re-arm another organization's delivery by guessing an id, and the
+//     affected-row count is what reports a miss.
+//  2. The lifetime attempt history is preserved. `attempts` is the per-window
+//     count the sender compares against max_attempts, so resetting it is what
+//     grants a fresh retry budget; `replay_count` is the lifetime number of
+//     windows and is never reset, so an operator can still see that the endpoint
+//     has already failed a full budget twice rather than reading a delivery that
+//     looks untouched.
+//  3. It is safe to call concurrently and repeatedly: it only ever moves a row
+//     into the pending state, so two replays of the same delivery cannot create a
+//     second delivery or a second send. A delivery that is already pending is
+//     left as it is rather than being reset a second time.
 func (g *Gateway) Replay(ctx context.Context, p *rbac.Principal, deliveryID uuid.UUID) error {
 	return g.db.WithTx(ctx, func(ctx context.Context, _ database.Tx) error {
 		const q = `
 			UPDATE webhook_deliveries
-			SET status='pending', attempts=0, next_attempt_at=now(), last_error=NULL
-			WHERE id = $1 AND organization_id = $2`
-		tag, err := g.db.Q(ctx).Exec(ctx, q, deliveryID, p.OrganizationID)
+			SET status='pending',
+			    attempts=0,
+			    replay_count=replay_count + 1,
+			    next_attempt_at=now(),
+			    last_error=NULL,
+			    dead_lettered_at=NULL,
+			    locked_at=NULL,
+			    locked_by=NULL
+			WHERE id = $1 AND organization_id = $2
+			  AND status <> 'pending'
+			RETURNING replay_count`
+		var replayCount int
+		err := g.db.Q(ctx).QueryRow(ctx, q, deliveryID, p.OrganizationID).Scan(&replayCount)
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Either the delivery is not this organization's, or it is already
+			// pending. Both are reported the same way: the caller asked for an
+			// action that cannot be applied, and telling them which would leak
+			// whether an id exists in another organization.
+			return httpx.ErrNotFound
+		}
 		if err != nil {
 			return fmt.Errorf("replay delivery: %w", err)
-		}
-		if tag.RowsAffected() == 0 {
-			return httpx.ErrNotFound
 		}
 		return g.audit.Record(ctx, audit.Entry{
 			OrganizationID: &p.OrganizationID, ActorUserID: &p.UserID,
 			Action: string(audit.ActionWebhookReplayed), EntityType: "webhook_delivery",
 			EntityID: deliveryID.String(),
+			Metadata: map[string]any{"replay_count": replayCount},
 		})
 	})
 }

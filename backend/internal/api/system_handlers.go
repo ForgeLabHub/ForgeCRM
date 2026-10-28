@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/geff1778/forgecrm/internal/audit"
 	"github.com/geff1778/forgecrm/internal/httpx"
 	"github.com/geff1778/forgecrm/internal/notify"
 )
@@ -137,17 +138,44 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var (
-		auditCount    int64
-		securityCount int64
-		importCount   int64
-		deliveryCount int64
+		auditCount        int64
+		securityCount     int64
+		importCount       int64
+		deliveryCount     int64
+		deadDeliveries    int64
+		deadLetteredEver  int64
+		pendingDeliveries int64
 	)
 	ctx := r.Context()
 	_ = s.deps.DB.Q(ctx).QueryRow(ctx, `SELECT count(*) FROM audit_log`).Scan(&auditCount)
 	_ = s.deps.DB.Q(ctx).QueryRow(ctx, `SELECT count(*) FROM security_events`).Scan(&securityCount)
 	_ = s.deps.DB.Q(ctx).QueryRow(ctx, `SELECT count(*) FROM import_jobs`).Scan(&importCount)
 	_ = s.deps.DB.Q(ctx).QueryRow(ctx, `SELECT count(*) FROM webhook_deliveries`).Scan(&deliveryCount)
-
+	// Dead-letter observability. Two distinct questions an operator asks:
+	//
+	//   webhook_deliveries_dead_total is how many deliveries are in the terminal
+	//   dead state right now. It falls when a dead delivery is replayed
+	//   successfully or swept by retention, so it answers "is anything broken at
+	//   the moment".
+	//
+	//   webhook_deliveries_dead_lettered_total is how many transitions into the
+	//   dead state have ever happened, read from the audit trail. It only rises, so
+	//   it is the value to alert on and to compute a rate from. It is durable and
+	//   shared across replicas because it is read from the database rather than a
+	//   per-process counter, which is what makes it correct when several workers
+	//   and API replicas run at once.
+	//
+	// Neither is labelled. A tenant id, a target URL or an event id in a metric
+	// label would multiply the series without bound and leak a customer's endpoint
+	// into a monitoring system; the per-organization view belongs in the audit
+	// page, not in a counter.
+	_ = s.deps.DB.Q(ctx).QueryRow(ctx,
+		`SELECT count(*) FROM webhook_deliveries WHERE status = 'dead'`).Scan(&deadDeliveries)
+	_ = s.deps.DB.Q(ctx).QueryRow(ctx,
+		`SELECT count(*) FROM audit_log WHERE action = $1`,
+		string(audit.ActionWebhookDeadLettered)).Scan(&deadLetteredEver)
+	_ = s.deps.DB.Q(ctx).QueryRow(ctx,
+		`SELECT count(*) FROM webhook_deliveries WHERE status IN ('pending','failed','delivering')`).Scan(&pendingDeliveries)
 	httpx.WriteJSON(w, map[string]any{
 		"uptime_seconds":     int64(time.Since(s.deps.StartedAt).Seconds()),
 		"jobs_by_status":     stats,
@@ -155,6 +183,11 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		"security_events":    securityCount,
 		"import_jobs":        importCount,
 		"webhook_deliveries": deliveryCount,
+		// The dead-letter counters, named as the operations runbook refers to them.
+		// Both are unlabelled scalars by design.
+		"webhook_deliveries_dead_total":          deadDeliveries,
+		"webhook_deliveries_dead_lettered_total": deadLetteredEver,
+		"webhook_deliveries_pending_total":       pendingDeliveries,
 		"subsystems": map[string]bool{
 			"email":    s.deps.Email.Enabled(),
 			"telegram": s.deps.Telegram.Enabled(),

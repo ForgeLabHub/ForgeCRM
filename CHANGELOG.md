@@ -10,6 +10,37 @@ once it reaches 1.0.
 
 ### Fixed
 
+- **A dead webhook delivery left no durable record.** When a subscriber's endpoint
+  kept failing, the delivery was marked `dead` and nothing else happened: no audit
+  entry, no counter. An operator reading the audit trail could not see that a
+  customer had stopped receiving events, and there was no value to alert on. The
+  terminal transition now writes exactly one `webhooks.delivery_dead_lettered`
+  audit entry and stamps `dead_lettered_at`. "Exactly one" is enforced in the
+  database: the transition and the `status <> 'dead'` guard are one `UPDATE`, so a
+  delivery several workers raced to fail produces one entry, not one per worker.
+  `TestDeliveryDeadLetterIsAuditedOnce` asserts the count is 1 and that the entry
+  is attributable to the owning organization.
+- **Replaying a dead delivery erased how many times it had failed.** `Replay` reset
+  `attempts` to zero and left nothing behind, so an operator could not tell a
+  delivery that had just died from one that had already exhausted two full budgets.
+  The per-window `attempts` is still reset — that is what grants the fresh retry
+  budget — but a new `replay_count`, never reset, records the lifetime number of
+  windows, and the frontend shows it next to the attempt count.
+
+### Added
+
+- **Dead-letter metrics.** `GET /api/v1/admin/metrics` now reports
+  `webhook_deliveries_dead_total` (deliveries currently dead, which falls on a
+  successful replay), `webhook_deliveries_dead_lettered_total` (transitions ever,
+  read from the append-only audit trail, so it only rises and is the value to alert
+  on) and `webhook_deliveries_pending_total`. All three are unlabelled scalars: a
+  tenant id, target URL or event id in a metric label would multiply the series
+  without bound and leak a customer's endpoint into the monitoring system. They are
+  read from the database rather than held in a process, so they are correct when
+  several workers and API replicas run at once.
+
+### Fixed
+
 - **Outgoing webhooks were recorded but never sent.** The dispatcher created a
   `webhook_deliveries` row for every subscription matching an event, and no code
   ever read those rows back. A subscription could be created, verified with a

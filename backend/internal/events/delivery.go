@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -37,6 +38,7 @@ type DeliverySender struct {
 	audit   *audit.Logger
 	keyring *secrets.Keyring
 	poster  Poster
+	log     *slog.Logger
 }
 
 // NewDeliverySender builds a sender. The keyring decrypts each subscription's
@@ -58,6 +60,7 @@ func NewDeliverySenderWithPoster(db *database.DB, auditLog *audit.Logger, keyrin
 		audit:   auditLog,
 		keyring: keyring,
 		poster:  poster,
+		log:     slog.Default(),
 	}
 }
 
@@ -214,10 +217,7 @@ func (s *DeliverySender) retryOrFail(ctx context.Context, id uuid.UUID, attempts
 		cause = cause[:1000]
 	}
 	if attempts >= maxAttempts {
-		_, _ = s.db.Pool().Exec(ctx, `
-			UPDATE webhook_deliveries
-			SET status='dead', attempts=$2, last_error=$3, locked_at=NULL, locked_by=NULL
-			WHERE id=$1`, id, attempts, cause)
+		s.deadLetter(ctx, id, attempts, cause)
 		return
 	}
 	backoff := time.Duration(1<<uint(minInt(attempts, 8))) * time.Second
@@ -226,6 +226,64 @@ func (s *DeliverySender) retryOrFail(ctx context.Context, id uuid.UUID, attempts
 		SET status='failed', attempts=$2, last_error=$3,
 		    next_attempt_at = now() + $4::interval, locked_at=NULL, locked_by=NULL
 		WHERE id=$1`, id, attempts, cause, fmt.Sprintf("%d seconds", int(backoff.Seconds())))
+}
+
+// deadLetter moves a delivery to the terminal dead state and records the
+// transition in the audit trail exactly once.
+//
+// The transition and the guard are the same statement: `WHERE status <> 'dead'`
+// means a second worker that also decides the delivery is exhausted updates no
+// row, so it writes no audit entry and increments no metric. Without that guard a
+// delivery that several workers raced to fail would produce several audit entries
+// for one event, and an alert built on the audit count would fire repeatedly for a
+// single failure.
+//
+// A replay deliberately re-arms a dead delivery (status returns to 'pending'), so
+// a delivery that dies again after a replay is a genuine second transition and is
+// audited again. That is the distinction the guard draws: one audit per time the
+// delivery actually reaches the dead state, not one per attempt and not one ever.
+func (s *DeliverySender) deadLetter(ctx context.Context, id uuid.UUID, attempts int, cause string) {
+	const q = `
+		UPDATE webhook_deliveries
+		SET status='dead', attempts=$2, last_error=$3, dead_lettered_at=now(),
+		    locked_at=NULL, locked_by=NULL
+		WHERE id=$1 AND status <> 'dead'
+		RETURNING organization_id, subscription_id, event_type`
+	var (
+		orgID     uuid.UUID
+		subID     uuid.UUID
+		eventType string
+	)
+	err := s.db.Pool().QueryRow(ctx, q, id, attempts, cause).Scan(&orgID, &subID, &eventType)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// Another worker already performed this transition. Doing nothing here is
+		// the point: the audit entry and the metric must reflect the transition, not
+		// the number of workers that observed it.
+		return
+	}
+	if err != nil {
+		s.log.Warn("could not mark a webhook delivery dead", "delivery_id", id, "error", err)
+		return
+	}
+
+	// The audit entry is the durable, cross-replica record an operator alerts on.
+	// It carries no target URL and no payload: the subscription id is enough to
+	// find the endpoint, and a URL can carry a credential in its query string.
+	if s.audit != nil {
+		_ = s.audit.Record(ctx, audit.Entry{
+			OrganizationID: &orgID,
+			ActorType:      "system",
+			Action:         string(audit.ActionWebhookDeadLettered),
+			EntityType:     "webhook_delivery",
+			EntityID:       id.String(),
+			Metadata: map[string]any{
+				"subscription_id": subID.String(),
+				"event_type":      eventType,
+				"attempts":        attempts,
+				"last_error":      cause,
+			},
+		})
+	}
 }
 
 // minInt is the two-argument minimum; Go 1.21+ has a builtin but this package

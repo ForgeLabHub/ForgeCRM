@@ -540,14 +540,18 @@ export interface Webhook {
 export interface WebhookDelivery {
   id: string
   subscription_id: string
-  event_id: string
   event_type: string
   status: string
   attempts: number
+  /** Operator replays so far. Each replay grants a fresh attempt budget. */
+  replay_count: number
   response_status?: number
-  error?: string
+  /** Why the last attempt failed. Present on failed and dead deliveries. */
+  last_error?: string
   created_at: string
   delivered_at?: string
+  /** Set when the delivery exhausted its attempts; cleared by a replay. */
+  dead_lettered_at?: string
 }
 
 export interface AuditEntry {
