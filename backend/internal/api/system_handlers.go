@@ -56,33 +56,56 @@ func (s *Server) handleSystemInfo(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// capabilitiesResponse tells a client which optional subsystems are live, so the
-// UI can hide features that are not configured instead of showing broken screens.
+// capabilitiesResponse tells a client which optional subsystems are usable, so
+// the UI can hide features that are not configured instead of showing broken
+// screens.
+//
+// The flags answer "can this be used now", not "does configuration exist". A
+// setting that is present but has no implementation behind it must report false,
+// or the interface offers a feature that cannot work. Each field therefore names
+// the condition it actually tests.
 type capabilitiesResponse struct {
-	Email            bool     `json:"email"`
-	Telegram         bool     `json:"telegram"`
-	AI               bool     `json:"ai"`
-	MCP              bool     `json:"mcp"`
-	OIDC             bool     `json:"oidc"`
+	Email    bool `json:"email"`
+	Telegram bool `json:"telegram"`
+	AI       bool `json:"ai"`
+	MFA      bool `json:"mfa"`
+	Webhooks bool `json:"webhooks"`
+	ToolAPI  bool `json:"tool_api"`
+
+	// OIDCConfigured reports whether OIDC settings are present. It is deliberately
+	// not called "oidc": the sign-in flow is not implemented, so a client must not
+	// offer SSO on the strength of this flag. See docs/ROADMAP.md.
+	OIDCConfigured bool `json:"oidc_configured"`
+
 	Imports          []string `json:"import_formats"`
 	Archives         []string `json:"archive_formats"`
 	MigrationSources []string `json:"migration_sources"`
-	MFA              bool     `json:"mfa"`
-	Webhooks         bool     `json:"webhooks"`
 }
 
 func (s *Server) handleCapabilities(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, capabilitiesResponse{
-		Email:            s.deps.Email.Enabled(),
-		Telegram:         s.deps.Telegram.Enabled(),
-		AI:               s.deps.AI.Enabled(),
-		MCP:              true,
-		OIDC:             s.deps.Config.OIDC.Enabled,
+		Email:    s.deps.Email.Enabled(),
+		Telegram: s.deps.Telegram.Enabled(),
+		AI:       s.deps.AI.Enabled(),
+		// MFA is unconditional: TOTP enrolment and verification are implemented in
+		// internal/authn and always available.
+		MFA: true,
+		// Webhook subscriptions and delivery are implemented in internal/events.
+		Webhooks: true,
+		// The tool API exposes tools/list and tools/call over HTTP. It is not a
+		// full MCP server: there is no initialize handshake, no protocol version
+		// negotiation and no stdio or SSE transport, so an off-the-shelf MCP client
+		// cannot connect. The flag says what exists, not what a reader might assume
+		// from the name.
+		ToolAPI: true,
+		// Reported, but the authorisation-code flow that would use it is not
+		// implemented. Named for what it is so the interface cannot mistake a
+		// setting for a working feature.
+		OIDCConfigured: s.deps.Config.OIDC.Enabled,
+
 		Imports:          []string{"csv", "tsv", "json", "jsonl", "xlsx", "xml"},
 		Archives:         []string{"zip", "tar", "tar.gz", "tar.bz2", "tar.xz", "gzip", "bzip2", "xz"},
 		MigrationSources: []string{"postgres", "sqlite", "rest_api"},
-		MFA:              true,
-		Webhooks:         true,
 	})
 }
 

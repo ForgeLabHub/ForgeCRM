@@ -46,7 +46,12 @@ func NewEmailService(cfg *config.EmailConfig, db *database.DB, log *slog.Logger)
 var ErrDisabled = errors.New("email notifications are not configured")
 
 // Enabled reports whether email is configured.
-func (s *EmailService) Enabled() bool { return s.cfg != nil && s.cfg.Enabled }
+// Enabled reports whether the transport is configured and switched on.
+//
+// It tolerates a nil receiver so that a service that was never constructed reports
+// "off" rather than panicking. A capability report must not be able to crash the
+// diagnostics endpoint because one optional subsystem was left nil.
+func (s *EmailService) Enabled() bool { return s != nil && s.cfg != nil && s.cfg.Enabled }
 
 // ValidateConfig checks internal consistency.
 func (s *EmailService) ValidateConfig() error {

@@ -111,9 +111,9 @@ where it is going. Strategy and Definition of Done: `docs/MASTER_PLAN.md`.
 
 | # | Item | Status |
 |---|---|---|
-| 1.1 | OpenAPI 3.1 generated from real routes | **IN_PROGRESS** |
-| 1.2 | Contract test: spec matches the router | **NOT_STARTED** |
-| 1.3 | OpenAPI validation in CI | **NOT_STARTED** |
+| 1.1 | OpenAPI 3.1 generated from real routes | **VERIFIED** — `cmd/openapi-gen` builds the live router and walks it; 144 operations, 111 paths |
+| 1.2 | Contract test: spec matches the router | **VERIFIED** — `internal/openapi/openapi_test.go`; drift guard proven negatively (added and modified routes both fail) |
+| 1.3 | OpenAPI validation in CI | **IMPLEMENTED** — `go run ./cmd/openapi-gen -check` runs in the backend job |
 | 1.4 | API reference site | **NOT_STARTED** |
 | 1.5 | Distributed rate limiting (Redis, tenant-aware, fail-open/closed per category) | **NOT_STARTED** |
 | 1.6 | Multi-replica pool verification | **NOT_STARTED** |
@@ -125,7 +125,7 @@ where it is going. Strategy and Definition of Done: `docs/MASTER_PLAN.md`.
 |---|---|---|
 | 2.1 | OIDC Authorization Code Flow + PKCE | **NOT_STARTED** |
 | 2.2 | Local test IdP (Keycloak) | **NOT_STARTED** |
-| 2.3 | `capabilities.oidc` truthful | **NOT_STARTED** |
+| 2.3 | `capabilities.oidc` truthful | **VERIFIED** — field renamed `oidc_configured`, and `mcp` renamed `tool_api`; `capabilities_test.go` fails if either misleading name returns. The setting is still only a setting: the flow itself is item 2.1 |
 | 2.4 | Consent model + policy service | **NOT_STARTED** |
 | 2.5 | Consent enforcement in every channel | **NOT_STARTED** |
 | 2.6 | Consent UI and "why was this allowed/blocked" | **NOT_STARTED** |
@@ -134,7 +134,7 @@ where it is going. Strategy and Definition of Done: `docs/MASTER_PLAN.md`.
 
 | # | Item | Status |
 |---|---|---|
-| 3.1 | MCP protocol transport | **NOT_STARTED** |
+| 3.1 | MCP protocol transport | **NOT_STARTED** — the capability flag no longer claims otherwise (`tool_api`) |
 | 3.2 | Read and safe-write MCP tools | **PARTIAL** — 8 tools exist behind a non-protocol endpoint |
 | 3.3 | MCP credential model, revocation, read/write split | **NOT_STARTED** |
 | 3.4 | MCP UI and client config examples | **NOT_STARTED** |

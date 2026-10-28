@@ -96,7 +96,11 @@ func NewService(cfg *config.AIConfig, db *database.DB, auditLog *audit.Logger) *
 }
 
 // Enabled reports whether the AI subsystem is configured.
-func (s *Service) Enabled() bool { return s.provider != nil }
+// Enabled reports whether a provider is configured.
+//
+// It tolerates a nil receiver so that AI being switched off is reported as "off"
+// rather than panicking. The platform must work without AI.
+func (s *Service) Enabled() bool { return s != nil && s.provider != nil }
 
 // ProviderName returns the configured provider name, or "none".
 func (s *Service) ProviderName() string {

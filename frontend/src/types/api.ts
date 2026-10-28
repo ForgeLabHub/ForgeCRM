@@ -673,14 +673,23 @@ export interface SystemInfo {
   server_time: string
 }
 
+/**
+ * Capabilities of the running instance.
+ *
+ * `oidc_configured` is not `oidc`: it reports that OIDC settings are present, not
+ * that SSO can be used. The sign-in flow is not implemented, so the interface must
+ * not offer it on the strength of this flag.
+ */
 export interface Capabilities {
   email: boolean
   telegram: boolean
   ai: boolean
-  mcp: boolean
-  oidc: boolean
   mfa: boolean
   webhooks: boolean
+  /** Tools over HTTP (`tools/list`, `tools/call`). Not a full MCP server. */
+  tool_api: boolean
+  /** OIDC settings present. The authorisation-code flow is not implemented. */
+  oidc_configured: boolean
   import_formats: string[]
   archive_formats: string[]
   migration_sources: string[]

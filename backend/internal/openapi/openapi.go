@@ -157,28 +157,56 @@ type Server struct {
 	Description string `json:"description,omitempty"`
 }
 
-// Public marks routes that intentionally require no session.
+// Anonymous lists routes that require no session at all.
 //
-// It is a small, closed list. A route that is neither public nor permission-
-// annotated fails the test in openapi_test.go, so an unauthenticated endpoint
-// cannot appear by accident.
-var Public = map[string]string{
+// It is a small, closed list. A route that is in none of Anonymous, SessionOnly or
+// the parsed permission table fails the contract test, so an unauthenticated
+// endpoint cannot appear by accident.
+//
+// These routes carry an explicit empty `security` list in the document, because in
+// OpenAPI an absent `security` inherits the document-level requirement. Omitting it
+// would tell a generated client to send a session cookie to the sign-in endpoint.
+var Anonymous = map[string]string{
 	"GET /health":                       "Liveness probe. Returns 200 while the process is running.",
 	"GET /ready":                        "Readiness probe. Returns 200 only when the database is reachable.",
 	"POST /api/v1/auth/login":           "Sign in and receive a session cookie.",
-	"POST /api/v1/auth/logout":          "Sign out and revoke the current session.",
 	"POST /api/v1/auth/password/forgot": "Request a password reset. The response is identical whether or not the account exists.",
 	"POST /api/v1/auth/password/reset":  "Complete a password reset with a single-use token.",
 	"POST /api/v1/auth/mfa/verify":      "Complete sign-in by presenting a second factor.",
-	"GET /api/v1/system/info":           "Build and version information. Requires a session.",
-	"GET /api/v1/system/capabilities":   "Advertised capabilities. Requires a session.",
+}
+
+// SessionOnly lists routes that require a signed-in session but no specific
+// permission, because they act on the caller's own account.
+//
+// These are distinct from Anonymous: they inherit the document-level security
+// requirement, so a client knows to send a session. Conflating the two, as an
+// earlier revision did, produced a document that told clients these endpoints were
+// callable anonymously while the server answered 401.
+var SessionOnly = map[string]string{
 	"GET /api/v1/auth/me":               "The current caller and their CSRF token.",
+	"POST /api/v1/auth/logout":          "Sign out and revoke the current session.",
 	"GET /api/v1/auth/sessions":         "The caller's own active sessions.",
 	"DELETE /api/v1/auth/sessions/{id}": "Revoke one of the caller's own sessions.",
 	"POST /api/v1/auth/password/change": "Change the caller's own password.",
 	"POST /api/v1/auth/mfa/enroll":      "Begin enrolling a second factor for the caller.",
 	"POST /api/v1/auth/mfa/confirm":     "Confirm a second factor enrolment.",
 	"POST /api/v1/auth/mfa/disable":     "Disable the caller's second factor.",
+	"GET /api/v1/system/info":           "Build and version information.",
+	"GET /api/v1/system/capabilities":   "Advertised capabilities of the running instance.",
+}
+
+// Public is the union of Anonymous and SessionOnly, for callers that only need to
+// know whether a permission is required.
+//
+// Deprecated: use Anonymous or SessionOnly, which distinguish whether a session is
+// needed. This exists so the distinction can be introduced without rewriting every
+// caller at once.
+func Public(key string) (string, bool) {
+	if d, ok := Anonymous[key]; ok {
+		return d, true
+	}
+	d, ok := SessionOnly[key]
+	return d, ok
 }
 
 // document is the OpenAPI document root.
@@ -323,26 +351,33 @@ func marshalDeterministic(v any) ([]byte, error) {
 
 // operationFor builds one operation.
 func operationFor(rt Route, group string, perms map[string]string) (operation, error) {
-	perm, isPublic := perms[rt.Key()], false
-	if _, ok := Public[rt.Key()]; ok {
-		isPublic = true
-	}
-	if perm == "" && !isPublic {
+	perm := perms[rt.Key()]
+	_, isAnonymous := Anonymous[rt.Key()]
+	_, isSessionOnly := SessionOnly[rt.Key()]
+
+	if perm == "" && !isAnonymous && !isSessionOnly {
 		return operation{}, fmt.Errorf(
-			"%s is neither permission-annotated nor listed in openapi.Public: "+
-				"add the permission in its route registration, or mark it public with a reason", rt.Key())
+			"%s is neither permission-annotated nor listed in openapi.Anonymous or "+
+				"openapi.SessionOnly: add the permission in its route registration, or "+
+				"declare its access level with a reason", rt.Key())
+	}
+	if perm != "" && (isAnonymous || isSessionOnly) {
+		return operation{}, fmt.Errorf(
+			"%s declares the permission %q and is also listed as needing no permission; "+
+				"one of the two is wrong", rt.Key(), perm)
+	}
+	if isAnonymous && isSessionOnly {
+		return operation{}, fmt.Errorf(
+			"%s is listed as both anonymous and session-only; these are mutually exclusive", rt.Key())
 	}
 
-	desc := publicDescription(rt)
-	if perm != "" {
-		desc = strings.TrimSpace(desc + "\n\nRequires the `" + perm + "` permission.")
-	}
+	desc := accessDescription(rt, perm)
 
 	summary := summaryFor(rt)
-	if isPublic {
-		// The Public table already states what the operation does in one line,
+	if perm == "" {
+		// The access tables already state what the operation does in one line,
 		// which reads better than the mechanical verb phrase ("Create a login").
-		summary = publicDescription(rt)
+		summary = accessDescription(rt, perm)
 	}
 
 	op := operation{
@@ -350,7 +385,7 @@ func operationFor(rt Route, group string, perms map[string]string) (operation, e
 		Tags:        []string{TagFor(group)},
 		Summary:     summary,
 		Description: desc,
-		Responses:   responsesFor(rt, isPublic),
+		Responses:   responsesFor(rt, isAnonymous),
 	}
 
 	for _, name := range pathParams(rt.Path) {
@@ -362,23 +397,37 @@ func operationFor(rt Route, group string, perms map[string]string) (operation, e
 		op.Parameters = append(op.Parameters, listParams()...)
 	}
 
-	// A session-scoped operation inherits the document-level security. A public
-	// one must override it with an explicit empty list: in OpenAPI an absent
-	// `security` inherits the global requirement, so omitting it would tell a
-	// generated client to send a session cookie to the sign-in endpoint. The field
-	// is a pointer because a plain slice cannot distinguish "empty" from "absent".
-	if isPublic {
+	// An anonymous operation must override the document-level security with an
+	// explicit empty list: in OpenAPI an absent `security` inherits the global
+	// requirement, so omitting it would tell a generated client to send a session
+	// cookie to the sign-in endpoint. The field is a pointer because a plain slice
+	// cannot distinguish "empty" from "absent". A session-only operation inherits
+	// the requirement, which is what we want.
+	if isAnonymous {
 		none := []map[string][]string{}
 		op.Security = &none
 	}
 	return op, nil
 }
 
-func publicDescription(rt Route) string {
-	if d, ok := Public[rt.Key()]; ok {
-		return d
+// accessDescription returns the description text: the hand-written line from the
+// access table, or the permission requirement, or both.
+func accessDescription(rt Route, perm string) string {
+	text := ""
+	if d, ok := Anonymous[rt.Key()]; ok {
+		text = d
+	} else if d, ok := SessionOnly[rt.Key()]; ok {
+		text = d
 	}
-	return ""
+
+	switch {
+	case perm == "":
+		return text
+	case text == "":
+		return "Requires the `" + perm + "` permission."
+	default:
+		return strings.TrimSpace(text + "\n\nRequires the `" + perm + "` permission.")
+	}
 }
 
 // operationID is derived from the method and path, so it is stable and unique
