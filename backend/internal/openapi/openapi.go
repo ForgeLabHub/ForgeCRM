@@ -1,0 +1,527 @@
+// Package openapi derives the API specification from the running router.
+//
+// The paths and methods are not written by hand. They are read from the same chi
+// router the server serves, so the document cannot list a route that does not
+// exist or miss one that does. A hand-written specification drifts on the first
+// route addition, and a specification that describes a system that no longer
+// exists is worse than none, because clients trust it.
+//
+// Two things the router cannot report are merged in:
+//
+//   - The permission each route requires. chi.Walk exposes only the innermost
+//     handler, so the requirement is not recoverable at runtime. It is parsed
+//     from the route registration in source instead, which is the same statement
+//     that installs the middleware, so the two cannot disagree.
+//   - Request and response schemas. These are declared below, next to the routes
+//     they describe.
+//
+// A route with no permission annotation and no public marker is a test failure,
+// not a silent gap.
+package openapi
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"sort"
+	"strings"
+
+	"github.com/go-chi/chi/v5"
+)
+
+// Route is one method on one path, as the router actually serves it.
+type Route struct {
+	Method string
+	Path   string
+}
+
+// Key identifies a route in the annotation tables.
+func (r Route) Key() string { return r.Method + " " + r.Path }
+
+// Routes walks a chi router and returns every registered route.
+//
+// chi.Walk reports the full path including any mounted prefix, so the result is
+// what a client calls rather than what a handler declares. It also reports paths
+// with a trailing slash, which chi treats as equivalent to the bare path; the
+// slash is stripped so the document shows one canonical form.
+func Routes(r chi.Routes) ([]Route, error) {
+	var routes []Route
+
+	err := chi.Walk(r, func(method, path string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
+		// chi registers a catch-all for its own 404 and 405 handling. Those are
+		// not API operations; the document describes them once as shared
+		// responses.
+		if strings.Contains(path, "/*") {
+			return nil
+		}
+		if len(path) > 1 {
+			path = strings.TrimSuffix(path, "/")
+		}
+		routes = append(routes, Route{Method: strings.ToUpper(method), Path: path})
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("walk router: %w", err)
+	}
+
+	sort.Slice(routes, func(i, j int) bool {
+		if routes[i].Path != routes[j].Path {
+			return routes[i].Path < routes[j].Path
+		}
+		return routes[i].Method < routes[j].Method
+	})
+	return routes, nil
+}
+
+// Group names the logical area a path belongs to. It is derived from the path, so
+// a new route is grouped without anyone remembering to say so. A route that lands
+// in "Other" is a signal that its path is surprising.
+func Group(path string) string {
+	switch {
+	case path == "/health", path == "/ready", strings.HasPrefix(path, "/api/v1/system"):
+		return "System"
+	case strings.HasPrefix(path, "/api/v1/auth"):
+		return "Authentication"
+	case strings.HasPrefix(path, "/api/v1/users"),
+		strings.HasPrefix(path, "/api/v1/roles"),
+		strings.HasPrefix(path, "/api/v1/permissions"),
+		strings.HasPrefix(path, "/api/v1/teams"),
+		strings.HasPrefix(path, "/api/v1/organizations"):
+		return "Users and permissions"
+	case strings.HasPrefix(path, "/api/v1/imports"), strings.HasPrefix(path, "/api/v1/exports"):
+		return "Import and export"
+	case strings.HasPrefix(path, "/api/v1/migrations"):
+		return "Migrations"
+	case strings.HasPrefix(path, "/api/v1/integrations"):
+		return "Integrations"
+	case strings.HasPrefix(path, "/api/v1/events"), strings.HasPrefix(path, "/api/v1/webhooks"):
+		return "Events"
+	case strings.HasPrefix(path, "/api/v1/jobs"):
+		return "Jobs"
+	case strings.HasPrefix(path, "/api/v1/audit"), strings.HasPrefix(path, "/api/v1/admin"):
+		return "Audit and diagnostics"
+	case strings.HasPrefix(path, "/api/v1/ai"), path == "/api/v1/mcp", strings.HasPrefix(path, "/api/v1/mcp/"):
+		return "AI and MCP"
+	case strings.HasPrefix(path, "/api/v1/notifications"):
+		return "Notifications"
+	case strings.HasPrefix(path, "/api/v1/"):
+		return "CRM"
+	default:
+		return "Other"
+	}
+}
+
+// TagFor turns a group name into an OpenAPI tag.
+func TagFor(group string) string {
+	return strings.ReplaceAll(strings.ToLower(group), " ", "-")
+}
+
+// Info describes the document itself.
+type Info struct {
+	Title       string `json:"title"`
+	Version     string `json:"version"`
+	Description string `json:"description,omitempty"`
+}
+
+// DefaultDescription states the conventions a client needs before reading any
+// single endpoint, so they are not repeated in seventy operations.
+//
+// It lives here rather than in the generator so the command and the contract test
+// produce byte-identical documents. If the two used different text, the drift test
+// would fail for a reason that has nothing to do with the API.
+const DefaultDescription = "ForgeCRM REST API.\n\n" +
+	"## Authentication\n\n" +
+	"Sign in with POST /api/v1/auth/login, which sets the session cookie\n" +
+	"`forgecrm_session`. State-changing requests must also send the CSRF token\n" +
+	"returned by GET /api/v1/auth/me in the `X-CSRF-Token` header.\n\n" +
+	"## Errors\n\n" +
+	"Every failure returns RFC 9457 Problem Details with `type`, `title`,\n" +
+	"`status`, `detail`, `instance` and `retryable`, and repeats the\n" +
+	"machine-readable code under `error`. Branch on `error.code`; `title` is prose\n" +
+	"and may change. See docs/api/errors.md.\n\n" +
+	"## Collections\n\n" +
+	"List operations accept `limit`, `offset`, `q`, `sort` and `order`, and return\n" +
+	"`{items, total, limit, offset}`. `limit` is clamped by the server, so a large\n" +
+	"value is not an error.\n\n" +
+	"## Long operations\n\n" +
+	"Imports, migrations and exports return a job identifier instead of blocking\n" +
+	"the request. Poll GET /api/v1/jobs/{id}.\n\n" +
+	"## Permissions\n\n" +
+	"Each operation states the permission it requires. A caller without it receives\n" +
+	"403. Authorisation is enforced on the server; the interface only decides what\n" +
+	"to display."
+
+// Server is an OpenAPI server entry.
+type Server struct {
+	URL         string `json:"url"`
+	Description string `json:"description,omitempty"`
+}
+
+// Public marks routes that intentionally require no session.
+//
+// It is a small, closed list. A route that is neither public nor permission-
+// annotated fails the test in openapi_test.go, so an unauthenticated endpoint
+// cannot appear by accident.
+var Public = map[string]string{
+	"GET /health":                       "Liveness probe. Returns 200 while the process is running.",
+	"GET /ready":                        "Readiness probe. Returns 200 only when the database is reachable.",
+	"POST /api/v1/auth/login":           "Sign in and receive a session cookie.",
+	"POST /api/v1/auth/logout":          "Sign out and revoke the current session.",
+	"POST /api/v1/auth/password/forgot": "Request a password reset. The response is identical whether or not the account exists.",
+	"POST /api/v1/auth/password/reset":  "Complete a password reset with a single-use token.",
+	"POST /api/v1/auth/mfa/verify":      "Complete sign-in by presenting a second factor.",
+	"GET /api/v1/system/info":           "Build and version information. Requires a session.",
+	"GET /api/v1/system/capabilities":   "Advertised capabilities. Requires a session.",
+	"GET /api/v1/auth/me":               "The current caller and their CSRF token.",
+	"GET /api/v1/auth/sessions":         "The caller's own active sessions.",
+	"DELETE /api/v1/auth/sessions/{id}": "Revoke one of the caller's own sessions.",
+	"POST /api/v1/auth/password/change": "Change the caller's own password.",
+	"POST /api/v1/auth/mfa/enroll":      "Begin enrolling a second factor for the caller.",
+	"POST /api/v1/auth/mfa/confirm":     "Confirm a second factor enrolment.",
+	"POST /api/v1/auth/mfa/disable":     "Disable the caller's second factor.",
+}
+
+// document is the OpenAPI document root.
+type document struct {
+	OpenAPI    string                `json:"openapi"`
+	Info       Info                  `json:"info"`
+	Servers    []Server              `json:"servers,omitempty"`
+	Tags       []tag                 `json:"tags"`
+	Paths      map[string]pathItem   `json:"paths"`
+	Components components            `json:"components"`
+	Security   []map[string][]string `json:"security"`
+}
+
+type info struct {
+	Title       string `json:"title"`
+	Version     string `json:"version"`
+	Description string `json:"description"`
+}
+
+type tag struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+type pathItem map[string]operation
+
+type operation struct {
+	OperationID string                 `json:"operationId"`
+	Tags        []string               `json:"tags"`
+	Summary     string                 `json:"summary"`
+	Description string                 `json:"description"`
+	Parameters  []parameter            `json:"parameters,omitempty"`
+	RequestBody *requestBody           `json:"requestBody,omitempty"`
+	Responses   map[string]response    `json:"responses"`
+	Security    *[]map[string][]string `json:"security,omitempty"`
+	Deprecated  bool                   `json:"deprecated,omitempty"`
+}
+
+type parameter struct {
+	Name        string         `json:"name"`
+	In          string         `json:"in"`
+	Required    bool           `json:"required,omitempty"`
+	Description string         `json:"description,omitempty"`
+	Schema      map[string]any `json:"schema"`
+}
+
+type requestBody struct {
+	Required bool                 `json:"required"`
+	Content  map[string]mediaType `json:"content"`
+}
+
+type response struct {
+	Description string               `json:"description"`
+	Content     map[string]mediaType `json:"content,omitempty"`
+}
+
+type mediaType struct {
+	Schema map[string]any `json:"schema"`
+}
+
+type components struct {
+	Schemas         map[string]any `json:"schemas"`
+	SecuritySchemes map[string]any `json:"securitySchemes"`
+}
+
+// Build assembles the document.
+//
+// perms maps a route key to the permission it requires; it comes from parsing the
+// route registrations in source. A route missing from both perms and Public makes
+// Build return an error rather than emitting an undocumented operation.
+func Build(routes []Route, perms map[string]string, in Info, servers []Server) ([]byte, error) {
+	if len(routes) == 0 {
+		return nil, fmt.Errorf("no routes: refusing to emit an empty specification")
+	}
+
+	paths := map[string]pathItem{}
+	tagsSeen := map[string]bool{}
+
+	for _, rt := range routes {
+		group := Group(rt.Path)
+		tagsSeen[group] = true
+
+		op, err := operationFor(rt, group, perms)
+		if err != nil {
+			return nil, err
+		}
+		if paths[rt.Path] == nil {
+			paths[rt.Path] = pathItem{}
+		}
+		method := strings.ToLower(rt.Method)
+		if _, dup := paths[rt.Path][method]; dup {
+			return nil, fmt.Errorf("duplicate route %s", rt.Key())
+		}
+		paths[rt.Path][method] = op
+	}
+
+	tags := make([]tag, 0, len(tagsSeen))
+	for name := range tagsSeen {
+		tags = append(tags, tag{Name: TagFor(name), Description: tagDescription(name)})
+	}
+	sort.Slice(tags, func(i, j int) bool { return tags[i].Name < tags[j].Name })
+
+	doc := document{
+		OpenAPI: "3.1.0",
+		Info:    in,
+		Servers: servers,
+		Tags:    tags,
+		Paths:   paths,
+		Components: components{
+			Schemas: schemas(),
+			SecuritySchemes: map[string]any{
+				"sessionCookie": map[string]any{
+					"type": "apiKey",
+					"in":   "cookie",
+					"name": "forgecrm_session",
+					"description": "Opaque session cookie set by POST /api/v1/auth/login. " +
+						"State-changing requests must also send the X-CSRF-Token header.",
+				},
+			},
+		},
+		Security: []map[string][]string{{"sessionCookie": {}}},
+	}
+
+	return marshalDeterministic(doc)
+}
+
+// marshalDeterministic encodes with sorted map keys and a trailing newline, so the
+// committed file is byte-stable across runs and machines. A generated file that
+// changes on every run cannot be committed and diffed, and a specification nobody
+// diffs is a specification nobody maintains. encoding/json sorts map keys, which
+// is what makes this work.
+func marshalDeterministic(v any) ([]byte, error) {
+	var b strings.Builder
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+	return []byte(b.String()), nil
+}
+
+// operationFor builds one operation.
+func operationFor(rt Route, group string, perms map[string]string) (operation, error) {
+	perm, isPublic := perms[rt.Key()], false
+	if _, ok := Public[rt.Key()]; ok {
+		isPublic = true
+	}
+	if perm == "" && !isPublic {
+		return operation{}, fmt.Errorf(
+			"%s is neither permission-annotated nor listed in openapi.Public: "+
+				"add the permission in its route registration, or mark it public with a reason", rt.Key())
+	}
+
+	desc := publicDescription(rt)
+	if perm != "" {
+		desc = strings.TrimSpace(desc + "\n\nRequires the `" + perm + "` permission.")
+	}
+
+	summary := summaryFor(rt)
+	if isPublic {
+		// The Public table already states what the operation does in one line,
+		// which reads better than the mechanical verb phrase ("Create a login").
+		summary = publicDescription(rt)
+	}
+
+	op := operation{
+		OperationID: operationID(rt),
+		Tags:        []string{TagFor(group)},
+		Summary:     summary,
+		Description: desc,
+		Responses:   responsesFor(rt, isPublic),
+	}
+
+	for _, name := range pathParams(rt.Path) {
+		op.Parameters = append(op.Parameters, parameter{
+			Name: name, In: "path", Required: true, Schema: pathParamSchema(name),
+		})
+	}
+	if rt.Method == http.MethodGet && !strings.Contains(rt.Path, "{") {
+		op.Parameters = append(op.Parameters, listParams()...)
+	}
+
+	// A session-scoped operation inherits the document-level security. A public
+	// one must override it with an explicit empty list: in OpenAPI an absent
+	// `security` inherits the global requirement, so omitting it would tell a
+	// generated client to send a session cookie to the sign-in endpoint. The field
+	// is a pointer because a plain slice cannot distinguish "empty" from "absent".
+	if isPublic {
+		none := []map[string][]string{}
+		op.Security = &none
+	}
+	return op, nil
+}
+
+func publicDescription(rt Route) string {
+	if d, ok := Public[rt.Key()]; ok {
+		return d
+	}
+	return ""
+}
+
+// operationID is derived from the method and path, so it is stable and unique
+// without a hand-maintained registry that can fall out of step.
+func operationID(rt Route) string {
+	parts := strings.Split(strings.Trim(rt.Path, "/"), "/")
+	var b strings.Builder
+	b.WriteString(strings.ToLower(rt.Method))
+	for _, p := range parts {
+		if p == "" || p == "api" || p == "v1" {
+			continue
+		}
+		if strings.HasPrefix(p, "{") {
+			name := strings.Trim(p, "{}")
+			b.WriteString("By" + strings.ToUpper(name[:1]) + name[1:])
+			continue
+		}
+		b.WriteString(strings.ToUpper(p[:1]) + p[1:])
+	}
+	return b.String()
+}
+
+// summaryFor describes the operation in one line, from its shape. It is
+// deliberately mechanical: a hand-written summary per route drifts, and a wrong
+// summary is worse than a plain one.
+func summaryFor(rt Route) string {
+	seg := lastStaticSegment(rt.Path)
+	switch {
+	case rt.Method == http.MethodGet && strings.Contains(rt.Path, "{"):
+		return "Get one " + seg + " by id"
+	case rt.Method == http.MethodGet:
+		return "List " + plural(seg)
+	case rt.Method == http.MethodPost && strings.Contains(rt.Path, "{"):
+		return "Perform an action on " + withArticle(seg)
+	case rt.Method == http.MethodPost:
+		return "Create " + withArticle(seg)
+	case rt.Method == http.MethodPut:
+		return "Replace " + withArticle(seg)
+	case rt.Method == http.MethodPatch:
+		return "Update " + withArticle(seg)
+	case rt.Method == http.MethodDelete:
+		return "Archive or delete " + withArticle(seg)
+	default:
+		return rt.Method + " " + rt.Path
+	}
+}
+
+// withArticle prefixes the indefinite article, so a generated summary reads as
+// English rather than "Create a account". The vowel test approximates the sound
+// rule and is deliberately narrow: it covers the words this API uses and does not
+// attempt general English, where the choice depends on pronunciation.
+func withArticle(word string) string {
+	if word == "" {
+		return "a resource"
+	}
+	switch word[0] {
+	case 'a', 'e', 'i', 'o', 'u':
+		return "an " + word
+	default:
+		return "a " + word
+	}
+}
+
+// plural returns the plural form for list operations. Irregular forms are listed
+// rather than guessed, because a wrong summary is worse than a plain one.
+func plural(word string) string {
+	switch word {
+	case "":
+		return "records"
+	case "activity":
+		return "activities"
+	case "status":
+		return "statuses"
+	}
+	if strings.HasSuffix(word, "s") || strings.HasSuffix(word, "x") ||
+		strings.HasSuffix(word, "ch") || strings.HasSuffix(word, "sh") {
+		return word + "es"
+	}
+	if strings.HasSuffix(word, "y") && len(word) > 1 {
+		switch word[len(word)-2] {
+		case 'a', 'e', 'i', 'o', 'u':
+			return word + "s"
+		default:
+			return word[:len(word)-1] + "ies"
+		}
+	}
+	return word + "s"
+}
+
+// lastStaticSegment returns the trailing non-parameter path segment, singularised
+// so "accounts" reads as "account".
+func lastStaticSegment(path string) string {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	for i := len(parts) - 1; i >= 0; i-- {
+		p := parts[i]
+		if p == "" || strings.HasPrefix(p, "{") {
+			continue
+		}
+		switch p {
+		case "api", "v1", "system", "admin":
+			continue
+		}
+		if strings.HasSuffix(p, "ies") {
+			return strings.TrimSuffix(p, "ies") + "y"
+		}
+		if strings.HasSuffix(p, "sses") || strings.HasSuffix(p, "shes") || strings.HasSuffix(p, "ches") {
+			return strings.TrimSuffix(p, "es")
+		}
+		if strings.HasSuffix(p, "s") && !strings.HasSuffix(p, "ss") {
+			return strings.TrimSuffix(p, "s")
+		}
+		return p
+	}
+	return "resource"
+}
+
+func tagDescription(name string) string {
+	switch name {
+	case "System":
+		return "Health, readiness, build information and advertised capabilities."
+	case "Authentication":
+		return "Sign-in, session management, password recovery and second factors."
+	case "Users and permissions":
+		return "Users, roles, permissions, teams and organizations."
+	case "CRM":
+		return "Contacts, accounts, leads, deals, pipelines, tasks, activities, tickets, documents, tags, custom fields, search and reports."
+	case "Import and export":
+		return "File and archive import, field mapping, dry runs, reports and exports."
+	case "Migrations":
+		return "Source database schema discovery, mapping, execution and reconciliation."
+	case "Integrations":
+		return "Integration hub: connections, configuration checks and synchronisation runs."
+	case "Events":
+		return "Inbound events, webhook subscriptions and delivery history."
+	case "Jobs":
+		return "Background jobs: status, cancellation and retry."
+	case "Audit and diagnostics":
+		return "Audit trail, application logs, metrics and diagnostics."
+	case "AI and MCP":
+		return "AI providers, AI tasks and the tool surface."
+	case "Notifications":
+		return "Email and Telegram notification channels."
+	default:
+		return "Operations not yet classified."
+	}
+}
