@@ -64,6 +64,13 @@ jobs:
       - name: go vet
         run: go vet ./...
 
+      - name: OpenAPI specification is current
+        # The specification is generated from the live router, so this step fails
+        # when a route is added, renamed or removed without regenerating
+        # docs/api/openapi.json. It is the enforcement half of the generator: the
+        # generator makes the document correct, this keeps it correct.
+        run: go run ./cmd/openapi-gen -check
+
       - name: Unit tests
         run: go test -race -count=1 ./...
 

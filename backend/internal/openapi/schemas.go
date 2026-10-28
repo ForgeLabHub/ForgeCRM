@@ -1,0 +1,201 @@
+package openapi
+
+import (
+	"fmt"
+	"net/http"
+	"strings"
+)
+
+// PathParamSchema types a path parameter. Identifiers are UUIDs; the few
+// exceptions are named explicitly rather than defaulting everything to string and
+// leaving a client to discover the type from a 500.
+//
+// Exported so the contract test can assert every parameter is typed.
+func PathParamSchema(name string) map[string]any { return pathParamSchema(name) }
+
+func pathParamSchema(name string) map[string]any {
+	switch name {
+	case "id", "roleId", "deliveryId", "userId", "teamId", "orgId", "jobId",
+		"sessionId", "importId", "migrationId", "integrationId", "webhookId",
+		"eventId", "taskId", "documentId", "ticketId", "dealId", "contactId",
+		"accountId", "leadId", "pipelineId", "notificationId":
+		return map[string]any{"type": "string", "format": "uuid"}
+	default:
+		return map[string]any{"type": "string"}
+	}
+}
+
+// pathParams extracts {name} segments in the order they appear.
+func pathParams(path string) []string {
+	var out []string
+	for {
+		start := strings.Index(path, "{")
+		if start < 0 {
+			break
+		}
+		end := strings.Index(path[start:], "}")
+		if end < 0 {
+			break
+		}
+		out = append(out, path[start+1:start+end])
+		path = path[start+end+1:]
+	}
+	return out
+}
+
+// listParams is the shared collection query contract.
+//
+// It is declared once because the middleware enforces the same set everywhere;
+// repeating it per route would invite the copies to disagree.
+func listParams() []parameter {
+	return []parameter{
+		{Name: "limit", In: "query",
+			Schema:      map[string]any{"type": "integer", "minimum": 1, "maximum": 200, "default": 50},
+			Description: "Page size. Values above the server maximum are clamped, not rejected."},
+		{Name: "offset", In: "query",
+			Schema: map[string]any{"type": "integer", "minimum": 0, "default": 0}},
+		{Name: "q", In: "query",
+			Schema:      map[string]any{"type": "string"},
+			Description: "Free-text filter."},
+		{Name: "sort", In: "query",
+			Schema:      map[string]any{"type": "string"},
+			Description: "Field to sort by. An unknown field is rejected."},
+		{Name: "order", In: "query",
+			Schema: map[string]any{"type": "string", "enum": []string{"asc", "desc"}, "default": "desc"}},
+	}
+}
+
+// ref builds a schema reference.
+func ref(name string) map[string]any {
+	return map[string]any{"$ref": "#/components/schemas/" + name}
+}
+
+// responsesFor assembles the response set for an operation.
+//
+// The error responses are attached centrally rather than restated per route,
+// because every operation can fail the same ways and the copies would drift. The
+// success response is described by shape, since the generator does not know which
+// entity a given action returns.
+func responsesFor(rt Route, isPublic bool) map[string]response {
+	out := map[string]response{}
+
+	success := http.StatusOK
+	if rt.Method == http.MethodPost {
+		success = http.StatusCreated
+	}
+	// Actions on an existing resource ("POST /{id}/execute") do not create a
+	// resource, so 200 is the honest status for them.
+	if rt.Method == http.MethodPost && strings.Contains(rt.Path, "{") {
+		success = http.StatusOK
+	}
+	if rt.Method == http.MethodDelete {
+		success = http.StatusNoContent
+	}
+
+	if success == http.StatusNoContent {
+		out["204"] = response{Description: "The operation succeeded. No body is returned."}
+	} else {
+		out[fmt.Sprint(success)] = response{
+			Description: "Success. The body shape depends on the resource.",
+			Content: map[string]mediaType{
+				"application/json": {Schema: map[string]any{"type": "object"}},
+			},
+		}
+	}
+
+	out["400"] = problemResponse("The request was malformed: bad JSON, an unknown field, or a missing required parameter.")
+	if !isPublic {
+		out["401"] = problemResponse("No valid session, or the session has expired. Sign in again.")
+		out["403"] = problemResponse("Authenticated, but the caller lacks the required permission.")
+	}
+	out["404"] = problemResponse("No such resource, or none visible to the caller's organization.")
+	out["409"] = problemResponse("The request conflicts with current state, such as a duplicate external identifier.")
+	out["422"] = problemResponse("A field failed validation. `error.details` names each field.")
+	out["429"] = problemResponse("Too many requests. Retry after the interval in `Retry-After`.")
+	out["500"] = problemResponse("Unexpected failure. The detail is deliberately generic; the cause is in the server log.")
+	return out
+}
+
+func problemResponse(description string) response {
+	return response{
+		Description: description,
+		Content: map[string]mediaType{
+			"application/problem+json": {Schema: ref("Problem")},
+			"application/json":         {Schema: ref("Problem")},
+		},
+	}
+}
+
+// schemas returns the shared component schemas.
+//
+// The error envelope is the important one: it is the only shape every client
+// must handle, and it is specified from the code in internal/httpx rather than
+// from memory.
+func schemas() map[string]any {
+	return map[string]any{
+		"Problem": map[string]any{
+			"type":        "object",
+			"description": "RFC 9457 Problem Details, as emitted by internal/httpx.",
+			"required":    []string{"type", "title", "status", "error"},
+			"properties": map[string]any{
+				"type":   map[string]any{"type": "string", "format": "uri-reference", "description": "A stable identifier for the problem class."},
+				"title":  map[string]any{"type": "string", "description": "A short human-readable summary."},
+				"status": map[string]any{"type": "integer", "description": "The HTTP status code, repeated for convenience."},
+				"detail": map[string]any{"type": "string", "description": "An explanation specific to this occurrence. Never contains a secret."},
+				"instance": map[string]any{
+					"type":        "string",
+					"description": "The request path, or its request id when a path would be misleading.",
+				},
+				"retryable": map[string]any{
+					"type":        "boolean",
+					"description": "Whether retrying the same request may succeed.",
+				},
+				"request_id": map[string]any{
+					"type":        "string",
+					"description": "Correlates this response with the server log. Quote it when reporting a problem.",
+				},
+				"error": map[string]any{
+					"type":        "object",
+					"description": "The machine-readable code. Branch on this, not on `title`.",
+					"required":    []string{"code", "message"},
+					"properties": map[string]any{
+						"code": map[string]any{
+							"type": "string",
+							"enum": []string{
+								"bad_request", "unauthorized", "forbidden", "not_found",
+								"conflict", "validation_failed", "rate_limited",
+								"internal_error", "unavailable",
+							},
+						},
+						"message": map[string]any{"type": "string"},
+						"details": map[string]any{
+							"type":                 "object",
+							"additionalProperties": map[string]any{"type": "string"},
+							"description":          "Field-level messages, present on validation failures.",
+						},
+					},
+				},
+			},
+		},
+		"Pagination": map[string]any{
+			"type":        "object",
+			"description": "Paging metadata returned with every collection.",
+			"required":    []string{"total", "limit", "offset"},
+			"properties": map[string]any{
+				"total":  map[string]any{"type": "integer", "description": "Total matching rows, ignoring limit and offset."},
+				"limit":  map[string]any{"type": "integer"},
+				"offset": map[string]any{"type": "integer"},
+			},
+		},
+		"Error": map[string]any{
+			"type":        "object",
+			"description": "Deprecated standalone error body. Prefer the Problem schema.",
+			"deprecated":  true,
+			"required":    []string{"code", "message"},
+			"properties": map[string]any{
+				"code":    map[string]any{"type": "string"},
+				"message": map[string]any{"type": "string"},
+			},
+		},
+	}
+}

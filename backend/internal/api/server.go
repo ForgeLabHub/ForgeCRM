@@ -91,6 +91,15 @@ func New(deps *Deps) *Server {
 // Handler returns the root HTTP handler.
 func (s *Server) Handler() http.Handler { return s.router }
 
+// Router exposes the router itself, for tools that need to enumerate the route
+// table rather than serve requests.
+//
+// The OpenAPI generator is the caller: it derives the specification from the same
+// router the server serves, so the document cannot describe a route that does not
+// exist. It is a separate method from Handler because Handler deliberately
+// returns the narrower http.Handler, which chi.Walk cannot inspect.
+func (s *Server) Router() chi.Router { return s.router }
+
 func (s *Server) buildRouter() chi.Router {
 	r := chi.NewRouter()
 
