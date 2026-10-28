@@ -32,9 +32,25 @@ export interface ApiErrorBody {
   details?: Record<string, string>
 }
 
+/**
+ * The error response shape.
+ *
+ * The server returns RFC 9457 Problem Details members at the top level and
+ * repeats the code and field errors under `error`. Only `error` is guaranteed
+ * here: a service that speaks plain RFC 9457 and omits the nested object is
+ * still handled, using `detail` for the message.
+ */
 export interface ApiErrorEnvelope {
-  error: ApiErrorBody
+  type?: string
+  title?: string
+  status?: number
+  detail?: string
+  instance?: string
+  /** Whether resending the identical request could succeed. */
+  retryable?: boolean
   request_id?: string
+  correlation_id?: string
+  error?: ApiErrorBody
 }
 
 /** An error the server described in its standard envelope. */
@@ -43,14 +59,17 @@ export class ApiError extends Error {
   readonly code: ErrorCode
   readonly details: Record<string, string>
   readonly requestId?: string
+  /** True when resending the identical request could succeed. */
+  readonly retryable: boolean
 
-  constructor(status: number, body: ApiErrorBody, requestId?: string) {
+  constructor(status: number, body: ApiErrorBody, requestId?: string, retryable = false) {
     super(body.message)
     this.name = 'ApiError'
     this.status = status
     this.code = body.code
     this.details = body.details ?? {}
     this.requestId = requestId
+    this.retryable = retryable
   }
 
   /** True when the session is gone and the user must sign in again. */
@@ -220,14 +239,19 @@ export class ApiClient {
 
     if (!response.ok) {
       const envelope = parsed as ApiErrorEnvelope | undefined
-      const errBody = envelope?.error
+      // Prefer the nested object, which carries the field-level details; fall
+      // back to the RFC 9457 members so a service that returns bare Problem
+      // Details still yields a readable message rather than a generic one.
+      const errBody: ApiErrorBody = envelope?.error ?? {
+        code: 'internal_error',
+        message:
+          envelope?.detail ?? `Request failed (HTTP ${response.status}).`,
+      }
       throw new ApiError(
         response.status,
-        errBody ?? {
-          code: 'internal_error',
-          message: `Request failed (HTTP ${response.status}).`,
-        },
+        errBody,
         envelope?.request_id ?? response.headers.get('X-Request-ID') ?? undefined,
+        envelope?.retryable ?? false,
       )
     }
 

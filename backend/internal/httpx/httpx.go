@@ -75,25 +75,116 @@ var (
 	ErrBadRequest = NewError(http.StatusBadRequest, CodeBadRequest, "malformed request")
 )
 
-// errorEnvelope wraps an error for JSON output.
+// errorEnvelope is the single JSON shape returned for every failed request.
+//
+// It carries RFC 9457 Problem Details members at the top level (type, title,
+// status, detail, instance) so a generic client or gateway can consume an error
+// without knowing this API, and repeats the machine-readable code and the
+// field-level errors under "error" so existing callers keep working. Both are
+// derived from one APIError, so they cannot disagree.
 type errorEnvelope struct {
-	Error     *APIError `json:"error"`
-	RequestID string    `json:"request_id,omitempty"`
+	// Type is a URN identifying the problem class. It is deliberately not an
+	// https URL: we do not operate a dereferenceable error catalogue, and a link
+	// that 404s is worse than an identifier that never claimed to resolve. The
+	// value to branch on is error.code.
+	Type   string `json:"type"`
+	Title  string `json:"title"`
+	Status int    `json:"status"`
+	Detail string `json:"detail"`
+	// Instance is the request path where the problem occurred. The query string
+	// is omitted on purpose: it can carry tokens and personal data that must not
+	// be echoed back into logs or client-side error reporting.
+	Instance string `json:"instance,omitempty"`
+
+	// Retryable states whether resending the identical request could succeed. It
+	// is what a client needs to choose between backing off and fixing the
+	// request, and it is not derivable from the status code: a 500 may be a
+	// transient fault or a deterministic defect, so we report the safer answer.
+	Retryable     bool   `json:"retryable"`
+	RequestID     string `json:"request_id,omitempty"`
+	CorrelationID string `json:"correlation_id,omitempty"`
+
+	// Error is the original envelope, retained for compatibility.
+	Error *APIError `json:"error"`
+}
+
+// errorTitles maps a code to the short summary RFC 9457 calls the problem title.
+// An unlisted code falls back to the HTTP status phrase, which is always correct
+// if not always specific.
+var errorTitles = map[ErrorCode]string{
+	CodeBadRequest:      "Malformed request",
+	CodeValidation:      "Validation failed",
+	CodeUnauthorized:    "Authentication required",
+	CodeForbidden:       "Permission denied",
+	CodeNotFound:        "Resource not found",
+	CodeConflict:        "Conflict",
+	CodeRateLimited:     "Too many requests",
+	CodePayloadTooLarge: "Payload too large",
+	CodeUnsupported:     "Unsupported operation",
+	CodeInternal:        "Internal error",
+	CodeDisabled:        "Subsystem disabled",
+	CodeMFARequired:     "Second factor required",
+}
+
+// errorTypeURN builds the problem type identifier for a code.
+func errorTypeURN(code ErrorCode) string { return "urn:forgecrm:error:" + string(code) }
+
+// retryableStatus reports whether a request that failed with this status could
+// succeed if sent again unchanged.
+//
+// 429 and 503 mean "not now" and 502/504 mean an upstream hop failed, so all
+// four are worth a bounded retry. 500 is excluded on purpose: it usually means
+// the request hit a defect, and retrying a defect is how a small incident
+// becomes a large one.
+func retryableStatus(status int) bool {
+	switch status {
+	case http.StatusTooManyRequests,
+		http.StatusBadGateway,
+		http.StatusServiceUnavailable,
+		http.StatusGatewayTimeout:
+		return true
+	}
+	return false
 }
 
 // WriteError renders err as JSON. Unknown errors become a generic 500 so that
 // internal details never reach the client.
 func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 	var apiErr *APIError
-	if !errors.As(err, &apiErr) {
+	// errors.As reports true for a typed-nil *APIError while leaving apiErr
+	// nil, so the nil check is required: without it the field access below
+	// panics inside the error path, turning a handler mistake into a crash.
+	if !errors.As(err, &apiErr) || apiErr == nil {
 		apiErr = ErrInternal
 	}
 	if apiErr.Status == 0 {
 		apiErr.Status = http.StatusInternalServerError
 	}
-	env := errorEnvelope{Error: apiErr}
+
+	title, ok := errorTitles[apiErr.Code]
+	if !ok {
+		// http.StatusText returns "" for an unrecognised status, so keep the
+		// title non-empty for clients that require the member.
+		title = http.StatusText(apiErr.Status)
+		if title == "" {
+			title = "Error"
+		}
+	}
+
+	env := errorEnvelope{
+		Type:      errorTypeURN(apiErr.Code),
+		Title:     title,
+		Status:    apiErr.Status,
+		Detail:    apiErr.Message,
+		Retryable: retryableStatus(apiErr.Status),
+		Error:     apiErr,
+	}
 	if r != nil {
 		env.RequestID = RequestID(r.Context())
+		env.CorrelationID = env.RequestID
+		if r.URL != nil {
+			env.Instance = r.URL.Path
+		}
 	}
 	WriteJSONStatus(w, apiErr.Status, env)
 }

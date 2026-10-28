@@ -8,6 +8,44 @@ once it reaches 1.0.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`WriteError` panicked on a typed-nil error.** `errors.As` reports success for
+  an error interface holding a nil `*APIError`, leaving the target nil; the
+  following field access then panicked *inside the error path*, so a handler that
+  returned a typed nil turned a recoverable failure into a crash. Found by a test
+  written for the new envelope below, which is the kind of defect that a suite
+  covering only the happy path does not reach.
+
+### Added
+
+- **RFC 9457 Problem Details in every error response.** The error envelope now
+  carries `type`, `title`, `status`, `detail` and `instance` alongside the
+  existing `error` object, so a generic client or gateway can consume a failure
+  without knowing this API. Both views are derived from one `APIError`, so they
+  cannot disagree, and `error.code` remains the value to branch on.
+  - `retryable` states whether resending the identical request could succeed. It
+    is not derivable from the status code: a 500 may be a transient fault or a
+    deterministic defect, and retrying a defect is how a small incident becomes a
+    large one, so 500 reports `false` while 429, 502, 503 and 504 report `true`.
+  - `instance` is the request path with the query string removed, because a query
+    string can carry tokens and personal data that must not be echoed into logs
+    or client-side error reporting.
+  - `correlation_id` is now emitted next to `request_id`; both carry the same
+    value, since the log pipeline and the frontend read different names.
+  - `type` is a URN, not an https URL: no dereferenceable error catalogue is
+    operated, and a link that 404s is worse than an identifier that never claimed
+    to resolve.
+
+- **Archive format coverage for bzip2 and xz.** `GET /api/v1/system/capabilities`
+  advertised `tar.bz2`, `tar.xz`, `bzip2` and `xz`, but the suite proved only
+  zip, tar, tar.gz and gzip — four advertised formats were reachable from the API
+  and exercised by no test. They are now covered by round-trip tests, corrupt-input
+  rejection, magic-byte detection and an assertion that every advertised format is
+  reported as supported. The bzip2 fixtures are embedded as base64 because the Go
+  standard library reads bzip2 but cannot write it; they are decoded back with an
+  independent reader so a fixture cannot drift into a false pass.
+
 ### Security
 
 - **Patched GO-2026-6809 (CVE-2026-111943) in the Go standard library.** The

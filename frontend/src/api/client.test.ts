@@ -147,6 +147,49 @@ describe('responses', () => {
     expect((error as ApiError).code).toBe('internal_error')
   })
 
+  it('reads a bare RFC 9457 problem response', async () => {
+    // A service that speaks plain Problem Details omits the nested `error`
+    // object. The client must still surface the server's detail text rather
+    // than a generic "Request failed".
+    const { client } = clientWithResponse(
+      jsonResponse(
+        {
+          type: 'urn:forgecrm:error:conflict',
+          title: 'Conflict',
+          status: 409,
+          detail: 'A contact with that email already exists',
+          instance: '/api/v1/contacts',
+        },
+        409,
+      ),
+    )
+
+    const error = (await client.post('/api/v1/contacts', {}).catch((e: unknown) => e)) as ApiError
+    expect(error).toBeInstanceOf(ApiError)
+    expect(error.status).toBe(409)
+    expect(error.message).toBe('A contact with that email already exists')
+  })
+
+  it('carries the retryable flag from the envelope', async () => {
+    const { client } = clientWithResponse(
+      jsonResponse(
+        {
+          type: 'urn:forgecrm:error:rate_limited',
+          status: 429,
+          detail: 'slow down',
+          retryable: true,
+          error: { code: 'rate_limited', message: 'slow down' },
+        },
+        429,
+      ),
+    )
+
+    const error = (await client.get('/api/v1/contacts').catch((e: unknown) => e)) as ApiError
+    expect(error.retryable).toBe(true)
+    // A client that does not know about the flag must not retry by default.
+    expect(new ApiError(500, { code: 'internal_error', message: 'x' }).retryable).toBe(false)
+  })
+
   it('reports a transport failure as a NetworkError', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('failed to fetch')))
     const client = new ApiClient()
