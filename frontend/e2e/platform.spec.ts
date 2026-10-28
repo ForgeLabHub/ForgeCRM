@@ -224,6 +224,7 @@ test.describe('workspace pages render live data', () => {
     { path: '/imports', title: 'Import Center' },
     { path: '/integrations', title: 'Integrations' },
     { path: '/jobs', title: 'Background jobs' },
+    { path: '/ai', title: 'AI & MCP' },
     { path: '/approvals', title: 'Agent approvals' },
     { path: '/admin/audit', title: 'Audit & logs' },
     { path: '/admin/users', title: 'Users' },

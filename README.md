@@ -21,7 +21,7 @@ Verified (see [docs/PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md) for evidence):
 | --- | --- |
 | Go API, migrations, PostgreSQL schema | Working, 11 migrations applied |
 | Authentication, sessions, CSRF, TOTP | Working |
-| RBAC: 81 permissions, 28 role records | Working, enforcement verified |
+| RBAC: 83 permissions, 28 role records | Working, enforcement verified |
 | Audit log and security events | Working |
 | CRM entities (contacts, accounts, deals, tasks, tickets, ...) | Working |
 | Import Center: CSV, TSV, JSON, JSONL, XLSX, XML, archives | Working |

@@ -56,7 +56,7 @@ grep -rhoE '\b(Get|Post|Put|Patch|Delete)\("(/[^"]*)"' backend/internal/api/*.go
 
 ### 1.3 RBAC
 
-- **81 permissions** declared in `backend/internal/rbac`.
+- **83 permissions** declared in `backend/internal/rbac` (the catalog in `rbac.go`; migration 0004 seeds them).
 - **14 default roles**, seeded in `0004_rbac_seed.up.sql`: `platform_owner`,
   `platform_admin`, `tenant_admin`, `security_auditor`, `integration_admin`,
   `data_steward`, `executive`, `sales_manager`, `sales_representative`,

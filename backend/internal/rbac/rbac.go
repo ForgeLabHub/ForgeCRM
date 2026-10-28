@@ -246,7 +246,18 @@ func (p *Principal) HasAny(perms ...Permission) bool {
 }
 
 // Permissions returns the sorted permission set, for /auth/me and diagnostics.
+//
+// A platform owner holds every permission by way of Has, so the set it reports
+// must be the whole catalog rather than the role-derived subset it happens to
+// carry. Otherwise the API allows an operation the owner's own /auth/me says it
+// cannot perform, and the interface hides a page the server would serve.
 func (p *Principal) Permissions() []Permission {
+	if p == nil {
+		return nil
+	}
+	if p.IsPlatformOwner {
+		return All()
+	}
 	out := make([]Permission, 0, len(p.permissions))
 	for perm := range p.permissions {
 		out = append(out, perm)
