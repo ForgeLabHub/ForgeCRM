@@ -8,6 +8,40 @@ once it reaches 1.0.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Outgoing webhooks were recorded but never sent.** The dispatcher created a
+  `webhook_deliveries` row for every subscription matching an event, and no code
+  ever read those rows back. A subscription could be created, verified with a
+  test, receive a green status — and the customer's endpoint was never called for
+  a real event. The row sat `pending` until the retention sweep deleted it. The
+  worker now runs a delivery loop that claims pending deliveries, signs the
+  payload and posts it, with exponential backoff and a bounded attempt count.
+  `TestOutboundWebhookIsActuallyDelivered` asserts a real HTTP server receives a
+  request whose signature verifies against the subscription's own secret.
+- **Two workers could send the same webhook twice.** Deliveries were selected
+  without being claimed, so two workers polling at the same moment both read the
+  same row and both POSTed it. The customer's endpoint saw two deliveries for one
+  domain change, which for a non-idempotent receiver is a duplicated side effect.
+  Claiming is now a single `UPDATE ... FOR UPDATE SKIP LOCKED`, and a unique
+  index on `(subscription_id, outbox_event_id)` rejects a duplicate delivery row
+  even if the dispatcher runs concurrently with itself.
+- **A failed outbox event was retried forever.** `MarkFailed` incremented the
+  attempt count and nothing ever acted on it, so a permanently broken event was
+  re-read by every drain until the end of the deployment. Retries are now bounded
+  and an exhausted event is dead-lettered, so the failure is terminal and
+  visible rather than an unbounded loop.
+- **Outbox draining could dispatch the same event twice.** The drain loop read
+  pending events without claiming them, so the scheduled drain and the queue job
+  could both process one event. Both paths now claim, and a claim abandoned by a
+  crashed worker is released on the next worker start instead of stranding the
+  event.
+- **The retention sweep never ran.** The handler existed and nothing enqueued
+  it, so delivered webhooks, finished jobs and application logs accumulated
+  without bound — a slow disk-filling defect rather than a theoretical one. The
+  worker now enqueues the sweep hourly, idempotently, so a slow sweep is never
+  doubled up by the next tick.
+
 ### Security
 
 - **`X-Forwarded-For` was believed from any caller.** `chi`'s

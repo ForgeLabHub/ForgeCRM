@@ -90,6 +90,7 @@ func run() error {
 		imports:    imports,
 		outbox:     outboxStore,
 		dispatcher: dispatcher,
+		sender:     events.NewDeliverySender(db, auditLog, keyring),
 		email:      emailSvc,
 		telegram:   telegramSvc,
 		hub:        hub,
@@ -104,7 +105,7 @@ func run() error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		runOutboxLoop(ctx, log, outboxStore, dispatcher, cfg.WorkerPollEvery)
+		runOutboxLoop(ctx, log, outboxStore, dispatcher, workerID+"-outbox", cfg.WorkerPollEvery)
 	}()
 
 	// Stale job recovery: a worker that died mid-job would otherwise leave the row
@@ -113,6 +114,24 @@ func run() error {
 	go func() {
 		defer wg.Done()
 		runRequeueLoop(ctx, log, queue)
+	}()
+
+	// Scheduled maintenance: the retention sweep handler existed but nothing ever
+	// enqueued it, so finished jobs, delivered webhooks and application logs grew
+	// without bound. This loop is what makes the retention policy real.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		runMaintenanceLoop(ctx, log, queue)
+	}()
+
+	// Webhook delivery: the loop that actually sends the rows the dispatcher
+	// creates. Without it a subscription was registered, matching events were
+	// recorded as deliveries, and the endpoint was never called.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		runDeliveryLoop(ctx, log, registry.sender, cfg.WorkerPollEvery)
 	}()
 
 	concurrency := cfg.WorkerConcurrency
@@ -141,6 +160,7 @@ type handlerRegistry struct {
 	imports    *importx.Service
 	outbox     *outbox.Store
 	dispatcher *events.Dispatcher
+	sender     *events.DeliverySender
 	email      *notify.EmailService
 	telegram   *notify.TelegramService
 	hub        *integrations.Hub
@@ -169,7 +189,7 @@ func (r *handlerRegistry) handle(ctx context.Context, queue *jobs.Queue, job *jo
 		if err := json.Unmarshal(job.Payload, &payload); err != nil {
 			return fmt.Errorf("decode webhook delivery payload: %w", err)
 		}
-		return r.deliverWebhook(ctx, payload.DeliveryID)
+		return r.sender.SendDelivery(ctx, payload.DeliveryID)
 
 	case jobs.KindEmailSend:
 		var payload struct {
@@ -202,94 +222,12 @@ func (r *handlerRegistry) handle(ctx context.Context, queue *jobs.Queue, job *jo
 	}
 }
 
-// deliverWebhook sends one pending webhook delivery.
-func (r *handlerRegistry) deliverWebhook(ctx context.Context, deliveryID uuid.UUID) error {
-	const sel = `
-		SELECT d.id, d.subscription_id, d.payload, s.target_url, s.secret_encrypted, s.max_attempts, d.attempts
-		FROM webhook_deliveries d
-		JOIN webhook_subscriptions s ON s.id = d.subscription_id
-		WHERE d.id = $1`
-	var (
-		id          uuid.UUID
-		subID       uuid.UUID
-		payload     []byte
-		targetURL   string
-		secretEnc   []byte
-		maxAttempts int
-		attempts    int
-	)
-	if err := r.db.Pool().QueryRow(ctx, sel, deliveryID).Scan(&id, &subID, &payload,
-		&targetURL, &secretEnc, &maxAttempts, &attempts); err != nil {
-		return fmt.Errorf("load webhook delivery: %w", err)
-	}
-
-	keyring, err := secrets.NewKeyring(platformSecretFromEnv())
-	if err != nil {
-		return err
-	}
-	secret, err := keyring.Decrypt(secretEnc)
-	if err != nil {
-		return fmt.Errorf("decrypt webhook secret: %w", err)
-	}
-
-	timestamp := fmt.Sprint(time.Now().Unix())
-	signature := keyring.WebhookSign(secret, timestamp, payload)
-
-	headers := map[string]string{
-		"X-Signature-256":       "sha256=" + signature,
-		"X-Signature-Timestamp": timestamp,
-		"X-ForgeCRM-Delivery":   id.String(),
-	}
-	// The guard refuses an internal or metadata destination on every hop.
-	client := integrations.NewGuardedClient(20 * time.Second)
-	status, body, err := client.PostJSON(ctx, targetURL, payload, headers)
-
-	attempts++
-	if err != nil {
-		// Exponential backoff, capped, so a persistent failure does not hammer a
-		// failing endpoint.
-		backoff := time.Duration(1<<uint(min(attempts, 8))) * time.Second
-		if attempts >= maxAttempts {
-			_, _ = r.db.Pool().Exec(ctx, `
-				UPDATE webhook_deliveries
-				SET status='failed', attempts=$2, last_error=$3
-				WHERE id=$1`, id, attempts, truncate(err.Error(), 1000))
-			return nil
-		}
-		_, _ = r.db.Pool().Exec(ctx, `
-			UPDATE webhook_deliveries
-			SET status='pending', attempts=$2, last_error=$3, next_attempt_at=now() + $4::interval
-			WHERE id=$1`, id, attempts, truncate(err.Error(), 1000), fmt.Sprintf("%d seconds", int(backoff.Seconds())))
-		return nil
-	}
-
-	if status >= 400 {
-		msg := fmt.Sprintf("the endpoint returned HTTP %d", status)
-		if attempts >= maxAttempts {
-			_, _ = r.db.Pool().Exec(ctx, `
-				UPDATE webhook_deliveries SET status='failed', attempts=$2, last_error=$3 WHERE id=$1`,
-				id, attempts, msg)
-			return nil
-		}
-		backoff := time.Duration(1<<uint(min(attempts, 8))) * time.Second
-		_, _ = r.db.Pool().Exec(ctx, `
-			UPDATE webhook_deliveries
-			SET status='pending', attempts=$2, last_error=$3, next_attempt_at=now() + $4::interval
-			WHERE id=$1`, id, attempts, msg, fmt.Sprintf("%d seconds", int(backoff.Seconds())))
-		return nil
-	}
-
-	_ = body
-	_, _ = r.db.Pool().Exec(ctx, `
-		UPDATE webhook_deliveries SET status='delivered', attempts=$2, delivered_at=now(), response_status=$3, last_error=NULL
-		WHERE id=$1`, id, attempts, status)
-	return nil
-}
-
 // drainOutbox publishes pending events and creates webhook deliveries.
 func (r *handlerRegistry) drainOutbox(ctx context.Context) error {
 	const batch = 100
-	events, err := r.outbox.FetchPending(ctx, batch)
+	// Claim rather than read: a queued drain runs in a worker that may be racing
+	// the drain loop, and reading without claiming let both process the same event.
+	events, err := r.outbox.ClaimPending(ctx, "drain-job", batch)
 	if err != nil {
 		return err
 	}
@@ -314,6 +252,9 @@ func (r *handlerRegistry) retentionSweep(ctx context.Context) error {
 	// are never deleted by an automatic sweep.
 	stmts := []string{
 		`DELETE FROM webhook_deliveries WHERE status = 'delivered' AND delivered_at < now() - interval '30 days'`,
+		// A dead delivery is terminal: it will never be retried, so it is retained
+		// only long enough for an operator to inspect it.
+		`DELETE FROM webhook_deliveries WHERE status = 'dead' AND next_attempt_at < now() - interval '30 days'`,
 		`DELETE FROM jobs WHERE status IN ('succeeded','cancelled') AND finished_at < now() - interval '30 days'`,
 		`DELETE FROM ai_tasks WHERE finished_at < now() - interval '90 days'`,
 		`DELETE FROM app_logs WHERE created_at < now() - interval '14 days'`,
@@ -376,11 +317,21 @@ func workerLoop(ctx context.Context, log *slog.Logger, queue *jobs.Queue,
 }
 
 func runOutboxLoop(ctx context.Context, log *slog.Logger, store *outbox.Store,
-	dispatcher *events.Dispatcher, poll time.Duration) {
+	dispatcher *events.Dispatcher, workerID string, poll time.Duration) {
 
 	if poll <= 0 {
 		poll = 2 * time.Second
 	}
+
+	// An event claimed by a worker that died is otherwise stuck: the claim has no
+	// owner to release it. Returning them at start makes an unclean shutdown cost a
+	// redelivery instead of a lost event.
+	if n, err := store.ReleaseStale(ctx, 10*time.Minute); err != nil {
+		log.Warn("could not release stale outbox claims", "error", err)
+	} else if n > 0 {
+		log.Info("released stale outbox claims", "count", n)
+	}
+
 	ticker := time.NewTicker(poll)
 	defer ticker.Stop()
 	for {
@@ -388,9 +339,11 @@ func runOutboxLoop(ctx context.Context, log *slog.Logger, store *outbox.Store,
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			events, err := store.FetchPending(ctx, 100)
+			// Claim, do not read: reading without claiming is what let two drains
+			// dispatch the same event and deliver it twice.
+			events, err := store.ClaimPending(ctx, workerID, 100)
 			if err != nil {
-				log.Warn("could not read the outbox", "error", err)
+				log.Warn("could not claim outbox events", "error", err)
 				continue
 			}
 			for _, ev := range events {
@@ -402,6 +355,78 @@ func runOutboxLoop(ctx context.Context, log *slog.Logger, store *outbox.Store,
 				if err := store.MarkPublished(ctx, ev.ID); err != nil {
 					log.Warn("could not mark an event published", "event_id", ev.ID, "error", err)
 				}
+			}
+		}
+	}
+}
+
+// runDeliveryLoop sends pending webhook deliveries.
+//
+// This is the consumer the outgoing webhook subsystem was missing: the dispatcher
+// only ever created delivery rows, so a subscription was registered, matching
+// events were recorded, and the target endpoint was never called. Claiming rather
+// than reading is what allows more than one worker to run this without sending the
+// same delivery twice.
+func runDeliveryLoop(ctx context.Context, log *slog.Logger, sender *events.DeliverySender, poll time.Duration) {
+	if poll <= 0 {
+		poll = 2 * time.Second
+	}
+
+	if n, err := sender.ReleaseStaleDeliveries(ctx, 5*time.Minute); err != nil {
+		log.Warn("could not release stale webhook deliveries", "error", err)
+	} else if n > 0 {
+		log.Info("released stale webhook deliveries", "count", n)
+	}
+
+	ticker := time.NewTicker(poll)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			for {
+				delivery, err := sender.ClaimDelivery(ctx, "delivery-loop", 2*time.Minute)
+				if err != nil {
+					if errors.Is(err, context.Canceled) {
+						return
+					}
+					log.Warn("could not claim a webhook delivery", "error", err)
+					break
+				}
+				if delivery == nil {
+					break
+				}
+				if err := sender.SendDelivery(ctx, delivery.ID); err != nil {
+					log.Warn("could not send a webhook delivery", "delivery_id", delivery.ID, "error", err)
+				}
+			}
+		}
+	}
+}
+
+// runMaintenanceLoop enqueues the periodic retention sweep.
+//
+// It enqueues rather than sweeping inline so the sweep runs on the same job
+// machinery as everything else: it is retried on failure, visible in the job log
+// and bounded by the queue's own concurrency. EnqueuePeriodic is idempotent per
+// kind, so a slow sweep is never doubled up by the next tick.
+func runMaintenanceLoop(ctx context.Context, log *slog.Logger, queue *jobs.Queue) {
+	const every = time.Hour
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			job, err := queue.EnqueuePeriodic(ctx, jobs.KindRetentionSweep, map[string]any{})
+			if err != nil {
+				log.Warn("could not enqueue the retention sweep", "error", err)
+				continue
+			}
+			if job != nil {
+				log.Info("enqueued the retention sweep", "job_id", job.ID)
 			}
 		}
 	}

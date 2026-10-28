@@ -318,6 +318,12 @@ func NewDispatcher(db *database.DB, auditLog *audit.Logger) *Dispatcher {
 // Dispatch creates a delivery row for each enabled subscription that matches an
 // event. A subscription's own origin is excluded to prevent an event that came
 // from an external system being echoed straight back to it.
+//
+// The insert is idempotent: a unique index on (subscription_id, outbox_event_id)
+// rejects a second row for the same event, and the conflict is absorbed rather
+// than returned. Two drains running concurrently would otherwise each create
+// their own delivery for the same event and the customer's endpoint would receive
+// two POSTs for one domain change.
 func (d *Dispatcher) Dispatch(ctx context.Context, ev outbox.Event) (int, error) {
 	if ev.OrganizationID == nil {
 		return 0, nil
@@ -331,6 +337,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, ev outbox.Event) (int, error)
 		  AND s.enabled
 		  AND s.disabled_at IS NULL
 		  AND (cardinality(s.event_types) = 0 OR $2 = ANY(s.event_types))
+		ON CONFLICT (subscription_id, outbox_event_id) DO NOTHING
 		RETURNING id`
 	envelope, err := json.Marshal(ev.ToEnvelope())
 	if err != nil {

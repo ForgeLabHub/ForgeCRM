@@ -119,6 +119,58 @@ func (q *Queue) Enqueue(ctx context.Context, req EnqueueRequest) (*Job, error) {
 	return scanJob(row)
 }
 
+// EnqueuePeriodic enqueues a job of the given kind unless one is already queued
+// or running.
+//
+// It exists for scheduled maintenance, which is enqueued on a timer: without the
+// check, every tick would add another retention sweep and the queue would fill
+// with duplicates that all do the same work.
+//
+// The lock is taken as its own statement before the check. Taking it inside the
+// same statement as the check does not work: a statement's snapshot is fixed when
+// it starts, so a waiter that acquires the lock still evaluates NOT EXISTS against
+// a snapshot taken before the other transaction committed and inserts a duplicate.
+func (q *Queue) EnqueuePeriodic(ctx context.Context, kind string, payload any) (*Job, error) {
+	if kind == "" {
+		return nil, errors.New("job kind is required")
+	}
+	body, err := json.Marshal(nonNil(payload))
+	if err != nil {
+		return nil, fmt.Errorf("marshal job payload: %w", err)
+	}
+
+	var job *Job
+	err = q.db.WithTx(ctx, func(ctx context.Context, tx database.Tx) error {
+		// Serialise periodic enqueue per kind. The lock is released when the
+		// transaction ends, and the check below therefore runs against a snapshot
+		// that includes any insert the previous holder committed.
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('forgecrm:periodic:' || $1))`, kind); err != nil {
+			return fmt.Errorf("acquire periodic lock: %w", err)
+		}
+		const sql = `
+			INSERT INTO jobs (kind, payload, priority, max_attempts, run_after)
+			SELECT $1, $2, 200, 1, now()
+			WHERE NOT EXISTS (
+				SELECT 1 FROM jobs WHERE kind = $1 AND status IN ('queued', 'running')
+			)
+			RETURNING ` + jobColumns
+		created, err := scanJob(tx.QueryRow(ctx, sql, kind, body))
+		if errors.Is(err, pgx.ErrNoRows) {
+			// A sweep is already outstanding; this tick is a no-op.
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		job = created
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return job, nil
+}
+
 const jobColumns = `
 	id, organization_id, kind, status, priority, payload, checkpoint, progress, result,
 	attempts, max_attempts, run_after, started_at, finished_at, last_error,

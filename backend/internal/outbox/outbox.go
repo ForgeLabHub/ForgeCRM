@@ -50,6 +50,12 @@ const (
 	EventUserBlocked        = "platform.user.blocked"
 )
 
+// maxPublishAttempts bounds how long a broken event is retried before it is
+// dead-lettered. Without a bound the row stays unpublished forever and every
+// drain re-reads it, so one bad payload costs work on every poll for the life of
+// the deployment.
+const maxPublishAttempts = 10
+
 // Event is one entry in the outbox.
 type Event struct {
 	ID             uuid.UUID       `json:"event_id"`
@@ -63,6 +69,10 @@ type Event struct {
 	PublishedAt    *time.Time      `json:"published_at,omitempty"`
 	Attempts       int             `json:"attempts"`
 	LastError      *string         `json:"last_error,omitempty"`
+	// DeadLetteredAt is set when the event exhausted its publish attempts. A dead
+	// event is never retried again, so it stops costing work on every drain and
+	// becomes visible to an operator instead of retrying silently forever.
+	DeadLetteredAt *time.Time `json:"dead_lettered_at,omitempty"`
 }
 
 // Envelope is the canonical external representation of an event.
@@ -104,15 +114,66 @@ func (s *Store) Emit(ctx context.Context, orgID *uuid.UUID, eventType string, pa
 	return nil
 }
 
+// ClaimPending atomically claims up to limit unpublished events for one drain.
+//
+// The previous read left the rows pending, so two workers polling at the same
+// instant both read the same events and both dispatched them. The claim marks the
+// rows claimed in the same statement that selects them: the caller now owns them
+// and a second worker skips them. A worker that dies mid-dispatch leaves the row
+// claimed, and ReleaseStale returns it after a timeout, so a crash costs a
+// redelivery rather than a lost event.
+func (s *Store) ClaimPending(ctx context.Context, workerID string, limit int) ([]Event, error) {
+	const q = `
+UPDATE outbox_events SET
+claimed_at = now(),
+claimed_by = $1
+WHERE id IN (
+SELECT id FROM outbox_events
+WHERE published_at IS NULL
+  AND dead_lettered_at IS NULL
+  AND attempts < $3
+  AND (claimed_at IS NULL OR claimed_at < now() - interval '5 minutes')
+ORDER BY occurred_at
+FOR UPDATE SKIP LOCKED
+LIMIT $2
+)
+RETURNING id, organization_id, event_type, schema_version, source, payload,
+          correlation_id, occurred_at, published_at, attempts, last_error`
+	rows, err := s.db.Pool().Query(ctx, q, workerID, limit, maxPublishAttempts)
+	if err != nil {
+		return nil, fmt.Errorf("claim outbox events: %w", err)
+	}
+	defer rows.Close()
+
+	var out []Event
+	for rows.Next() {
+		var e Event
+		var correlationID *string
+		if err := rows.Scan(&e.ID, &e.OrganizationID, &e.Type, &e.SchemaVersion, &e.Source,
+			&e.Payload, &correlationID, &e.OccurredAt, &e.PublishedAt, &e.Attempts, &e.LastError); err != nil {
+			return nil, err
+		}
+		if correlationID != nil {
+			e.CorrelationID = *correlationID
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
 // FetchPending returns unpublished events, oldest first.
+//
+// Read-only, and used by the admin event log and tests. The drain path uses
+// ClaimPending, because reading without claiming is what allowed two workers to
+// dispatch the same event.
 func (s *Store) FetchPending(ctx context.Context, limit int) ([]Event, error) {
 	const q = `
-		SELECT id, organization_id, event_type, schema_version, source, payload,
-		       correlation_id, occurred_at, published_at, attempts, last_error
-		FROM outbox_events
-		WHERE published_at IS NULL
-		ORDER BY occurred_at
-		LIMIT $1`
+SELECT id, organization_id, event_type, schema_version, source, payload,
+       correlation_id, occurred_at, published_at, attempts, last_error
+FROM outbox_events
+WHERE published_at IS NULL AND dead_lettered_at IS NULL
+ORDER BY occurred_at
+LIMIT $1`
 	rows, err := s.db.Q(ctx).Query(ctx, q, limit)
 	if err != nil {
 		return nil, fmt.Errorf("fetch outbox: %w", err)
@@ -137,24 +198,52 @@ func (s *Store) FetchPending(ctx context.Context, limit int) ([]Event, error) {
 
 // MarkPublished records successful publication.
 func (s *Store) MarkPublished(ctx context.Context, id uuid.UUID) error {
-	const q = `UPDATE outbox_events SET published_at = now() WHERE id = $1`
-	if _, err := s.db.Q(ctx).Exec(ctx, q, id); err != nil {
+	const q = `UPDATE outbox_events SET published_at = now(), claimed_at = NULL, claimed_by = NULL WHERE id = $1`
+	if _, err := s.db.Pool().Exec(ctx, q, id); err != nil {
 		return fmt.Errorf("mark event published: %w", err)
 	}
 	return nil
 }
 
 // MarkFailed records a publication failure and increments the attempt counter.
+//
+// The claim is released so the next drain can retry immediately rather than
+// waiting out the stale-claim timeout, and the row is dead-lettered once the
+// attempts are exhausted so the pending set stays bounded.
 func (s *Store) MarkFailed(ctx context.Context, id uuid.UUID, cause error) error {
 	msg := cause.Error()
 	if len(msg) > 2000 {
 		msg = msg[:2000]
 	}
-	const q = `UPDATE outbox_events SET attempts = attempts + 1, last_error = $2 WHERE id = $1`
-	if _, err := s.db.Q(ctx).Exec(ctx, q, id, msg); err != nil {
+	const q = `
+UPDATE outbox_events SET
+attempts = attempts + 1,
+last_error = $2,
+claimed_at = NULL,
+claimed_by = NULL,
+dead_lettered_at = CASE WHEN attempts + 1 >= $3 THEN now() ELSE dead_lettered_at END
+WHERE id = $1`
+	if _, err := s.db.Pool().Exec(ctx, q, id, msg, maxPublishAttempts); err != nil {
 		return fmt.Errorf("mark event failed: %w", err)
 	}
 	return nil
+}
+
+// ReleaseStale returns events abandoned by a crashed drain to the pending set.
+// Called at worker start, so an unclean shutdown does not strand an event behind
+// a claim that will never be released.
+func (s *Store) ReleaseStale(ctx context.Context, olderThan time.Duration) (int64, error) {
+	const q = `
+UPDATE outbox_events SET claimed_at = NULL, claimed_by = NULL
+WHERE published_at IS NULL
+  AND dead_lettered_at IS NULL
+  AND claimed_at IS NOT NULL
+  AND claimed_at < now() - $1::interval`
+	tag, err := s.db.Pool().Exec(ctx, q, olderThan.String())
+	if err != nil {
+		return 0, fmt.Errorf("release stale outbox claims: %w", err)
+	}
+	return tag.RowsAffected(), nil
 }
 
 // ToEnvelope converts a stored event to its external representation.
