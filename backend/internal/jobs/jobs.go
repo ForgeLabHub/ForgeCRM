@@ -43,6 +43,10 @@ const (
 	KindOutboxDrain    = "outbox.drain"
 	KindReconcile      = "migration.reconcile"
 	KindRetentionSweep = "maintenance.retention"
+	// KindAgentSweep expires approval requests that were never decided, and fails
+	// the runs that were waiting on them. It is the bound that keeps "waiting for
+	// approval" from becoming "waiting forever" (ADR 0005).
+	KindAgentSweep = "agent.sweep_expired"
 )
 
 // Job is a queued unit of work.

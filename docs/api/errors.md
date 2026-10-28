@@ -83,6 +83,13 @@ can duplicate the effect even where `retryable` is `true`.
 | `disabled` | 503 | The subsystem is switched off by configuration. |
 | `mfa_required` | 401 | A second factor must be completed. |
 
+A `403` from `POST /api/v1/agent/actions/{id}/decide` with the detail
+"a destructive action requires a second authentication factor" is the step-up
+requirement (ADR 0005), not a missing permission. The caller holds the approval
+right; the session has not presented a factor recently. Call
+`POST /api/v1/auth/step-up` with a code or password and retry the decision. The
+same response from any other endpoint is an ordinary permission failure.
+
 ## What is never returned
 
 Error responses do not contain stack traces, SQL, database or table names,

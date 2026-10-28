@@ -29,9 +29,23 @@ once it reaches 1.0.
 
 ### Added
 
+- **Human-in-the-loop agent approvals, with a second factor for destructive
+  decisions.** An agent proposes an action; a person decides it. Nothing the agent
+  proposes runs on its own. The decision carries the arguments hash the operator was
+  shown and the server refuses a decision whose hash does not match the stored one,
+  so approving cannot be redirected to a different payload. An action stored at the
+  `destructive` risk tier additionally requires the deciding session to have
+  presented a second factor within a short window: a lapsed window is refused with
+  `403` and a `urn:forgecrm:error:forbidden` reason, and `POST /api/v1/auth/step-up`
+  re-verifies the factor and refreshes the window. The factor is never read from the
+  request body, so it cannot be asserted by the caller. The approvals screen
+  (`/approvals`) shows the exact arguments, the binding hash and the risk tier, and
+  prompts for the factor inline when the server refuses. See
+  `docs/adr/0005-hitl-agent-execution-model.md`.
 - **Dead-letter metrics.** `GET /api/v1/admin/metrics` now reports
-  `webhook_deliveries_dead_total` (deliveries currently dead, which falls on a
-  successful replay), `webhook_deliveries_dead_lettered_total` (transitions ever,
+  `webhook_deliveries_dead` (deliveries currently dead, which falls on a
+  successful replay; named without a `_total` suffix because it is a gauge, so
+  `rate()` over it would be meaningless), `webhook_deliveries_dead_lettered_total` (transitions ever,
   read from the append-only audit trail, so it only rises and is the value to alert
   on) and `webhook_deliveries_pending_total`. All three are unlabelled scalars: a
   tenant id, target URL or event id in a metric label would multiply the series

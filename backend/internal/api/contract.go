@@ -67,6 +67,9 @@ func APIContract() openapi.Contract {
 	c.RequestBodies["POST /api/v1/auth/password/change"] = reflect.TypeOf(passwordChangeRequest{})
 	c.RequiredBody["PasswordChangeRequest"] = []string{"current_password", "new_password"}
 
+	c.RequestBodies["POST /api/v1/auth/step-up"] = reflect.TypeOf(stepUpRequest{})
+	c.Responses["POST /api/v1/auth/step-up"] = reflect.TypeOf(stepUpResponse{})
+
 	c.Responses["GET /api/v1/auth/me"] = reflect.TypeOf(meResponse{})
 
 	// --- Users, roles, teams, organizations ---------------------------------

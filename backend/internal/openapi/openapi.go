@@ -192,6 +192,7 @@ var SessionOnly = map[string]string{
 	"POST /api/v1/auth/mfa/enroll":      "Begin enrolling a second factor for the caller.",
 	"POST /api/v1/auth/mfa/confirm":     "Confirm a second factor enrolment.",
 	"POST /api/v1/auth/mfa/disable":     "Disable the caller's second factor.",
+	"POST /api/v1/auth/step-up":         "Re-present a factor to refresh the second-factor window a destructive agent decision requires.",
 	"GET /api/v1/system/info":           "Build and version information.",
 	"GET /api/v1/system/capabilities":   "Advertised capabilities of the running instance.",
 }

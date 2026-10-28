@@ -448,7 +448,7 @@ function DeliveriesDialog({ webhook, onClose }: { webhook: Webhook; onClose: () 
                     <th>Status</th>
                     <th className="numeric">Attempts</th>
                     <th className="numeric">Replays</th>
-                    <th className="numeric">Response</th>
+                    <th>Result</th>
                     <th>When</th>
                     <th />
                   </tr>
@@ -462,8 +462,12 @@ function DeliveriesDialog({ webhook, onClose }: { webhook: Webhook; onClose: () 
                       </td>
                       <td className="numeric">{delivery.attempts}</td>
                       <td className="numeric">{delivery.replay_count ?? 0}</td>
-                      <td className="numeric" title={delivery.last_error ?? undefined}>
-                        {delivery.response_status ?? '—'}
+                      <td
+                        className="truncate"
+                        style={{ maxWidth: '22rem' }}
+                        title={delivery.last_error ?? undefined}
+                      >
+                        {delivery.last_error ? delivery.last_error : (delivery.response_status ?? '—')}
                       </td>
                       <td>
                         <Timestamp value={delivery.created_at} />

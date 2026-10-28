@@ -153,10 +153,11 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	_ = s.deps.DB.Q(ctx).QueryRow(ctx, `SELECT count(*) FROM webhook_deliveries`).Scan(&deliveryCount)
 	// Dead-letter observability. Two distinct questions an operator asks:
 	//
-	//   webhook_deliveries_dead_total is how many deliveries are in the terminal
-	//   dead state right now. It falls when a dead delivery is replayed
-	//   successfully or swept by retention, so it answers "is anything broken at
-	//   the moment".
+	//   webhook_deliveries_dead is how many deliveries are in the terminal dead
+	//   state right now. It falls when a dead delivery is replayed successfully or
+	//   swept by retention, so it answers "is anything broken at the moment". It
+	//   carries no _total suffix because it is a gauge, not a counter: rate() over
+	//   it would be meaningless, and the suffix would invite exactly that mistake.
 	//
 	//   webhook_deliveries_dead_lettered_total is how many transitions into the
 	//   dead state have ever happened, read from the audit trail. It only rises, so
@@ -185,7 +186,7 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		"webhook_deliveries": deliveryCount,
 		// The dead-letter counters, named as the operations runbook refers to them.
 		// Both are unlabelled scalars by design.
-		"webhook_deliveries_dead_total":          deadDeliveries,
+		"webhook_deliveries_dead":                deadDeliveries,
 		"webhook_deliveries_dead_lettered_total": deadLetteredEver,
 		"webhook_deliveries_pending_total":       pendingDeliveries,
 		"subsystems": map[string]bool{

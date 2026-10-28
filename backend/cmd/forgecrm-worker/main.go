@@ -20,6 +20,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/geff1778/forgecrm/internal/agent"
 	"github.com/geff1778/forgecrm/internal/ai"
 	"github.com/geff1778/forgecrm/internal/audit"
 	"github.com/geff1778/forgecrm/internal/config"
@@ -32,6 +33,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/logging"
 	"github.com/geff1778/forgecrm/internal/notify"
 	"github.com/geff1778/forgecrm/internal/outbox"
+	"github.com/geff1778/forgecrm/internal/rbac"
 	"github.com/geff1778/forgecrm/internal/secrets"
 )
 
@@ -96,6 +98,18 @@ func run() error {
 		hub:        hub,
 		crm:        crmSvc,
 	}
+
+	// The agent runtime needs an executor to run approved actions. The worker builds
+	// its own tool registry and executor rather than sharing the API's, because the
+	// worker's job is the sweep; the executor is only consulted if an approved action
+	// is executed from this process, which the API normally does.
+	toolRegistry := ai.NewToolRegistry(crmSvc, auditLog)
+	agentSvc, err := agent.NewService(db, auditLog, ai.NewAgentExecutor(db, rbac.NewService(db), toolRegistry),
+		agent.Config{PlatformSecret: cfg.SecretKey, DeniedTools: ai.DeniedToolNames()})
+	if err != nil {
+		return fmt.Errorf("initialise the agent service: %w", err)
+	}
+	registry.agent = agentSvc
 
 	workerID := hostnameOrRandom()
 
@@ -165,6 +179,7 @@ type handlerRegistry struct {
 	telegram   *notify.TelegramService
 	hub        *integrations.Hub
 	crm        *crm.Service
+	agent      *agent.Service
 }
 
 // handle dispatches one job. An unknown kind is a hard failure rather than a
@@ -217,6 +232,9 @@ func (r *handlerRegistry) handle(ctx context.Context, queue *jobs.Queue, job *jo
 	case jobs.KindRetentionSweep:
 		return r.retentionSweep(ctx)
 
+	case jobs.KindAgentSweep:
+		return r.agentSweep(ctx)
+
 	default:
 		return fmt.Errorf("no handler is registered for job kind %q", job.Kind)
 	}
@@ -242,6 +260,23 @@ func (r *handlerRegistry) drainOutbox(ctx context.Context) error {
 		if err := r.outbox.MarkPublished(ctx, ev.ID); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// agentSweep expires approval requests past their deadline and fails the runs that
+// were waiting on them. Without it, a proposal nobody decided would hold a run in
+// waiting_approval indefinitely.
+func (r *handlerRegistry) agentSweep(ctx context.Context) error {
+	if r.agent == nil {
+		return nil
+	}
+	n, err := r.agent.SweepExpired(ctx)
+	if err != nil {
+		return err
+	}
+	if n > 0 {
+		r.log.Info("expired undecided agent approvals", "count", n)
 	}
 	return nil
 }
@@ -423,10 +458,16 @@ func runMaintenanceLoop(ctx context.Context, log *slog.Logger, queue *jobs.Queue
 			job, err := queue.EnqueuePeriodic(ctx, jobs.KindRetentionSweep, map[string]any{})
 			if err != nil {
 				log.Warn("could not enqueue the retention sweep", "error", err)
-				continue
-			}
-			if job != nil {
+			} else if job != nil {
 				log.Info("enqueued the retention sweep", "job_id", job.ID)
+			}
+			// The same tick also expires undecided agent approvals, so a proposal
+			// nobody decided does not hold its run open forever.
+			sweep, err := queue.EnqueuePeriodic(ctx, jobs.KindAgentSweep, map[string]any{})
+			if err != nil {
+				log.Warn("could not enqueue the agent approval sweep", "error", err)
+			} else if sweep != nil {
+				log.Info("enqueued the agent approval sweep", "job_id", sweep.ID)
 			}
 		}
 	}

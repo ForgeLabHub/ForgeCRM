@@ -108,7 +108,7 @@ not silent:
 
 | Counter | Meaning | Alert on it? |
 | --- | --- | --- |
-| `webhook_deliveries_dead_total` | Deliveries in the terminal dead state right now. Falls when a delivery is replayed or swept. | No — it is a level, not an event. |
+| `webhook_deliveries_dead` | Deliveries in the terminal dead state right now. Falls when a delivery is replayed or swept. | No — it is a level, not an event. |
 | `webhook_deliveries_dead_lettered_total` | Transitions into the dead state, ever. Read from the audit trail, so it only rises. | Yes — a rate over this is the signal. |
 | `webhook_deliveries_pending_total` | Deliveries still eligible for an attempt. | If it grows without draining. |
 
@@ -117,6 +117,19 @@ correct when several workers and API replicas run at once. None is labelled: a t
 or target URL in a metric label would multiply the series without bound and leak a
 customer's endpoint into the monitoring system. The per-organization view is in the audit
 page.
+
+Only `webhook_deliveries_dead_lettered_total` carries the `_total` suffix, because only
+it is a counter. `webhook_deliveries_dead` is a gauge: it goes down when a delivery is
+replayed or swept, so a `rate()` over it would report nonsense. The suggested alert is
+
+```
+rate(webhook_deliveries_dead_lettered_total[1h]) > 0
+```
+
+Any sustained transition into the dead state is an incident: an endpoint the customer
+configured has stopped receiving events. Start with `> 0` and raise the threshold only
+after the baseline is known; do not alert on the gauge, which returns to zero on its own
+when the deliveries are replayed.
 
 ### Replaying a delivery
 

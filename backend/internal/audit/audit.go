@@ -175,6 +175,21 @@ const (
 	ActionEmailConfigured      Action = "notifications.email_configured"
 	ActionTelegramLinked       Action = "notifications.telegram_linked"
 	ActionTelegramUnlinked     Action = "notifications.telegram_unlinked"
+
+	// Agent lifecycle. The agent actions are the write-before-execute record ADR
+	// 0005 requires: `proposed` exists before any effect, `approved` records the
+	// signed human decision, `executed` records the effect, and `rejected` /
+	// `expired` close a proposal without an effect. An action can therefore never
+	// exist without a record of why it was allowed.
+	ActionAgentRunStarted     Action = "agent.run_started"
+	ActionAgentRunCompleted   Action = "agent.run_completed"
+	ActionAgentRunFailed      Action = "agent.run_failed"
+	ActionAgentActionProposed Action = "agent.action_proposed"
+	ActionAgentActionApproved Action = "agent.action_approved"
+	ActionAgentActionRejected Action = "agent.action_rejected"
+	ActionAgentActionExpired  Action = "agent.action_expired"
+	ActionAgentActionExecuted Action = "agent.action_executed"
+	ActionAgentActionFailed   Action = "agent.action_failed"
 )
 
 func marshalJSONOrNil(v any) ([]byte, error) {

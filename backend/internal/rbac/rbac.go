@@ -120,6 +120,13 @@ const (
 	PermApprovalsRead   Permission = "approvals.read"
 	PermApprovalsDecide Permission = "approvals.decide"
 	PermSystemSettings  Permission = "system.settings"
+
+	// Agent permissions. Reading the queue and starting a run are separate: an
+	// operator who reviews and decides on what the agent proposes does not need the
+	// right to set the agent running, and the two duties are usually held by
+	// different people.
+	PermAgentRead Permission = "agent.read"
+	PermAgentRun  Permission = "agent.run"
 )
 
 // All returns every permission in the catalog, sorted.
@@ -162,6 +169,7 @@ var catalog = map[Permission]struct{}{
 	PermNotificationsRead: {}, PermEmailManage: {}, PermTelegramManage: {},
 	PermAIRead: {}, PermAIToolsExecute: {}, PermAIConfigure: {},
 	PermApprovalsRead: {}, PermApprovalsDecide: {}, PermSystemSettings: {},
+	PermAgentRead: {}, PermAgentRun: {},
 }
 
 // Known reports whether p is part of the catalog.

@@ -705,3 +705,57 @@ export interface BulkArchiveResult {
   archived: string[]
   failed: { id: string; reason: string }[]
 }
+
+/** One working cycle of an agent acting on behalf of a user (ADR 0005). */
+export interface AgentRun {
+  id: string
+  organization_id: string
+  user_id: string
+  goal: string
+  status: string
+  budget_tokens: number
+  tokens_used: number
+  action_cap: number
+  actions_used: number
+  error?: string
+  created_at: string
+  updated_at: string
+  finished_at?: string
+}
+
+/** A proposed agent operation awaiting a human decision, or the record of one. */
+export interface AgentAction {
+  id: string
+  run_id: string
+  organization_id: string
+  tool_name: string
+  arguments: Record<string, unknown>
+  /**
+   * The hash of the arguments as proposed. A decision must echo it, so the
+   * operator approves exactly what was displayed and not a re-substituted payload.
+   */
+  arguments_hash: string
+  risk_tier: 'safe' | 'confirm' | 'destructive'
+  summary: string
+  status: string
+  idempotency_key: string
+  result?: unknown
+  error?: string
+  expires_at: string
+  proposed_at: string
+  decided_at?: string
+  executed_at?: string
+}
+
+/** An append-only record of one human decision on an agent action. */
+export interface AgentApproval {
+  id: string
+  action_id: string
+  decided_by: string
+  decision: string
+  comment?: string
+  arguments_hash: string
+  /** HMAC binding the decision to the action and its arguments. */
+  signature: string
+  decided_at: string
+}

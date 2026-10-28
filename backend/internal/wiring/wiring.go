@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/geff1778/forgecrm/internal/agent"
 	"github.com/geff1778/forgecrm/internal/ai"
 	"github.com/geff1778/forgecrm/internal/audit"
 	"github.com/geff1778/forgecrm/internal/authn"
@@ -49,6 +50,10 @@ type Services struct {
 	Tools        *ai.ToolRegistry
 	// MCP is the protocol transport over Tools.
 	MCP *ai.MCPServer
+	// Agent is the human-in-the-loop execution state machine (ADR 0005). It is
+	// wired with an executor built from Tools, so an approved action runs through
+	// exactly the same permission-checked tool path as a direct call.
+	Agent *agent.Service
 }
 
 // Build constructs every service from the given configuration and database.
@@ -70,6 +75,18 @@ func Build(cfg *config.Config, db *database.DB, keyring *secrets.Keyring, log *s
 
 	tools := ai.NewToolRegistry(crmSvc, auditLog)
 
+	// The agent runtime executes approved actions through the tool registry, so it
+	// needs the registry and the RBAC service to rebuild the decider's principal at
+	// execution time.
+	executor := ai.NewAgentExecutor(db, rbacSvc, tools)
+	agentSvc, err := agent.NewService(db, auditLog, executor, agent.Config{
+		PlatformSecret: cfg.SecretKey,
+		DeniedTools:    ai.DeniedToolNames(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("initialise the agent service: %w", err)
+	}
+
 	return &Services{
 		Audit:        auditLog,
 		Auth:         authn.NewService(db, cfg, keyring, auditLog, rbacSvc),
@@ -87,5 +104,6 @@ func Build(cfg *config.Config, db *database.DB, keyring *secrets.Keyring, log *s
 		AI:           ai.NewService(&cfg.AI, db, auditLog),
 		Tools:        tools,
 		MCP:          ai.NewMCPServer(tools),
+		Agent:        agentSvc,
 	}, nil
 }
