@@ -11,7 +11,7 @@ integration enabled. Every integration is opt-in and configurable.
 
 ## Status
 
-Under active development on the `feat/platform-foundation` branch. The backend,
+Under active development on `main`. The backend,
 database schema, Import Center and the web interface are implemented and verified
 against a real PostgreSQL instance.
 
@@ -19,7 +19,7 @@ Verified (see [docs/PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md) for evidence):
 
 | Area | State |
 | --- | --- |
-| Go API, migrations, PostgreSQL schema | Working, 6 migrations applied |
+| Go API, migrations, PostgreSQL schema | Working, 11 migrations applied |
 | Authentication, sessions, CSRF, TOTP | Working |
 | RBAC: 81 permissions, 28 role records | Working, enforcement verified |
 | Audit log and security events | Working |
@@ -28,12 +28,13 @@ Verified (see [docs/PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md) for evidence):
 | Background jobs and transactional outbox | Working |
 | Web interface: sign-in, CRM, Import Center, administration | Working, verified in a browser |
 | Docker Compose deployment | Verified end to end |
-| AI and MCP layer | Backend only, no UI |
+| AI & MCP | Provider abstraction (Ollama, OpenAI-compatible), MCP JSON-RPC transport, AI & MCP admin page |
+| Agent approvals (human-in-the-loop) | Working, second-factor step-up for destructive actions |
 
 The web interface covers sign-in with second factor, the CRM workspace, the Import
 Center including the mapping wizard, integrations, events and webhooks, background
-jobs, and the administration pages for users, roles, organizations, teams, email,
-Telegram, audit, security and diagnostics.
+jobs, agent approvals, and the administration pages for users, roles, organizations,
+teams, email, Telegram, audit, security and diagnostics.
 
 ## Quick start
 

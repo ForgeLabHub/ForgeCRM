@@ -5,6 +5,16 @@
 - **Commit audited:** `main` @ `3b1ce12`
 - **Repository:** https://github.com/geff1778/ForgeCRM
 
+> **Refresh note (2026-10-28, later).** The body of this audit reflects the
+> repository at `3b1ce12`. Since then `main` has advanced to `27caac0` (PRs #6–#9:
+> permission-filtered search, bulk archive, distributed rate limiting with a trusted
+> proxy list, multi-replica safety) and two further bodies of work are open for
+> review on `feat/webhook-lifecycle-and-hitl`: the outgoing webhook delivery
+> lifecycle (migrations `0007`–`0008`) and the human-in-the-loop agent approval path
+> (migrations `0009`–`0011`). Where this document and the code disagree, the code
+> and `docs/ROADMAP.md` win. The per-claim evidence below has not been re-run against
+> the newer commits except where a later section says so.
+
 This records the **verified** state of the repository. It separates confirmed
 facts from risks and proposals. Every claim below was checked against the code at
 the audited commit; commands and results are recorded.

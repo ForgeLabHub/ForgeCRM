@@ -23,9 +23,9 @@ and compiles but is not yet covered by passing tests.
 | 1.9 | Import Center: CSV/TSV/JSON/JSONL/XLSX/XML parsing | **VERIFIED** |
 | 1.10 | Safe archive handling: ZIP, TAR, TAR.GZ/TGZ, TAR.BZ2, TAR.XZ, GZIP, BZIP2, XZ | **VERIFIED** |
 | 1.11 | Import wizard backend: upload → preview → mapping → validate → dry-run → execute → report → errors → rerun | **VERIFIED** |
-| 1.12 | Frontend admin panel (React + TS + Vite) wired to the real API | **NOT_STARTED** — `frontend/` is empty; the API is the only interface |
-| 1.13 | Tests: unit, integration (real PostgreSQL), API, security, import edge cases | **IN_PROGRESS** — 2 packages covered (`importx`, `importx/safe`); the rest is verified manually against a live instance, not by automated tests |
-| 1.14 | Docker Compose, scripts, CI, docs | **VERIFIED** — stack brought up end to end, smoke test 9/9; CI workflow added but not yet run on GitHub |
+| 1.12 | Frontend admin panel (React + TS + Vite) wired to the real API | **VERIFIED** — 21 pages under `frontend/src/pages/` (CRM workspace, Import Center + wizard, Migrations, Integrations, Webhooks, Events, Background jobs, Agent approvals, and 9 admin pages) across 34 routes, all calling the real API; 6 unit-test files and 13 Playwright E2E cases |
+| 1.13 | Tests: unit, integration (real PostgreSQL), API, security, import edge cases | **IN_PROGRESS** — backend unit + integration packages (`importx`, `importx/safe`, `internal/api` under the `integration` tag, `authn`, `ratelimit`, `openapi`, `archtest`), frontend unit tests and Playwright E2E; some areas are still verified manually rather than by automated tests |
+| 1.14 | Docker Compose, scripts, CI, docs | **VERIFIED** — stack brought up end to end, smoke test 9/9; CI workflow runs on GitHub Actions (fmt, vet, unit, integration against a real PostgreSQL, frontend lint/type/test/build, Docker build, migrations, dependency + secret + security scan, docs presence) |
 
 ## Cycle 2 — Integration platform (next)
 
@@ -70,6 +70,7 @@ and compiles but is not yet covered by passing tests.
 | 5.3 | Tool registry reusing domain authz (8 tools, permission-checked, audited) | **VERIFIED** |
 | 5.3a | MCP **protocol** transport (JSON-RPC 2.0, `initialize`, `tools/list`, `tools/call`) | **VERIFIED** — `POST /api/v1/mcp` speaks JSON-RPC 2.0: `initialize` with protocol-version negotiation, `ping`, `tools/list` in the protocol shape (`inputSchema`), `tools/call`, notifications answered with an empty 202, and the JSON-RPC error codes for parse, invalid-request, method-not-found and invalid-params. `GET /api/v1/mcp/tools` and `POST /api/v1/mcp/call` remain as the admin UI's own shape. Verified by `internal/ai/mcp_protocol_test.go` (transport) and `internal/api/mcp_integration_test.go` (session, permission, confirmation and tenant scope over the real HTTP stack). See `docs/mcp/` |
 | 5.4 | Prompt-injection hardening + unauthorized-access tests | **VERIFIED** |
+| 5.4a | Human-in-the-loop agent execution: durable approval requests, risk tiers, payload-hash binding, second-factor step-up for `destructive` actions, approve/reject UI | **VERIFIED** — `internal/agent` (approval lifecycle), migrations `0009`–`0011`, `POST /api/v1/agent/actions/{id}/decide`, `POST /api/v1/auth/step-up`, and the `/approvals` screen. A lapsed step-up window is refused with `403`; a decision whose arguments hash does not match the stored one is refused. Covered by `internal/api/agent_http_test.go` (integration) and `internal/agent/agent_test.go` (unit). See `docs/adr/0005-hitl-agent-execution-model.md` |
 | 5.5 | Contextual AI in entity cards, calibrated confidence, graceful failure, human handoff | **NOT_STARTED** — Phase 3 |
 
 > Correction: an earlier revision of this file marked "MCP tool server" as
