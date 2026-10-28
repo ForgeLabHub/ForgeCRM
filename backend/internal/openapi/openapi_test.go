@@ -14,7 +14,9 @@ import (
 
 	"github.com/geff1778/forgecrm/internal/api"
 	"github.com/geff1778/forgecrm/internal/config"
+	"github.com/geff1778/forgecrm/internal/httpx"
 	"github.com/geff1778/forgecrm/internal/openapi"
+	"github.com/geff1778/forgecrm/internal/ratelimit"
 )
 
 // These tests are the contract. They are the reason the specification can be
@@ -28,10 +30,13 @@ import (
 // producing a partial document.
 func buildRouter(t *testing.T) chi.Router {
 	t.Helper()
-	srv := api.New(&api.Deps{
+	srv, err := api.New(&api.Deps{
 		Config: &config.Config{},
 		Log:    slog.New(slog.NewTextHandler(io.Discard, nil)),
-	})
+	}, ratelimit.NewMemoryStore(), httpx.TrustedProxies{})
+	if err != nil {
+		t.Fatalf("build server: %v", err)
+	}
 	return srv.Router()
 }
 

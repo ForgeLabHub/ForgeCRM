@@ -27,7 +27,7 @@ import (
 func buildDocument(t *testing.T) map[string]any {
 	t.Helper()
 
-	srv := New(&Deps{
+	srv := newTestServer(t, &Deps{
 		Config: &config.Config{},
 		Log:    slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})

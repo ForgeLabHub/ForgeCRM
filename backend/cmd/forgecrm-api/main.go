@@ -27,6 +27,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/authn"
 	"github.com/geff1778/forgecrm/internal/config"
 	"github.com/geff1778/forgecrm/internal/database"
+	"github.com/geff1778/forgecrm/internal/httpx"
 	"github.com/geff1778/forgecrm/internal/logging"
 	"github.com/geff1778/forgecrm/internal/migrate"
 	"github.com/geff1778/forgecrm/internal/rbac"
@@ -116,7 +117,39 @@ func run() error {
 		return err
 	}
 
-	server := api.New(&api.Deps{
+	// The limiter store is built before the server so that an unreachable Redis is a
+	// startup failure. The alternative — starting anyway and discovering it on the
+	// first request — reports the problem as a warning about an unenforced limit,
+	// which is easy to miss and means the limit silently is not applied.
+	limiterStore, err := api.NewLimiterStore(ctx, cfg)
+	if err != nil {
+		return fmt.Errorf("rate limit store: %w", err)
+	}
+
+	trustedProxies, err := httpx.TrustedProxiesFrom(cfg.TrustedProxies)
+	if err != nil {
+		// config.Validate already checked this; a failure here means the value changed
+		// after validation, and continuing would silently ignore forwarding headers.
+		return fmt.Errorf("trusted proxies: %w", err)
+	}
+	if trustedProxies.Len() == 0 {
+		log.Info("no trusted proxies configured; client address is taken from the connection",
+			"note", "set FORGECRM_TRUSTED_PROXIES when running behind a reverse proxy")
+	}
+	if trustedProxies.TrustsAny() {
+		// Trusting every peer means any caller can choose its own address via a header.
+		// That is a legitimate topology when the API is unreachable except through a
+		// proxy, but it must be visible rather than assumed.
+		log.Warn("FORGECRM_TRUSTED_PROXIES trusts every peer; " +
+			"X-Forwarded-For is accepted from any caller and rate limits can be evaded")
+	}
+	log.Info("rate limiter configured",
+		"store", limiterStore.String(),
+		"api_per_min", cfg.RateLimitPerMin,
+		"login_per_min", cfg.LoginRateLimitPerMin,
+	)
+
+	server, err := api.New(&api.Deps{
 		Config:       cfg,
 		Log:          log,
 		DB:           db,
@@ -140,7 +173,13 @@ func run() error {
 		StartedAt:    time.Now(),
 		Version:      version,
 		BuildCommit:  commit,
-	})
+	}, limiterStore, trustedProxies)
+	if err != nil {
+		return err
+	}
+	// The store holds a connection pool when Redis is configured; closing it on the
+	// way out releases those sockets rather than waiting for the process to exit.
+	defer server.Close()
 
 	httpServer := &http.Server{
 		Addr:    cfg.HTTPAddr,

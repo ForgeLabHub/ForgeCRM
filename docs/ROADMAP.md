@@ -92,6 +92,36 @@ and compiles but is not yet covered by passing tests.
 
 ---
 
+## Cycle 7 — Distributed rate limiting and client-address trust
+
+| # | Item | Status |
+|---|---|---|
+| 7.1 | `Store` interface with `MemoryStore` and `RedisStore` | **VERIFIED** — `internal/ratelimit`; `MemoryStore` is mutex-guarded, `RedisStore` increments with a single Lua script so the read-modify-write is atomic on the server |
+| 7.2 | Data race in the previous in-process limiter | **VERIFIED FIXED** — the old `httpx.RateLimiter` kept counters in a bare `map` written from every request goroutine. `net/http` serves each request in its own goroutine, so this was a live race and a possible unrecoverable `concurrent map write` panic. `TestMemoryStoreIsSafeForConcurrentUse` (64 goroutines × 250 increments) fails under `-race` against the old code and asserts no increment is lost against the new |
+| 7.3 | Unbounded key growth | **VERIFIED FIXED** — the previous map was never swept because `Sweep` had no caller. `MemoryStore` has a background sweeper and a `maxKeys` bound, both covered by tests |
+| 7.4 | Forwarding-header trust | **VERIFIED FIXED** — `chi`'s `middleware.RealIP` was rewriting `RemoteAddr` from `X-Forwarded-For` for every caller, so any client could choose the address it was rate-limited and logged under. It is removed. `ClientIPMiddleware` resolves the address once, from the peer unless the peer is in `FORGECRM_TRUSTED_PROXIES`, and the chain is read right-to-left skipping trusted hops |
+| 7.5 | Per-policy fail mode | **VERIFIED** — `FailOpen` for general API traffic, `FailClosed` for authentication. Both decisions set `Degraded`, and a store error is never reported as a 429 |
+| 7.6 | Redis opt-in deployment | **VERIFIED** — `redis` service behind a compose profile; `docker compose config` with and without the profile both validated. Default `up` starts no Redis |
+| 7.7 | Multi-replica shared counter | **VERIFIED (unit level)** — `TestRedisStoreWindowIsSharedBetweenInstances` builds two limiters over separate connections and asserts a limit of 5 yields exactly 5 allows across both. Two API containers against a real database is item 1.6 |
+
+### Evidence
+
+| Check | Command | Result |
+|---|---|---|
+| Formatting | `gofmt -l ./...` | clean |
+| Vet | `go vet ./...` | clean |
+| Unit tests, race detector | `go test -race -count=1 ./...` | all packages pass, including the new 16 000-increment concurrency test |
+| Redis integration | `go test -race -tags=integration -run TestRedisStore ./internal/ratelimit/` | 5 tests pass against `redis:7-alpine` |
+| OpenAPI currency | `go run ./cmd/openapi-gen -check` | spec current; no route change |
+| Compose | `docker compose config`, `docker compose --profile redis config` | both valid; Redis absent from the default profile |
+
+The spoofing test was written before the fix and observed to fail against the
+original left-to-right header parsing (`TestForwardedChainIsReadRightToLeft`),
+which is what showed the obvious implementation returns the address the client
+wrote rather than the one the proxy observed.
+
+---
+
 # Master plan phases
 
 The cycles above describe how the platform was built. The phases below describe
@@ -116,8 +146,8 @@ where it is going. Strategy and Definition of Done: `docs/MASTER_PLAN.md`.
 | 1.2 | Contract test: spec matches the router | **VERIFIED** — `internal/openapi/openapi_test.go`; drift guard proven negatively (added and modified routes both fail) |
 | 1.3 | OpenAPI validation in CI | **IMPLEMENTED** — `go run ./cmd/openapi-gen -check` runs in the backend job |
 | 1.4 | API reference site | **NOT_STARTED** |
-| 1.5 | Distributed rate limiting (Redis, tenant-aware, fail-open/closed per category) | **NOT_STARTED** |
-| 1.6 | Multi-replica pool verification | **NOT_STARTED** |
+| 1.5 | Distributed rate limiting (Redis, tenant-aware, fail-open/closed per category) | **VERIFIED** — `internal/ratelimit` with a `Store` interface, `MemoryStore` and `RedisStore` (atomic Lua script); fail mode is per policy; see cycle 7 below |
+| 1.6 | Multi-replica pool verification | **IN_PROGRESS** — the shared counter is verified across two independent connections (see cycle 7); running two API containers against one database and confirming the session and limiter behaviour together is still to do |
 | 1.7 | Request correlation and diagnostics | **PARTIAL** — `request_id`/`correlation_id` emitted; no trace propagation |
 
 ## Phase 2 — Identity and security — **NOT_STARTED**

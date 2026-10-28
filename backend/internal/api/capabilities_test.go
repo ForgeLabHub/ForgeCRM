@@ -34,7 +34,7 @@ func TestCapabilitiesDoesNotOverstateOIDC(t *testing.T) {
 	// The route sits behind the session middleware, so an unauthenticated request
 	// is rejected before the handler runs. The handler is exercised directly to
 	// test its body without standing up a session.
-	srv := New(&Deps{Config: cfg, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	srv := newTestServer(t, &Deps{Config: cfg, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	srv.handleCapabilities(rec, httptest.NewRequest(http.MethodGet, "/api/v1/system/capabilities", nil))
 
 	if rec.Code != http.StatusOK {
@@ -70,7 +70,7 @@ func TestCapabilitiesDoesNotOverstateOIDC(t *testing.T) {
 // and a tools/list call, and fails if the flag is set without a working transport.
 func TestCapabilitiesMCPFlagMatchesTheTransport(t *testing.T) {
 	cfg := &config.Config{}
-	srv := New(&Deps{Config: cfg, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	srv := newTestServer(t, &Deps{Config: cfg, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 
 	rec := httptest.NewRecorder()
 	srv.handleCapabilities(rec, httptest.NewRequest(http.MethodGet, "/api/v1/system/capabilities", nil))
@@ -113,7 +113,7 @@ func TestCapabilitiesMCPFlagMatchesTheTransport(t *testing.T) {
 // with the implementation rather than being deleted.
 func TestCapabilitiesReportsImplementedSubsystems(t *testing.T) {
 	cfg := &config.Config{}
-	srv := New(&Deps{Config: cfg, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	srv := newTestServer(t, &Deps{Config: cfg, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 
 	rec := httptest.NewRecorder()
 	srv.handleCapabilities(rec, httptest.NewRequest(http.MethodGet, "/api/v1/system/capabilities", nil))

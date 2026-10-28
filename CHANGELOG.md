@@ -8,8 +8,31 @@ once it reaches 1.0.
 
 ## [Unreleased]
 
+### Security
+
+- **`X-Forwarded-For` was believed from any caller.** `chi`'s
+  `middleware.RealIP` rewrote `RemoteAddr` from the forwarding header for every
+  request, so a client could choose the address it was rate limited and logged
+  under: rotating the header gave it an unlimited supply of fresh rate-limit
+  buckets, and a brute-force attempt was attributed to addresses the attacker
+  invented. The middleware is removed. The client address is now resolved once,
+  from the connection address unless the peer is listed in the new
+  `FORGECRM_TRUSTED_PROXIES` setting, and the proxy chain is read right-to-left
+  skipping trusted hops. See `docs/operations/README.md`.
+
 ### Fixed
 
+- **Data race in the rate limiter, with a possible process-killing panic.** The
+  limiter kept its counters in a plain `map` that every request goroutine read
+  and wrote. `net/http` serves each request in its own goroutine, so this was a
+  live race rather than a theoretical one: `go test -race` reports it, and a
+  sufficiently unlucky interleaving of concurrent map writes is an unrecoverable
+  runtime panic. Counters now live behind a mutex in `internal/ratelimit`,
+  covered by a 64-goroutine test that asserts no increment is lost.
+- **The limiter's key map grew without bound.** `Sweep` existed but had no
+  caller, so expired windows were never reclaimed. Since the keys are client
+  addresses, anyone able to send a request could grow the map until the process
+  was killed. The store now sweeps on a timer and holds a maximum key count.
 - **`WriteError` panicked on a typed-nil error.** `errors.As` reports success for
   an error interface holding a nil `*APIError`, leaving the target nil; the
   following field access then panicked *inside the error path*, so a handler that
@@ -19,6 +42,19 @@ once it reaches 1.0.
 
 ### Added
 
+- **Distributed rate limiting.** `internal/ratelimit` separates the counter
+  store from the policy. `MemoryStore` is the default and keeps counters in the
+  process; `RedisStore` shares them across replicas using a single Lua script, so
+  the read-modify-write is atomic on the server rather than in the client. Select
+  it with `FORGECRM_RATE_LIMIT_STORE=redis` and `FORGECRM_REDIS_URL`. The failure
+  mode is per policy: general API traffic fails open, authentication fails closed,
+  and a store error is never reported as a `429`. Both decisions are marked
+  degraded and logged. Redis is opt-in through a compose profile, so the default
+  `docker compose up` starts nothing extra. See `docs/operations/README.md`.
+- **Rate-limit response headers.** `RateLimit-Limit`, `RateLimit-Remaining`,
+  `RateLimit-Reset` and `Retry-After` are emitted, along with the older
+  `X-RateLimit-*` names, so a client can see the budget instead of only
+  discovering it by being refused.
 - **Bulk archive for accounts, contacts and deals.** `POST
   /api/v1/{accounts,contacts,deals}/bulk-archive` takes up to 200 ids and returns
   which records were archived and which were not, with a reason for each. A

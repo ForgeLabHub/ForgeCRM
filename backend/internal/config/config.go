@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/geff1778/forgecrm/internal/database"
+	"github.com/geff1778/forgecrm/internal/httpx"
 )
 
 // Config is the fully resolved runtime configuration.
@@ -47,7 +48,23 @@ type Config struct {
 	// person locks out everybody.
 	LoginRateLimitPerMin int
 	RateLimitPerMin      int
-	SecretKey            string
+
+	// RateLimitStore selects where limiter counters live. "memory" keeps them in
+	// this process, which is correct for one replica and means each replica of a
+	// larger deployment enforces its own copy of the budget. "redis" shares them,
+	// which is required once more than one replica serves traffic.
+	RateLimitStore string
+	// RedisURL is the connection string for the shared limiter store, for example
+	// redis://localhost:6379/0. It is required when RateLimitStore is "redis".
+	RedisURL string
+	// TrustedProxies lists the CIDR ranges or addresses whose X-Forwarded-For and
+	// X-Real-Ip headers are believed. Empty trusts nothing, so the peer address is
+	// used and the headers are ignored. A deployment behind a reverse proxy must
+	// name that proxy here; otherwise every request is attributed to the proxy's
+	// address and one client's traffic is counted against another's budget.
+	TrustedProxies string
+
+	SecretKey string
 
 	WorkerConcurrency int
 	WorkerPollEvery   time.Duration
@@ -212,6 +229,9 @@ func Load() (*Config, error) {
 		LockoutThreshold:     envIntOr("FORGECRM_LOCKOUT_THRESHOLD", 8),
 		LoginRateLimitPerMin: envIntOr("FORGECRM_LOGIN_RATE_LIMIT_PER_MIN", 60),
 		RateLimitPerMin:      envIntOr("FORGECRM_RATE_LIMIT_PER_MIN", 300),
+		RateLimitStore:       env("FORGECRM_RATE_LIMIT_STORE", "memory"),
+		RedisURL:             env("FORGECRM_REDIS_URL", ""),
+		TrustedProxies:       env("FORGECRM_TRUSTED_PROXIES", ""),
 
 		LogLevel:     env("FORGECRM_LOG_LEVEL", "info"),
 		LogFormat:    env("FORGECRM_LOG_FORMAT", "json"),
@@ -370,6 +390,31 @@ func (c *Config) Validate() error {
 	if c.OIDC.Enabled && (c.OIDC.Issuer == "" || c.OIDC.ClientID == "") {
 		return fmt.Errorf("OIDC enabled but FORGECRM_OIDC_ISSUER or FORGECRM_OIDC_CLIENT_ID is empty")
 	}
+
+	// The limiter store is validated here rather than at first use, so a typo in the
+	// store name is a startup failure next to the setting that caused it instead of a
+	// silent fall back to per-process counting — which is the failure this setting
+	// exists to prevent, and which would be invisible until someone counted requests.
+	switch c.RateLimitStore {
+	case "memory":
+		if c.RedisURL != "" {
+			return fmt.Errorf("FORGECRM_REDIS_URL is set but FORGECRM_RATE_LIMIT_STORE is \"memory\"; set it to \"redis\" or clear the URL")
+		}
+	case "redis":
+		if c.RedisURL == "" {
+			return fmt.Errorf("FORGECRM_RATE_LIMIT_STORE is \"redis\" but FORGECRM_REDIS_URL is empty")
+		}
+	default:
+		return fmt.Errorf("FORGECRM_RATE_LIMIT_STORE must be \"memory\" or \"redis\", got %q", c.RateLimitStore)
+	}
+
+	// A malformed trusted-proxy list is rejected here. Left unchecked it would make
+	// every request look untrusted, which silently disables the proxy-aware client
+	// address and collapses all traffic into the proxy's own bucket.
+	if _, err := httpx.TrustedProxiesFrom(c.TrustedProxies); err != nil {
+		return fmt.Errorf("FORGECRM_TRUSTED_PROXIES is invalid: %w", err)
+	}
+
 	return nil
 }
 

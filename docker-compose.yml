@@ -33,6 +33,25 @@ services:
     # ports:
     #   - "5432:5432"
 
+  # Redis is optional and opt-in through the "redis" profile, so the default
+  # `docker compose up` starts nothing extra. Enable it when running more than
+  # one API replica, and set FORGECRM_RATE_LIMIT_STORE=redis and
+  # FORGECRM_REDIS_URL=redis://redis:6379/0 in .env. Without it each replica
+  # enforces its own copy of the rate limit.
+  #
+  #   docker compose --profile redis up -d
+  redis:
+    image: redis:7-alpine
+    profiles: ["redis"]
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
   api:
     build:
       context: ./backend

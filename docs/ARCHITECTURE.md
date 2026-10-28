@@ -85,7 +85,13 @@ imports another domain package except through an interface it declares itself.
 - **Session fixation**: a fresh session token is issued on successful authentication.
 - **MFA**: TOTP (RFC 6238), verified as a second factor; recovery codes hashed.
 - **Brute-force**: per-account failed-attempt counter with lockout window, plus per-IP
-  rate limiting.
+  rate limiting. Counters live in a `ratelimit.Store`: `MemoryStore` for one process,
+  `RedisStore` for several replicas. Authentication uses fail-closed, general API traffic
+  fail-open.
+- **Client address**: resolved once per request by `ClientIPMiddleware` from the
+  connection address, unless the peer is listed in `FORGECRM_TRUSTED_PROXIES`. Forwarding
+  headers are not read otherwise, so a caller cannot choose the address it is limited or
+  logged under.
 - **Bootstrap**: the first platform owner is created by an explicit, one-time
   `bootstrap` command that requires an operator-supplied password (or generates a strong
   random one printed once). **No default credentials ship in the code.**

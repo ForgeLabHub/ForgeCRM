@@ -12,11 +12,12 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
 
 	"github.com/geff1778/forgecrm/internal/ai"
@@ -34,6 +35,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/migratex"
 	"github.com/geff1778/forgecrm/internal/notify"
 	"github.com/geff1778/forgecrm/internal/outbox"
+	"github.com/geff1778/forgecrm/internal/ratelimit"
 	"github.com/geff1778/forgecrm/internal/rbac"
 	"github.com/geff1778/forgecrm/internal/secrets"
 )
@@ -74,22 +76,134 @@ type Deps struct {
 type Server struct {
 	deps         *Deps
 	router       chi.Router
-	limiter      *httpx.RateLimiter
-	loginLimiter *httpx.RateLimiter
+	limiter      *ratelimit.Limiter
+	loginLimiter *ratelimit.Limiter
+	// limiterStore is kept so Close can release it. A Redis-backed store holds a
+	// connection pool; leaving it open across a graceful shutdown leaks sockets
+	// until the process exits.
+	limiterStore ratelimit.Store
+	trusted      httpx.TrustedProxies
 }
 
 // New builds the API server and its routes.
-func New(deps *Deps) *Server {
+//
+// The limiter store is passed in rather than constructed here, because whether
+// counters are per-process or shared is a deployment decision that belongs with
+// the rest of the configuration and must be able to fail at startup. See
+// NewLimiterStore.
+func New(deps *Deps, store ratelimit.Store, trusted httpx.TrustedProxies) (*Server, error) {
+	// Authentication endpoints get a tighter budget: this is the endpoint an
+	// attacker would use to brute-force a password. The budget is configurable
+	// because a shared NAT address consumes it on behalf of everyone behind it.
+	//
+	// The two policies differ in what happens when the store cannot answer. The
+	// login limit is the only barrier to unlimited password guessing, so it refuses
+	// when it cannot count; ordinary API traffic allows, because refusing every read
+	// over an unavailable counter turns a degraded dependency into an outage.
+	loginLimiter, err := ratelimit.New(store, ratelimit.Policy{
+		Name:      "login",
+		Limit:     deps.Config.LoginRateLimitPerMin,
+		Window:    time.Minute,
+		FailMode:  ratelimit.FailClosed,
+		KeyPrefix: "rl:login",
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	apiLimiter, err := ratelimit.New(store, ratelimit.Policy{
+		Name:      "api",
+		Limit:     deps.Config.RateLimitPerMin,
+		Window:    time.Minute,
+		FailMode:  ratelimit.FailOpen,
+		KeyPrefix: "rl:api",
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	s := &Server{
-		deps:    deps,
-		limiter: httpx.NewRateLimiter(deps.Config.RateLimitPerMin, time.Minute),
-		// Authentication endpoints get a tighter budget: this is the endpoint an
-		// attacker would use to brute-force a password. The budget is configurable
-		// because a shared NAT address consumes it on behalf of everyone behind it.
-		loginLimiter: httpx.NewRateLimiter(deps.Config.LoginRateLimitPerMin, time.Minute),
+		deps:         deps,
+		limiter:      apiLimiter,
+		loginLimiter: loginLimiter,
+		limiterStore: store,
+		trusted:      trusted,
 	}
 	s.router = s.buildRouter()
-	return s
+	return s, nil
+}
+
+// Close releases the limiter store.
+func (s *Server) Close() error {
+	if s.limiterStore == nil {
+		return nil
+	}
+	return s.limiterStore.Close()
+}
+
+// NewLimiterStore builds the counter store named by configuration.
+//
+// It is a function rather than a few lines in main so that the choice, and the
+// failure when Redis is unreachable, is testable without starting a server. A
+// Redis store is verified with a PING at construction: without that, a wrong
+// address would surface as a per-request warning about an unenforced limit
+// rather than as a startup failure next to the setting that caused it.
+func NewLimiterStore(ctx context.Context, cfg *config.Config) (ratelimit.Store, error) {
+	switch cfg.RateLimitStore {
+	case "redis":
+		opts, err := redisOptionsFromURL(cfg.RedisURL)
+		if err != nil {
+			return nil, err
+		}
+		return ratelimit.NewRedisStore(ctx, opts)
+	case "memory", "":
+		return ratelimit.NewMemoryStore(), nil
+	default:
+		// config.Validate already rejects an unknown store, so reaching here means
+		// the value changed after validation. Refusing is still the right answer:
+		// silently choosing a store would hide which one is running.
+		return nil, fmt.Errorf("unknown rate limit store %q", cfg.RateLimitStore)
+	}
+}
+
+// redisOptionsFromURL parses a redis:// or rediss:// connection string.
+//
+// A URL is used rather than host/port/password fields because it is one setting
+// instead of four, and it can be pasted from a provider's console without being
+// reassembled. A password in a URL is still a secret, so the URL is not logged.
+func redisOptionsFromURL(raw string) (ratelimit.RedisOptions, error) {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ratelimit.RedisOptions{}, fmt.Errorf("FORGECRM_REDIS_URL is not a valid URL: %w", err)
+	}
+	if u.Scheme != "redis" && u.Scheme != "rediss" {
+		return ratelimit.RedisOptions{}, fmt.Errorf("FORGECRM_REDIS_URL must use the redis:// or rediss:// scheme, got %q", u.Scheme)
+	}
+	if u.Host == "" {
+		return ratelimit.RedisOptions{}, fmt.Errorf("FORGECRM_REDIS_URL has no host")
+	}
+
+	opts := ratelimit.RedisOptions{Addr: u.Host}
+
+	if u.User != nil {
+		if pw, ok := u.User.Password(); ok {
+			opts.Password = pw
+		}
+	}
+
+	// The path is the database index: redis://host:6379/2 selects database 2.
+	if db := strings.TrimPrefix(u.Path, "/"); db != "" {
+		n, err := strconv.Atoi(db)
+		if err != nil {
+			return ratelimit.RedisOptions{}, fmt.Errorf("FORGECRM_REDIS_URL has a non-numeric database %q", db)
+		}
+		if n < 0 {
+			return ratelimit.RedisOptions{}, fmt.Errorf("FORGECRM_REDIS_URL has a negative database %d", n)
+		}
+		opts.DB = n
+	}
+
+	return opts, nil
 }
 
 // Handler returns the root HTTP handler.
@@ -110,8 +224,16 @@ func (s *Server) buildRouter() chi.Router {
 	r.Use(httpx.RequestIDMiddleware)
 	r.Use(httpx.RecoverMiddleware(s.deps.Log))
 	r.Use(httpx.SecurityHeadersMiddleware)
+	// The client address is resolved once, here, against the configured proxy trust
+	// list, and carried in the request context. The rate limiter and the audit trail
+	// then read the same value instead of each deriving its own from headers the
+	// client can set.
+	//
+	// chi's middleware.RealIP is deliberately not used. It rewrites RemoteAddr from
+	// X-Forwarded-For for every caller, which would defeat the trust check below and
+	// let any client choose the address it is attributed to.
+	r.Use(httpx.ClientIPMiddleware(s.trusted))
 	r.Use(httpx.AccessLogMiddleware(s.deps.Log))
-	r.Use(middleware.RealIP)
 
 	// Health probes are unauthenticated and outside the API version prefix so
 	// that infrastructure can reach them without knowing about the API. They are
@@ -123,11 +245,23 @@ func (s *Server) buildRouter() chi.Router {
 	r.Route("/api/v1", func(r chi.Router) {
 		// The rate limiter covers the API subtree only. Health probes above are
 		// deliberately exempt so a busy API cannot make the container look dead.
-		r.Use(httpx.RateLimitMiddleware(s.limiter))
+		//
+		// The subject is the client address, which ClientIPMiddleware resolved from
+		// the peer address unless the peer is a trusted proxy. A client therefore
+		// cannot move itself into a fresh bucket by setting a header.
+		r.Use(httpx.RateLimitMiddleware(httpx.RateLimitOptions{
+			Limiter: s.limiter,
+			Subject: httpx.ClientIP,
+			Log:     s.deps.Log,
+		}))
 
 		r.Route("/auth", func(r chi.Router) {
 			r.Group(func(r chi.Router) {
-				r.Use(httpx.RateLimitMiddleware(s.loginLimiter))
+				r.Use(httpx.RateLimitMiddleware(httpx.RateLimitOptions{
+					Limiter: s.loginLimiter,
+					Subject: httpx.ClientIP,
+					Log:     s.deps.Log,
+				}))
 				r.Post("/login", s.handleLogin)
 				r.Post("/mfa/verify", s.handleMFAVerify)
 				r.Post("/password/forgot", s.handlePasswordForgot)
