@@ -69,6 +69,28 @@ func (r *ToolRegistry) Get(name string) (*Tool, bool) {
 	return t, ok
 }
 
+// PromptDescriptors renders the tool list for the prompt's tool contract.
+//
+// It is derived from the registry rather than hand-written into the prompt text,
+// so the list the model sees cannot disagree with the tools the server will
+// actually authorize. A nil registry yields an empty list, which lets a caller
+// assemble a prompt before AI is configured.
+func (r *ToolRegistry) PromptDescriptors() []ToolDescriptor {
+	if r == nil {
+		return nil
+	}
+	tools := r.List()
+	out := make([]ToolDescriptor, 0, len(tools))
+	for _, t := range tools {
+		out = append(out, ToolDescriptor{
+			Name:                 t.Name,
+			Description:          t.Description,
+			RequiresConfirmation: t.Dangerous,
+		})
+	}
+	return out
+}
+
 // Call invokes a tool after checking the caller's permission.
 //
 // The permission check happens here, before the handler, so a handler cannot
