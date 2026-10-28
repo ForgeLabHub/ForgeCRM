@@ -1,160 +1,279 @@
 # ForgeCRM — Project Audit
 
-**Audit date:** 2026-10-27
-**Auditor:** engineering agent (OpenHands)
-**Branch audited:** `main` @ `7cf51de` ("Initial commit")
-**Repository:** https://github.com/geff1778/ForgeCRM
+- **Audit date:** 2026-10-28
+- **Auditor:** engineering agent (OpenHands)
+- **Commit audited:** `main` @ `3b1ce12`
+- **Repository:** https://github.com/geff1778/ForgeCRM
 
-This document records the **verified, factual** state of the repository before any
-implementation work. It deliberately separates confirmed facts from risks and proposals.
+This records the **verified** state of the repository. It separates confirmed
+facts from risks and proposals. Every claim below was checked against the code at
+the audited commit; commands and results are recorded.
+
+An earlier version of this document described the repository when it contained a
+single 10-byte `README.md`. That state is superseded. The current document
+describes what exists now.
 
 ---
 
-## 1. Confirmed facts
+## 1. Verified state
 
-### 1.1 Repository contents
+### 1.1 Repository and toolchain
 
-| Item | Verified state |
+| Item | Verified state | Evidence |
+|---|---|---|
+| Branch | `main`, direct push permitted | `git push origin main` succeeded |
+| Go | 1.26.10 | `backend/go.mod` |
+| Frontend | React 19, TypeScript, Vite 6 | `frontend/package.json` |
+| Database | PostgreSQL 17 | `docker-compose.yml`, CI services |
+| Migrations | 6 up / 6 down | `backend/internal/migrations/` |
+| Backend test functions | 69 | `grep -c "^func Test"` |
+| Frontend unit tests | 33 passing | `npx vitest run` |
+| E2E scenarios | 11 declared, 22 assertions passing in Chromium | `npx playwright test` |
+| CI jobs | 6, all green on `ff83452` and `3b1ce12` | GitHub Actions |
+
+### 1.2 API surface
+
+73 unique route paths across 144 registrations, mounted under `/api/v1` plus
+`/health` and `/ready`. Groups: auth, system, CRM, admin, imports, migrations,
+integrations, events, jobs, AI/MCP, notifications.
+
+Verified by enumerating the router rather than reading documentation:
+
+```
+grep -rhoE '\b(Get|Post|Put|Patch|Delete)\("(/[^"]*)"' backend/internal/api/*.go | sort -u | wc -l
+→ 73
+```
+
+### 1.3 RBAC
+
+- **81 permissions** declared in `backend/internal/rbac`.
+- **14 default roles**, seeded in `0004_rbac_seed.up.sql`: `platform_owner`,
+  `platform_admin`, `tenant_admin`, `security_auditor`, `integration_admin`,
+  `data_steward`, `executive`, `sales_manager`, `sales_representative`,
+  `support_manager`, `support_agent`, `analyst`, `employee`, `readonly_auditor`.
+- Roles are permission sets in the database, not conditions scattered through the
+  code.
+- Server-side enforcement via `requirePermission` middleware; `api` handlers call
+  `s.perm(rbac.PermX)`.
+
+### 1.4 Domain packages
+
+| Package | Role |
 |---|---|
-| Tracked files | **1** — `README.md` (10 bytes, contents: `# ForgeCRM`) |
-| Source code | **None** |
-| Backend | **None** |
-| Frontend | **None** |
-| Migrations | **None** |
-| Tests | **None** |
-| Docker / Compose | **None** |
-| CI | **None** |
-| License | **None** |
-| Documentation | **None** (beyond the single-line README) |
+| `crm` | Core: contacts, accounts, leads, deals, pipelines, tasks, activities, tickets, tags, custom fields, search, reports |
+| `importx` | Parsers, safe archive extraction, mapping, execution |
+| `migratex` | Source adapters (PostgreSQL, SQLite, REST), reconciliation |
+| `integrations` | Adapter interface, hub, SSRF guard |
+| `events` | Event gateway, webhook subscriptions and delivery |
+| `notify` | SMTP and Telegram adapters, templates, send log |
+| `ai` | Provider interface, Ollama and OpenAI-compatible, MCP tool registry |
 
-Command evidence:
+Layering verified by `internal/archtest`: the core does not import an application
+service; nothing imports `api`.
 
-```
-$ git ls-files
-README.md
+### 1.5 MCP
 
-$ git log --oneline
-7cf51de (grafted, HEAD -> main, origin/main, origin/HEAD) Initial commit
+`internal/ai/mcp.go` implements **8 tools**: `search_accounts`,
+`account_summary`, `list_tasks`, `pipeline_overview`, `create_task`,
+`create_ticket`, `update_deal_stage`, `get_report`.
 
-$ git rev-parse --is-shallow-repository
-true
+Tools call `crm.Service` methods directly — the same code path as HTTP, so
+permissions and validation are not reimplemented. Mutating tools require
+`confirm=true`.
 
-$ find . -maxdepth 2 -not -path './.git/*'
-.
-./README.md
-```
+### 1.6 Import and archive formats
 
-### 1.2 Git state
+Advertised by `/system/capabilities` and **covered by tests**:
 
-- Single branch: `main` (default). No other branches local or remote.
-- Shallow clone (depth 1, "grafted" commit). History before `7cf51de` is unavailable.
-- Working tree clean; nothing to commit.
-- Remote: `origin` → `github.com/geff1778/ForgeCRM.git`.
-
-### 1.3 Pre-existing checks
-
-There were **no tests, no build, and no linters** in the repository to run. The baseline
-"initial test run" is therefore vacuously empty — not a pass and not a failure. There is
-no technical debt in code because there is no code.
-
-### 1.4 Audit environment (this machine)
-
-| Tool | Version | Notes |
+| Category | Formats | Test status |
 |---|---|---|
-| Go | 1.24.5 | installed during audit (`/usr/local/go`) |
-| Node.js | 24.21.0 | preinstalled |
-| npm | 11.21.0 | preinstalled |
-| Docker | 29.9.2 | daemon available |
-| PostgreSQL | 17.11 | installed + cluster started during audit |
-| GCC | 14.2.0 | available for cgo if ever needed |
-| OS | Debian 13 (trixie), 4 vCPU, 15 GiB RAM | |
+| Tabular | csv, tsv, json, jsonl, xlsx, xml | Tested |
+| Archive | zip, tar, tar.gz, gzip | Tested |
+| Archive | tar.bz2, tar.xz, bzip2, xz | Tested (added this cycle) |
 
-Database provisioned for development/testing:
+`internal/importx/safe` enforces entry count, total bytes, per-entry bytes, nesting
+depth and compression ratio, and rejects path traversal and absolute paths.
 
-```
-role:     forgecrm
-database: forgecrm       (dev)
-database: forgecrm_test  (test)
-```
+### 1.7 Error contract
+
+Every error response carries RFC 9457 Problem Details members (`type`, `title`,
+`status`, `detail`, `instance`, `retryable`) alongside the nested
+`error: {code, message, details}` object. Both views derive from one `APIError`.
+Documented in `docs/api/errors.md`.
 
 ---
 
-## 2. Problems
+## 2. What the previous cycle's report claimed — verified or corrected
 
-Because the repository is empty, "problems" are really **gaps against the mission
-brief**. Each is a missing capability rather than a defect in existing code.
+The prior report is treated as a list of hypotheses. Each was checked:
 
-| # | Gap | Severity |
+| Claim | Verdict | Evidence |
 |---|---|---|
-| P1 | No data model, no migrations, no persistence layer | Blocker |
-| P2 | No authentication, sessions, MFA or bootstrap process | Blocker |
-| P3 | No RBAC / permission enforcement | Blocker |
-| P4 | No CRM domain (contacts, accounts, deals, tasks, tickets, …) | Blocker |
-| P5 | No import / migration center (the brief's headline module) | Blocker |
-| P6 | No events, webhooks, outbox or job queue | High |
-| P7 | No integration hub / adapter lifecycle | High |
-| P8 | No audit trail or observability surface | High |
-| P9 | No admin UI | High |
-| P10 | No tests of any kind | Blocker |
-| P11 | No deployment (Compose, reverse proxy, migrations runner) | High |
-| P12 | No license — legal ambiguity for an "open-source" product | Medium |
-| P13 | No security policy / docs / contribution guide | Medium |
-| P14 | README is a single line; no onboarding path | Low |
+| `main` was at `7cf51de` | **Correct at the time** | Superseded; `main` is now `3b1ce12` |
+| `feat/platform-foundation` at `386ffb7` | **Correct** | Branch exists at that SHA |
+| PRs #1, #2, #3 open | **Correct** | All three open, base `main` |
+| PR #2 contains RFC 9457 handling | **Correct** | `httpx.go` emits the members |
+| PR #3 contains configurable pool | **Correct** | `FORGECRM_DATABASE_MAX_CONNS` |
+| CI green on those commits | **Correct** | Runs confirmed for each SHA |
+| No full OIDC Authorization Code Flow | **Correct, and worse than stated** | See finding A |
+| No OpenAPI specification | **Correct** | No OpenAPI, Swagger or equivalent file exists |
+| No distributed rate limiter | **Correct** | `httpx.RateLimiter` holds `hits map[string]*window` in process memory; no Redis in `go.mod` |
+| API and worker share codebase and DB | **Correct** | Both import `internal/crm` and connect to one database |
+| No license chosen | **Correct** | No `LICENSE` file |
+
+**Corrections to the prior report's framing:**
+
+- The report described the MCP surface as a "server". It is an HTTP endpoint
+  speaking a custom JSON shape, not the MCP protocol. See finding B.
+- The report listed three PRs as containing "unique changes". They are one linear
+  stack, so all three were integrated by a single fast-forward. See §3.
 
 ---
 
-## 3. Risks
+## 3. Findings
 
-| # | Risk | Likelihood | Impact | Mitigation taken |
+### A. `/system/capabilities` reports `oidc: true` when no OIDC flow exists — **Medium**
+
+`backend/internal/api/system_handlers.go:80` sets `OIDC: s.deps.Config.OIDC.Enabled`,
+which reflects the `FORGECRM_OIDC_ENABLED` environment variable. No authorization
+code flow exists: there is no `golang.org/x/oauth2` or `coreos/go-oidc` dependency,
+and no route handles a callback.
+
+A client reading `capabilities` would conclude that corporate SSO is available. It
+is not. This is exactly the failure mode the mission's rule 14 warns about.
+
+**Status:** Open. Tracked as Phase 2 work. The flag is the honest report of intent
+and Phase 2 implements the flow; until then the field misdescribes the system,
+which is recorded here rather than left implicit.
+
+### B. MCP is a custom JSON shape, not the MCP protocol — **Medium**
+
+`POST /api/v1/mcp` accepts `{method, params, confirm}` and dispatches `tools/list`
+and `tools/call`. It does not speak JSON-RPC 2.0, has no `initialize` handshake,
+negotiates no `protocolVersion`, and is not reachable by any standard MCP client.
+
+The tool registry, permission checks and audit are real and reused from the domain
+layer, so the *logic* is sound. The *transport* is not MCP.
+
+**Status:** Open. Tracked as Phase 3 work.
+
+### C. Rate limiting is per process — **Medium**
+
+`httpx.RateLimiter` keeps counters in a `map[string]*window` guarded by a mutex,
+in process memory. With N replicas the effective limit is N times the configured
+value. Login, API, import and AI budgets all scale the same way.
+
+There is no Redis dependency. This is the same multiplication problem as the
+database pool, and it is the last thing preventing safe horizontal scaling.
+
+**Status:** Open. Tracked as Phase 1 work.
+
+### D. No OpenAPI specification — **High**
+
+73 routes are described in prose only. The mission's target of a typed SDK,
+generated clients and a contract test all depend on a machine-readable contract.
+Without it, an API change cannot be detected as breaking.
+
+**Status:** Open. Tracked as Phase 1 work; highest-value single item.
+
+### E. `crm` imports `httpx` for error types — **Low**
+
+29 uses of `httpx.APIError`, `httpx.Pagination` and `httpx.SortSpec` in the core
+domain. A domain error type does not belong in a package named for HTTP.
+
+The dependency is one-directional, so it is not a cycle and the rules are still
+written once. It is a layering smell, not a defect.
+
+**Status:** Open, bounded. `TestCoreDoesNotImportCompositionOrHTTP` pins the two
+properties that must hold while the debt exists (`api` is never imported; `httpx`
+never imports `crm`). Fixing it means extracting the error types to a neutral
+package, which is a mechanical change with a large diff and no behavioural
+benefit; it is deferred deliberately.
+
+### F. No `LICENSE` file — **Blocker (owner decision)**
+
+The distribution model is the owner's decision, not an engineering one. CI
+deliberately does not require the file.
+
+**Status:** Blocked on the owner.
+
+### G. No consent model — **Medium**
+
+`grep -ri consent backend/internal` returns nothing. No entity, no policy service,
+no enforcement point. Any channel — email, Telegram, webhook — can send without
+consulting a consent record.
+
+**Status:** Open. Tracked as Phase 2 work.
+
+### H. No tenant configuration mechanism — **Medium**
+
+Tenant settings are not centralized. There is no versioned config schema, no
+preview, no audit of configuration changes, no bootstrap beyond migrations.
+
+**Status:** Open. Tracked as Phase 5 work.
+
+---
+
+## 4. Verified baseline results
+
+Run at `3b1ce12` on the audit machine.
+
+| Check | Command | Result |
+|---|---|---|
+| Backend format | `gofmt -l ./cmd ./internal` | 0 files |
+| Backend vet | `go vet ./...` | clean |
+| Backend build | `go build ./...` | ok |
+| Backend unit | `go test -count=1 ./...` | all pass |
+| Backend integration | `go test -count=1 -p 1 -tags=integration ./...` | all pass against PostgreSQL 17 |
+| Frontend lint | `npx eslint .` | 0 errors, 4 pre-existing warnings |
+| Frontend types | `npx tsc --noEmit` | clean |
+| Frontend unit | `npx vitest run` | 33 pass |
+| E2E | `npx playwright test` | 22 pass in real Chromium |
+| CI | GitHub Actions on `ff83452`, `3b1ce12` | 6/6 jobs green |
+
+### Known non-blocking issues
+
+- 4 ESLint warnings about fast-refresh exports in files that export both a
+  component and a helper. Cosmetic; fixing them means splitting those modules.
+- Integration tests must run with `-p 1` because they share one test database.
+
+---
+
+## 5. Technical debt register
+
+| # | Debt | Severity | Cost to fix | Status |
 |---|---|---|---|---|
-| R1 | Mission scope vastly exceeds one work cycle | Certain | High | Deliver a **complete vertical slice** (Foundation → Import), keep the rest explicitly `NOT_STARTED`/`IN_PROGRESS` in `ROADMAP.md` |
-| R2 | Archive handling is untrusted input; naive extraction is a remote-code/data risk | High if built carelessly | Critical | Central `safezip`/`safetar` extractors with size/file/depth limits, path-traversal rejection, no symlink following, no execution |
-| R3 | Tenant data leakage via guessed IDs | Medium | Critical | `organization_id` on every tenant table + mandatory org predicate in every query + cross-tenant tests |
-| R4 | Privilege escalation through role/permission handling | Medium | Critical | Permissions are data, not scattered `if` statements; explicit escalation tests |
-| R5 | Secrets leaking into logs or config commits | Medium | High | Structured logging with redaction; `.env.example` only; secret scan in CI |
-| R6 | Green CI hiding broken behaviour | Medium | Medium | CI runs real-Postgres integration tests; no test disabling |
-| R7 | Go toolchain / PG not present for future contributors | Medium | Medium | Docker Compose is the canonical path; scripts verify the environment |
-| R8 | Licensing an "open-source" product without checking dependency compatibility | Medium | Medium | **No license chosen in this cycle** — recorded as an open decision (see below) |
+| 1 | No OpenAPI contract | High | Medium | Planned, Phase 1 |
+| 2 | Per-process rate limiting | Medium | Medium | Planned, Phase 1 |
+| 3 | MCP is not the MCP protocol | Medium | Medium | Planned, Phase 3 |
+| 4 | `capabilities.oidc` misreports | Medium | Low | Planned, Phase 2 |
+| 5 | No consent model | Medium | High | Planned, Phase 2 |
+| 6 | No tenant configuration | Medium | High | Planned, Phase 5 |
+| 7 | `crm` → `httpx` layering | Low | Medium | Deferred, bounded by test |
+| 8 | 4 ESLint fast-refresh warnings | Low | Low | Deferred |
+| 9 | No `LICENSE` | — | None | Blocked on owner |
 
 ---
 
-## 4. Proposals (adopted)
+## 6. Risks
 
-1. **Go modular monolith.** Single deployable API + a separate worker process sharing
-   one codebase and one schema. Module boundaries enforced by package layout, not by
-   network hops. Extractable to services later because cross-module calls go through
-   narrow interfaces.
-2. **PostgreSQL as the only mandatory stateful dependency.** The job queue, outbox and
-   event log all use Postgres (`FOR UPDATE SKIP LOCKED`, transactional outbox). This
-   removes Redis/RabbitMQ from the critical path and keeps operations simple — Redis is
-   deliberately **not** introduced.
-3. **chi + pgx + golang-migrate.** Mature, small, well-understood. Migrations embedded
-   in the binary so deployment cannot drift from code.
-4. **OpenAPI as the contract**, served from the binary, with the frontend using a typed
-   client generated from it.
-5. **Rust deferred.** No component in this cycle meets the brief's bar ("isolated
-   processing of untrusted archives", "high-throughput heavy transforms"). Archive
-   extraction is implemented in Go with strict limits. A Rust sidecar is documented as a
-   *candidate* in `ARCHITECTURE.md` with explicit entry criteria, and is **not** created
-   just to use a second language.
-6. **AI and integrations are optional by construction.** With no provider keys
-   configured, the API, CRM and import paths work fully; AI/MCP endpoints report
-   `disabled` rather than failing.
-
-## 5. Open decisions (not decided unilaterally)
-
-| Decision | Why deferred |
-|---|---|
-| **License** | The brief says not to choose a license without checking dependency compatibility and the intended distribution model. Dependencies are AGPL/MIT/BSD-compatible, but the distribution model is the owner's call. No `LICENSE` file is added this cycle. |
-| **SSO/OIDC provider** | Interface + adapter planned; concrete IdP is deployment-specific. |
-| **Oracle / MSSQL / MySQL migration sources** | Adapter interfaces defined; only Postgres + SQLite + REST implemented and tested this cycle. |
+| Risk | Impact | Mitigation in place |
+|---|---|---|
+| Horizontal scaling multiplies rate limits | Login and AI abuse limits are weaker than configured | Documented; Redis limiter is Phase 1 |
+| API contract drift | A breaking change ships undetected | None yet; OpenAPI + contract test is Phase 1 |
+| Client believes SSO is available | Integration effort wasted, security expectation unmet | Documented here; Phase 2 implements the flow |
+| Consent absent | Messages can be sent without a lawful basis | Documented; Phase 2 |
+| Archive handling is the main untrusted-input surface | A parsing flaw is remotely reachable | Limits, traversal rejection, ratio cap, and round-trip plus corrupt-input tests for all 8 formats |
+| `crm` → `httpx` becomes a cycle | Module stops building | Pinned by `TestCoreDoesNotImportCompositionOrHTTP` |
 
 ---
 
-## 6. Baseline conclusion
+## 7. Next priorities
 
-The project is a **greenfield repository with a name**. There is no legacy code to
-preserve, no migration of existing data, and no risk of overwriting prior work. The
-correct first move is to establish a real foundation — schema, auth, RBAC, CRM core,
-and one end-to-end import path — with tests that prove it works against a real
-PostgreSQL instance, and to be honest in `ROADMAP.md` about what remains.
+1. **OpenAPI 3.1 from the real routes** plus a contract test and CI validation
+   (finding D). Unblocks SDK, MCP and integrations.
+2. **Distributed rate limiting** (finding C). The last scaling blocker.
+3. **Real OIDC Authorization Code Flow with PKCE** and a test IdP (finding A).
+
+Findings 1 and 2 are independent and touch different files, so they can proceed
+in parallel. Finding 3 needs a test IdP first.
