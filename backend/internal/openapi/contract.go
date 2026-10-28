@@ -1,0 +1,132 @@
+package openapi
+
+import (
+	"reflect"
+	"sort"
+)
+
+// Contract is what the generator cannot learn from the router alone.
+//
+// The router says which paths exist and which permission each needs. It does not
+// say what a handler decodes or what it returns, because that is a runtime fact
+// about a value, not a property of the route table. The contract supplies it by
+// naming the real Go type, so the schema is derived from the type the handler
+// actually uses and cannot describe a different one.
+//
+// Every entry is a reflect.Type rather than a schema literal. A literal would be a
+// second description of the same thing, and the second description is the one that
+// goes stale. Naming the type means a field added to a DTO appears in the
+// specification on the next generation, with no edit here.
+//
+// The maps are keyed by "METHOD /path", the same key the router and the permission
+// table use, so all three are joined on one identifier.
+type Contract struct {
+	// RequestBodies names the type each handler decodes into.
+	RequestBodies map[string]reflect.Type
+
+	// Responses names the type a successful response carries.
+	Responses map[string]reflect.Type
+
+	// RequiredBody lists the request fields validation actually rejects when
+	// absent. It is declared rather than inferred: a field being a non-pointer
+	// says nothing about whether a client must send it. DealInput.Amount is a
+	// non-pointer float that may be omitted, and AccountInput.Name is a
+	// non-pointer string that may not. Only the validation code knows which.
+	RequiredBody map[string][]string
+
+	// BodyNames overrides the component name used for a request body.
+	//
+	// It exists for the case where one Go type serves as both a request and a
+	// response. The two directions need different `required` sets — a client
+	// must send a name but must not send the id the server assigns — and one
+	// component can carry only one set. Naming the request separately gives each
+	// direction its own schema, which is the honest description, instead of one
+	// component whose required list is wrong for at least one caller.
+	BodyNames map[string]string
+
+	// TypeNames overrides the component name for a Go type everywhere it appears.
+	//
+	// It exists for two distinct Go types that share a bare name — importx.Job and
+	// jobs.Job are both "Job" — which would otherwise collide in the components map.
+	// Generation stops on a collision rather than letting one type's fields describe
+	// the other, and this names them apart. It is keyed by type rather than by route
+	// because a type is often reached as a nested field of a generic response, where
+	// a per-route override would not apply.
+	TypeNames map[reflect.Type]string
+
+	// QueryParams declares the filters a collection endpoint accepts. The shared
+	// pagination parameters are added automatically; this is for the ones that
+	// differ per resource.
+	QueryParams map[string][]QueryParam
+
+	// SortColumns lists the fields a collection can be sorted by. It is declared
+	// because the allowlist lives in an unexported map inside the handler package
+	// that this package cannot import; the generator checks the declaration against
+	// the handler at generation time so the two cannot drift.
+	SortColumns map[string][]string
+}
+
+// QueryParam describes one query parameter.
+type QueryParam struct {
+	Name        string
+	Description string
+	Schema      map[string]any
+	Required    bool
+}
+
+// ResponseType returns the declared response type for a route, if any.
+func (c Contract) ResponseType(key string) (reflect.Type, bool) {
+	t, ok := c.Responses[key]
+	return t, ok
+}
+
+// BodyType returns the declared request type for a route, if any.
+func (c Contract) BodyType(key string) (reflect.Type, bool) {
+	t, ok := c.RequestBodies[key]
+	return t, ok
+}
+
+// requiredFor returns the declared required field names for a request type.
+func (c Contract) requiredForBody(name string) []string {
+	return c.RequiredBody[name]
+}
+
+// keys returns every route key the contract mentions, for the orphan check.
+func (c Contract) keys() map[string]bool {
+	out := map[string]bool{}
+	for k := range c.RequestBodies {
+		out[k] = true
+	}
+	for k := range c.Responses {
+		out[k] = true
+	}
+	for k := range c.QueryParams {
+		out[k] = true
+	}
+	for k := range c.SortColumns {
+		out[k] = true
+	}
+	return out
+}
+
+// schemaForResponse describes a successful response. Required fields are derived
+// from the struct tags, because on a response the tags are authoritative: a field
+// without omitempty is always serialised, so it is always present.
+func (c Contract) schemaForResponse(t reflect.Type, reg *registry) map[string]any {
+	if t.Kind() != reflect.Struct {
+		return schemaFor(t, reg, modeResponse)
+	}
+	name := componentName(t, reg, modeResponse)
+	reg.addResponse(name, t)
+	return ref(name)
+}
+
+// sortedKeys returns a sorted key list, so iteration order cannot vary between runs.
+func sortedKeys[T any](m map[string]T) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}

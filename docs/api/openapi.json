@@ -102,8 +102,15 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Field to sort by. An unknown field is rejected.",
+            "description": "Field to sort by. Any other value is rejected.",
             "schema": {
+              "enum": [
+                "created_at",
+                "employees",
+                "name",
+                "revenue",
+                "updated_at"
+              ],
               "type": "string"
             }
           },
@@ -122,11 +129,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ListResponseCrmAccount"
                 }
               }
             }
@@ -260,13 +267,23 @@
         ],
         "summary": "Create an account",
         "description": "Requires the `accounts.create` permission.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountInput"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Account"
                 }
               }
             }
@@ -559,11 +576,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Account"
                 }
               }
             }
@@ -708,13 +725,23 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountInput"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Account"
                 }
               }
             }
@@ -863,11 +890,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ListResponseCrmActivity"
                 }
               }
             }
@@ -1016,11 +1043,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ListResponseCrmContact"
                 }
               }
             }
@@ -1169,11 +1196,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ListResponseCrmDeal"
                 }
               }
             }
@@ -1341,8 +1368,12 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Field to sort by. An unknown field is rejected.",
+            "description": "Field to sort by. Any other value is rejected.",
             "schema": {
+              "enum": [
+                "created_at",
+                "occurred_at"
+              ],
               "type": "string"
             }
           },
@@ -1361,11 +1392,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ListResponseCrmActivity"
                 }
               }
             }
@@ -1499,13 +1530,24 @@
         ],
         "summary": "Create an activity",
         "description": "Requires the `activities.create` permission.",
+        "requestBody": {
+          "required": true,
+          "description": "The activity must reference at least one of `account_id`, `contact_id`, `deal_id` or `ticket_id`.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActivityInput"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Activity"
                 }
               }
             }
@@ -1693,7 +1735,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1885,7 +1927,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2025,9 +2067,19 @@
         ],
         "summary": "Create a send",
         "description": "Requires the `email.manage` permission.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendEmailRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2219,7 +2271,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2361,7 +2413,7 @@
         "description": "Requires the `email.manage` permission.",
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2553,7 +2605,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2745,7 +2797,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2937,7 +2989,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3075,9 +3127,30 @@
         ],
         "summary": "Replace a setting",
         "description": "Requires the `system.settings` permission.",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "query",
+            "required": true,
+            "description": "The setting to write. Required; a request without it is rejected.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSettingRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3354,7 +3427,7 @@
         "description": "Requires the `email.manage` permission.",
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3546,7 +3619,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3738,7 +3811,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3930,7 +4003,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4122,7 +4195,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4260,13 +4333,23 @@
         ],
         "summary": "Create a task",
         "description": "Requires the `ai.tools.execute` permission.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAITaskRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/AiCompletionResponse"
                 }
               }
             }
@@ -4454,7 +4537,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4594,13 +4677,23 @@
         ],
         "summary": "Sign in and receive a session cookie.",
         "description": "Sign in and receive a session cookie.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/LoginResponse"
                 }
               }
             }
@@ -4709,7 +4802,7 @@
         "description": "Sign out and revoke the current session.",
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4901,11 +4994,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/MeResponse"
                 }
               }
             }
@@ -5041,9 +5134,19 @@
         ],
         "summary": "Confirm a second factor enrolment.",
         "description": "Confirm a second factor enrolment.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaConfirmRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5185,7 +5288,7 @@
         "description": "Disable the caller's second factor.",
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5327,7 +5430,7 @@
         "description": "Begin enrolling a second factor for the caller.",
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5467,13 +5570,23 @@
         ],
         "summary": "Complete sign-in by presenting a second factor.",
         "description": "Complete sign-in by presenting a second factor.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaVerifyRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/LoginResponse"
                 }
               }
             }
@@ -5580,9 +5693,19 @@
         ],
         "summary": "Change the caller's own password.",
         "description": "Change the caller's own password.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordChangeRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5722,9 +5845,19 @@
         ],
         "summary": "Request a password reset. The response is identical whether or not the account exists.",
         "description": "Request a password reset. The response is identical whether or not the account exists.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordForgotRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5835,9 +5968,19 @@
         ],
         "summary": "Complete a password reset with a single-use token.",
         "description": "Complete a password reset with a single-use token.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordResetRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6000,7 +6143,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6338,11 +6481,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ListResponseCrmComment"
                 }
               }
             }
@@ -6476,13 +6619,23 @@
         ],
         "summary": "Create a comment",
         "description": "Requires the `comments.create` permission.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCommentRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Comment"
                 }
               }
             }
@@ -6650,8 +6803,15 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Field to sort by. An unknown field is rejected.",
+            "description": "Field to sort by. Any other value is rejected.",
             "schema": {
+              "enum": [
+                "created_at",
+                "email",
+                "first_name",
+                "last_name",
+                "updated_at"
+              ],
               "type": "string"
             }
           },
@@ -6670,11 +6830,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ListResponseCrmContact"
                 }
               }
             }
@@ -6808,13 +6968,24 @@
         ],
         "summary": "Create a contact",
         "description": "Requires the `contacts.create` permission.",
+        "requestBody": {
+          "required": true,
+          "description": "At least one of `first_name`, `last_name` or `email` is required. `external_source` and `external_id` must be supplied together or not at all.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContactInput"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Contact"
                 }
               }
             }
@@ -7107,11 +7278,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Contact"
                 }
               }
             }
@@ -7256,13 +7427,24 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "description": "At least one of `first_name`, `last_name` or `email` is required. `external_source` and `external_id` must be supplied together or not at all.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContactInput"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Contact"
                 }
               }
             }
@@ -7450,7 +7632,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -7588,13 +7770,23 @@
         ],
         "summary": "Create a custom-field",
         "description": "Requires the `custom_fields.manage` permission.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomFieldDefinitionInput"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/CustomFieldDefinition"
                 }
               }
             }
@@ -7762,8 +7954,15 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Field to sort by. An unknown field is rejected.",
+            "description": "Field to sort by. Any other value is rejected.",
             "schema": {
+              "enum": [
+                "amount",
+                "created_at",
+                "expected_close_date",
+                "title",
+                "updated_at"
+              ],
               "type": "string"
             }
           },
@@ -7782,11 +7981,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ListResponseCrmDeal"
                 }
               }
             }
@@ -7920,13 +8119,23 @@
         ],
         "summary": "Create a deal",
         "description": "Requires the `deals.create` permission.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DealInput"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Deal"
                 }
               }
             }
@@ -8219,11 +8428,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Deal"
                 }
               }
             }
@@ -8368,13 +8577,23 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DealInput"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Deal"
                 }
               }
             }
@@ -8523,7 +8742,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -8674,13 +8893,23 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveStageRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Deal"
                 }
               }
             }
@@ -8868,7 +9097,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -9008,9 +9237,19 @@
         ],
         "summary": "Create an export",
         "description": "Requires the `exports.execute` permission.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateExportRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -9202,11 +9441,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ListResponseImportxJob"
                 }
               }
             }
@@ -9340,13 +9579,23 @@
         ],
         "summary": "Create an import",
         "description": "Requires the `imports.create` permission.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateImportRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ImportJob"
                 }
               }
             }
@@ -9534,7 +9783,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -9687,11 +9936,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ImportJob"
                 }
               }
             }
@@ -9838,13 +10087,23 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/AnalysisResult"
                 }
               }
             }
@@ -9993,7 +10252,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -10144,13 +10403,23 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Report"
                 }
               }
             }
@@ -10299,7 +10568,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -10450,13 +10719,23 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/JobAcceptedResponse"
                 }
               }
             }
@@ -10605,7 +10884,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -10758,7 +11037,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -10911,11 +11190,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ImportUploadResponse"
                 }
               }
             }
@@ -11062,13 +11341,23 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Report"
                 }
               }
             }
@@ -11256,7 +11545,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -11394,13 +11683,23 @@
         ],
         "summary": "Create an integration",
         "description": "Requires the `integrations.configure` permission.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Integration"
                 }
               }
             }
@@ -11588,7 +11887,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -11885,11 +12184,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Integration"
                 }
               }
             }
@@ -12038,7 +12337,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -12191,11 +12490,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/IntegrationStatusResponse"
                 }
               }
             }
@@ -12340,9 +12639,19 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetIntegrationStatusRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -12495,7 +12804,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -12687,7 +12996,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -12879,7 +13188,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -13032,11 +13341,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Job"
                 }
               }
             }
@@ -13185,7 +13494,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -13338,7 +13647,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -13510,8 +13819,14 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Field to sort by. An unknown field is rejected.",
+            "description": "Field to sort by. Any other value is rejected.",
             "schema": {
+              "enum": [
+                "created_at",
+                "score",
+                "status",
+                "updated_at"
+              ],
               "type": "string"
             }
           },
@@ -13530,11 +13845,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ListResponseCrmLead"
                 }
               }
             }
@@ -13668,13 +13983,23 @@
         ],
         "summary": "Create a lead",
         "description": "Requires the `leads.create` permission.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LeadInput"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Lead"
                 }
               }
             }
@@ -13823,11 +14148,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Lead"
                 }
               }
             }
@@ -13972,13 +14297,23 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LeadInput"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Lead"
                 }
               }
             }
@@ -14127,11 +14462,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/LeadConversionResponse"
                 }
               }
             }
@@ -14267,9 +14602,19 @@
         ],
         "summary": "Create a mcp",
         "description": "Requires the `ai.tools.execute` permission.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/McpCallRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -14461,7 +14806,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -14653,7 +14998,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -14791,13 +15136,23 @@
         ],
         "summary": "Create a migration",
         "description": "Requires the `migrations.manage` permission.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMigrationRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/MigrationJob"
                 }
               }
             }
@@ -14946,11 +15301,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/MigrationJob"
                 }
               }
             }
@@ -15099,11 +15454,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/SchemaDiscoveryResponse"
                 }
               }
             }
@@ -15252,7 +15607,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -15401,13 +15756,23 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReconcileRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Reconciliation"
                 }
               }
             }
@@ -15595,7 +15960,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -15748,7 +16113,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -15940,7 +16305,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -16078,13 +16443,23 @@
         ],
         "summary": "Create an organization",
         "description": "Requires the `organizations.manage` permission.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOrganizationRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/OrganizationCreatedResponse"
                 }
               }
             }
@@ -16272,11 +16647,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/PipelineListResponse"
                 }
               }
             }
@@ -16410,13 +16785,23 @@
         ],
         "summary": "Create a pipeline",
         "description": "Requires the `pipelines.manage` permission.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePipelineRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Pipeline"
                 }
               }
             }
@@ -16565,11 +16950,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/PipelineReport"
                 }
               }
             }
@@ -16757,11 +17142,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/SalesSummaryReport"
                 }
               }
             }
@@ -16949,11 +17334,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/SupportSummaryReport"
                 }
               }
             }
@@ -17141,7 +17526,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -17279,13 +17664,23 @@
         ],
         "summary": "Create a role",
         "description": "Requires the `roles.manage` permission.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRoleRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/RoleCreatedResponse"
                 }
               }
             }
@@ -17473,7 +17868,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -17624,9 +18019,19 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetRolePermissionsRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -17814,11 +18219,20 @@
               ],
               "type": "string"
             }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "description": "The term to search for. Required; a request without it is rejected.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -18010,7 +18424,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -18202,11 +18616,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/CapabilitiesResponse"
                 }
               }
             }
@@ -18394,11 +18808,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/SystemInfoResponse"
                 }
               }
             }
@@ -18586,11 +19000,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/TagListResponse"
                 }
               }
             }
@@ -18724,13 +19138,23 @@
         ],
         "summary": "Create a tag",
         "description": "Requires the `tags.manage` permission.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTagRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Tag"
                 }
               }
             }
@@ -18877,9 +19301,19 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttachTagRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -19051,8 +19485,15 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Field to sort by. An unknown field is rejected.",
+            "description": "Field to sort by. Any other value is rejected.",
             "schema": {
+              "enum": [
+                "created_at",
+                "due_at",
+                "priority",
+                "status",
+                "title"
+              ],
               "type": "string"
             }
           },
@@ -19071,11 +19512,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ListResponseCrmTask"
                 }
               }
             }
@@ -19209,13 +19650,23 @@
         ],
         "summary": "Create a task",
         "description": "Requires the `tasks.create` permission.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskInput"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Task"
                 }
               }
             }
@@ -19362,13 +19813,23 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskInput"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Task"
                 }
               }
             }
@@ -19556,7 +20017,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -19694,13 +20155,23 @@
         ],
         "summary": "Create a team",
         "description": "Requires the `teams.manage` permission.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTeamRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/TeamCreatedResponse"
                 }
               }
             }
@@ -19847,9 +20318,19 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddTeamMemberRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -20021,8 +20502,14 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Field to sort by. An unknown field is rejected.",
+            "description": "Field to sort by. Any other value is rejected.",
             "schema": {
+              "enum": [
+                "created_at",
+                "priority",
+                "status",
+                "subject"
+              ],
               "type": "string"
             }
           },
@@ -20041,11 +20528,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ListResponseCrmTicket"
                 }
               }
             }
@@ -20179,13 +20666,23 @@
         ],
         "summary": "Create a ticket",
         "description": "Requires the `tickets.create` permission.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TicketInput"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Ticket"
                 }
               }
             }
@@ -20334,11 +20831,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Ticket"
                 }
               }
             }
@@ -20483,13 +20980,23 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TicketInput"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Ticket"
                 }
               }
             }
@@ -20677,11 +21184,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ListResponseApiUserSummary"
                 }
               }
             }
@@ -20815,13 +21322,23 @@
         ],
         "summary": "Create an user",
         "description": "Requires the `users.manage` permission.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteUserRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/InviteResponse"
                 }
               }
             }
@@ -20970,11 +21487,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/UserSummary"
                 }
               }
             }
@@ -21119,9 +21636,19 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -21274,7 +21801,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -21425,9 +21952,19 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignRoleRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -21735,7 +22272,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -21888,7 +22425,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -22080,7 +22617,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -22218,13 +22755,23 @@
         ],
         "summary": "Create a webhook",
         "description": "Requires the `webhooks.manage` permission.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSubscriptionRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/WebhookCreatedResponse"
                 }
               }
             }
@@ -22373,7 +22920,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -22535,7 +23082,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -22686,9 +23233,19 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetWebhookEnabledRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -22841,7 +23398,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
             "content": {
               "application/json": {
                 "schema": {
@@ -23033,11 +23590,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/HealthResponse"
                 }
               }
             }
@@ -23196,11 +23753,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. The body shape depends on the resource.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ReadyResponse"
                 }
               }
             }
@@ -23302,6 +23859,1491 @@
   },
   "components": {
     "schemas": {
+      "Account": {
+        "properties": {
+          "address_line1": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "annual_revenue": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "archived_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "city": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "country": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "custom_fields": {
+            "additionalProperties": {
+              "description": "Arbitrary JSON value."
+            },
+            "type": "object"
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "employee_count": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "external_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "industry": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "legal_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "organization_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "owner_user_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "postal_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "region": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tax_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "team_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "website": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "created_at",
+          "custom_fields",
+          "id",
+          "name",
+          "organization_id",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "AccountInput": {
+        "properties": {
+          "address_line1": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "annual_revenue": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "city": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "country": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "custom_fields": {
+            "additionalProperties": {
+              "description": "Arbitrary JSON value."
+            },
+            "type": "object"
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "employee_count": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "external_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "industry": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "legal_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner_user_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "postal_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "region": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tax_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "team_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "website": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "Activity": {
+        "properties": {
+          "account_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "body": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "contact_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "deal_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "duration_minutes": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "organization_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "outcome": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "subject": {
+            "type": "string"
+          },
+          "ticket_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "created_at",
+          "id",
+          "occurred_at",
+          "organization_id",
+          "subject",
+          "type"
+        ],
+        "type": "object"
+      },
+      "ActivityInput": {
+        "properties": {
+          "account_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "body": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "contact_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "deal_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "duration_minutes": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "occurred_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "outcome": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "subject": {
+            "type": "string"
+          },
+          "ticket_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AddTeamMemberRequest": {
+        "properties": {
+          "user_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "type": "object"
+      },
+      "AiCompletionResponse": {
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "input_tokens": {
+            "type": "integer"
+          },
+          "model": {
+            "type": "string"
+          },
+          "output_tokens": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "content",
+          "input_tokens",
+          "model",
+          "output_tokens"
+        ],
+        "type": "object"
+      },
+      "AnalysisResult": {
+        "properties": {
+          "archive": {
+            "type": "boolean"
+          },
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/RowError"
+            },
+            "type": "array"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/ExtractedFile"
+            },
+            "type": "array"
+          },
+          "format": {
+            "type": "string"
+          },
+          "preview": {
+            "items": {
+              "additionalProperties": {
+                "description": "Arbitrary JSON value."
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "selected_file": {
+            "type": "string"
+          },
+          "total_rows": {
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "types": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "archive",
+          "columns",
+          "errors",
+          "format",
+          "preview",
+          "total_rows",
+          "truncated",
+          "types"
+        ],
+        "type": "object"
+      },
+      "AnonymousObject": {
+        "properties": {
+          "archive_entry": {
+            "type": "string"
+          },
+          "default_owner_id": {
+            "type": "string"
+          },
+          "default_pipeline_id": {
+            "type": "string"
+          },
+          "default_stage_id": {
+            "type": "string"
+          },
+          "delimiter": {
+            "type": "string"
+          },
+          "duplicate_key": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "duplicates": {
+            "type": "string"
+          },
+          "external_source": {
+            "type": "string"
+          },
+          "has_header": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "max_rows": {
+            "type": "integer"
+          },
+          "sheet_name": {
+            "type": "string"
+          },
+          "skip_rows": {
+            "type": "integer"
+          },
+          "xml_row_element": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AssignRoleRequest": {
+        "properties": {
+          "role_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "role_id"
+        ],
+        "type": "object"
+      },
+      "AttachTagRequest": {
+        "properties": {
+          "entity_id": {
+            "type": "string"
+          },
+          "entity_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "entity_id",
+          "entity_type"
+        ],
+        "type": "object"
+      },
+      "CapabilitiesResponse": {
+        "properties": {
+          "ai": {
+            "type": "boolean"
+          },
+          "archive_formats": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "email": {
+            "type": "boolean"
+          },
+          "import_formats": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "mfa": {
+            "type": "boolean"
+          },
+          "migration_sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "oidc_configured": {
+            "type": "boolean"
+          },
+          "telegram": {
+            "type": "boolean"
+          },
+          "tool_api": {
+            "type": "boolean"
+          },
+          "webhooks": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ai",
+          "archive_formats",
+          "email",
+          "import_formats",
+          "mfa",
+          "migration_sources",
+          "oidc_configured",
+          "telegram",
+          "tool_api",
+          "webhooks"
+        ],
+        "type": "object"
+      },
+      "Comment": {
+        "properties": {
+          "author_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "author_user_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "body": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "entity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "entity_type": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "body",
+          "created_at",
+          "entity_id",
+          "entity_type",
+          "id"
+        ],
+        "type": "object"
+      },
+      "ConnectionConfig": {
+        "properties": {
+          "base_url": {
+            "type": "string"
+          },
+          "database": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "read_path": {
+            "type": "string"
+          },
+          "ssl_mode": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Contact": {
+        "properties": {
+          "account_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "archived_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "custom_fields": {
+            "additionalProperties": {
+              "description": "Arbitrary JSON value."
+            },
+            "type": "object"
+          },
+          "department": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "first_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "is_primary": {
+            "type": "boolean"
+          },
+          "job_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mobile": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "organization_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "owner_user_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "team_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "created_at",
+          "custom_fields",
+          "id",
+          "is_primary",
+          "organization_id",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "ContactInput": {
+        "properties": {
+          "account_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "custom_fields": {
+            "additionalProperties": {
+              "description": "Arbitrary JSON value."
+            },
+            "type": "object"
+          },
+          "department": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "first_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_primary": {
+            "type": "boolean"
+          },
+          "job_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mobile": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "owner_user_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "team_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "CreateAITaskRequest": {
+        "properties": {
+          "max_tokens": {
+            "type": "integer"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "system": {
+            "type": "string"
+          },
+          "temperature": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "prompt"
+        ],
+        "type": "object"
+      },
+      "CreateCommentRequest": {
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "entity_id": {
+            "type": "string"
+          },
+          "entity_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "body",
+          "entity_id",
+          "entity_type"
+        ],
+        "type": "object"
+      },
+      "CreateExportRequest": {
+        "properties": {
+          "entity_type": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "entity_type",
+          "format"
+        ],
+        "type": "object"
+      },
+      "CreateImportRequest": {
+        "properties": {
+          "entity_type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "original_filename": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "entity_type"
+        ],
+        "type": "object"
+      },
+      "CreateMigrationRequest": {
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/ConnectionConfig"
+          },
+          "name": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "source_tables": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "strategy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "config",
+          "name"
+        ],
+        "type": "object"
+      },
+      "CreateOrganizationRequest": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "CreatePipelineRequest": {
+        "properties": {
+          "currency": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/PipelineStageInput"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "stages"
+        ],
+        "type": "object"
+      },
+      "CreateRequest": {
+        "properties": {
+          "allow_write": {
+            "type": "boolean"
+          },
+          "config": {
+            "format": "byte",
+            "type": "string"
+          },
+          "direction": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "max_concurrency": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "quota_per_hour": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "secrets": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "timeout_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "name"
+        ],
+        "type": "object"
+      },
+      "CreateRoleRequest": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "key",
+          "name"
+        ],
+        "type": "object"
+      },
+      "CreateSubscriptionRequest": {
+        "properties": {
+          "event_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "max_attempts": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "secret": {
+            "type": "string"
+          },
+          "target_url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_types",
+          "name",
+          "target_url"
+        ],
+        "type": "object"
+      },
+      "CreateTagRequest": {
+        "properties": {
+          "color": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "CreateTeamRequest": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "CustomFieldDefinition": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "entity_type": {
+            "type": "string"
+          },
+          "field_type": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "options": {
+            "additionalProperties": {
+              "description": "Arbitrary JSON value."
+            },
+            "type": "object"
+          },
+          "position": {
+            "type": "integer"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "created_at",
+          "entity_type",
+          "field_type",
+          "id",
+          "key",
+          "label",
+          "options",
+          "position",
+          "required"
+        ],
+        "type": "object"
+      },
+      "CustomFieldDefinitionInput": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "entity_type": {
+            "type": "string"
+          },
+          "field_type": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "options": {
+            "additionalProperties": {
+              "description": "Arbitrary JSON value."
+            },
+            "type": "object"
+          },
+          "position": {
+            "type": "integer"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "entity_type",
+          "field_type",
+          "key",
+          "label"
+        ],
+        "type": "object"
+      },
+      "Deal": {
+        "properties": {
+          "account_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "amount": {
+            "type": "number"
+          },
+          "archived_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "closed_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "custom_fields": {
+            "additionalProperties": {
+              "description": "Arbitrary JSON value."
+            },
+            "type": "object"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "discount_approved_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "discount_approved_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "discount_percent": {
+            "type": "number"
+          },
+          "expected_close_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "lost_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "organization_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "owner_user_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pipeline_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "primary_contact_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stage_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "team_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "amount",
+          "created_at",
+          "currency",
+          "custom_fields",
+          "discount_percent",
+          "id",
+          "organization_id",
+          "pipeline_id",
+          "stage_id",
+          "status",
+          "title",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "DealInput": {
+        "properties": {
+          "account_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "custom_fields": {
+            "additionalProperties": {
+              "description": "Arbitrary JSON value."
+            },
+            "type": "object"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "discount_percent": {
+            "type": "number"
+          },
+          "expected_close_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "owner_user_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pipeline_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "primary_contact_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stage_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "team_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pipeline_id",
+          "stage_id",
+          "title"
+        ],
+        "type": "object"
+      },
       "Error": {
         "deprecated": true,
         "description": "Deprecated standalone error body. Prefer the Problem schema.",
@@ -23316,6 +25358,1312 @@
         "required": [
           "code",
           "message"
+        ],
+        "type": "object"
+      },
+      "ExtractedFile": {
+        "properties": {
+          "rel_path": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "HealthResponse": {
+        "properties": {
+          "service": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "service",
+          "status",
+          "version"
+        ],
+        "type": "object"
+      },
+      "ImportJob": {
+        "properties": {
+          "checksum_sha256": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "config": {
+            "format": "byte",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "entity_type": {
+            "type": "string"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "failed_rows": {
+            "type": "integer"
+          },
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "format": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "imported_rows": {
+            "type": "integer"
+          },
+          "job_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mapping": {
+            "format": "byte",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "options": {
+            "format": "byte",
+            "type": "string"
+          },
+          "organization_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "original_filename": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "preview": {
+            "format": "byte",
+            "type": "string"
+          },
+          "report": {
+            "format": "byte",
+            "type": "string"
+          },
+          "schema_info": {
+            "format": "byte",
+            "type": "string"
+          },
+          "size_bytes": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "skipped_rows": {
+            "type": "integer"
+          },
+          "source_type": {
+            "type": "string"
+          },
+          "started_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "total_rows": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "config",
+          "created_at",
+          "entity_type",
+          "failed_rows",
+          "format",
+          "id",
+          "imported_rows",
+          "mapping",
+          "name",
+          "options",
+          "organization_id",
+          "preview",
+          "report",
+          "schema_info",
+          "skipped_rows",
+          "source_type",
+          "status",
+          "total_rows"
+        ],
+        "type": "object"
+      },
+      "ImportRequest": {
+        "properties": {
+          "mapping": {
+            "items": {
+              "$ref": "#/components/schemas/MappingEntry"
+            },
+            "type": "array"
+          },
+          "options": {
+            "$ref": "#/components/schemas/AnonymousObject"
+          }
+        },
+        "type": "object"
+      },
+      "ImportUploadResponse": {
+        "properties": {
+          "checksum_sha256": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "size_bytes": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "checksum_sha256",
+          "id",
+          "size_bytes"
+        ],
+        "type": "object"
+      },
+      "Integration": {
+        "properties": {
+          "allow_write": {
+            "type": "boolean"
+          },
+          "archived_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "config": {
+            "format": "byte",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "direction": {
+            "type": "string"
+          },
+          "has_secrets": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "last_sync_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_test_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_test_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_test_ok": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "max_concurrency": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "organization_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "quota_per_hour": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "allow_write",
+          "config",
+          "created_at",
+          "direction",
+          "has_secrets",
+          "id",
+          "kind",
+          "max_concurrency",
+          "name",
+          "organization_id",
+          "status",
+          "timeout_seconds"
+        ],
+        "type": "object"
+      },
+      "IntegrationStatusResponse": {
+        "properties": {
+          "allow_write": {
+            "type": "boolean"
+          },
+          "has_secrets": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "last_sync_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_test_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_test_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_test_ok": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "max_concurrency": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "allow_write",
+          "has_secrets",
+          "id",
+          "kind",
+          "last_sync_at",
+          "last_test_at",
+          "last_test_error",
+          "last_test_ok",
+          "max_concurrency",
+          "name",
+          "status",
+          "timeout_seconds"
+        ],
+        "type": "object"
+      },
+      "InviteResponse": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "reset_token": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "note",
+          "status"
+        ],
+        "type": "object"
+      },
+      "InviteUserRequest": {
+        "properties": {
+          "display_name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "role_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "display_name",
+          "email"
+        ],
+        "type": "object"
+      },
+      "Job": {
+        "properties": {
+          "attempts": {
+            "type": "integer"
+          },
+          "cancel_requested": {
+            "type": "boolean"
+          },
+          "checkpoint": {
+            "format": "byte",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "last_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "max_attempts": {
+            "type": "integer"
+          },
+          "organization_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "payload": {
+            "format": "byte",
+            "type": "string"
+          },
+          "priority": {
+            "type": "integer"
+          },
+          "progress": {
+            "format": "byte",
+            "type": "string"
+          },
+          "result": {
+            "format": "byte",
+            "type": "string"
+          },
+          "run_after": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "started_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "attempts",
+          "cancel_requested",
+          "created_at",
+          "id",
+          "kind",
+          "max_attempts",
+          "payload",
+          "priority",
+          "run_after",
+          "status",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "JobAcceptedResponse": {
+        "properties": {
+          "import_id": {
+            "type": "string"
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "import_id",
+          "job_id",
+          "status"
+        ],
+        "type": "object"
+      },
+      "Lead": {
+        "properties": {
+          "archived_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "company": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "converted_account_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "converted_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "converted_contact_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "custom_fields": {
+            "additionalProperties": {
+              "description": "Arbitrary JSON value."
+            },
+            "type": "object"
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "first_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "last_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "organization_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "owner_user_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "score": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "team_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "created_at",
+          "custom_fields",
+          "id",
+          "organization_id",
+          "status",
+          "title",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "LeadConversionResponse": {
+        "properties": {
+          "account": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Account"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "contact": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Contact"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lead": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Lead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "account",
+          "contact",
+          "lead"
+        ],
+        "type": "object"
+      },
+      "LeadInput": {
+        "properties": {
+          "company": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "custom_fields": {
+            "additionalProperties": {
+              "description": "Arbitrary JSON value."
+            },
+            "type": "object"
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "first_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "owner_user_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "score": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "team_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListResponseApiUserSummary": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UserSummary"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "limit",
+          "offset",
+          "total"
+        ],
+        "type": "object"
+      },
+      "ListResponseCrmAccount": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Account"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "limit",
+          "offset",
+          "total"
+        ],
+        "type": "object"
+      },
+      "ListResponseCrmActivity": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Activity"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "limit",
+          "offset",
+          "total"
+        ],
+        "type": "object"
+      },
+      "ListResponseCrmComment": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Comment"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "limit",
+          "offset",
+          "total"
+        ],
+        "type": "object"
+      },
+      "ListResponseCrmContact": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Contact"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "limit",
+          "offset",
+          "total"
+        ],
+        "type": "object"
+      },
+      "ListResponseCrmDeal": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Deal"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "limit",
+          "offset",
+          "total"
+        ],
+        "type": "object"
+      },
+      "ListResponseCrmLead": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Lead"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "limit",
+          "offset",
+          "total"
+        ],
+        "type": "object"
+      },
+      "ListResponseCrmTask": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Task"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "limit",
+          "offset",
+          "total"
+        ],
+        "type": "object"
+      },
+      "ListResponseCrmTicket": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Ticket"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "limit",
+          "offset",
+          "total"
+        ],
+        "type": "object"
+      },
+      "ListResponseImportxJob": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ImportJob"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "limit",
+          "offset",
+          "total"
+        ],
+        "type": "object"
+      },
+      "LoginRequest": {
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "type": "object"
+      },
+      "LoginResponse": {
+        "properties": {
+          "csrf_token": {
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "mfa_required": {
+            "type": "boolean"
+          },
+          "mfa_ticket": {
+            "type": "string"
+          },
+          "user": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/User"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "mfa_required",
+          "user"
+        ],
+        "type": "object"
+      },
+      "MappingEntry": {
+        "properties": {
+          "required": {
+            "type": "boolean"
+          },
+          "source_column": {
+            "type": "string"
+          },
+          "target_field": {
+            "type": "string"
+          },
+          "transform": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "McpCallRequest": {
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          },
+          "method": {
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": {
+              "description": "Arbitrary JSON value."
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "method"
+        ],
+        "type": "object"
+      },
+      "MeResponse": {
+        "properties": {
+          "csrf_token": {
+            "type": "string"
+          },
+          "organization": {
+            "$ref": "#/components/schemas/OrgSummary"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "teams": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "user": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/User"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "organization",
+          "permissions",
+          "teams",
+          "user"
+        ],
+        "type": "object"
+      },
+      "MfaConfirmRequest": {
+        "properties": {
+          "code": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "type": "object"
+      },
+      "MfaVerifyRequest": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "ticket": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "ticket"
+        ],
+        "type": "object"
+      },
+      "MigrationJob": {
+        "properties": {
+          "config": {
+            "format": "byte",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "last_run_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mapping": {
+            "format": "byte",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "organization_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "report": {
+            "format": "byte",
+            "type": "string"
+          },
+          "source_kind": {
+            "type": "string"
+          },
+          "source_tables": {
+            "format": "byte",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "strategy": {
+            "type": "string"
+          },
+          "watermark": {
+            "format": "byte",
+            "type": "string"
+          }
+        },
+        "required": [
+          "config",
+          "created_at",
+          "id",
+          "mapping",
+          "name",
+          "organization_id",
+          "report",
+          "source_kind",
+          "source_tables",
+          "status",
+          "strategy",
+          "watermark"
+        ],
+        "type": "object"
+      },
+      "MoveStageRequest": {
+        "properties": {
+          "note": {
+            "type": "string"
+          },
+          "stage_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "stage_id"
+        ],
+        "type": "object"
+      },
+      "OrgSummary": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "OrganizationCreatedResponse": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "slug"
         ],
         "type": "object"
       },
@@ -23338,6 +26686,223 @@
           "limit",
           "offset"
         ],
+        "type": "object"
+      },
+      "PasswordChangeRequest": {
+        "properties": {
+          "current_password": {
+            "type": "string"
+          },
+          "new_password": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "type": "object"
+      },
+      "PasswordForgotRequest": {
+        "properties": {
+          "email": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "type": "object"
+      },
+      "PasswordResetRequest": {
+        "properties": {
+          "new_password": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "new_password",
+          "token"
+        ],
+        "type": "object"
+      },
+      "Pipeline": {
+        "properties": {
+          "archived_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "is_default": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "organization_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/PipelineStage"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "created_at",
+          "currency",
+          "id",
+          "is_default",
+          "name",
+          "organization_id"
+        ],
+        "type": "object"
+      },
+      "PipelineListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Pipeline"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "PipelineReport": {
+        "properties": {
+          "currency": {
+            "type": "string"
+          },
+          "pipeline_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "pipeline_name": {
+            "type": "string"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/PipelineStageStat"
+            },
+            "type": "array"
+          },
+          "total_lost": {
+            "type": "number"
+          },
+          "total_open": {
+            "type": "number"
+          },
+          "total_won": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "currency",
+          "pipeline_id",
+          "pipeline_name",
+          "stages",
+          "total_lost",
+          "total_open",
+          "total_won"
+        ],
+        "type": "object"
+      },
+      "PipelineStage": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "is_lost": {
+            "type": "boolean"
+          },
+          "is_won": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pipeline_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "position": {
+            "type": "integer"
+          },
+          "probability": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "PipelineStageInput": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "is_lost": {
+            "type": "boolean"
+          },
+          "is_won": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pipeline_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "position": {
+            "type": "integer"
+          },
+          "probability": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "PipelineStageStat": {
+        "properties": {
+          "deal_count": {
+            "type": "integer"
+          },
+          "stage_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "stage_name": {
+            "type": "string"
+          },
+          "total_amount": {
+            "type": "number"
+          },
+          "weighted_amount": {
+            "type": "number"
+          }
+        },
         "type": "object"
       },
       "Problem": {
@@ -23412,6 +26977,936 @@
           "title",
           "status",
           "error"
+        ],
+        "type": "object"
+      },
+      "ReadyResponse": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "ReconcileRequest": {
+        "properties": {
+          "source_table": {
+            "type": "string"
+          },
+          "target_entity": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_table",
+          "target_entity"
+        ],
+        "type": "object"
+      },
+      "Reconciliation": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "details": {
+            "additionalProperties": {
+              "description": "Arbitrary JSON value."
+            },
+            "type": "object"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "matched_count": {
+            "type": "integer"
+          },
+          "mismatched_count": {
+            "type": "integer"
+          },
+          "source_count": {
+            "type": "integer"
+          },
+          "source_table": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "target_count": {
+            "type": "integer"
+          },
+          "target_entity": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "created_at",
+          "details",
+          "id",
+          "matched_count",
+          "mismatched_count",
+          "source_count",
+          "source_table",
+          "status",
+          "target_count",
+          "target_entity"
+        ],
+        "type": "object"
+      },
+      "Report": {
+        "properties": {
+          "checksum_sha256": {
+            "type": "string"
+          },
+          "column_count": {
+            "type": "integer"
+          },
+          "dry_run": {
+            "type": "boolean"
+          },
+          "duration_ms": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "finished_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "imported": {
+            "type": "integer"
+          },
+          "mapped_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "rows_per_second": {
+            "type": "number"
+          },
+          "skipped": {
+            "type": "integer"
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "total_rows": {
+            "type": "integer"
+          },
+          "updated": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "column_count",
+          "dry_run",
+          "duration_ms",
+          "failed",
+          "finished_at",
+          "imported",
+          "mapped_fields",
+          "rows_per_second",
+          "skipped",
+          "started_at",
+          "total_rows",
+          "updated"
+        ],
+        "type": "object"
+      },
+      "RoleCreatedResponse": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "key"
+        ],
+        "type": "object"
+      },
+      "RowError": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "row": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "SalesSummaryReport": {
+        "properties": {
+          "avg_deal_amount": {
+            "type": "number"
+          },
+          "deals_created": {
+            "type": "integer"
+          },
+          "deals_lost": {
+            "type": "integer"
+          },
+          "deals_won": {
+            "type": "integer"
+          },
+          "from": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lost_value": {
+            "type": "number"
+          },
+          "open_count": {
+            "type": "integer"
+          },
+          "open_value": {
+            "type": "number"
+          },
+          "to": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "win_rate": {
+            "type": "number"
+          },
+          "won_value": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "avg_deal_amount",
+          "deals_created",
+          "deals_lost",
+          "deals_won",
+          "lost_value",
+          "open_count",
+          "open_value",
+          "win_rate",
+          "won_value"
+        ],
+        "type": "object"
+      },
+      "SchemaDiscoveryResponse": {
+        "properties": {
+          "read_only": {
+            "type": "boolean"
+          },
+          "tables": {
+            "items": {
+              "additionalProperties": {
+                "description": "Arbitrary JSON value."
+              },
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "read_only",
+          "tables"
+        ],
+        "type": "object"
+      },
+      "SendEmailRequest": {
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "to": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "subject",
+          "to"
+        ],
+        "type": "object"
+      },
+      "SetIntegrationStatusRequest": {
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "SetRolePermissionsRequest": {
+        "properties": {
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "permissions"
+        ],
+        "type": "object"
+      },
+      "SetWebhookEnabledRequest": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "Subscription": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "disabled_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "event_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "max_attempts": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "organization_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "target_url": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SupportSummaryReport": {
+        "properties": {
+          "avg_resolution_hours": {
+            "type": "number"
+          },
+          "by_priority": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "open": {
+            "type": "integer"
+          },
+          "resolved": {
+            "type": "integer"
+          },
+          "sla_breached": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "avg_resolution_hours",
+          "by_priority",
+          "open",
+          "resolved",
+          "sla_breached",
+          "total"
+        ],
+        "type": "object"
+      },
+      "SystemInfoResponse": {
+        "properties": {
+          "commit": {
+            "type": "string"
+          },
+          "database": {
+            "type": "string"
+          },
+          "environment": {
+            "type": "string"
+          },
+          "server_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "service": {
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "uptime_seconds": {
+            "type": "integer"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "database",
+          "environment",
+          "server_time",
+          "service",
+          "started_at",
+          "uptime_seconds",
+          "version"
+        ],
+        "type": "object"
+      },
+      "Tag": {
+        "properties": {
+          "color": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "color",
+          "created_at",
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "TagListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Tag"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "Task": {
+        "properties": {
+          "account_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "archived_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "assignee_user_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "completed_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "contact_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "deal_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "due_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "organization_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "priority": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "team_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ticket_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "created_at",
+          "id",
+          "organization_id",
+          "priority",
+          "status",
+          "title",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "TaskInput": {
+        "properties": {
+          "account_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "assignee_user_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "contact_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "deal_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "due_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "priority": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "team_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ticket_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "type": "object"
+      },
+      "TeamCreatedResponse": {
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "Ticket": {
+        "properties": {
+          "account_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "archived_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "assignee_user_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "channel": {
+            "type": "string"
+          },
+          "contact_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "first_responded_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "first_response_due_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "number": {
+            "type": "integer"
+          },
+          "organization_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "priority": {
+            "type": "string"
+          },
+          "resolution_due_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolved_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sla_breached": {
+            "type": "boolean"
+          },
+          "sla_policy_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "team_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel",
+          "created_at",
+          "id",
+          "number",
+          "organization_id",
+          "priority",
+          "sla_breached",
+          "status",
+          "subject",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "TicketInput": {
+        "properties": {
+          "account_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "assignee_user_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "channel": {
+            "type": "string"
+          },
+          "contact_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "priority": {
+            "type": "string"
+          },
+          "sla_policy_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "team_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "subject"
+        ],
+        "type": "object"
+      },
+      "UpdateSettingRequest": {
+        "properties": {
+          "value": {
+            "description": "Arbitrary JSON value."
+          }
+        },
+        "type": "object"
+      },
+      "UpdateUserRequest": {
+        "properties": {
+          "display_name": {
+            "type": "string"
+          },
+          "locale": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "User": {
+        "properties": {
+          "display_name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "is_platform_owner": {
+            "type": "boolean"
+          },
+          "last_login_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mfa_enabled": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UserSummary": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "is_platform_owner": {
+            "type": "boolean"
+          },
+          "last_login_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mfa_enabled": {
+            "type": "boolean"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "created_at",
+          "display_name",
+          "email",
+          "id",
+          "is_platform_owner",
+          "mfa_enabled",
+          "status"
+        ],
+        "type": "object"
+      },
+      "WebhookCreatedResponse": {
+        "properties": {
+          "subscription": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Subscription"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "subscription"
         ],
         "type": "object"
       }

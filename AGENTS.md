@@ -38,6 +38,31 @@ go run ./cmd/openapi-gen -check     # what CI runs; fails when the two disagree
 from the route registrations, and CI fails if it disagrees with them. A route
 change means running the generator and committing the result.
 
+Request and response schemas are derived from the types the handlers actually use,
+so the document cannot describe a shape no code accepts:
+
+- The contract table lives in `internal/api/contract.go` (`APIContract`). It names
+  the real DTO for each route. It cannot live in `internal/openapi`, because the
+  request DTOs are unexported types in package `api` and only that package can name
+  them — a re-declared copy would describe a different type.
+- Field names, types, nullability and the required set of a **response** come from
+  the struct and its tags. Only a **request**'s required set is declared, next to
+  the validation it mirrors, because presence is a fact about validation and cannot
+  be read off the type.
+- A type used as both a request and a response gets a distinct `...Input` component
+  for the request direction (`DealInput`), so its request `required` set cannot
+  contradict its response one. Two types sharing a bare name (`importx.Job`,
+  `jobs.Job`) are disambiguated with `Contract.TypeNames`.
+- A validation rule that is conditional — "at least one of these", "one of a fixed
+  set" — cannot be expressed as a required list. It goes in the request body
+  description, and `internal/api/contract_test.go` fails if a rule the validator
+  enforces is neither declared required nor recorded as conditional.
+
+Adding a request body or response to a route means adding a row to the table in
+`internal/api/contract.go`. A route with no row is left unspecified rather than
+guessed, and `TestNoRouteIsInvented` / `TestNoOrphanComponents` keep the two
+directions honest.
+
 A route must declare its access level in one of three ways, or generation fails:
 a permission via `s.perm(rbac.PermX)` in its registration, an entry in
 `openapi.Anonymous` (no session at all), or an entry in `openapi.SessionOnly`
