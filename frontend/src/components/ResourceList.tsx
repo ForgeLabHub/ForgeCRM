@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import type { ListResponse, PaginationParams } from '../api/client'
@@ -35,6 +35,11 @@ interface ResourceListProps<T> {
   actions?: ReactNode
   title?: string
   pageSize?: number
+  /**
+   * Adds a checkbox column and renders the bulk bar when rows are selected.
+   * Receives the selected row keys and a function to clear the selection.
+   */
+  bulkActions?: (selected: string[], clear: () => void) => ReactNode
 }
 
 /**
@@ -59,9 +64,21 @@ export function ResourceList<T>({
   actions,
   title,
   pageSize = 25,
+  bulkActions,
 }: ResourceListProps<T>) {
   const [offset, setOffset] = useState(0)
   const [search, setSearch] = useState('')
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
+
+  const selectable = Boolean(bulkActions)
+
+  // A selection is confined to the page it was made on. Changing the page or the
+  // search term clears it, because the rows it referred to are no longer on
+  // screen: a selection that outlives its rows would let a bulk action apply to
+  // records the user can no longer see and cannot deselect.
+  useEffect(() => {
+    setSelected(new Set())
+  }, [offset, search])
 
   const params: PaginationParams = { limit: pageSize, offset }
   if (searchable && search.trim()) params.q = search.trim()
@@ -75,6 +92,27 @@ export function ResourceList<T>({
   })
 
   const data = query.data
+  const pageKeys = data ? data.items.map(rowKey).map(String) : []
+  const selectedOnPage = pageKeys.filter((key) => selected.has(key))
+  const allOnPageSelected = pageKeys.length > 0 && selectedOnPage.length === pageKeys.length
+
+  function toggle(key: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  function toggleAllOnPage() {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (allOnPageSelected) pageKeys.forEach((key) => next.delete(key))
+      else pageKeys.forEach((key) => next.add(key))
+      return next
+    })
+  }
 
   return (
     <Card title={title} actions={actions} flush>
@@ -102,6 +140,15 @@ export function ResourceList<T>({
         </div>
       ) : null}
 
+      {selectable && selected.size > 0 ? (
+        <div className="toolbar" style={{ padding: 'var(--space-3) var(--space-4) 0' }}>
+          <span className="text-sm">
+            {selected.size} selected
+          </span>
+          {bulkActions ? bulkActions([...selected], () => setSelected(new Set())) : null}
+        </div>
+      ) : null}
+
       {query.isError ? (
         <ErrorState message={errorMessage(query.error)} onRetry={() => void query.refetch()} />
       ) : query.isLoading ? (
@@ -118,6 +165,16 @@ export function ResourceList<T>({
             <table>
               <thead>
                 <tr>
+                  {selectable ? (
+                    <th style={{ width: '2.5rem' }}>
+                      <input
+                        type="checkbox"
+                        aria-label="Select all rows on this page"
+                        checked={allOnPageSelected}
+                        onChange={toggleAllOnPage}
+                      />
+                    </th>
+                  ) : null}
                   {columns.map((column) => (
                     <th
                       key={column.key}
@@ -136,6 +193,19 @@ export function ResourceList<T>({
                     onClick={onRowClick ? () => onRowClick(row) : undefined}
                     style={onRowClick ? { cursor: 'pointer' } : undefined}
                   >
+                    {selectable ? (
+                      <td>
+                        {/* The checkbox must not also open the row: a click meant to
+                            select would navigate away from the list being built. */}
+                        <input
+                          type="checkbox"
+                          aria-label="Select row"
+                          checked={selected.has(String(rowKey(row)))}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={() => toggle(String(rowKey(row)))}
+                        />
+                      </td>
+                    ) : null}
                     {columns.map((column) => (
                       <td key={column.key} className={column.numeric ? 'numeric' : undefined}>
                         {column.render(row)}

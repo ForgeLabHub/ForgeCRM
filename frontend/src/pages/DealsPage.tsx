@@ -7,6 +7,7 @@ import { errorMessage, fieldErrors } from '../api/client'
 import type { Deal, DealInput, Pipeline } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
 import { ResourceList, type Column } from '../components/ResourceList'
+import { BulkArchiveButton } from '../components/BulkArchiveButton'
 import {
   Alert,
   Badge,
@@ -118,6 +119,18 @@ export function DealsPage() {
           emptyText="Create a deal to track an opportunity through your pipeline."
           searchable
           searchPlaceholder="Search deals…"
+          bulkActions={
+            can('deals.archive')
+              ? (selected, clear) => (
+                  <BulkArchiveButton
+                    ids={selected}
+                    entityLabel="deals"
+                    archive={dealsApi.bulkArchive}
+                    onDone={clear}
+                  />
+                )
+              : undefined
+          }
         />
       ) : (
         <PipelineBoard onOpen={(deal) => navigate(`/deals/${deal.id}`)} />

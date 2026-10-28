@@ -695,3 +695,9 @@ export interface Capabilities {
   migration_sources: string[]
   [key: string]: unknown
 }
+
+/** The outcome of a bulk archive: which records were archived, and which were not. */
+export interface BulkArchiveResult {
+  archived: string[]
+  failed: { id: string; reason: string }[]
+}

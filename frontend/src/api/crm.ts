@@ -17,6 +17,7 @@ import type {
   SearchResult,
   SupportSummaryReport,
   SalesSummaryReport,
+  BulkArchiveResult,
   Tag,
   Task,
   TaskInput,
@@ -41,6 +42,8 @@ export const accountsApi = {
   create: (body: AccountInput) => api.post<Account>('/api/v1/accounts', body),
   update: (id: string, body: AccountInput) => api.put<Account>(`/api/v1/accounts/${id}`, body),
   archive: (id: string) => api.delete(`/api/v1/accounts/${id}`),
+  bulkArchive: (ids: string[]) =>
+    api.post<BulkArchiveResult>('/api/v1/accounts/bulk-archive', { ids }),
   contacts: (id: string, params?: CRMListParams) =>
     api.get<ListResponse<Contact>>(`/api/v1/accounts/${id}/contacts`, params),
   deals: (id: string, params?: CRMListParams) =>
@@ -55,6 +58,8 @@ export const contactsApi = {
   create: (body: ContactInput) => api.post<Contact>('/api/v1/contacts', body),
   update: (id: string, body: ContactInput) => api.put<Contact>(`/api/v1/contacts/${id}`, body),
   archive: (id: string) => api.delete(`/api/v1/contacts/${id}`),
+  bulkArchive: (ids: string[]) =>
+    api.post<BulkArchiveResult>('/api/v1/contacts/bulk-archive', { ids }),
 }
 
 export const leadsApi = {
@@ -78,6 +83,8 @@ export const dealsApi = {
   create: (body: DealInput) => api.post<Deal>('/api/v1/deals', body),
   update: (id: string, body: DealInput) => api.put<Deal>(`/api/v1/deals/${id}`, body),
   archive: (id: string) => api.delete(`/api/v1/deals/${id}`),
+  bulkArchive: (ids: string[]) =>
+    api.post<BulkArchiveResult>('/api/v1/deals/bulk-archive', { ids }),
   moveStage: (id: string, stageId: string) =>
     api.post<Deal>(`/api/v1/deals/${id}/stage`, { stage_id: stageId }),
   history: (id: string) =>
