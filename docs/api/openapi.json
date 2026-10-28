@@ -14604,6 +14604,160 @@
         "description": "Requires the `ai.tools.execute` permission.",
         "requestBody": {
           "required": true,
+          "description": "A JSON-RPC 2.0 request. Methods: `initialize`, `notifications/initialized`, `notifications/cancelled`, `ping`, `tools/list`, `tools/call`. Omit `id` to send a notification; the server answers 202 with no body. A failed tool call is returned as a JSON-RPC error with the HTTP status in `data`.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MCPRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed: bad JSON, an unknown field, or a missing required parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session, or the session has expired. Sign in again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but the caller lacks the required permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such resource, or none visible to the caller's organization.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request conflicts with current state, such as a duplicate external identifier.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A field failed validation. `error.details` names each field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests. Retry after the interval in `Retry-After`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected failure. The detail is deliberately generic; the cause is in the server log.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp/call": {
+      "post": {
+        "operationId": "postMcpCall",
+        "tags": [
+          "ai-and-mcp"
+        ],
+        "summary": "Create a call",
+        "description": "Requires the `ai.tools.execute` permission.",
+        "requestBody": {
+          "required": true,
+          "description": "Invokes one tool. Equivalent to a `tools/call` JSON-RPC request; `name` and `arguments` are shorthand for the same fields inside `params`. A mutating tool requires `confirm: true`.",
           "content": {
             "application/json": {
               "schema": {
@@ -24459,6 +24613,9 @@
             },
             "type": "array"
           },
+          "mcp": {
+            "type": "boolean"
+          },
           "mfa": {
             "type": "boolean"
           },
@@ -24486,6 +24643,7 @@
           "archive_formats",
           "email",
           "import_formats",
+          "mcp",
           "mfa",
           "migration_sources",
           "oidc_configured",
@@ -26450,6 +26608,54 @@
         ],
         "type": "object"
       },
+      "MCPRequest": {
+        "properties": {
+          "id": {
+            "format": "byte",
+            "type": "string"
+          },
+          "jsonrpc": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "params": {
+            "format": "byte",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "MCPResponse": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RPCError"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "format": "byte",
+            "type": "string"
+          },
+          "jsonrpc": {
+            "type": "string"
+          },
+          "result": {
+            "description": "Arbitrary JSON value."
+          }
+        },
+        "required": [
+          "id",
+          "jsonrpc"
+        ],
+        "type": "object"
+      },
       "MappingEntry": {
         "properties": {
           "required": {
@@ -26469,10 +26675,19 @@
       },
       "McpCallRequest": {
         "properties": {
+          "arguments": {
+            "additionalProperties": {
+              "description": "Arbitrary JSON value."
+            },
+            "type": "object"
+          },
           "confirm": {
             "type": "boolean"
           },
           "method": {
+            "type": "string"
+          },
+          "name": {
             "type": "string"
           },
           "params": {
@@ -26482,9 +26697,6 @@
             "type": "object"
           }
         },
-        "required": [
-          "method"
-        ],
         "type": "object"
       },
       "MeResponse": {
@@ -26978,6 +27190,20 @@
           "status",
           "error"
         ],
+        "type": "object"
+      },
+      "RPCError": {
+        "properties": {
+          "code": {
+            "type": "integer"
+          },
+          "data": {
+            "description": "Arbitrary JSON value."
+          },
+          "message": {
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "ReadyResponse": {

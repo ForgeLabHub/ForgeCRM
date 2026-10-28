@@ -68,14 +68,15 @@ and compiles but is not yet covered by passing tests.
 | 5.1 | `ai.Provider` interface, Ollama + OpenAI-compatible providers | **VERIFIED** |
 | 5.2 | AI task records, timeouts, request caps, cost metadata, audit | **VERIFIED** |
 | 5.3 | Tool registry reusing domain authz (8 tools, permission-checked, audited) | **VERIFIED** |
-| 5.3a | MCP **protocol** transport (JSON-RPC 2.0, `initialize`, `tools/list`, `tools/call`) | **NOT_STARTED** — `POST /api/v1/mcp` speaks a custom JSON shape, not the protocol, so no standard MCP client can connect. See `PROJECT_AUDIT.md` finding B |
+| 5.3a | MCP **protocol** transport (JSON-RPC 2.0, `initialize`, `tools/list`, `tools/call`) | **VERIFIED** — `POST /api/v1/mcp` speaks JSON-RPC 2.0: `initialize` with protocol-version negotiation, `ping`, `tools/list` in the protocol shape (`inputSchema`), `tools/call`, notifications answered with an empty 202, and the JSON-RPC error codes for parse, invalid-request, method-not-found and invalid-params. `GET /api/v1/mcp/tools` and `POST /api/v1/mcp/call` remain as the admin UI's own shape. Verified by `internal/ai/mcp_protocol_test.go` (transport) and `internal/api/mcp_integration_test.go` (session, permission, confirmation and tenant scope over the real HTTP stack). See `docs/mcp/` |
 | 5.4 | Prompt-injection hardening + unauthorized-access tests | **VERIFIED** |
 | 5.5 | Contextual AI in entity cards, calibrated confidence, graceful failure, human handoff | **NOT_STARTED** — Phase 3 |
 
 > Correction: an earlier revision of this file marked "MCP tool server" as
-> `VERIFIED`. The tool *logic* is verified — 8 tools that reuse `crm.Service` and
-> enforce permissions. The MCP *transport* does not exist, so the claim was
-> narrowed rather than left to overstate the system.
+> `VERIFIED`. The tool *logic* was verified — 8 tools that reuse `crm.Service` and
+> enforce permissions — but the MCP *transport* did not exist, so the claim was
+> narrowed rather than left to overstate the system. The transport now exists and
+> is verified separately, which is why 5.3a is distinct from 5.3.
 
 
 ## Cycle 6 — Production readiness
@@ -130,14 +131,14 @@ where it is going. Strategy and Definition of Done: `docs/MASTER_PLAN.md`.
 | 2.5 | Consent enforcement in every channel | **NOT_STARTED** |
 | 2.6 | Consent UI and "why was this allowed/blocked" | **NOT_STARTED** |
 
-## Phase 3 — MCP and AI-native UX — **NOT_STARTED**
+## Phase 3 — MCP and AI-native UX — **IN_PROGRESS**
 
 | # | Item | Status |
 |---|---|---|
-| 3.1 | MCP protocol transport | **NOT_STARTED** — the capability flag no longer claims otherwise (`tool_api`) |
-| 3.2 | Read and safe-write MCP tools | **PARTIAL** — 8 tools exist behind a non-protocol endpoint |
-| 3.3 | MCP credential model, revocation, read/write split | **NOT_STARTED** |
-| 3.4 | MCP UI and client config examples | **NOT_STARTED** |
+| 3.1 | MCP protocol transport | **VERIFIED** — JSON-RPC 2.0 over `POST /api/v1/mcp`; see cycle 5.3a |
+| 3.2 | Read and safe-write MCP tools | **PARTIAL** — 8 tools are reachable over the protocol; the read/write split is currently per-tool (the `dangerous` flag plus a required `confirm` acknowledgement), not a separate credential scope |
+| 3.3 | MCP credential model, revocation, read/write split | **NOT_STARTED** — MCP currently authenticates with the caller's browser session; a dedicated credential with its own scope and revocation is not implemented |
+| 3.4 | MCP UI and client config examples | **PARTIAL** — the AI & MCP page lists tools and can invoke one, with a confirmation checkbox for mutating tools. Client configuration examples live in `docs/mcp/`; a copy-to-clipboard generator is not built |
 | 3.5 | Contextual AI, calibrated confidence, graceful failure, human handoff | **NOT_STARTED** |
 
 ## Phases 4–9 — Planned

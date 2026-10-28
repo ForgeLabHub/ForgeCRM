@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -8,7 +9,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/google/uuid"
+
+	"github.com/geff1778/forgecrm/internal/ai"
 	"github.com/geff1778/forgecrm/internal/config"
+	"github.com/geff1778/forgecrm/internal/rbac"
 )
 
 // TestCapabilitiesDoesNotOverstateOIDC pins the honesty of the capability report.
@@ -56,13 +61,14 @@ func TestCapabilitiesDoesNotOverstateOIDC(t *testing.T) {
 	_ = h // the router is built to prove the route exists behind the session gate
 }
 
-// TestCapabilitiesToolAPIIsNotCalledMCP pins the same honesty for the tool surface.
+// TestCapabilitiesMCPFlagMatchesTheTransport pins the honesty of the MCP flag.
 //
-// The endpoint exposes tools/list and tools/call over HTTP. It is not a full MCP
-// server: there is no initialize handshake, no protocol version negotiation and no
-// stdio or SSE transport, so an off-the-shelf MCP client cannot connect. Reporting
-// `mcp: true` would tell an integrator otherwise.
-func TestCapabilitiesToolAPIIsNotCalledMCP(t *testing.T) {
+// An earlier revision reported `tool_api` only, because the endpoint spoke a
+// custom JSON shape and no standard MCP client could connect. The protocol
+// transport now exists, so `mcp` is reported — and this test requires the claim to
+// be earned: it drives the real protocol handler through an initialize handshake
+// and a tools/list call, and fails if the flag is set without a working transport.
+func TestCapabilitiesMCPFlagMatchesTheTransport(t *testing.T) {
 	cfg := &config.Config{}
 	srv := New(&Deps{Config: cfg, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 
@@ -74,12 +80,28 @@ func TestCapabilitiesToolAPIIsNotCalledMCP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, ok := body["mcp"]; ok {
-		t.Error(`the response contains "mcp", which reads as "a full MCP server is available"; ` +
-			`only tools/list and tools/call exist, so the field must be named "tool_api"`)
+	claimed, _ := body["mcp"].(bool)
+	if !claimed {
+		t.Fatal(`the response does not report "mcp": true, but the protocol transport exists`)
 	}
-	if _, ok := body["tool_api"]; !ok {
-		t.Error(`the response has no "tool_api" field`)
+
+	// The flag is only honest if the transport answers the handshake. A registry
+	// with no CRM service is enough to answer initialize and tools/list, which are
+	// the methods that prove the protocol is spoken rather than merely advertised.
+	server := ai.NewMCPServer(ai.NewToolRegistry(nil, nil))
+	principal := rbac.NewPrincipal(uuid.New(), "t@example.test", "T", uuid.New(), nil)
+
+	resp, reply := server.Handle(context.Background(), principal,
+		[]byte(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}`))
+	if !reply || resp.Error != nil {
+		t.Fatalf("initialize failed: reply=%v err=%+v", reply, resp.Error)
+	}
+	result, _ := resp.Result.(map[string]any)
+	if result["protocolVersion"] != ai.MCPProtocolVersion {
+		t.Errorf("initialize negotiated %v, want %s", result["protocolVersion"], ai.MCPProtocolVersion)
+	}
+	if _, ok := result["serverInfo"]; !ok {
+		t.Error("initialize result has no serverInfo, which a client requires")
 	}
 }
 
@@ -101,7 +123,7 @@ func TestCapabilitiesReportsImplementedSubsystems(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, field := range []string{"mfa", "webhooks", "tool_api"} {
+	for _, field := range []string{"mfa", "webhooks", "tool_api", "mcp"} {
 		if body[field] != true {
 			t.Errorf("%s is %v, want true: the subsystem is implemented and always available",
 				field, body[field])

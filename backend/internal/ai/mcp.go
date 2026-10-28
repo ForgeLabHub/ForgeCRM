@@ -82,7 +82,7 @@ func (r *ToolRegistry) Call(ctx context.Context, p *rbac.Principal, name string,
 		return nil, httpx.NewError(404, httpx.CodeNotFound, fmt.Sprintf("unknown tool %q", name))
 	}
 	if !p.Has(tool.Permission) {
-		_ = r.audit.Record(ctx, audit.Entry{
+		r.record(ctx, audit.Entry{
 			OrganizationID: &p.OrganizationID, ActorUserID: &p.UserID, ActorType: "ai_agent",
 			Action: string(audit.ActionAIToolInvoked), EntityType: "ai_tool", EntityID: name,
 			Metadata: map[string]any{"allowed": false, "required_permission": string(tool.Permission)},
@@ -99,8 +99,21 @@ func (r *ToolRegistry) Call(ctx context.Context, p *rbac.Principal, name string,
 	if err != nil {
 		entry.Metadata["error"] = err.Error()
 	}
-	_ = r.audit.Record(ctx, entry)
+	r.record(ctx, entry)
 	return result, err
+}
+
+// record writes an audit entry, tolerating a registry built without a logger.
+//
+// The audit write never decides the outcome. A denial is enforced because the
+// permission is absent, not because the entry was written, so a missing logger
+// must not turn a refusal into a crash — which is what dereferencing it on the
+// denial path would do.
+func (r *ToolRegistry) record(ctx context.Context, e audit.Entry) {
+	if r.audit == nil {
+		return
+	}
+	_ = r.audit.Record(ctx, e)
 }
 
 // Descriptors renders the tool list in MCP-compatible form.
@@ -115,6 +128,69 @@ func (r *ToolRegistry) Descriptors() []map[string]any {
 			"permission":   string(t.Permission),
 		})
 	}
+	return out
+}
+
+// MCPDescriptors renders the tool list for the MCP protocol.
+//
+// It differs from Descriptors in the field names, and that is the point: the
+// protocol defines `inputSchema`, while the admin UI reads `input_schema`. A
+// client reading the protocol shape finds the schema where it expects it, and a
+// tool with no declared input schema reports an empty object rather than a null,
+// which some clients refuse.
+func (r *ToolRegistry) MCPDescriptors() []map[string]any {
+	out := make([]map[string]any, 0, len(r.tools))
+	for _, t := range r.List() {
+		schema := t.InputSchema
+		if schema == nil {
+			schema = map[string]any{"type": "object", "properties": map[string]any{}}
+		}
+		if t.Dangerous {
+			schema = withConfirmation(schema)
+		}
+		out = append(out, map[string]any{
+			"name":        t.Name,
+			"description": t.Description,
+			"inputSchema": schema,
+		})
+	}
+	return out
+}
+
+// withConfirmation adds the confirm argument a mutating tool requires.
+//
+// The requirement is published rather than enforced invisibly: a client that
+// reads the schema learns it must acknowledge the write before calling, instead
+// of receiving a refusal it cannot explain. The input schema is copied rather
+// than mutated, because the same map is served to the admin UI, which has no
+// confirmation flag.
+func withConfirmation(schema map[string]any) map[string]any {
+	props, _ := schema["properties"].(map[string]any)
+	copied := make(map[string]any, len(props)+1)
+	for k, v := range props {
+		copied[k] = v
+	}
+	copied["confirm"] = map[string]any{
+		"type": "boolean",
+		"description": "Must be true. Acknowledges that this tool changes stored data; " +
+			"the call is refused without it.",
+	}
+
+	required, _ := schema["required"].([]string)
+	next := make([]string, 0, len(required)+1)
+	for _, name := range required {
+		if name != "confirm" {
+			next = append(next, name)
+		}
+	}
+	next = append(next, "confirm")
+
+	out := make(map[string]any, len(schema)+1)
+	for k, v := range schema {
+		out[k] = v
+	}
+	out["properties"] = copied
+	out["required"] = next
 	return out
 }
 
@@ -137,12 +213,8 @@ func (r *ToolRegistry) CallMCP(ctx context.Context, p *rbac.Principal, method st
 		// A mutating tool requires explicit confirmation. This is the
 		// "confirm dangerous operations" requirement: an agent cannot silently
 		// perform a write.
-		if tool, ok := r.Get(name); ok && tool.Dangerous {
-			confirmed, _ := params["confirm"].(bool)
-			if !confirmed {
-				return nil, httpx.NewError(400, httpx.CodeBadRequest,
-					"this tool changes data and requires confirm=true")
-			}
+		if err := r.RequireConfirmation(name, args); err != nil {
+			return nil, err
 		}
 		result, err := r.Call(ctx, p, name, args)
 		if err != nil {
@@ -160,6 +232,23 @@ func (r *ToolRegistry) CallMCP(ctx context.Context, p *rbac.Principal, method st
 		return nil, httpx.NewError(400, httpx.CodeBadRequest,
 			fmt.Sprintf("unsupported MCP method %q", method))
 	}
+}
+
+// RequireConfirmation enforces the acknowledgement a mutating tool needs.
+//
+// It is one function called from both transports, so the rule cannot hold on the
+// JSON-RPC path and be forgotten on the other, which is exactly the kind of gap
+// that turns a safety check into a formality.
+func (r *ToolRegistry) RequireConfirmation(name string, args map[string]any) error {
+	tool, ok := r.Get(name)
+	if !ok || !tool.Dangerous {
+		return nil
+	}
+	if confirmed, _ := args["confirm"].(bool); confirmed {
+		return nil
+	}
+	return httpx.NewError(400, httpx.CodeBadRequest,
+		fmt.Sprintf("tool %q changes data and requires confirm=true", name))
 }
 
 func (r *ToolRegistry) buildTools() []*Tool {

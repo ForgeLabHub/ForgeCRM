@@ -44,6 +44,14 @@ type Contract struct {
 	// component whose required list is wrong for at least one caller.
 	BodyNames map[string]string
 
+	// BodyDescriptions adds prose to a request body, keyed by route.
+	//
+	// It carries the rules a schema cannot state: which methods a JSON-RPC
+	// endpoint accepts, that a field is shorthand for another, that an
+	// acknowledgement flag is required. Keying by route rather than by type means
+	// two routes using one type can each describe themselves correctly.
+	BodyDescriptions map[string]string
+
 	// TypeNames overrides the component name for a Go type everywhere it appears.
 	//
 	// It exists for two distinct Go types that share a bare name — importx.Job and

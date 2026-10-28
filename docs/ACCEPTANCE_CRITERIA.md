@@ -129,6 +129,14 @@ A module is `VERIFIED` only when every criterion below has recorded evidence.
 - **I5** Instructions embedded in untrusted documents or imported rows do not change tool
   authorization.
 - **I6** Unauthorized MCP tool calls are denied and audited.
+- **I7** A standard MCP client can connect: the server answers the `initialize`
+  handshake with a `protocolVersion`, publishes the tools with `inputSchema`, and
+  answers `tools/list` and `tools/call`. A message without an `id` is treated as a
+  notification and receives an empty `202`. Enforced by
+  `internal/ai/mcp_protocol_test.go` and `internal/api/mcp_integration_test.go`.
+- **I8** A tool that changes stored data is refused unless the call carries
+  `confirm: true`, and the requirement is published in the tool's schema so a
+  client can see it before calling.
 
 ## J. Operations
 

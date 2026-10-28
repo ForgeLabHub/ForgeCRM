@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/geff1778/forgecrm/internal/ai"
 	"github.com/geff1778/forgecrm/internal/crm"
 	"github.com/geff1778/forgecrm/internal/events"
 	"github.com/geff1778/forgecrm/internal/httpx"
@@ -34,13 +35,14 @@ import (
 // the validation it mirrors.
 func APIContract() openapi.Contract {
 	c := openapi.Contract{
-		RequestBodies: map[string]reflect.Type{},
-		Responses:     map[string]reflect.Type{},
-		RequiredBody:  map[string][]string{},
-		BodyNames:     map[string]string{},
-		QueryParams:   map[string][]openapi.QueryParam{},
-		SortColumns:   map[string][]string{},
-		TypeNames:     map[reflect.Type]string{},
+		RequestBodies:    map[string]reflect.Type{},
+		Responses:        map[string]reflect.Type{},
+		RequiredBody:     map[string][]string{},
+		BodyNames:        map[string]string{},
+		BodyDescriptions: map[string]string{},
+		QueryParams:      map[string][]openapi.QueryParam{},
+		SortColumns:      map[string][]string{},
+		TypeNames:        map[reflect.Type]string{},
 	}
 
 	// --- Authentication ------------------------------------------------------
@@ -264,8 +266,25 @@ func APIContract() openapi.Contract {
 	c.RequiredBody["CreateAITaskRequest"] = []string{"prompt"}
 	c.Responses["POST /api/v1/ai/tasks"] = reflect.TypeOf(aiCompletionResponse{})
 
-	c.RequestBodies["POST /api/v1/mcp"] = reflect.TypeOf(mcpCallRequest{})
-	c.RequiredBody["McpCallRequest"] = []string{"method"}
+	// The protocol endpoint. `id` is echoed back unchanged and may be a string or a
+	// number, so the schema describes it as either; omit it to send a notification,
+	// which receives an empty 202 and no body.
+	c.RequestBodies["POST /api/v1/mcp"] = reflect.TypeOf(ai.Request{})
+	c.Responses["POST /api/v1/mcp"] = reflect.TypeOf(ai.Response{})
+	c.TypeNames[reflect.TypeOf(ai.Request{})] = "MCPRequest"
+	c.TypeNames[reflect.TypeOf(ai.Response{})] = "MCPResponse"
+	c.BodyDescriptions["POST /api/v1/mcp"] = "A JSON-RPC 2.0 request. Methods: " +
+		"`initialize`, `notifications/initialized`, `notifications/cancelled`, `ping`, " +
+		"`tools/list`, `tools/call`. Omit `id` to send a notification; the server " +
+		"answers 202 with no body. A failed tool call is returned as a JSON-RPC error " +
+		"with the HTTP status in `data`."
+
+	// The single-call convenience shape for the admin UI. `name` and `arguments` are
+	// shorthand for the same fields inside `params`.
+	c.RequestBodies["POST /api/v1/mcp/call"] = reflect.TypeOf(mcpCallRequest{})
+	c.BodyDescriptions["POST /api/v1/mcp/call"] = "Invokes one tool. Equivalent to a " +
+		"`tools/call` JSON-RPC request; `name` and `arguments` are shorthand for the " +
+		"same fields inside `params`. A mutating tool requires `confirm: true`."
 
 	// --- Notifications and email --------------------------------------------
 	c.RequestBodies["POST /api/v1/admin/email/send"] = reflect.TypeOf(sendEmailRequest{})

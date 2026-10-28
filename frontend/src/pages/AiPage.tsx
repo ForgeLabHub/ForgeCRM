@@ -100,14 +100,14 @@ export function AiPage() {
             <TableSkeleton rows={4} columns={2} />
           ) : tools.isError ? (
             <Alert tone="error">{errorMessage(tools.error)}</Alert>
-          ) : tools.data?.items.length ? (
+          ) : tools.data?.tools.length ? (
             <>
               <p className="text-muted text-sm" style={{ marginBottom: 'var(--space-3)' }}>
                 These tools are the ones your account is allowed to see. Each one re-checks your
                 permission when it runs, and every call is audited.
               </p>
               <div className="stack stack--sm">
-                {tools.data.items.map((tool) => (
+                {tools.data.tools.map((tool) => (
                   <div key={tool.name} className="row row--between">
                     <div style={{ minWidth: 0 }}>
                       <div className="mono table__primary">{tool.name}</div>
@@ -132,7 +132,7 @@ export function AiPage() {
           )}
         </Card>
 
-        {can('ai.tools.execute') ? <McpConsole tools={tools.data?.items ?? []} /> : null}
+        {can('ai.tools.execute') ? <McpConsole tools={tools.data?.tools ?? []} /> : null}
 
         <Card title="Recent AI tasks" flush>
           {tasks.isLoading ? (
@@ -235,8 +235,15 @@ export function AiPage() {
 function McpConsole({ tools }: { tools: MCPTool[] }) {
   const [toolName, setToolName] = useState(tools[0]?.name ?? '')
   const [argsText, setArgsText] = useState('{}')
+  const [confirm, setConfirm] = useState(false)
   const [result, setResult] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // A mutating tool is refused without an acknowledgement, so the interface must
+  // offer one. Showing the checkbox only for such a tool keeps the requirement
+  // visible instead of leaving the user with an unexplained refusal.
+  const selected = tools.find((tool) => tool.name === toolName)
+  const needsConfirmation = selected?.dangerous ?? false
 
   const call = useMutation({
     mutationFn: () => {
@@ -246,7 +253,7 @@ function McpConsole({ tools }: { tools: MCPTool[] }) {
       } catch {
         throw new Error('Arguments must be valid JSON.')
       }
-      return mcpApi.call(toolName, args)
+      return mcpApi.call(toolName, args, needsConfirmation ? confirm : false)
     },
     onSuccess: (response) => {
       setError(null)
@@ -274,6 +281,7 @@ function McpConsole({ tools }: { tools: MCPTool[] }) {
               value={toolName}
               onChange={(event) => {
                 setToolName(event.target.value)
+                setConfirm(false)
                 setResult(null)
                 setError(null)
               }}
@@ -290,12 +298,24 @@ function McpConsole({ tools }: { tools: MCPTool[] }) {
             <input className="mono" value={argsText} onChange={(event) => setArgsText(event.target.value)} />
           </label>
         </div>
+        {needsConfirmation ? (
+          <label className="row" style={{ gap: 'var(--space-2)', alignItems: 'center' }}>
+            <input
+              type="checkbox"
+              checked={confirm}
+              onChange={(event) => setConfirm(event.target.checked)}
+            />
+            <span className="text-sm">
+              This tool changes stored data. I confirm I want to run it.
+            </span>
+          </label>
+        ) : null}
         <div className="row">
           <button
             type="button"
             className="btn btn--primary btn--sm"
             onClick={() => call.mutate()}
-            disabled={call.isPending || !toolName}
+            disabled={call.isPending || !toolName || (needsConfirmation && !confirm)}
           >
             {call.isPending ? 'Running…' : 'Run tool'}
           </button>

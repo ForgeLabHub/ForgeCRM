@@ -51,20 +51,31 @@ export const aiApi = {
 export interface MCPTool {
   name: string
   description: string
+  // The catalogue endpoint names this input_schema; the MCP protocol endpoint
+  // names the same thing inputSchema. This page reads the catalogue, so it uses
+  // the catalogue's name.
   input_schema: Record<string, unknown>
+  dangerous: boolean
+  permission: string
 }
 
 export const mcpApi = {
   /** The tools this caller is allowed to see, filtered by permission. */
-  tools: () => api.get<{ items: MCPTool[] }>('/api/v1/mcp/tools'),
+  tools: () => api.get<{ tools: MCPTool[] }>('/api/v1/mcp/tools'),
 
   /**
    * Invokes one tool. The server re-checks the caller's permission for the
    * specific tool, so listing a tool is not enough to be able to run it.
+   *
+   * This posts to the single-call endpoint rather than to the JSON-RPC one. The
+   * two shapes were once crossed — this function sent {name, arguments} to an
+   * endpoint that decoded {method, params} — so the call arrived with no method
+   * and was refused. The convenience endpoint is the one that speaks this shape.
    */
-  call: (name: string, args: Record<string, unknown>) =>
-    api.post<{ content: unknown; is_error?: boolean }>('/api/v1/mcp', {
+  call: (name: string, args: Record<string, unknown>, confirm = false) =>
+    api.post<{ content: unknown; is_error?: boolean }>('/api/v1/mcp/call', {
       name,
       arguments: args,
+      confirm,
     }),
 }

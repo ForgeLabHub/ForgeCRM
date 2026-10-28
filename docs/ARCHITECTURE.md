@@ -183,10 +183,18 @@ after every redirect; cap redirects; refuse non-HTTP(S) schemes.
   Provider selection, timeouts, request caps and cost metadata are configuration; the CRM
   works with AI entirely disabled.
 - MCP tools (`search_accounts`, `account_summary`, `list_tasks`, `pipeline_overview`,
-  `create_task`, `create_ticket`, `update_deal_stage`, `get_report`,
-  `integration_status`) are thin wrappers over the **same** domain services and the
-  **same** authorization checks as the REST API. No raw SQL, shell, filesystem or
-  unbounded export is exposed.
+  `create_task`, `create_ticket`, `update_deal_stage`, `get_report`) are thin
+  wrappers over the **same** domain services and the **same** authorization checks
+  as the REST API. No raw SQL, shell, filesystem or unbounded export is exposed.
+- The transport is JSON-RPC 2.0 (`internal/ai/jsonrpc.go`, `mcp_protocol.go`):
+  `initialize` with protocol-version negotiation, `ping`, `tools/list`, `tools/call`,
+  and notifications answered with an empty `202`. A standard MCP client can connect.
+  `MCPServer` wraps `ToolRegistry` rather than reimplementing it, so the protocol
+  cannot grant more authority than the registry enforces. A tool that changes data
+  requires `confirm: true`, and the requirement is published in the tool's
+  `inputSchema` so a client sees it before calling. The admin UI keeps its own
+  shape at `POST /api/v1/mcp/call`, which is not the protocol. Authentication is
+  the caller's session; a dedicated scoped credential is Phase 3, item 3.3.
 - Prompt-injection stance: content found in documents, emails, imported rows or external
   responses is **data**. It never changes the agent's permission set, tool allowlist or
   system instructions. Tool calls are authorized per-caller, not per-content.

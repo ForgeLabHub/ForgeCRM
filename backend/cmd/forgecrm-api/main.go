@@ -136,6 +136,7 @@ func run() error {
 		Telegram:     services.Telegram,
 		AI:           services.AI,
 		Tools:        services.Tools,
+		MCP:          services.MCP,
 		StartedAt:    time.Now(),
 		Version:      version,
 		BuildCommit:  commit,

@@ -477,9 +477,15 @@ func requestBodyFor(key string, t reflect.Type, c Contract, reg *registry) *requ
 	}
 	reg.addRequest(name, t, c.requiredForBody(name))
 
-	desc := ""
-	if f := requiredDescription(t); f != "" {
-		desc = f
+	desc := requiredDescription(t)
+	if d, ok := c.BodyDescriptions[key]; ok {
+		// A route-level description adds to, rather than replaces, the rule derived
+		// from the type: one route may need both.
+		if desc != "" {
+			desc = desc + "\n\n" + d
+		} else {
+			desc = d
+		}
 	}
 	return &requestBody{
 		Required:    true,

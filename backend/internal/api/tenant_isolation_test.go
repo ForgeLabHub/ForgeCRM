@@ -88,6 +88,7 @@ func newHarness(t *testing.T) *harness {
 		Migrations: svcs.Migrations, Integrations: svcs.Integrations,
 		Events: svcs.Events, Dispatcher: svcs.Dispatcher,
 		Email: svcs.Email, Telegram: svcs.Telegram, AI: svcs.AI, Tools: svcs.Tools,
+		MCP:     svcs.MCP,
 		Version: "test",
 	})
 
