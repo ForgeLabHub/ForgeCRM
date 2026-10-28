@@ -100,3 +100,66 @@ cache and the components all run for real. Mocking our own modules would test
 that the mocks agree with each other and nothing else. See
 `src/api/client.test.ts`, `src/components/ResourceList.test.tsx` and
 `src/components/RequirePermission.test.tsx`.
+
+## End-to-end tests
+
+The unit tests above stub `fetch`, which proves the components behave. They
+cannot prove that a button performs the operation it claims to, because the
+operation itself is the thing being stubbed. The end-to-end suite closes that
+gap: it drives a real Chromium browser against the real Go API and a real
+PostgreSQL database, with no network stubbing anywhere.
+
+```bash
+# 1. PostgreSQL with migrations applied
+createdb forgecrm_e2e
+cd backend
+FORGECRM_DATABASE_URL='postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_e2e?sslmode=disable' \
+FORGECRM_SECRET_KEY='a-development-secret-key-long-enough-for-hkdf' \
+FORGECRM_ENV=development \
+  go run ./cmd/forgecrm-api -migrate
+
+# 2. A platform owner, created through the same path an operator uses
+FORGECRM_DATABASE_URL='postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_e2e?sslmode=disable' \
+FORGECRM_SECRET_KEY='a-development-secret-key-long-enough-for-hkdf' \
+FORGECRM_ENV=development \
+  ../scripts/e2e-bootstrap.sh
+
+# 3. The API
+FORGECRM_DATABASE_URL='postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_e2e?sslmode=disable' \
+FORGECRM_SECRET_KEY='a-development-secret-key-long-enough-for-hkdf' \
+FORGECRM_ENV=development \
+FORGECRM_HTTP_ADDR=127.0.0.1:8080 \
+  go run ./cmd/forgecrm-api
+
+# 4. The suite; Playwright starts the Vite dev server itself
+cd ../frontend
+FORGECRM_API_URL='http://127.0.0.1:8080' npm run e2e
+```
+
+CI runs exactly these steps as the `e2e` job in `.github/workflows/ci.yml`.
+
+### Two things that will bite you
+
+**Raise the rate limits when running the suite.** The suite signs in repeatedly
+and drives many requests from a single address, which the production budgets are
+correct to refuse. Set `FORGECRM_RATE_LIMIT_PER_MIN` and
+`FORGECRM_LOGIN_RATE_LIMIT_PER_MIN` high for a local run, as CI does. A `429` in
+a failure message is the product working, not a broken test.
+
+**The tests share one database and must run one at a time.** `workers: 1` and
+`fullyParallel: false` are set in `playwright.config.ts` for that reason.
+
+### Writing a test
+
+Prefer asserting on the effect over the rendering. After a write, re-read the
+record through the API and confirm the value landed; then reload the page and
+confirm it is still there. A test that only checks a toast appeared will pass
+even when nothing was saved.
+
+For the page-load cases, assert on the page's own `h1`, not the shell's. The
+application shell renders `<h1>ForgeCRM</h1>` on every route, so a test that
+looks for any `h1` passes even when the route fell through to the overview.
+
+Target form inputs by their stable `id` (`#account-name`) rather than their
+label. A required field renders its label as `Name *`, which makes the visible
+text differ from the `label` prop and breaks a label-based locator.

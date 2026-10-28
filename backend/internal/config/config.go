@@ -31,8 +31,13 @@ type Config struct {
 	CSRFHeader        string
 	LockoutThreshold  int
 	LockoutWindow     time.Duration
-	RateLimitPerMin   int
-	SecretKey         string
+	// LoginRateLimitPerMin bounds authentication attempts per client IP per minute.
+	// It is configurable because the right value is deployment-specific: an office
+	// behind one NAT address shares a single bucket, so a budget tuned for one
+	// person locks out everybody.
+	LoginRateLimitPerMin int
+	RateLimitPerMin      int
+	SecretKey            string
 
 	WorkerConcurrency int
 	WorkerPollEvery   time.Duration
@@ -192,8 +197,9 @@ func Load() (*Config, error) {
 		ImportStorageDir:       env("FORGECRM_IMPORT_STORAGE_DIR", ""),
 		RunMigrationsOnStart:   envBool("FORGECRM_MIGRATE_ON_START", false),
 
-		LockoutThreshold: envIntOr("FORGECRM_LOCKOUT_THRESHOLD", 8),
-		RateLimitPerMin:  envIntOr("FORGECRM_RATE_LIMIT_PER_MIN", 300),
+		LockoutThreshold:     envIntOr("FORGECRM_LOCKOUT_THRESHOLD", 8),
+		LoginRateLimitPerMin: envIntOr("FORGECRM_LOGIN_RATE_LIMIT_PER_MIN", 60),
+		RateLimitPerMin:      envIntOr("FORGECRM_RATE_LIMIT_PER_MIN", 300),
 
 		LogLevel:     env("FORGECRM_LOG_LEVEL", "info"),
 		LogFormat:    env("FORGECRM_LOG_FORMAT", "json"),

@@ -98,15 +98,16 @@ func testConfig(t *testing.T) *config.Config {
 	t.Helper()
 	dir := t.TempDir()
 	return &config.Config{
-		Env:               "test",
-		HTTPAddr:          "127.0.0.1:0",
-		SecretKey:         "test-secret-key-that-is-long-enough-for-hkdf-derivation",
-		SessionCookieName: "forgecrm_session",
-		CSRFHeader:        "X-CSRF-Token",
-		SessionTTL:        12 * 60 * 60 * 1e9,
-		RateLimitPerMin:   100000, // the rate limiter must not interfere with tests
-		ImportStorageDir:  dir,
-		ImportTempDir:     dir,
+		Env:                  "test",
+		HTTPAddr:             "127.0.0.1:0",
+		SecretKey:            "test-secret-key-that-is-long-enough-for-hkdf-derivation",
+		SessionCookieName:    "forgecrm_session",
+		CSRFHeader:           "X-CSRF-Token",
+		SessionTTL:           12 * 60 * 60 * 1e9,
+		RateLimitPerMin:      100000, // the rate limiter must not interfere with tests
+		LoginRateLimitPerMin: 100000, // the suite signs in repeatedly from one address
+		ImportStorageDir:     dir,
+		ImportTempDir:        dir,
 	}
 }
 

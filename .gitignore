@@ -42,3 +42,13 @@ __pycache__/
 # Agent and build scratch
 .agent_tmp/
 /tmp/
+
+# Compiled binaries produced by `go build` in the repository root
+/backend/forgecrm-api
+/backend/forgecrm-worker
+
+# Playwright artifacts: failure traces, screenshots and the HTML report
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+frontend/playwright/.cache/

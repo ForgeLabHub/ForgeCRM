@@ -121,6 +121,96 @@ jobs:
       - name: Build
         run: npm run build
 
+  e2e:
+    name: End-to-end (real API, real database, real browser)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: forgecrm
+          POSTGRES_PASSWORD: forgecrm
+          POSTGRES_DB: forgecrm_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U forgecrm"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      FORGECRM_DATABASE_URL: postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_e2e?sslmode=disable
+      FORGECRM_SECRET_KEY: e2e-secret-key-long-enough-for-hkdf-derivation-0000
+      FORGECRM_ENV: development
+      FORGECRM_HTTP_ADDR: 127.0.0.1:8080
+      # The suite signs in repeatedly from one address and drives many requests
+      # through the API. The production budgets are correct for production, so
+      # they are raised here rather than weakened in the product.
+      FORGECRM_RATE_LIMIT_PER_MIN: "100000"
+      FORGECRM_LOGIN_RATE_LIMIT_PER_MIN: "100000"
+      FORGECRM_API_URL: http://127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend/go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Build the API and apply migrations
+        working-directory: backend
+        run: |
+          go build -o forgecrm-api ./cmd/forgecrm-api
+          ./forgecrm-api -migrate
+
+      - name: Provision the E2E platform owner
+        working-directory: .
+        run: ./scripts/e2e-bootstrap.sh
+
+      - name: Start the API
+        working-directory: backend
+        run: |
+          nohup ./forgecrm-api > /tmp/forgecrm-api.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/ready > /dev/null; then
+              echo "API is ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "API did not become ready; log follows"
+          cat /tmp/forgecrm-api.log
+          exit 1
+
+      # Playwright starts the Vite dev server itself (see webServer in
+      # playwright.config.ts), so there is no separate step for it.
+      - name: Run end-to-end tests
+        run: npm run e2e
+
+      - name: Upload the report when a test fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
   security:
     name: Security (dependencies, secrets, static analysis)
     runs-on: ubuntu-latest

@@ -80,8 +80,9 @@ func New(deps *Deps) *Server {
 		deps:    deps,
 		limiter: httpx.NewRateLimiter(deps.Config.RateLimitPerMin, time.Minute),
 		// Authentication endpoints get a tighter budget: this is the endpoint an
-		// attacker would use to brute-force a password.
-		loginLimiter: httpx.NewRateLimiter(20, time.Minute),
+		// attacker would use to brute-force a password. The budget is configurable
+		// because a shared NAT address consumes it on behalf of everyone behind it.
+		loginLimiter: httpx.NewRateLimiter(deps.Config.LoginRateLimitPerMin, time.Minute),
 	}
 	s.router = s.buildRouter()
 	return s
@@ -98,14 +99,19 @@ func (s *Server) buildRouter() chi.Router {
 	r.Use(httpx.SecurityHeadersMiddleware)
 	r.Use(httpx.AccessLogMiddleware(s.deps.Log))
 	r.Use(middleware.RealIP)
-	r.Use(httpx.RateLimitMiddleware(s.limiter))
 
 	// Health probes are unauthenticated and outside the API version prefix so
-	// that infrastructure can reach them without knowing about the API.
+	// that infrastructure can reach them without knowing about the API. They are
+	// deliberately outside the rate limiter: a throttled probe reports the
+	// container as unhealthy, which turns a traffic spike into an outage.
 	r.Get("/health", s.handleHealth)
 	r.Get("/ready", s.handleReady)
 
 	r.Route("/api/v1", func(r chi.Router) {
+		// The rate limiter covers the API subtree only. Health probes above are
+		// deliberately exempt so a busy API cannot make the container look dead.
+		r.Use(httpx.RateLimitMiddleware(s.limiter))
+
 		r.Route("/auth", func(r chi.Router) {
 			r.Group(func(r chi.Router) {
 				r.Use(httpx.RateLimitMiddleware(s.loginLimiter))

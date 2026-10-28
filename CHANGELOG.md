@@ -117,9 +117,45 @@ once it reaches 1.0.
 - Cross-organization access returns 404 rather than 403.
 - Blocking a user revokes their sessions immediately.
 
+### Added
+
+- **End-to-end test suite.** `frontend/e2e/platform.spec.ts` drives a real
+  Chromium browser against the real Go API and a real PostgreSQL database; the
+  network is never stubbed. It covers sign-in, sign-out, session revocation, the
+  account create/edit/archive lifecycle, cross-checks each write through the API
+  rather than the screen alone, and loads every workspace and administration
+  route asserting on the page's own heading so a route that silently falls
+  through to the overview is caught. `npm run e2e` runs it; the `e2e` job in CI
+  starts PostgreSQL, applies migrations, provisions the owner and runs the suite.
+- **`scripts/e2e-bootstrap.sh`** provisions the end-to-end platform owner through
+  the same `--bootstrap-admin` path an operator uses, so the suite has no
+  test-only back door. It is idempotent and safe to run before every suite.
+- **Regression tests for request throttling** in
+  `backend/internal/api/ratelimit_test.go`, covering the two defects below.
+
+### Fixed
+
+- **Health probes were rate limited, so a busy API reported the container as
+  unhealthy.** `/health` and `/ready` shared the API's request budget. Once the
+  budget was spent the probes answered 429, which an orchestrator reads as a
+  failed container and acts on by restarting it — turning a traffic spike into an
+  outage. The probes now sit outside the limiter while `/api/v1` stays inside it,
+  which `TestHealthEndpointsAreNotRateLimited` and `TestAPISubtreeIsRateLimited`
+  pin down.
+- **The login throttle was a hardcoded 20 requests per minute per client IP.**
+  Everyone behind one NAT gateway shares a single bucket, so an office of thirty
+  people would lock itself out after twenty sign-ins between them. The budget is
+  now the `FORGECRM_LOGIN_RATE_LIMIT_PER_MIN` setting (default 60) and is
+  documented in `.env.example`, because the correct value depends on how many
+  users share an address.
+- **Six lint errors and two warnings in the frontend** that would have failed the
+  CI lint step, including a Playwright fixture parameter named `use` that lint
+  read as React's `use` hook.
+
 ### Known gaps
 
-- No web administration panel.
 - No license file.
 - OIDC has not been exercised against a real identity provider.
-- Rate limiting is per process, not global.
+- Rate limiting is per process, not global. Behind more than one API replica the
+  effective budget is multiplied by the replica count, so a shared store
+  (Redis) is required before running more than one replica in production.
