@@ -697,6 +697,8 @@ export interface Capabilities {
   import_formats: string[]
   archive_formats: string[]
   migration_sources: string[]
+  /** Canonical webhook event vocabulary. The subscription form must use this list. */
+  event_types: string[]
   [key: string]: unknown
 }
 

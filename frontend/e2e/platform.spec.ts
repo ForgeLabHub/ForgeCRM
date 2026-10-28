@@ -223,6 +223,8 @@ test.describe('workspace pages render live data', () => {
     { path: '/reports', title: 'Reports' },
     { path: '/imports', title: 'Import Center' },
     { path: '/integrations', title: 'Integrations' },
+    { path: '/webhooks', title: 'Webhooks' },
+    { path: '/events', title: 'Events' },
     { path: '/jobs', title: 'Background jobs' },
     { path: '/ai', title: 'AI & MCP' },
     { path: '/approvals', title: 'Agent approvals' },
@@ -241,6 +243,22 @@ test.describe('workspace pages render live data', () => {
       await expect(page.getByText(/something went wrong|failed to load/i)).toHaveCount(0)
     })
   }
+})
+
+test.describe('webhook subscriptions', () => {
+  test('the event picker offers the canonical event types the dispatcher matches', async ({
+    authedPage: page,
+  }) => {
+    await page.goto('/webhooks')
+    await page.getByRole('button', { name: 'New subscription' }).click()
+
+    // The picker must offer the names the server actually emits. A shortened list
+    // ("contact.created") produced a subscription the dispatcher never matched, so
+    // the endpoint silently received nothing — the failure this test guards.
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByText('crm.contact.created', { exact: true })).toBeVisible()
+    await expect(dialog.getByText('contact.created', { exact: true })).toHaveCount(0)
+  })
 })
 
 test.describe('health endpoints', () => {

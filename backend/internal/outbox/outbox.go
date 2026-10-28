@@ -50,6 +50,29 @@ const (
 	EventUserBlocked        = "platform.user.blocked"
 )
 
+// EventTypes lists every event type the platform can emit, in the exact spelling
+// the dispatcher matches a subscription against.
+//
+// It is the single source of truth a client must offer when creating a webhook
+// subscription. The interface once hard-coded a shortened list ("contact.created"
+// rather than "crm.contact.created"); a subscription built from it selected no
+// events, so the endpoint silently received nothing. A list derived from these
+// constants cannot drift from what the dispatcher compares, which is what makes
+// the failure impossible to reintroduce.
+func EventTypes() []string {
+	return []string{
+		EventAccountCreated, EventAccountUpdated, EventAccountArchived,
+		EventContactCreated, EventContactUpdated, EventContactArchived,
+		EventLeadCreated, EventLeadUpdated, EventLeadConverted,
+		EventDealCreated, EventDealUpdated, EventDealStageChanged,
+		EventDealWon, EventDealLost,
+		EventTaskCreated, EventTaskCompleted,
+		EventTicketCreated, EventTicketUpdated, EventTicketClosed,
+		EventImportCompleted, EventImportFailed, EventMigrationCompleted,
+		EventIntegrationRun, EventUserInvited, EventUserBlocked,
+	}
+}
+
 // maxPublishAttempts bounds how long a broken event is retried before it is
 // dead-lettered. Without a bound the row stays unpublished forever and every
 // drain re-reads it, so one bad payload costs work on every poll for the life of

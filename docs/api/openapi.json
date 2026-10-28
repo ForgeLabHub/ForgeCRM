@@ -26704,6 +26704,12 @@
           "email": {
             "type": "boolean"
           },
+          "event_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "import_formats": {
             "items": {
               "type": "string"
@@ -26739,6 +26745,7 @@
           "ai",
           "archive_formats",
           "email",
+          "event_types",
           "import_formats",
           "mcp",
           "mfa",

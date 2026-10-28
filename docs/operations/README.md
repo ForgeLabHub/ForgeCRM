@@ -97,6 +97,23 @@ exactly-once: a worker that dies after the endpoint accepted the POST but before
 was marked delivered leaves the claim to expire and the delivery is sent again. Every
 payload therefore carries a stable `event_id` for the receiver to de-duplicate on.
 
+### Event types
+
+A subscription names the event types it wants. The names are namespaced by domain —
+`crm.contact.created`, `crm.deal.won`, `support.ticket.closed`, `data.import.completed`,
+`integration.run.completed`, `platform.user.invited` — and the dispatcher matches them
+exactly. A name that is not in the list matches nothing and the subscription silently
+receives no deliveries, so the authoritative list is published rather than left to be
+guessed:
+
+```
+GET /api/v1/system/capabilities   →   { "event_types": ["crm.account.created", …] }
+```
+
+The admin UI builds its event picker from that field, and
+`TestWebhookEventVocabularyMatchesTheDispatcher` emits and dispatches every advertised
+type so the list and the dispatcher cannot drift apart.
+
 A delivery that keeps failing is retried with exponential backoff up to the
 subscription's `max_attempts`, then moves to the terminal `dead` state. Dead is visible,
 not silent:

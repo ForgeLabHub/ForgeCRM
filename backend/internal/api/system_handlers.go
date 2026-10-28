@@ -8,6 +8,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/audit"
 	"github.com/geff1778/forgecrm/internal/httpx"
 	"github.com/geff1778/forgecrm/internal/notify"
+	"github.com/geff1778/forgecrm/internal/outbox"
 )
 
 // ctxOrBackground returns the request context. It exists so handlers read
@@ -87,6 +88,13 @@ type capabilitiesResponse struct {
 	Imports          []string `json:"import_formats"`
 	Archives         []string `json:"archive_formats"`
 	MigrationSources []string `json:"migration_sources"`
+
+	// EventTypes is the canonical vocabulary a webhook subscription may select
+	// from. A client must build the picker from this list rather than a local
+	// copy: the interface once offered shortened names ("contact.created") while
+	// the dispatcher matched "crm.contact.created", so every subscription created
+	// from the interface matched no events and received nothing.
+	EventTypes []string `json:"event_types"`
 }
 
 func (s *Server) handleCapabilities(w http.ResponseWriter, r *http.Request) {
@@ -114,6 +122,7 @@ func (s *Server) handleCapabilities(w http.ResponseWriter, r *http.Request) {
 		Imports:          []string{"csv", "tsv", "json", "jsonl", "xlsx", "xml"},
 		Archives:         []string{"zip", "tar", "tar.gz", "tar.bz2", "tar.xz", "gzip", "bzip2", "xz"},
 		MigrationSources: []string{"postgres", "sqlite", "rest_api"},
+		EventTypes:       outbox.EventTypes(),
 	})
 }
 

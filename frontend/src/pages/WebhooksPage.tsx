@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { webhooksApi } from '../api/integrations'
+import { systemApi } from '../api/admin'
 import { errorMessage, fieldErrors } from '../api/client'
 import type { Webhook } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
@@ -16,30 +17,22 @@ import {
   Timestamp,
 } from '../components/ui'
 
-/** Event types the platform emits. Kept here so the form can offer them. */
-const EVENT_TYPES = [
-  'contact.created',
-  'contact.updated',
-  'contact.archived',
-  'account.created',
-  'account.updated',
-  'deal.created',
-  'deal.updated',
-  'deal.stage_changed',
-  'deal.won',
-  'deal.lost',
-  'lead.created',
-  'lead.converted',
-  'task.created',
-  'task.completed',
-  'ticket.created',
-  'ticket.updated',
-  'ticket.resolved',
-  'import.completed',
-  'import.failed',
-  'integration.sync_completed',
-  'integration.sync_failed',
-]
+/**
+ * The event vocabulary is read from the server rather than hard-coded.
+ *
+ * A local list once used shortened names ("contact.created") while the dispatcher
+ * matched "crm.contact.created", so a subscription built from this form selected
+ * no events and the endpoint silently received nothing. Reading
+ * /system/capabilities keeps the picker equal to what the server actually emits.
+ */
+function useEventTypes() {
+  const query = useQuery({
+    queryKey: ['system', 'capabilities'],
+    queryFn: systemApi.capabilities,
+    staleTime: 5 * 60 * 1000,
+  })
+  return { eventTypes: query.data?.event_types ?? [], isLoading: query.isLoading }
+}
 
 export function WebhooksPage() {
   const { can } = useAuth()
@@ -241,6 +234,7 @@ function NewWebhookDialog({
   const [secret, setSecret] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [formError, setFormError] = useState<string | null>(null)
+  const { eventTypes, isLoading: eventsLoading } = useEventTypes()
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -345,22 +339,31 @@ function NewWebhookDialog({
                   padding: 'var(--space-3)',
                 }}
               >
-                {EVENT_TYPES.map((type) => (
-                  <label key={type} className="checkbox">
-                    <input
-                      type="checkbox"
-                      checked={selected.includes(type)}
-                      onChange={(event) =>
-                        setSelected((previous) =>
-                          event.target.checked
-                            ? [...previous, type]
-                            : previous.filter((item) => item !== type),
-                        )
-                      }
-                    />
-                    <span className="mono">{type}</span>
-                  </label>
-                ))}
+                {eventsLoading ? (
+                  <span className="text-muted">Loading event types…</span>
+                ) : eventTypes.length === 0 ? (
+                  <span className="field__error">
+                    The event list could not be loaded, so a subscription cannot be created. Reload
+                    the page and try again.
+                  </span>
+                ) : (
+                  eventTypes.map((type) => (
+                    <label key={type} className="checkbox">
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(type)}
+                        onChange={(event) =>
+                          setSelected((previous) =>
+                            event.target.checked
+                              ? [...previous, type]
+                              : previous.filter((item) => item !== type),
+                          )
+                        }
+                      />
+                      <span className="mono">{type}</span>
+                    </label>
+                  ))
+                )}
               </div>
               {errors.event_types ? (
                 <span className="field__error">{errors.event_types}</span>

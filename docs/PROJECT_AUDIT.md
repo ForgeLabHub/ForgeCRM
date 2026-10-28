@@ -237,6 +237,24 @@ preview, no audit of configuration changes, no bootstrap beyond migrations.
 
 **Status:** Open. Tracked as Phase 5 work.
 
+### I. Webhook event vocabulary drifted between the form and the dispatcher — **High**
+
+Found and fixed in the current cycle. `WebhooksPage.tsx` held a hard-coded event
+list with bare names (`contact.created`, `deal.created`). The dispatcher matches
+the namespaced names the outbox emits (`crm.contact.created`, `crm.deal.created`).
+A subscription created through the form therefore selected events that never
+occurred: it was accepted, listed, and enabled, and delivered nothing. The failure
+presents as a network problem on the customer's side and is invisible in the UI,
+which is what makes it worth a written finding rather than a quiet fix.
+
+The list now has a single source of truth, `outbox.EventTypes()`, published as
+`event_types` on `GET /api/v1/system/capabilities`; the form renders its picker
+from that response. `TestWebhookEventVocabularyMatchesTheDispatcher` emits and
+dispatches every advertised type and asserts one delivery each, so the two halves
+cannot drift again — it was confirmed to fail against the shortened list.
+
+**Status:** Fixed. See `docs/ROADMAP.md` cycle 8.
+
 ---
 
 ## 4. Verified baseline results

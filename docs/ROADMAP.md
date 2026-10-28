@@ -123,6 +123,29 @@ wrote rather than the one the proxy observed.
 
 ---
 
+## Cycle 8 — Webhook event vocabulary and HTTP-level lifecycle coverage
+
+| # | Item | Status |
+|---|---|---|
+| 8.1 | Event vocabulary drift between the subscription form and the dispatcher | **VERIFIED FIXED** — `WebhooksPage` hard-coded a shortened list (`contact.created`) while the dispatcher matched the namespaced name (`crm.contact.created`). A subscription created from the form selected no events, so the customer's endpoint silently received nothing: the failure looks like a network fault and is invisible in the UI. The canonical list is now `outbox.EventTypes()`, exposed as `event_types` on `GET /api/v1/system/capabilities`, and the form builds its picker from it |
+| 8.2 | A regression guard for the vocabulary | **VERIFIED** — `TestWebhookEventVocabularyMatchesTheDispatcher` (`internal/api`, integration tag) reads the advertised list, then emits and dispatches every advertised type and asserts each produces exactly one delivery. It was run against a deliberately shortened list and failed, naming each missing type |
+| 8.3 | HTTP-level coverage of dead-letter and replay | **VERIFIED** — `TestWebhookLifecycleOverHTTP` drives create → dispatch → exhaust attempts → dead → replay entirely through the API, asserting the delivery state, `replay_count`, and the `webhooks.delivery_dead_lettered` / `webhooks.replayed` audit entries as an operator would see them. Replaying a still-pending delivery is asserted to be refused with 404 |
+| 8.4 | `/webhooks` and `/events` in the E2E page sweep | **VERIFIED** — both pages added to the sweep in `frontend/e2e/platform.spec.ts`; the webhook form is asserted to offer `crm.contact.created` and not the bare `contact.created` |
+
+### Evidence
+
+| Check | Command | Result |
+|---|---|---|
+| Formatting | `gofmt -l ./internal/ ./cmd/` | clean |
+| Vet | `go vet ./...` | clean |
+| Unit tests | `go test ./internal/rbac/ ./internal/outbox/ ./internal/api/` | pass |
+| Integration tests | `go test -p 1 -tags=integration ./...` | all packages pass, including `internal/testsupport` and the two new `internal/api` tests |
+| Regression guard, negative | shorten the advertised list, re-run 8.2 | test fails, naming every omitted type |
+| E2E | `npx playwright test` | 28 pass in real Chromium (was 26), including the two new cases |
+| OpenAPI currency | `go run ./cmd/openapi-gen` | spec regenerated; adds `event_types` to `CapabilitiesResponse` |
+
+---
+
 # Master plan phases
 
 The cycles above describe how the platform was built. The phases below describe
