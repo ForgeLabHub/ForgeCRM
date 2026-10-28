@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import { GlobalSearch } from './GlobalSearch'
+import { useGlobalSearchShortcut } from '../hooks/useGlobalSearch'
 
 interface NavEntry {
   to: string
@@ -69,6 +71,7 @@ const NAV_GROUPS: NavGroup[] = [
 export function AppShell() {
   const { session, signOut, can } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
+  const search = useGlobalSearchShortcut()
 
   const groups = NAV_GROUPS.map((group) => ({
     ...group,
@@ -117,6 +120,15 @@ export function AppShell() {
             <span className="topbar__org">
               {session?.organization?.name || 'ForgeCRM'}
             </span>
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm"
+              onClick={() => search.setOpen(true)}
+              aria-keyshortcuts="Control+K Meta+K"
+            >
+              Search
+              <kbd className="kbd">Ctrl K</kbd>
+            </button>
           </div>
           <div className="topbar__user">
             <div style={{ textAlign: 'right' }}>
@@ -140,6 +152,8 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+
+      {search.open ? <GlobalSearch onClose={() => search.setOpen(false)} /> : null}
     </div>
   )
 }
