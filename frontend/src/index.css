@@ -728,3 +728,17 @@ tbody tr:last-child td { border-bottom: none; }
   .dl { grid-template-columns: 1fr; gap: var(--space-1); }
   .dl dt { margin-top: var(--space-2); }
 }
+
+/* Keyboard shortcut hint. Styled as a key rather than text so it reads as an
+   instruction to press, not as a label. */
+.kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 5px;
+  margin-left: var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+}

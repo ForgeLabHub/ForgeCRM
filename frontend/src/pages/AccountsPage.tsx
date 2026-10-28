@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { accountsApi } from '../api/crm'
+import { accountsApi, tasksApi } from '../api/crm'
 import { errorMessage, fieldErrors } from '../api/client'
 import type { Account, AccountInput } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
@@ -347,6 +347,21 @@ export function AccountDetailPage() {
     enabled: Boolean(id) && can('deals.read'),
   })
 
+  // Open tasks for this account. The server applies the record-level rule: a
+  // caller without tasks.assign sees only tasks assigned to them or their teams,
+  // so this list is already narrowed and must not be widened on the client.
+  const tasks = useQuery({
+    queryKey: ['account', id, 'tasks'],
+    queryFn: () => tasksApi.list({ account_id: id, limit: 10 }),
+    enabled: Boolean(id) && can('tasks.read'),
+  })
+
+  const activities = useQuery({
+    queryKey: ['account', id, 'activities'],
+    queryFn: () => accountsApi.activities(id, { limit: 10 }),
+    enabled: Boolean(id) && can('activities.read'),
+  })
+
   const archive = useMutation({
     mutationFn: () => accountsApi.archive(id),
     onSuccess: () => {
@@ -503,6 +518,52 @@ export function AccountDetailPage() {
                 </div>
               ) : (
                 <p className="text-muted text-sm">No deals for this account.</p>
+              )}
+            </Card>
+          ) : null}
+
+          {can('tasks.read') ? (
+            <Card title={`Open tasks${tasks.data ? ` (${tasks.data.total})` : ''}`}>
+              {tasks.isError ? (
+                <Alert tone="error">{errorMessage(tasks.error)}</Alert>
+              ) : tasks.data?.items.length ? (
+                <div className="stack stack--sm">
+                  {tasks.data.items.map((task) => (
+                    <div key={task.id} className="row row--between">
+                      <span className="table__primary truncate">{task.title}</span>
+                      <span className="row">
+                        <StatusBadge status={task.status} />
+                        {task.due_at ? <Timestamp value={task.due_at} /> : null}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted text-sm">No open tasks for this account.</p>
+              )}
+            </Card>
+          ) : null}
+
+          {can('activities.read') ? (
+            <Card title={`Activity history${activities.data ? ` (${activities.data.total})` : ''}`}>
+              {activities.isError ? (
+                <Alert tone="error">{errorMessage(activities.error)}</Alert>
+              ) : activities.data?.items.length ? (
+                <div className="stack stack--sm">
+                  {activities.data.items.map((activity) => (
+                    <div key={activity.id} className="row row--between">
+                      <span className="table__primary truncate">
+                        {activity.subject || activity.type}
+                      </span>
+                      <span className="row">
+                        <span className="text-subtle text-sm">{activity.type}</span>
+                        <Timestamp value={activity.occurred_at} />
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted text-sm">No recorded interactions yet.</p>
               )}
             </Card>
           ) : null}
