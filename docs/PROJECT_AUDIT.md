@@ -142,9 +142,11 @@ and no route handles a callback.
 A client reading `capabilities` would conclude that corporate SSO is available. It
 is not. This is exactly the failure mode the mission's rule 14 warns about.
 
-**Status:** Open. Tracked as Phase 2 work. The flag is the honest report of intent
-and Phase 2 implements the flow; until then the field misdescribes the system,
-which is recorded here rather than left implicit.
+**Status:** Fixed. The field is renamed `oidc_configured` and reports exactly what
+it tests: that OIDC settings are present. `capabilities_test.go` fails if the field
+is renamed back to `oidc`, so the misleading name cannot return. The
+authorisation-code flow is still not implemented (Phase 2, item 2.1); the fix makes
+the report honest, it does not add SSO.
 
 ### B. MCP is a custom JSON shape, not the MCP protocol — **Medium**
 

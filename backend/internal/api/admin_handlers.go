@@ -1179,7 +1179,10 @@ func (s *Server) handleDiagnostics(w http.ResponseWriter, r *http.Request) {
 			"email":    s.deps.Email.Enabled(),
 			"telegram": s.deps.Telegram.Enabled(),
 			"ai":       s.deps.AI.Enabled(),
-			"oidc":     s.deps.Config.OIDC.Enabled,
+			// Named for what it reports. The key was "oidc", which read as "SSO is
+			// available" while only the configuration is; the sign-in flow is not
+			// implemented. See docs/ROADMAP.md.
+			"oidc_configured": s.deps.Config.OIDC.Enabled,
 		},
 		"limits": map[string]any{
 			"import_max_upload_bytes":   s.deps.Config.ImportMaxUploadBytes,

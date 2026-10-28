@@ -4733,6 +4733,36 @@
               }
             }
           },
+          "401": {
+            "description": "No valid session, or the session has expired. Sign in again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but the caller lacks the required permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "404": {
             "description": "No such resource, or none visible to the caller's organization.",
             "content": {
@@ -4808,8 +4838,7 @@
               }
             }
           }
-        },
-        "security": []
+        }
       }
     },
     "/api/v1/auth/me": {
@@ -4896,6 +4925,36 @@
               }
             }
           },
+          "401": {
+            "description": "No valid session, or the session has expired. Sign in again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but the caller lacks the required permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "404": {
             "description": "No such resource, or none visible to the caller's organization.",
             "content": {
@@ -4971,8 +5030,7 @@
               }
             }
           }
-        },
-        "security": []
+        }
       }
     },
     "/api/v1/auth/mfa/confirm": {
@@ -5009,6 +5067,36 @@
               }
             }
           },
+          "401": {
+            "description": "No valid session, or the session has expired. Sign in again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but the caller lacks the required permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "404": {
             "description": "No such resource, or none visible to the caller's organization.",
             "content": {
@@ -5084,8 +5172,7 @@
               }
             }
           }
-        },
-        "security": []
+        }
       }
     },
     "/api/v1/auth/mfa/disable": {
@@ -5122,6 +5209,36 @@
               }
             }
           },
+          "401": {
+            "description": "No valid session, or the session has expired. Sign in again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but the caller lacks the required permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "404": {
             "description": "No such resource, or none visible to the caller's organization.",
             "content": {
@@ -5197,8 +5314,7 @@
               }
             }
           }
-        },
-        "security": []
+        }
       }
     },
     "/api/v1/auth/mfa/enroll": {
@@ -5235,6 +5351,36 @@
               }
             }
           },
+          "401": {
+            "description": "No valid session, or the session has expired. Sign in again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but the caller lacks the required permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "404": {
             "description": "No such resource, or none visible to the caller's organization.",
             "content": {
@@ -5310,8 +5456,7 @@
               }
             }
           }
-        },
-        "security": []
+        }
       }
     },
     "/api/v1/auth/mfa/verify": {
@@ -5461,6 +5606,36 @@
               }
             }
           },
+          "401": {
+            "description": "No valid session, or the session has expired. Sign in again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but the caller lacks the required permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "404": {
             "description": "No such resource, or none visible to the caller's organization.",
             "content": {
@@ -5536,8 +5711,7 @@
               }
             }
           }
-        },
-        "security": []
+        }
       }
     },
     "/api/v1/auth/password/forgot": {
@@ -5850,6 +6024,36 @@
               }
             }
           },
+          "401": {
+            "description": "No valid session, or the session has expired. Sign in again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but the caller lacks the required permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "404": {
             "description": "No such resource, or none visible to the caller's organization.",
             "content": {
@@ -5925,8 +6129,7 @@
               }
             }
           }
-        },
-        "security": []
+        }
       }
     },
     "/api/v1/auth/sessions/{id}": {
@@ -5967,6 +6170,36 @@
               }
             }
           },
+          "401": {
+            "description": "No valid session, or the session has expired. Sign in again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but the caller lacks the required permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "404": {
             "description": "No such resource, or none visible to the caller's organization.",
             "content": {
@@ -6042,8 +6275,7 @@
               }
             }
           }
-        },
-        "security": []
+        }
       }
     },
     "/api/v1/comments": {
@@ -17916,8 +18148,8 @@
         "tags": [
           "system"
         ],
-        "summary": "Advertised capabilities. Requires a session.",
-        "description": "Advertised capabilities. Requires a session.",
+        "summary": "Advertised capabilities of the running instance.",
+        "description": "Advertised capabilities of the running instance.",
         "parameters": [
           {
             "name": "limit",
@@ -17981,6 +18213,36 @@
           },
           "400": {
             "description": "The request was malformed: bad JSON, an unknown field, or a missing required parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session, or the session has expired. Sign in again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but the caller lacks the required permission.",
             "content": {
               "application/json": {
                 "schema": {
@@ -18069,8 +18331,7 @@
               }
             }
           }
-        },
-        "security": []
+        }
       }
     },
     "/api/v1/system/info": {
@@ -18079,8 +18340,8 @@
         "tags": [
           "system"
         ],
-        "summary": "Build and version information. Requires a session.",
-        "description": "Build and version information. Requires a session.",
+        "summary": "Build and version information.",
+        "description": "Build and version information.",
         "parameters": [
           {
             "name": "limit",
@@ -18144,6 +18405,36 @@
           },
           "400": {
             "description": "The request was malformed: bad JSON, an unknown field, or a missing required parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session, or the session has expired. Sign in again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but the caller lacks the required permission.",
             "content": {
               "application/json": {
                 "schema": {
@@ -18232,8 +18523,7 @@
               }
             }
           }
-        },
-        "security": []
+        }
       }
     },
     "/api/v1/tags": {

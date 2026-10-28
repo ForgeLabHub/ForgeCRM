@@ -76,7 +76,7 @@ func ref(name string) map[string]any {
 // because every operation can fail the same ways and the copies would drift. The
 // success response is described by shape, since the generator does not know which
 // entity a given action returns.
-func responsesFor(rt Route, isPublic bool) map[string]response {
+func responsesFor(rt Route, isAnonymous bool) map[string]response {
 	out := map[string]response{}
 
 	success := http.StatusOK
@@ -104,7 +104,7 @@ func responsesFor(rt Route, isPublic bool) map[string]response {
 	}
 
 	out["400"] = problemResponse("The request was malformed: bad JSON, an unknown field, or a missing required parameter.")
-	if !isPublic {
+	if !isAnonymous {
 		out["401"] = problemResponse("No valid session, or the session has expired. Sign in again.")
 		out["403"] = problemResponse("Authenticated, but the caller lacks the required permission.")
 	}

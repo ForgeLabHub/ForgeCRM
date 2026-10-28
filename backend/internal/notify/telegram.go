@@ -43,9 +43,13 @@ func NewTelegramService(cfg *config.TelegramConfig, db *database.DB, log *slog.L
 	}
 }
 
-// Enabled reports whether the bot is configured.
+// Enabled reports whether the bot is configured and switched on.
+//
+// It tolerates a nil receiver so that an unconfigured bot reports "off" rather
+// than panicking. This is the path taken when no token is set, which must leave the
+// rest of the system working.
 func (s *TelegramService) Enabled() bool {
-	return s.cfg != nil && s.cfg.Enabled && s.cfg.BotToken != ""
+	return s != nil && s.cfg != nil && s.cfg.Enabled && s.cfg.BotToken != ""
 }
 
 // ErrTelegramDisabled is returned when the bot is not configured.

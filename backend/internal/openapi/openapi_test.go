@@ -168,15 +168,22 @@ func TestEveryRouteDeclaresItsAccessRequirement(t *testing.T) {
 	perms = openapi.PrefixAPI(perms)
 
 	for _, rt := range routes {
-		_, isPublic := openapi.Public[rt.Key()]
-		perm := perms[rt.Key()]
-		if perm == "" && !isPublic {
+		key := rt.Key()
+		perm := perms[key]
+		_, isAnonymous := openapi.Anonymous[key]
+		_, isSessionOnly := openapi.SessionOnly[key]
+
+		if perm == "" && !isAnonymous && !isSessionOnly {
 			t.Errorf("%s declares no access requirement: give it a permission in its route "+
-				"registration, or add it to openapi.Public with a reason", rt.Key())
+				"registration, or list it in openapi.Anonymous or openapi.SessionOnly "+
+				"with a reason", key)
 		}
-		if perm != "" && isPublic {
-			t.Errorf("%s is both permission-protected and listed as public; "+
-				"a public route must not require a permission", rt.Key())
+		if perm != "" && (isAnonymous || isSessionOnly) {
+			t.Errorf("%s requires %q and is also listed as needing no permission; "+
+				"one of the two is wrong", key, perm)
+		}
+		if isAnonymous && isSessionOnly {
+			t.Errorf("%s is listed as both anonymous and session-only", key)
 		}
 	}
 }
@@ -216,13 +223,13 @@ func TestPermissionsAreResolvedToStringValues(t *testing.T) {
 	}
 }
 
-// TestPublicRoutesDoNotInheritSessionSecurity guards a subtle OpenAPI rule.
+// TestAnonymousRoutesDoNotInheritSessionSecurity guards a subtle OpenAPI rule.
 //
 // An operation without a `security` member inherits the document-level
 // requirement. If a public route omitted it, a generated client would send a
 // session cookie to the sign-in endpoint, and a reader would conclude that sign-in
 // requires a session. The route must carry an explicit empty list.
-func TestPublicRoutesDoNotInheritSessionSecurity(t *testing.T) {
+func TestAnonymousRoutesDoNotInheritSessionSecurity(t *testing.T) {
 	var doc struct {
 		Paths map[string]map[string]struct {
 			Security *[]map[string][]string `json:"security"`
@@ -232,28 +239,28 @@ func TestPublicRoutesDoNotInheritSessionSecurity(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for key := range openapi.Public {
+	for key := range openapi.Anonymous {
 		method, path, ok := strings.Cut(key, " ")
 		if !ok {
-			t.Fatalf("malformed Public key %q", key)
+			t.Fatalf("malformed Anonymous key %q", key)
 		}
 		item, ok := doc.Paths[path]
 		if !ok {
-			t.Errorf("%s is listed public but absent from the specification", key)
+			t.Errorf("%s is listed anonymous but absent from the specification", key)
 			continue
 		}
 		op, ok := item[strings.ToLower(method)]
 		if !ok {
-			t.Errorf("%s is listed public but absent from the specification", key)
+			t.Errorf("%s is listed anonymous but absent from the specification", key)
 			continue
 		}
 		if op.Security == nil {
-			t.Errorf("%s is public but omits `security`, so it inherits the session "+
+			t.Errorf("%s is anonymous but omits `security`, so it inherits the session "+
 				"requirement; set an explicit empty list", key)
 			continue
 		}
 		if len(*op.Security) != 0 {
-			t.Errorf("%s is public but declares security requirements %v", key, *op.Security)
+			t.Errorf("%s is anonymous but declares security requirements %v", key, *op.Security)
 		}
 	}
 }
@@ -278,12 +285,12 @@ func TestSessionRoutesInheritSecurity(t *testing.T) {
 	for path, item := range doc.Paths {
 		for method, op := range item {
 			key := strings.ToUpper(method) + " " + path
-			if _, isPublic := openapi.Public[key]; isPublic {
+			if _, isAnonymous := openapi.Anonymous[key]; isAnonymous {
 				continue
 			}
 			if op.Security != nil && len(*op.Security) == 0 {
-				t.Errorf("%s is not public but declares an empty security list, "+
-					"which makes it anonymous", key)
+				t.Errorf("%s is not anonymous but declares an empty security list, "+
+					"which makes it callable without a session", key)
 			}
 		}
 	}

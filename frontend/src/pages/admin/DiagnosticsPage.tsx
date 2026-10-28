@@ -15,6 +15,19 @@ function formatDuration(seconds: number): string {
   return parts.join(' ')
 }
 
+/**
+ * Labels that differ from the raw capability key.
+ *
+ * A bare `oidc_configured: enabled` reads as "SSO works", which it does not: the
+ * setting is present but the sign-in flow is not implemented. The label says what
+ * the flag means so the page cannot mislead. A key with no entry falls back to the
+ * key itself.
+ */
+const CAPABILITY_LABELS: Record<string, string> = {
+  oidc_configured: 'OIDC settings present (sign-in flow not implemented)',
+  tool_api: 'Tool API over HTTP (not a full MCP server)',
+}
+
 export function DiagnosticsPage() {
   const info = useQuery({ queryKey: ['system', 'info'], queryFn: systemApi.info })
   const capabilities = useQuery({
@@ -91,7 +104,9 @@ export function DiagnosticsPage() {
                 <tbody>
                   {Object.entries(capabilities.data).map(([key, value]) => (
                     <tr key={key}>
-                      <td className="table__primary mono">{key}</td>
+                      <td className="table__primary mono">
+                        {CAPABILITY_LABELS[key] ?? key}
+                      </td>
                       <td>
                         {typeof value === 'boolean' ? (
                           value ? (
