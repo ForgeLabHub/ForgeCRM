@@ -67,8 +67,16 @@ and compiles but is not yet covered by passing tests.
 |---|---|---|
 | 5.1 | `ai.Provider` interface, Ollama + OpenAI-compatible providers | **VERIFIED** |
 | 5.2 | AI task records, timeouts, request caps, cost metadata, audit | **VERIFIED** |
-| 5.3 | MCP tool server reusing domain authz | **VERIFIED** |
+| 5.3 | Tool registry reusing domain authz (8 tools, permission-checked, audited) | **VERIFIED** |
+| 5.3a | MCP **protocol** transport (JSON-RPC 2.0, `initialize`, `tools/list`, `tools/call`) | **NOT_STARTED** — `POST /api/v1/mcp` speaks a custom JSON shape, not the protocol, so no standard MCP client can connect. See `PROJECT_AUDIT.md` finding B |
 | 5.4 | Prompt-injection hardening + unauthorized-access tests | **VERIFIED** |
+| 5.5 | Contextual AI in entity cards, calibrated confidence, graceful failure, human handoff | **NOT_STARTED** — Phase 3 |
+
+> Correction: an earlier revision of this file marked "MCP tool server" as
+> `VERIFIED`. The tool *logic* is verified — 8 tools that reuse `crm.Service` and
+> enforce permissions. The MCP *transport* does not exist, so the claim was
+> narrowed rather than left to overstate the system.
+
 
 ## Cycle 6 — Production readiness
 
@@ -77,6 +85,73 @@ and compiles but is not yet covered by passing tests.
 | 6.1 | CI: fmt, vet, unit, integration (real PG), frontend lint/type/test/build, docker build, migrations, dep + secret + security scan, docs presence | **VERIFIED** |
 | 6.2 | E2E browser tests | **IN_PROGRESS** |
 | 6.3 | Clean-environment install rehearsal | **VERIFIED** |
-| 6.4 | LICENSE selection | **BLOCKED** — owner decision (see `PROJECT_AUDIT.md` §5) |
-| 6.5 | OIDC / corporate SSO | **IN_PROGRESS** — config + interface present |
+| 6.4 | LICENSE selection | **BLOCKED** — owner decision (see `PROJECT_AUDIT.md` §3 finding F) |
+| 6.5 | OIDC / corporate SSO | **PARTIAL** — config and `capabilities` flag only; no Authorization Code flow exists. See `PROJECT_AUDIT.md` finding A |
 | 6.6 | LDAP / Active Directory adapter | **NOT_STARTED** — needs confirmed demand |
+
+---
+
+# Master plan phases
+
+The cycles above describe how the platform was built. The phases below describe
+where it is going. Strategy and Definition of Done: `docs/MASTER_PLAN.md`.
+
+## Phase 0 — Safe start — **COMPLETE**
+
+| # | Item | Status |
+|---|---|---|
+| 0.1 | Audit the repository against the code, not the prior report | **VERIFIED** — `docs/PROJECT_AUDIT.md`, 8 findings |
+| 0.2 | Integrate PRs #1–#3 into `main` without losing history | **VERIFIED** — fast-forward `7cf51de` → `ff83452`, no force push |
+| 0.3 | ADR 0001 — hybrid architecture | **VERIFIED** — `docs/adr/0001-hybrid-architecture.md` |
+| 0.4 | ADR 0002 — measurable extraction triggers | **VERIFIED** — `docs/adr/0002-service-extraction-triggers.md` |
+| 0.5 | Enforce module boundaries with tests | **VERIFIED** — `internal/archtest`, 5 tests, `3b1ce12` |
+| 0.6 | Master plan, audit, roadmap, statuses | **VERIFIED** |
+
+## Phase 1 — Contracts and platform base — **IN PROGRESS**
+
+| # | Item | Status |
+|---|---|---|
+| 1.1 | OpenAPI 3.1 generated from real routes | **IN_PROGRESS** |
+| 1.2 | Contract test: spec matches the router | **NOT_STARTED** |
+| 1.3 | OpenAPI validation in CI | **NOT_STARTED** |
+| 1.4 | API reference site | **NOT_STARTED** |
+| 1.5 | Distributed rate limiting (Redis, tenant-aware, fail-open/closed per category) | **NOT_STARTED** |
+| 1.6 | Multi-replica pool verification | **NOT_STARTED** |
+| 1.7 | Request correlation and diagnostics | **PARTIAL** — `request_id`/`correlation_id` emitted; no trace propagation |
+
+## Phase 2 — Identity and security — **NOT_STARTED**
+
+| # | Item | Status |
+|---|---|---|
+| 2.1 | OIDC Authorization Code Flow + PKCE | **NOT_STARTED** |
+| 2.2 | Local test IdP (Keycloak) | **NOT_STARTED** |
+| 2.3 | `capabilities.oidc` truthful | **NOT_STARTED** |
+| 2.4 | Consent model + policy service | **NOT_STARTED** |
+| 2.5 | Consent enforcement in every channel | **NOT_STARTED** |
+| 2.6 | Consent UI and "why was this allowed/blocked" | **NOT_STARTED** |
+
+## Phase 3 — MCP and AI-native UX — **NOT_STARTED**
+
+| # | Item | Status |
+|---|---|---|
+| 3.1 | MCP protocol transport | **NOT_STARTED** |
+| 3.2 | Read and safe-write MCP tools | **PARTIAL** — 8 tools exist behind a non-protocol endpoint |
+| 3.3 | MCP credential model, revocation, read/write split | **NOT_STARTED** |
+| 3.4 | MCP UI and client config examples | **NOT_STARTED** |
+| 3.5 | Contextual AI, calibrated confidence, graceful failure, human handoff | **NOT_STARTED** |
+
+## Phases 4–9 — Planned
+
+Agentic system, tenant adaptation and SDK, identity resolution and collaboration,
+mobile and analytics, automation and infrastructure, polish and documentation.
+Each is scoped in `docs/MASTER_PLAN.md` §4. None is started; none is claimed as
+done.
+
+### Ordering rationale
+
+Phase 1 precedes Phase 2 because the OIDC flow needs a contract to be testable
+against, and because the rate limiter is the last obstacle to running more than
+one replica — which every later phase depends on. Phase 3 precedes Phase 4 because
+agents call tools, so the tool transport and credential model must be sound before
+anything runs autonomously.
+
