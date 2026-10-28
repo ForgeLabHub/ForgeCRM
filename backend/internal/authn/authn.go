@@ -148,22 +148,21 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*LoginResult, er
 	}
 
 	var (
-		id             uuid.UUID
-		passwordHash   *string
-		status         string
-		isOwner        bool
-		mfaEnabled     bool
-		failedAttempts int
-		lockedUntil    *time.Time
-		displayName    string
+		id           uuid.UUID
+		passwordHash *string
+		status       string
+		isOwner      bool
+		mfaEnabled   bool
+		lockedUntil  *time.Time
+		displayName  string
 	)
 	const q = `
 		SELECT id, password_hash, status, is_platform_owner, mfa_enabled,
-		       failed_attempts, locked_until, display_name
+		       locked_until, display_name
 		FROM users WHERE email = $1`
 
 	err := s.db.Q(ctx).QueryRow(ctx, q, email).Scan(
-		&id, &passwordHash, &status, &isOwner, &mfaEnabled, &failedAttempts, &lockedUntil, &displayName)
+		&id, &passwordHash, &status, &isOwner, &mfaEnabled, &lockedUntil, &displayName)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		// Spend comparable time on a missing account so that response timing does
@@ -212,15 +211,9 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*LoginResult, er
 	}
 
 	if err := secrets.VerifyPassword(req.Password, *passwordHash); err != nil {
-		attempts := failedAttempts + 1
-		var lockUntil *time.Time
-		if s.cfg.LockoutThreshold > 0 && attempts >= s.cfg.LockoutThreshold {
-			t := time.Now().Add(s.cfg.LockoutWindow)
-			lockUntil = &t
-		}
-		const upd = `UPDATE users SET failed_attempts = $2, locked_until = $3 WHERE id = $1`
-		if _, uErr := s.db.Q(ctx).Exec(ctx, upd, id, attempts, lockUntil); uErr != nil {
-			return nil, fmt.Errorf("update failed attempts: %w", uErr)
+		attempts, lockUntil, uErr := s.registerFailedAttempt(ctx, id)
+		if uErr != nil {
+			return nil, uErr
 		}
 		s.recordLoginAttempt(ctx, email, req.IP, false, "bad_password")
 		sev := "warn"
@@ -278,6 +271,63 @@ func (s *Service) recordLoginAttempt(ctx context.Context, email, ip string, succ
 		INSERT INTO login_attempts (email, ip, success, reason)
 		VALUES ($1, NULLIF($2, '')::inet, $3, NULLIF($4, ''))`
 	_, _ = s.db.Q(ctx).Exec(ctx, q, email, ip, success, reason)
+}
+
+// registerFailedAttempt increments the failure counter for one user and returns
+// the new count together with the lock expiry, which is set on the attempt that
+// reaches the threshold.
+//
+// The increment is a single statement so it is atomic in the database. The
+// obvious Go-side read-modify-write is not: two replicas both read N, both write
+// N+1, and one failure is lost. With a threshold of T that hands an attacker
+// more than T attempts per window, and the excess grows with the replica count —
+// exactly when the control is supposed to matter. A concurrency test in
+// lockout_integration_test.go lost 34 of 40 attempts against the previous code.
+//
+// The lock is expressed as "this increment reached the threshold", not as a
+// separate comparison against a value read earlier, so two replicas racing to
+// lock converge on the same expiry instead of one overwriting the other's.
+//
+// A window that has already elapsed is treated as a fresh start: the counter
+// resets rather than continuing from the previous burst, so a user who mistyped
+// twice yesterday and twice today is not locked out.
+//
+// Both assignments are written as expressions over the row's own columns, with no
+// CTE and no read taken earlier in the statement. Under READ COMMITTED, when the
+// UPDATE finds the row already changed by a concurrent transaction, Postgres
+// re-evaluates every SET expression against the new version; a CTE or a value
+// read before the update is not re-evaluated and would be written back stale,
+// which is what lost 2 of 40 attempts in the first version of this fix. The
+// reset is repeated inline in the lock decision so both expressions see the same
+// value.
+func (s *Service) registerFailedAttempt(ctx context.Context, userID uuid.UUID) (int, *time.Time, error) {
+	const q = `
+		UPDATE users
+		   SET failed_attempts = CASE
+		           WHEN locked_until IS NOT NULL AND locked_until <= now() THEN 1
+		           ELSE failed_attempts + 1
+		       END,
+		       locked_until = CASE
+		           WHEN locked_until IS NOT NULL AND locked_until > now() THEN locked_until
+		           WHEN $2 > 0 AND (CASE
+		                    WHEN locked_until IS NOT NULL AND locked_until <= now() THEN 1
+		                    ELSE failed_attempts + 1
+		                END) >= $2
+		           THEN now() + ($3 * interval '1 millisecond')
+		           ELSE NULL
+		       END
+		 WHERE id = $1
+		 RETURNING failed_attempts, locked_until`
+
+	var (
+		attempts    int
+		lockedUntil *time.Time
+	)
+	if err := s.db.Q(ctx).QueryRow(ctx, q, userID, s.cfg.LockoutThreshold, s.cfg.LockoutWindow.Milliseconds()).
+		Scan(&attempts, &lockedUntil); err != nil {
+		return 0, nil, fmt.Errorf("register failed attempt: %w", err)
+	}
+	return attempts, lockedUntil, nil
 }
 
 // ---------------------------------------------------------------------------

@@ -134,8 +134,9 @@ things:
 
 - **General API traffic fails open.** A request is allowed and the decision is
   marked degraded. A broken counter must not take the whole API down.
-- **Authentication fails closed.** A request is refused. If the counter cannot be
-  read, there is no barrier to password guessing.
+- **Authentication fails closed.** A request is refused with `503` and code
+  `unavailable`. If the counter cannot be read, there is no barrier to password
+  guessing.
 
 Both cases log a warning and are visible in the metrics; neither is reported as a
 `429`, because a `429` tells the client to slow down when the truth is that the
@@ -174,5 +175,65 @@ replicas, the effective limit is the configured value times the replica count.
 `FORGECRM_TRUSTED_PROXIES`, so all requests are attributed to the proxy's
 address. Add the proxy's network to the list.
 
-**A 429 appears with `degraded` in the logs.** The counter store is unreachable.
-For authentication that is a refusal; for general traffic it is an allow.
+**A `503` with code `unavailable` appears on a sign-in.** The counter store is
+unreachable and authentication is failing closed. This is not a rate limit: no
+budget was consumed and `Retry-After` is absent. Check that Redis is up and that
+`FORGECRM_REDIS_URL` points at it. The warning `rate limit store unavailable;
+policy fail mode applied` names the policy.
+
+**General traffic is served but the limit is not enforced.** The counter store is
+unreachable and general traffic is failing open. The same warning is logged. This
+is the intended degradation, but it is worth an alert: while it lasts, the limit
+exists in configuration only.
+
+## Verifying multi-replica operation
+
+A single-replica deployment cannot tell a shared counter from a per-process one,
+because there is only one process. The rehearsal below builds the topology that
+can: two API containers behind a real nginx, sharing one PostgreSQL and one
+Redis.
+
+```bash
+./scripts/multi-replica-verify.sh          # tear the stack down afterwards
+./scripts/multi-replica-verify.sh --keep   # leave it up to inspect
+```
+
+It uses a separate compose project, separate ports (18080-18082) and a separate
+volume, so it cannot touch the default stack. It checks, and fails loudly on:
+
+1. every container reaches `healthy`, and both replicas answer `/ready`;
+2. a session created on one replica is accepted by the other, and logout and
+   revocation on one take effect on the other;
+3. the login budget is a property of the deployment, not of a replica — a budget
+   of 2 is 2 attempts across the pair, not 2 per replica;
+4. a direct client cannot open its own bucket by sending `X-Forwarded-For`, and
+   rotating the header through the proxy does not help either;
+5. with Redis down, sign-in returns `503 unavailable` (fail-closed) while
+   ordinary API traffic keeps being served (fail-open), and both recover;
+6. stopping one replica leaves the other serving, and the counters written before
+   a restart are still in force afterwards.
+
+The same properties are asserted at the code level, without containers, by the
+integration tests in `internal/api/cross_replica_test.go` and
+`internal/api/session_sharing_test.go`, and the lockout counter by
+`internal/authn/lockout_integration_test.go`. Those run in CI against a real
+PostgreSQL and Redis and are the faster signal; the script is what proves the
+deployment wiring.
+
+### Running a production replica set
+
+The rehearsal's topology is the shape to copy, with three settings that must
+match across replicas:
+
+- `FORGECRM_SECRET_KEY` must be identical, or a session or encrypted value
+  written by one replica cannot be read by another.
+- `FORGECRM_RATE_LIMIT_STORE=redis` with a shared `FORGECRM_REDIS_URL`, or each
+  replica enforces its own budget.
+- `FORGECRM_TRUSTED_PROXIES` must name the load balancer's addresses, or every
+  request is attributed to the balancer and one client's traffic counts against
+  another's budget.
+
+`FORGECRM_MIGRATE_ON_START` may be left on for every replica: migrations are
+advisory-locked, so concurrent starts serialise rather than race. Leaving it on
+for one replica and off for the rest, as the rehearsal does, is only to keep the
+startup log unambiguous.
