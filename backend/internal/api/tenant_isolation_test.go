@@ -31,8 +31,10 @@ import (
 
 	"github.com/geff1778/forgecrm/internal/config"
 	"github.com/geff1778/forgecrm/internal/database"
+	"github.com/geff1778/forgecrm/internal/httpx"
 	"github.com/geff1778/forgecrm/internal/logging"
 	"github.com/geff1778/forgecrm/internal/migrate"
+	"github.com/geff1778/forgecrm/internal/ratelimit"
 	"github.com/geff1778/forgecrm/internal/rbac"
 	"github.com/geff1778/forgecrm/internal/secrets"
 	"github.com/geff1778/forgecrm/internal/wiring"
@@ -56,12 +58,23 @@ func newHarness(t *testing.T) *harness {
 		t.Skip("FORGECRM_TEST_DATABASE_URL is not set; skipping integration test")
 	}
 
+	resetSchema(t, url)
+	return newHarnessWithStore(t, testConfig(t), ratelimit.NewMemoryStore(), url)
+}
+
+// resetSchema drops and rebuilds the public schema and applies every migration.
+// It is separate from newHarness because a test that builds more than one server
+// over one database — the cross-replica tests — must reset exactly once, before
+// the first server is built.
+func resetSchema(t *testing.T, url string) {
+	t.Helper()
+
 	ctx := context.Background()
 	db, err := database.Connect(ctx, url)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	t.Cleanup(db.Close)
+	defer db.Close()
 
 	if _, err := db.Pool().Exec(ctx, `DROP SCHEMA public CASCADE; CREATE SCHEMA public;`); err != nil {
 		t.Fatalf("reset schema: %v", err)
@@ -69,8 +82,25 @@ func newHarness(t *testing.T) *harness {
 	if _, err := migrate.Up(url, slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
+}
 
-	cfg := testConfig(t)
+// newHarnessWithStore builds one server over the given limiter store and
+// database. It does not reset the schema, so a caller can build several servers
+// over one database.
+//
+// Each call opens its own connection pool, which is what lets the cross-replica
+// tests model two processes: nothing but PostgreSQL and the injected store is
+// shared between them.
+func newHarnessWithStore(t *testing.T, cfg *config.Config, store ratelimit.Store, url string) *harness {
+	t.Helper()
+
+	ctx := context.Background()
+	db, err := database.Connect(ctx, url)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(db.Close)
+
 	keyring, err := secrets.NewKeyring(cfg.SecretKey)
 	if err != nil {
 		t.Fatalf("keyring: %v", err)
@@ -81,7 +111,15 @@ func newHarness(t *testing.T) *harness {
 		t.Fatalf("build services: %v", err)
 	}
 
-	srv := newTestServer(t, &Deps{
+	// The trust list is derived from the config, the same way main.go derives it, so
+	// a test that configures trusted proxies exercises the real parsing and matching
+	// rather than a value the test injected.
+	trusted, err := httpx.TrustedProxiesFrom(cfg.TrustedProxies)
+	if err != nil {
+		t.Fatalf("parse trusted proxies: %v", err)
+	}
+
+	srv, err := New(&Deps{
 		Config: cfg, Log: logging.New("error", "text"), DB: db, Keyring: keyring,
 		Audit: svcs.Audit, Auth: svcs.Auth, RBAC: svcs.RBAC, CRM: svcs.CRM,
 		Jobs: svcs.Jobs, Outbox: svcs.Outbox, Imports: svcs.Imports,
@@ -90,7 +128,10 @@ func newHarness(t *testing.T) *harness {
 		Email: svcs.Email, Telegram: svcs.Telegram, AI: svcs.AI, Tools: svcs.Tools,
 		MCP:     svcs.MCP,
 		Version: "test",
-	})
+	}, store, trusted)
+	if err != nil {
+		t.Fatalf("build server: %v", err)
+	}
 
 	return &harness{t: t, db: db, server: srv.Handler(), cfg: cfg}
 }

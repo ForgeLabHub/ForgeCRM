@@ -80,6 +80,18 @@ func RateLimitMiddleware(opts RateLimitOptions) func(http.Handler) http.Handler 
 			}
 
 			if !decision.Allowed {
+				// A degraded decision is not a rate-limit refusal and must not be
+				// reported as one. A 429 tells the client to slow down and retry later,
+				// which is the wrong instruction when the truth is that the server
+				// cannot count: the client would back off from a limit that is not
+				// actually being applied. 503 with a distinct code says "this dependency
+				// is unavailable", which is what a caller and an operator both need.
+				if decision.Degraded {
+					WriteError(w, r, NewError(http.StatusServiceUnavailable, CodeUnavailable,
+						"the rate limit cannot be evaluated because its store is unavailable"))
+					return
+				}
+
 				// Retry-After is in seconds per RFC 9110. Round up, so a client that
 				// waits exactly the advertised time does not retry a moment early and
 				// be refused again.

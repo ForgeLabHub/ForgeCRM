@@ -24,6 +24,7 @@ export type ErrorCode =
   | 'unsupported'
   | 'internal_error'
   | 'disabled'
+  | 'unavailable'
   | 'mfa_required'
 
 export interface ApiErrorBody {

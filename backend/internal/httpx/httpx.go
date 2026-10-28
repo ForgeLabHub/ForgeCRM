@@ -36,6 +36,7 @@ const (
 	CodeUnsupported     ErrorCode = "unsupported"
 	CodeInternal        ErrorCode = "internal_error"
 	CodeDisabled        ErrorCode = "disabled"
+	CodeUnavailable     ErrorCode = "unavailable"
 	CodeMFARequired     ErrorCode = "mfa_required"
 )
 
@@ -123,6 +124,7 @@ var errorTitles = map[ErrorCode]string{
 	CodeUnsupported:     "Unsupported operation",
 	CodeInternal:        "Internal error",
 	CodeDisabled:        "Subsystem disabled",
+	CodeUnavailable:     "Dependency unavailable",
 	CodeMFARequired:     "Second factor required",
 }
 
