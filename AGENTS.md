@@ -125,6 +125,14 @@ schema change requires a rebuild, not just a restart.
   `go.mod`'s `go` directive, `backend/Dockerfile` and `GO_VERSION` in CI. A
   stdlib CVE is fixed by bumping all three; bumping only one lets a fix pass in
   one place and be missing in another.
+- **A webhook subscription's event list must come from the server, never a local
+  constant.** The form once hard-coded bare names (`contact.created`) while the
+  dispatcher matched namespaced ones (`crm.contact.created`), so a subscription
+  created in the UI was accepted and enabled and then delivered nothing — a failure
+  that looks like a network fault and is invisible in the UI. The vocabulary is
+  `outbox.EventTypes()`, published as `event_types` on `/api/v1/system/capabilities`;
+  the picker reads it. `TestWebhookEventVocabularyMatchesTheDispatcher` fails if the
+  two ever diverge.
 - **The audit log is append-only**, so a user who has acted can never be deleted
   — the FK cascade is blocked by a trigger. Disable the account instead
   (`status` must be one of `invited`, `active`, `suspended`, `blocked`).
