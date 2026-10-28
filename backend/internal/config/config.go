@@ -15,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/geff1778/forgecrm/internal/database"
 )
 
 // Config is the fully resolved runtime configuration.
@@ -31,6 +33,14 @@ type Config struct {
 	CSRFHeader        string
 	LockoutThreshold  int
 	LockoutWindow     time.Duration
+
+	// DatabaseMaxConns bounds one process's database connection pool.
+	//
+	// It is configurable because the number that matters is replicas x pool, and
+	// only the operator knows the replica count and the server's max_connections.
+	// A value that would exhaust the server is rejected at startup rather than
+	// clamped, so the misconfiguration is visible immediately.
+	DatabaseMaxConns int32
 	// LoginRateLimitPerMin bounds authentication attempts per client IP per minute.
 	// It is configurable because the right value is deployment-specific: an office
 	// behind one NAT address shares a single bucket, so a budget tuned for one
@@ -178,6 +188,8 @@ func Load() (*Config, error) {
 		BaseURL:     strings.TrimRight(env("FORGECRM_BASE_URL", "http://localhost:8080"), "/"),
 		DatabaseURL: env("FORGECRM_DATABASE_URL", ""),
 
+		DatabaseMaxConns: int32(envIntOr("FORGECRM_DATABASE_MAX_CONNS", int(database.DefaultMaxConns))),
+
 		SessionCookieName: env("FORGECRM_SESSION_COOKIE", "forgecrm_session"),
 		CookieSecure:      envBool("FORGECRM_COOKIE_SECURE", prod),
 		CookieDomain:      env("FORGECRM_COOKIE_DOMAIN", ""),
@@ -309,6 +321,12 @@ func envDuration(key string, def time.Duration) (time.Duration, error) {
 func (c *Config) Validate() error {
 	if c.DatabaseURL == "" {
 		return fmt.Errorf("FORGECRM_DATABASE_URL is required")
+	}
+	if c.DatabaseMaxConns > database.MaxAllowedConns {
+		return fmt.Errorf(
+			"FORGECRM_DATABASE_MAX_CONNS is %d, above the maximum of %d; size each "+
+				"replica's pool so that replicas x pool stays below the server's max_connections",
+			c.DatabaseMaxConns, database.MaxAllowedConns)
 	}
 	switch c.Env {
 	case "development", "test", "production":
