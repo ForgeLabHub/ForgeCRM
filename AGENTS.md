@@ -28,7 +28,21 @@ go build ./...
 go vet ./...
 gofmt -l ./cmd ./internal           # must print nothing
 go test -race -count=1 ./...
+
+# The API specification is generated from the live router, never hand-edited.
+go run ./cmd/openapi-gen            # regenerate docs/api/openapi.json
+go run ./cmd/openapi-gen -check     # what CI runs; fails when the two disagree
 ```
+
+**Never edit `docs/api/openapi.json` by hand.** It is generated from the router and
+from the route registrations, and CI fails if it disagrees with them. A route
+change means running the generator and committing the result.
+
+A route must declare its access level in one of three ways, or generation fails:
+a permission via `s.perm(rbac.PermX)` in its registration, an entry in
+`openapi.Anonymous` (no session at all), or an entry in `openapi.SessionOnly`
+(session, no permission). `Anonymous` is a closed list of six; adding to it means
+adding an unauthenticated endpoint, which needs a reason.
 
 Integration tests need a real database and a build tag. They skip themselves when
 the URL is unset, so the default test run stays green:
@@ -95,6 +109,14 @@ schema change requires a rebuild, not just a restart.
 - **The frontend is served same-origin by Nginx.** Do not add a CORS
   configuration or move the session token into `localStorage`; the cookie plus
   CSRF double-submit depends on same-origin.
+- **A capability flag must name the condition it tests, not the feature a reader
+  hopes for.** `capabilities.oidc` once reported that settings were present while
+  no sign-in flow existed, so clients offered SSO that could not work. It is now
+  `oidc_configured`, and the tool endpoint is `tool_api` because it speaks
+  `tools/list` and `tools/call` but is not a full MCP server.
+  `capabilities_test.go` fails if either misleading name returns. `Enabled()` on
+  the optional services tolerates a nil receiver, so a subsystem left unconstructed
+  reports "off" rather than panicking the diagnostics endpoint.
 
 ## Conventions
 
