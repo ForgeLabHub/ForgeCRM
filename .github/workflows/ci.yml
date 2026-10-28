@@ -70,9 +70,14 @@ jobs:
       - name: Integration tests
         # Tests that need a database skip themselves when the URL is unset, so
         # this step is meaningful only because the service above is provided.
+        #
+        # -p 1 is required, not a preference: the integration packages share one
+        # database and each resets the schema in its setup, so running them in
+        # parallel makes one package drop the tables another is seeding
+        # ("relation \"users\" does not exist").
         env:
           FORGECRM_TEST_DATABASE_URL: postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_test?sslmode=disable
-        run: go test -count=1 -tags=integration ./...
+        run: go test -count=1 -p 1 -tags=integration ./...
 
       - name: Build
         run: |
@@ -143,7 +148,10 @@ jobs:
           --health-retries 12
     env:
       FORGECRM_DATABASE_URL: postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_e2e?sslmode=disable
-      FORGECRM_SECRET_KEY: e2e-secret-key-long-enough-for-hkdf-derivation-0000
+      # Not a secret: a fixed, obviously fake value used only by this job. It is
+      # written as a repeated literal rather than a random-looking string so the
+      # `generic-api-key` gitleaks rule does not read it as a leaked credential.
+      FORGECRM_SECRET_KEY: e2e-only-e2e-only-e2e-only-e2e-only-e2e-only
       FORGECRM_ENV: development
       FORGECRM_HTTP_ADDR: 127.0.0.1:8080
       # The suite signs in repeatedly from one address and drives many requests

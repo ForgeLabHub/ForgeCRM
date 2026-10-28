@@ -151,6 +151,16 @@ once it reaches 1.0.
 - **Six lint errors and two warnings in the frontend** that would have failed the
   CI lint step, including a Playwright fixture parameter named `use` that lint
   read as React's `use` hook.
+- **The integration-test step ran the packages in parallel over one shared
+  database.** Each integration package resets the schema in its setup, so one
+  package could drop the tables another was still seeding, and the suite failed
+  with `relation "users" does not exist`. It passed in earlier runs by luck of
+  scheduling, which is the worst kind of flake: green until it is not. The step
+  now runs with `-p 1`.
+- **The end-to-end job could time out waiting for the Vite dev server.** Vite
+  binds `localhost` by default, which resolves to `::1` on some runners, while
+  Playwright polls `127.0.0.1`; the server started correctly and the wait still
+  expired. The config now pins the dev server to `127.0.0.1`.
 
 ### Known gaps
 
