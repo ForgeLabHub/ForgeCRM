@@ -174,6 +174,29 @@ schema change requires a rebuild, not just a restart.
   the optional services tolerates a nil receiver, so a subsystem left unconstructed
   reports "off" rather than panicking the diagnostics endpoint.
 
+- **The workflow engine calls `crm.Service` directly, so it enforces the coarse
+  permission itself.** The API enforces permissions in middleware and the MCP
+  registry enforces them in its tool layer; the service layer checks tenant scope
+  and record ownership but not the coarse "may you do this at all" permission.
+  The engine bypasses both, so it maps each step type to a `rbac.Permission` and
+  checks it against the author's freshly resolved principal before running the
+  step. A new step type without an entry in that map is a privilege-escalation
+  bug: a user holding only `workflows.manage` could perform an action their role
+  forbids. Add the permission with the step type.
+- **A workflow acts as its author, resolved at execution time.** Not captured at
+  authoring time: a blocked author, a removed membership or a revoked role stops
+  the next run. If you cache the principal on the workflow row, you break this.
+- **Event-triggered runs are de-duplicated by a database constraint, not a flag.**
+  `workflow_run_events` has a primary key on `(workflow_id, event_id)` and the run
+  row is created in the same transaction as the claim. Do not split them: creating
+  the run first and marking a duplicate `skipped` leaves one orphan run per
+  redelivery, which is unbounded under the outbox's retries. This was a real bug
+  and `TestWorkflowEventTriggerIsDeDuplicated` is the guard.
+- **A chain a workflow causes is bounded by correlation, not by a timer.** A step's
+  emitted event inherits the run's correlation id, and the chain depth is the count
+  of runs already recorded for it. `run_depth` is therefore derived, not passed in
+  a payload. Two workflows that watch each other stop at `max_depth`.
+
 ## Conventions
 
 - `gofmt` clean, `go vet` clean, no new dependency where the standard library works.
