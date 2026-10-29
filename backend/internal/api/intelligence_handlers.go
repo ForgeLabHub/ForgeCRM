@@ -27,6 +27,11 @@ import (
 // mountIntelligence wires the Forecasting & Risk endpoints.
 func (s *Server) mountIntelligence(r chi.Router) {
 	r.Route("/forecast", func(r chi.Router) {
+		// A handler dereferences the service, so a deployment that failed to wire it
+		// would panic per request. The guard answers 503 naming the subsystem instead,
+		// while still registering every route so the router walk and the generated
+		// contract describe the same set of endpoints.
+		r.Use(s.requireService(func() bool { return s.deps.Forecast != nil }, "forecasting"))
 		// The catalog is static: it describes the methods the engine can compute and
 		// exposes no tenant data, so it needs no permission beyond being signed in.
 		r.Get("/catalog", s.handleForecastCatalog)
@@ -36,6 +41,7 @@ func (s *Server) mountIntelligence(r chi.Router) {
 	})
 
 	r.Route("/risk", func(r chi.Router) {
+		r.Use(s.requireService(func() bool { return s.deps.Risk != nil }, "risk"))
 		r.With(s.perm(rbac.PermRiskRead)).Get("/signals", s.handleListRiskSignals)
 		r.With(s.perm(rbac.PermRiskRead)).Post("/scan", s.handleRiskScan)
 		r.With(s.perm(rbac.PermRiskRead)).Get("/signals/{id}", s.handleGetRiskSignal)
@@ -43,6 +49,24 @@ func (s *Server) mountIntelligence(r chi.Router) {
 		r.With(s.perm(rbac.PermRiskRead)).Get("/thresholds", s.handleGetRiskThresholds)
 		r.With(s.perm(rbac.PermRiskManage)).Put("/thresholds", s.handleSetRiskThresholds)
 	})
+}
+
+// requireService refuses a request when the route group's backing service was not
+// constructed. It passes every request through when the service exists, so on a
+// correctly wired instance it changes nothing. A wiring mistake becomes a 503
+// naming the subsystem rather than a nil-pointer panic the recovery middleware
+// turns into an opaque 500.
+func (s *Server) requireService(ok func() bool, subsystem string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !ok() {
+				httpx.WriteError(w, r, httpx.NewError(http.StatusServiceUnavailable, httpx.CodeUnavailable,
+					subsystem+" is not available on this instance"))
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // ---------------------------------------------------------------------------

@@ -242,6 +242,8 @@ test.describe('workspace pages render live data', () => {
     { path: '/tickets', title: 'Support' },
     { path: '/reports', title: 'Reports' },
     { path: '/simulation', title: 'Simulation Lab' },
+    { path: '/forecast', title: 'Forecasting' },
+    { path: '/risk', title: 'Risk' },
     { path: '/imports', title: 'Import Center' },
     { path: '/integrations', title: 'Integrations' },
     { path: '/webhooks', title: 'Webhooks' },
@@ -419,6 +421,60 @@ test.describe('simulation lab', () => {
     await expect(
       page.getByText(/Observed \(CRM\)|insufficient data/i),
     ).toBeVisible()
+  })
+})
+
+test.describe('forecasting', () => {
+  test('a forecast is computed against the real revenue history', async ({ authedPage: page }) => {
+    await page.goto('/forecast')
+
+    // Compute with the default method. The catalog is served by the API, so the
+    // form only offers methods the core can actually compute.
+    await page.getByRole('button', { name: 'Compute forecast' }).click()
+
+    // The result is either a projection with the observed series it came from, or
+    // the server's reason there is not enough history. A projection shown without
+    // its observed series would be a number from nowhere, which must not happen.
+    await expect(page.getByText(/Measured accuracy|insufficient history/i)).toBeVisible()
+
+    if (await page.getByText('Measured accuracy').isVisible()) {
+      // The accuracy is presented next to the naive baseline the method must beat.
+      await expect(page.getByText('Naive MAE')).toBeVisible()
+      await expect(page.getByText('Observed series').first()).toBeVisible()
+    }
+  })
+})
+
+test.describe('risk', () => {
+  test('a scan reconciles the signal list and the result is explained', async ({ authedPage: page }) => {
+    await page.goto('/risk')
+
+    await page.getByRole('button', { name: 'Scan now' }).click()
+
+    // The scan reports what it did, so the list's state is explained rather than
+    // silent.
+    await expect(page.getByText(/Scan detected \d+ condition/i)).toBeVisible()
+
+    // Either a signal is listed with its rationale and evidence, or the list is
+    // empty because the organization has no data to flag. Both are correct; a
+    // signal without a reason is not.
+    const empty = page.getByText('No risk signals')
+    if (await empty.isVisible()) {
+      await expect(empty).toBeVisible()
+    } else {
+      await expect(page.getByText(/Stalled deal|Overdue task|Account without contact|Unusual deal amount|Conversion drop|Stage concentration/).first()).toBeVisible()
+    }
+  })
+
+  test('the thresholds form is present and saves', async ({ authedPage: page }) => {
+    await page.goto('/risk')
+
+    const stalled = page.getByLabel('Stalled deal (days)')
+    await expect(stalled).toBeVisible()
+    await stalled.fill('31')
+    await page.getByRole('button', { name: 'Save thresholds' }).click()
+
+    await expect(page.getByText('Saved')).toBeVisible()
   })
 })
 

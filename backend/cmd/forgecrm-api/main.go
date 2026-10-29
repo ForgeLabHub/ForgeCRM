@@ -173,6 +173,8 @@ func run() error {
 		Agent:        services.Agent,
 		Workflows:    services.Workflows,
 		Simulation:   services.Simulation,
+		Forecast:     services.Forecast,
+		Risk:         services.Risk,
 		Storage:      services.Storage,
 		StartedAt:    time.Now(),
 		Version:      version,
