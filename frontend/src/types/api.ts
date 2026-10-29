@@ -540,14 +540,18 @@ export interface Webhook {
 export interface WebhookDelivery {
   id: string
   subscription_id: string
-  event_id: string
   event_type: string
   status: string
   attempts: number
+  /** Operator replays so far. Each replay grants a fresh attempt budget. */
+  replay_count: number
   response_status?: number
-  error?: string
+  /** Why the last attempt failed. Present on failed and dead deliveries. */
+  last_error?: string
   created_at: string
   delivered_at?: string
+  /** Set when the delivery exhausted its attempts; cleared by a replay. */
+  dead_lettered_at?: string
 }
 
 export interface AuditEntry {
@@ -693,6 +697,8 @@ export interface Capabilities {
   import_formats: string[]
   archive_formats: string[]
   migration_sources: string[]
+  /** Canonical webhook event vocabulary. The subscription form must use this list. */
+  event_types: string[]
   [key: string]: unknown
 }
 
@@ -700,4 +706,58 @@ export interface Capabilities {
 export interface BulkArchiveResult {
   archived: string[]
   failed: { id: string; reason: string }[]
+}
+
+/** One working cycle of an agent acting on behalf of a user (ADR 0005). */
+export interface AgentRun {
+  id: string
+  organization_id: string
+  user_id: string
+  goal: string
+  status: string
+  budget_tokens: number
+  tokens_used: number
+  action_cap: number
+  actions_used: number
+  error?: string
+  created_at: string
+  updated_at: string
+  finished_at?: string
+}
+
+/** A proposed agent operation awaiting a human decision, or the record of one. */
+export interface AgentAction {
+  id: string
+  run_id: string
+  organization_id: string
+  tool_name: string
+  arguments: Record<string, unknown>
+  /**
+   * The hash of the arguments as proposed. A decision must echo it, so the
+   * operator approves exactly what was displayed and not a re-substituted payload.
+   */
+  arguments_hash: string
+  risk_tier: 'safe' | 'confirm' | 'destructive'
+  summary: string
+  status: string
+  idempotency_key: string
+  result?: unknown
+  error?: string
+  expires_at: string
+  proposed_at: string
+  decided_at?: string
+  executed_at?: string
+}
+
+/** An append-only record of one human decision on an agent action. */
+export interface AgentApproval {
+  id: string
+  action_id: string
+  decided_by: string
+  decision: string
+  comment?: string
+  arguments_hash: string
+  /** HMAC binding the decision to the action and its arguments. */
+  signature: string
+  decided_at: string
 }

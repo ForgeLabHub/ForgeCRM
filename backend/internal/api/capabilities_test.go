@@ -131,8 +131,9 @@ func TestCapabilitiesReportsImplementedSubsystems(t *testing.T) {
 	}
 
 	// The advertised formats must be non-empty, or the UI would hide import
-	// entirely while the importer works.
-	for _, field := range []string{"import_formats", "archive_formats", "migration_sources"} {
+	// entirely while the importer works. The event vocabulary is checked the same
+	// way: an empty list would leave the webhook form with nothing to select.
+	for _, field := range []string{"import_formats", "archive_formats", "migration_sources", "event_types"} {
 		list, ok := body[field].([]any)
 		if !ok || len(list) == 0 {
 			t.Errorf("%s is %v, want a non-empty list", field, body[field])

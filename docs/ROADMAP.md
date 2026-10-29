@@ -23,9 +23,9 @@ and compiles but is not yet covered by passing tests.
 | 1.9 | Import Center: CSV/TSV/JSON/JSONL/XLSX/XML parsing | **VERIFIED** |
 | 1.10 | Safe archive handling: ZIP, TAR, TAR.GZ/TGZ, TAR.BZ2, TAR.XZ, GZIP, BZIP2, XZ | **VERIFIED** |
 | 1.11 | Import wizard backend: upload → preview → mapping → validate → dry-run → execute → report → errors → rerun | **VERIFIED** |
-| 1.12 | Frontend admin panel (React + TS + Vite) wired to the real API | **NOT_STARTED** — `frontend/` is empty; the API is the only interface |
-| 1.13 | Tests: unit, integration (real PostgreSQL), API, security, import edge cases | **IN_PROGRESS** — 2 packages covered (`importx`, `importx/safe`); the rest is verified manually against a live instance, not by automated tests |
-| 1.14 | Docker Compose, scripts, CI, docs | **VERIFIED** — stack brought up end to end, smoke test 9/9; CI workflow added but not yet run on GitHub |
+| 1.12 | Frontend admin panel (React + TS + Vite) wired to the real API | **VERIFIED** — 21 pages under `frontend/src/pages/` (CRM workspace, Import Center + wizard, Migrations, Integrations, Webhooks, Events, Background jobs, Agent approvals, and 9 admin pages) across 34 routes, all calling the real API; 6 unit-test files and 13 Playwright E2E cases |
+| 1.13 | Tests: unit, integration (real PostgreSQL), API, security, import edge cases | **IN_PROGRESS** — backend unit + integration packages (`importx`, `importx/safe`, `internal/api` under the `integration` tag, `authn`, `ratelimit`, `openapi`, `archtest`), frontend unit tests and Playwright E2E; some areas are still verified manually rather than by automated tests |
+| 1.14 | Docker Compose, scripts, CI, docs | **VERIFIED** — stack brought up end to end, smoke test 9/9; CI workflow runs on GitHub Actions (fmt, vet, unit, integration against a real PostgreSQL, frontend lint/type/test/build, Docker build, migrations, dependency + secret + security scan, docs presence) |
 
 ## Cycle 2 — Integration platform (next)
 
@@ -70,6 +70,7 @@ and compiles but is not yet covered by passing tests.
 | 5.3 | Tool registry reusing domain authz (8 tools, permission-checked, audited) | **VERIFIED** |
 | 5.3a | MCP **protocol** transport (JSON-RPC 2.0, `initialize`, `tools/list`, `tools/call`) | **VERIFIED** — `POST /api/v1/mcp` speaks JSON-RPC 2.0: `initialize` with protocol-version negotiation, `ping`, `tools/list` in the protocol shape (`inputSchema`), `tools/call`, notifications answered with an empty 202, and the JSON-RPC error codes for parse, invalid-request, method-not-found and invalid-params. `GET /api/v1/mcp/tools` and `POST /api/v1/mcp/call` remain as the admin UI's own shape. Verified by `internal/ai/mcp_protocol_test.go` (transport) and `internal/api/mcp_integration_test.go` (session, permission, confirmation and tenant scope over the real HTTP stack). See `docs/mcp/` |
 | 5.4 | Prompt-injection hardening + unauthorized-access tests | **VERIFIED** |
+| 5.4a | Human-in-the-loop agent execution: durable approval requests, risk tiers, payload-hash binding, second-factor step-up for `destructive` actions, approve/reject UI | **VERIFIED** — `internal/agent` (approval lifecycle), migrations `0009`–`0011`, `POST /api/v1/agent/actions/{id}/decide`, `POST /api/v1/auth/step-up`, and the `/approvals` screen. A lapsed step-up window is refused with `403`; a decision whose arguments hash does not match the stored one is refused. Covered by `internal/api/agent_http_test.go` (integration) and `internal/agent/agent_test.go` (unit). See `docs/adr/0005-hitl-agent-execution-model.md` |
 | 5.5 | Contextual AI in entity cards, calibrated confidence, graceful failure, human handoff | **NOT_STARTED** — Phase 3 |
 
 > Correction: an earlier revision of this file marked "MCP tool server" as
@@ -119,6 +120,30 @@ The spoofing test was written before the fix and observed to fail against the
 original left-to-right header parsing (`TestForwardedChainIsReadRightToLeft`),
 which is what showed the obvious implementation returns the address the client
 wrote rather than the one the proxy observed.
+
+---
+
+## Cycle 8 — Webhook event vocabulary and HTTP-level lifecycle coverage
+
+| # | Item | Status |
+|---|---|---|
+| 8.1 | Event vocabulary drift between the subscription form and the dispatcher | **VERIFIED FIXED** — `WebhooksPage` hard-coded a shortened list (`contact.created`) while the dispatcher matched the namespaced name (`crm.contact.created`). A subscription created from the form selected no events, so the customer's endpoint silently received nothing: the failure looks like a network fault and is invisible in the UI. The canonical list is now `outbox.EventTypes()`, exposed as `event_types` on `GET /api/v1/system/capabilities`, and the form builds its picker from it |
+| 8.2 | A regression guard for the vocabulary | **VERIFIED** — `TestWebhookEventVocabularyMatchesTheDispatcher` (`internal/api`, integration tag) reads the advertised list, then emits and dispatches every advertised type and asserts each produces exactly one delivery. It was run against a deliberately shortened list and failed, naming each missing type |
+| 8.3 | HTTP-level coverage of dead-letter and replay | **VERIFIED** — `TestWebhookLifecycleOverHTTP` drives create → dispatch → exhaust attempts → dead → replay entirely through the API, asserting the delivery state, `replay_count`, and the `webhooks.delivery_dead_lettered` / `webhooks.replayed` audit entries as an operator would see them. Replaying a still-pending delivery is asserted to be refused with 404 |
+| 8.4 | `/webhooks` and `/events` in the E2E page sweep | **VERIFIED** — both pages added to the sweep in `frontend/e2e/platform.spec.ts`; the webhook form is asserted to offer `crm.contact.created` and not the bare `contact.created` |
+| 8.5 | HTTP-level replay edge cases, and the two defects they exposed | **VERIFIED FIXED** — `internal/api/webhook_replay_http_test.go` adds ten scenarios through the real stack: the replay response shape, lifetime `replay_count` across two windows, the audit entry's context (actor, entity, `replay_count` metadata), the in-flight refusal, the wrong-subscription refusal, concurrent replays applied once, a retried replay after a lost response, cross-tenant refusal for both replay and delivery listing, a caller without `webhooks.manage`, and the shared invariant that a refused replay leaves no state or audit entry. Two defects were found and fixed: (1) the guard was `status <> 'pending'`, so a delivery a worker had claimed (`delivering`) could be replayed while it was being sent — contradicting ADR 0004's own "already in flight is refused"; the guard is now `status NOT IN ('pending','delivering')`. (2) `handleReplayDelivery` read only `deliveryId` and ignored the `{id}` subscription the route and OpenAPI both declare required, so a delivery could be replayed under a subscription it did not belong to; `Replay` now scopes the mutating statement by `subscription_id` as well as `organization_id`. Each fix was mutation-tested: reverting either one fails its test with the expected message |
+
+### Evidence
+
+| Check | Command | Result |
+|---|---|---|
+| Formatting | `gofmt -l ./internal/ ./cmd/` | clean |
+| Vet | `go vet ./...` | clean |
+| Unit tests | `go test ./internal/rbac/ ./internal/outbox/ ./internal/api/` | pass |
+| Integration tests | `go test -p 1 -tags=integration ./...` | all packages pass, including `internal/testsupport` and the two new `internal/api` tests |
+| Regression guard, negative | shorten the advertised list, re-run 8.2 | test fails, naming every omitted type |
+| E2E | `npx playwright test` | 28 pass in real Chromium (was 26), including the two new cases |
+| OpenAPI currency | `go run ./cmd/openapi-gen` | spec regenerated; adds `event_types` to `CapabilitiesResponse` |
 
 ---
 

@@ -5,6 +5,16 @@
 - **Commit audited:** `main` @ `3b1ce12`
 - **Repository:** https://github.com/geff1778/ForgeCRM
 
+> **Refresh note (2026-10-28, later).** The body of this audit reflects the
+> repository at `3b1ce12`. Since then `main` has advanced to `27caac0` (PRs #6–#9:
+> permission-filtered search, bulk archive, distributed rate limiting with a trusted
+> proxy list, multi-replica safety) and two further bodies of work are open for
+> review on `feat/webhook-lifecycle-and-hitl`: the outgoing webhook delivery
+> lifecycle (migrations `0007`–`0008`) and the human-in-the-loop agent approval path
+> (migrations `0009`–`0011`). Where this document and the code disagree, the code
+> and `docs/ROADMAP.md` win. The per-claim evidence below has not been re-run against
+> the newer commits except where a later section says so.
+
 This records the **verified** state of the repository. It separates confirmed
 facts from risks and proposals. Every claim below was checked against the code at
 the audited commit; commands and results are recorded.
@@ -46,7 +56,7 @@ grep -rhoE '\b(Get|Post|Put|Patch|Delete)\("(/[^"]*)"' backend/internal/api/*.go
 
 ### 1.3 RBAC
 
-- **81 permissions** declared in `backend/internal/rbac`.
+- **83 permissions** declared in `backend/internal/rbac` (the catalog in `rbac.go`; migration 0004 seeds them).
 - **14 default roles**, seeded in `0004_rbac_seed.up.sql`: `platform_owner`,
   `platform_admin`, `tenant_admin`, `security_auditor`, `integration_admin`,
   `data_steward`, `executive`, `sales_manager`, `sales_representative`,
@@ -226,6 +236,24 @@ Tenant settings are not centralized. There is no versioned config schema, no
 preview, no audit of configuration changes, no bootstrap beyond migrations.
 
 **Status:** Open. Tracked as Phase 5 work.
+
+### I. Webhook event vocabulary drifted between the form and the dispatcher — **High**
+
+Found and fixed in the current cycle. `WebhooksPage.tsx` held a hard-coded event
+list with bare names (`contact.created`, `deal.created`). The dispatcher matches
+the namespaced names the outbox emits (`crm.contact.created`, `crm.deal.created`).
+A subscription created through the form therefore selected events that never
+occurred: it was accepted, listed, and enabled, and delivered nothing. The failure
+presents as a network problem on the customer's side and is invisible in the UI,
+which is what makes it worth a written finding rather than a quiet fix.
+
+The list now has a single source of truth, `outbox.EventTypes()`, published as
+`event_types` on `GET /api/v1/system/capabilities`; the form renders its picker
+from that response. `TestWebhookEventVocabularyMatchesTheDispatcher` emits and
+dispatches every advertised type and asserts one delivery each, so the two halves
+cannot drift again — it was confirmed to fail against the shortened list.
+
+**Status:** Fixed. See `docs/ROADMAP.md` cycle 8.
 
 ---
 

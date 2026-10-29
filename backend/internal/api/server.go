@@ -20,6 +20,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/geff1778/forgecrm/internal/agent"
 	"github.com/geff1778/forgecrm/internal/ai"
 	"github.com/geff1778/forgecrm/internal/audit"
 	"github.com/geff1778/forgecrm/internal/authn"
@@ -65,6 +66,9 @@ type Deps struct {
 	// Tools, so it cannot grant more authority than the tool registry already
 	// enforces.
 	MCP *ai.MCPServer
+	// Agent is the human-in-the-loop execution state machine (ADR 0005). It is the
+	// only path by which an approval-gated tool can run.
+	Agent *agent.Service
 	// StartedAt is used by the system info endpoint.
 	StartedAt time.Time
 	Version   string
@@ -279,6 +283,14 @@ func (s *Server) buildRouter() chi.Router {
 				r.Post("/mfa/enroll", s.withCSRF(s.handleMFAEnroll))
 				r.Post("/mfa/confirm", s.withCSRF(s.handleMFAConfirm))
 				r.Post("/mfa/disable", s.withCSRF(s.handleMFADisable))
+				// Step-up refreshes the second-factor window a destructive agent
+				// decision requires (ADR 0005). It is rate-limited with the login
+				// limiter because it is a credential-verification endpoint.
+				r.With(httpx.RateLimitMiddleware(httpx.RateLimitOptions{
+					Limiter: s.loginLimiter,
+					Subject: httpx.ClientIP,
+					Log:     s.deps.Log,
+				})).Post("/step-up", s.withCSRF(s.handleStepUp))
 			})
 		})
 
@@ -296,6 +308,7 @@ func (s *Server) buildRouter() chi.Router {
 			s.mountEvents(r)
 			s.mountJobs(r)
 			s.mountAI(r)
+			s.mountAgent(r)
 			s.mountMCP(r)
 			s.mountNotifications(r)
 		})

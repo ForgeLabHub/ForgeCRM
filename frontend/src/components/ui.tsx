@@ -25,12 +25,15 @@ export function statusTone(status: string): 'neutral' | 'success' | 'danger' | '
     case 'healthy':
     case 'ok':
       return 'success'
+    // A dead webhook delivery is a terminal failure, not a neutral state: it is
+    // the one an operator must act on, so it must not look like an ordinary row.
     case 'failed':
     case 'error':
     case 'revoked':
     case 'blocked':
     case 'lost':
     case 'breached':
+    case 'dead':
       return 'danger'
     case 'pending':
     case 'running':

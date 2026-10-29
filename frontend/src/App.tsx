@@ -18,6 +18,7 @@ import { WebhooksPage } from './pages/WebhooksPage'
 import { EventsPage } from './pages/EventsPage'
 import { JobsPage } from './pages/JobsPage'
 import { AiPage } from './pages/AiPage'
+import { ApprovalsPage } from './pages/ApprovalsPage'
 import { UsersPage } from './pages/admin/UsersPage'
 import { RolesPage } from './pages/admin/RolesPage'
 import { OrganizationsPage } from './pages/admin/OrganizationsPage'
@@ -205,6 +206,14 @@ export function App() {
           element={
             <RequirePermission permission="ai.read">
               <AiPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="approvals"
+          element={
+            <RequirePermission permission="approvals.read">
+              <ApprovalsPage />
             </RequirePermission>
           }
         />

@@ -170,6 +170,7 @@ func run() error {
 		AI:           services.AI,
 		Tools:        services.Tools,
 		MCP:          services.MCP,
+		Agent:        services.Agent,
 		StartedAt:    time.Now(),
 		Version:      version,
 		BuildCommit:  commit,

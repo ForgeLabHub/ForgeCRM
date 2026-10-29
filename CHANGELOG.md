@@ -8,6 +8,99 @@ once it reaches 1.0.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A dead webhook delivery left no durable record.** When a subscriber's endpoint
+  kept failing, the delivery was marked `dead` and nothing else happened: no audit
+  entry, no counter. An operator reading the audit trail could not see that a
+  customer had stopped receiving events, and there was no value to alert on. The
+  terminal transition now writes exactly one `webhooks.delivery_dead_lettered`
+  audit entry and stamps `dead_lettered_at`. "Exactly one" is enforced in the
+  database: the transition and the `status <> 'dead'` guard are one `UPDATE`, so a
+  delivery several workers raced to fail produces one entry, not one per worker.
+  `TestDeliveryDeadLetterIsAuditedOnce` asserts the count is 1 and that the entry
+  is attributable to the owning organization.
+- **Replaying a dead delivery erased how many times it had failed.** `Replay` reset
+  `attempts` to zero and left nothing behind, so an operator could not tell a
+  delivery that had just died from one that had already exhausted two full budgets.
+  The per-window `attempts` is still reset — that is what grants the fresh retry
+  budget — but a new `replay_count`, never reset, records the lifetime number of
+  windows, and the frontend shows it next to the attempt count.
+- **A delivery could be replayed while it was being sent.** The replay guard refused
+  only `status = 'pending'`, but a delivery a worker has claimed is `delivering`. An
+  operator could therefore replay a delivery mid-send, granting a second retry window
+  that the attempt already in progress would consume, with the possibility of one
+  event producing two outbound POSTs. The guard now refuses both in-flight states
+  (`status NOT IN ('pending', 'delivering')`), which is what ADR 0004 already claimed
+  to do.
+- **A delivery could be replayed under a subscription it did not belong to.** The
+  replay route nests a delivery under its subscription
+  (`/webhooks/{id}/deliveries/{deliveryId}/replay`) and the OpenAPI document marks
+  both path parameters required, but the handler read only `deliveryId` and ignored
+  `{id}`. The mutating statement now filters on `subscription_id` as well as
+  `organization_id`, so the subscription named in the path is part of what identifies
+  the delivery and a mismatch is refused.
+
+### Added
+
+- **Human-in-the-loop agent approvals, with a second factor for destructive
+  decisions.** An agent proposes an action; a person decides it. Nothing the agent
+  proposes runs on its own. The decision carries the arguments hash the operator was
+  shown and the server refuses a decision whose hash does not match the stored one,
+  so approving cannot be redirected to a different payload. An action stored at the
+  `destructive` risk tier additionally requires the deciding session to have
+  presented a second factor within a short window: a lapsed window is refused with
+  `403` and a `urn:forgecrm:error:forbidden` reason, and `POST /api/v1/auth/step-up`
+  re-verifies the factor and refreshes the window. The factor is never read from the
+  request body, so it cannot be asserted by the caller. The approvals screen
+  (`/approvals`) shows the exact arguments, the binding hash and the risk tier, and
+  prompts for the factor inline when the server refuses. See
+  `docs/adr/0005-hitl-agent-execution-model.md`.
+- **Dead-letter metrics.** `GET /api/v1/admin/metrics` now reports
+  `webhook_deliveries_dead` (deliveries currently dead, which falls on a
+  successful replay; named without a `_total` suffix because it is a gauge, so
+  `rate()` over it would be meaningless), `webhook_deliveries_dead_lettered_total` (transitions ever,
+  read from the append-only audit trail, so it only rises and is the value to alert
+  on) and `webhook_deliveries_pending_total`. All three are unlabelled scalars: a
+  tenant id, target URL or event id in a metric label would multiply the series
+  without bound and leak a customer's endpoint into the monitoring system. They are
+  read from the database rather than held in a process, so they are correct when
+  several workers and API replicas run at once.
+
+### Fixed
+
+- **Outgoing webhooks were recorded but never sent.** The dispatcher created a
+  `webhook_deliveries` row for every subscription matching an event, and no code
+  ever read those rows back. A subscription could be created, verified with a
+  test, receive a green status — and the customer's endpoint was never called for
+  a real event. The row sat `pending` until the retention sweep deleted it. The
+  worker now runs a delivery loop that claims pending deliveries, signs the
+  payload and posts it, with exponential backoff and a bounded attempt count.
+  `TestOutboundWebhookIsActuallyDelivered` asserts a real HTTP server receives a
+  request whose signature verifies against the subscription's own secret.
+- **Two workers could send the same webhook twice.** Deliveries were selected
+  without being claimed, so two workers polling at the same moment both read the
+  same row and both POSTed it. The customer's endpoint saw two deliveries for one
+  domain change, which for a non-idempotent receiver is a duplicated side effect.
+  Claiming is now a single `UPDATE ... FOR UPDATE SKIP LOCKED`, and a unique
+  index on `(subscription_id, outbox_event_id)` rejects a duplicate delivery row
+  even if the dispatcher runs concurrently with itself.
+- **A failed outbox event was retried forever.** `MarkFailed` incremented the
+  attempt count and nothing ever acted on it, so a permanently broken event was
+  re-read by every drain until the end of the deployment. Retries are now bounded
+  and an exhausted event is dead-lettered, so the failure is terminal and
+  visible rather than an unbounded loop.
+- **Outbox draining could dispatch the same event twice.** The drain loop read
+  pending events without claiming them, so the scheduled drain and the queue job
+  could both process one event. Both paths now claim, and a claim abandoned by a
+  crashed worker is released on the next worker start instead of stranding the
+  event.
+- **The retention sweep never ran.** The handler existed and nothing enqueued
+  it, so delivered webhooks, finished jobs and application logs accumulated
+  without bound — a slow disk-filling defect rather than a theoretical one. The
+  worker now enqueues the sweep hourly, idempotently, so a slow sweep is never
+  doubled up by the next tick.
+
 ### Security
 
 - **`X-Forwarded-For` was believed from any caller.** `chi`'s

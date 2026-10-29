@@ -127,6 +127,7 @@ func newHarnessWithStore(t *testing.T, cfg *config.Config, store ratelimit.Store
 		Events: svcs.Events, Dispatcher: svcs.Dispatcher,
 		Email: svcs.Email, Telegram: svcs.Telegram, AI: svcs.AI, Tools: svcs.Tools,
 		MCP:     svcs.MCP,
+		Agent:   svcs.Agent,
 		Version: "test",
 	}, store, trusted)
 	if err != nil {

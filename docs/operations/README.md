@@ -90,6 +90,80 @@ security events, job history, integration runs and webhook deliveries at
 `/api/v1/audit`, `/api/v1/security-events` and `/api/v1/admin/logs`. These require the
 corresponding permissions.
 
+## Webhook delivery
+
+A subscription receives every matching event. Delivery is **at-least-once**, not
+exactly-once: a worker that dies after the endpoint accepted the POST but before the row
+was marked delivered leaves the claim to expire and the delivery is sent again. Every
+payload therefore carries a stable `event_id` for the receiver to de-duplicate on.
+
+### Event types
+
+A subscription names the event types it wants. The names are namespaced by domain —
+`crm.contact.created`, `crm.deal.won`, `support.ticket.closed`, `data.import.completed`,
+`integration.run.completed`, `platform.user.invited` — and the dispatcher matches them
+exactly. A name that is not in the list matches nothing and the subscription silently
+receives no deliveries, so the authoritative list is published rather than left to be
+guessed:
+
+```
+GET /api/v1/system/capabilities   →   { "event_types": ["crm.account.created", …] }
+```
+
+The admin UI builds its event picker from that field, and
+`TestWebhookEventVocabularyMatchesTheDispatcher` emits and dispatches every advertised
+type so the list and the dispatcher cannot drift apart.
+
+A delivery that keeps failing is retried with exponential backoff up to the
+subscription's `max_attempts`, then moves to the terminal `dead` state. Dead is visible,
+not silent:
+
+- the transition writes one `webhooks.delivery_dead_lettered` audit entry, once per
+  transition, so an alert built on it does not repeat for a single failure;
+- `dead_lettered_at` records when it happened;
+- `GET /api/v1/admin/metrics` reports three counters.
+
+| Counter | Meaning | Alert on it? |
+| --- | --- | --- |
+| `webhook_deliveries_dead` | Deliveries in the terminal dead state right now. Falls when a delivery is replayed or swept. | No — it is a level, not an event. |
+| `webhook_deliveries_dead_lettered_total` | Transitions into the dead state, ever. Read from the audit trail, so it only rises. | Yes — a rate over this is the signal. |
+| `webhook_deliveries_pending_total` | Deliveries still eligible for an attempt. | If it grows without draining. |
+
+All three are read from the database rather than a per-process counter, so they are
+correct when several workers and API replicas run at once. None is labelled: a tenant id
+or target URL in a metric label would multiply the series without bound and leak a
+customer's endpoint into the monitoring system. The per-organization view is in the audit
+page.
+
+Only `webhook_deliveries_dead_lettered_total` carries the `_total` suffix, because only
+it is a counter. `webhook_deliveries_dead` is a gauge: it goes down when a delivery is
+replayed or swept, so a `rate()` over it would report nonsense. The suggested alert is
+
+```
+rate(webhook_deliveries_dead_lettered_total[1h]) > 0
+```
+
+Any sustained transition into the dead state is an incident: an endpoint the customer
+configured has stopped receiving events. Start with `> 0` and raise the threshold only
+after the baseline is known; do not alert on the gauge, which returns to zero on its own
+when the deliveries are replayed.
+
+### Replaying a delivery
+
+`POST /api/v1/webhooks/{id}/deliveries/{deliveryID}/replay` re-arms a delivery. It
+resets the per-window attempt count, which grants a fresh retry budget, and increments
+`replay_count` — never reset — so an operator can tell a delivery that has just died from
+one that has already exhausted several budgets. The dead-letter marker is cleared and the
+replay is audited.
+
+A replay is refused when the delivery is already in flight — `pending` (queued) or
+`delivering` (a worker has claimed it and is sending it now). Refusing the `delivering`
+case matters: replaying a delivery mid-send would grant a second window that the
+in-progress attempt consumes, and one event could produce two sends. The refusal is
+reported as not found, as is a delivery that belongs to another organization or to a
+different subscription than the one named in the path, so none of those is
+distinguishable from an id that does not exist.
+
 ## Rate limiting
 
 Requests to `/api/v1` are limited per client address. Authentication endpoints

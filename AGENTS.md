@@ -125,6 +125,37 @@ schema change requires a rebuild, not just a restart.
   `go.mod`'s `go` directive, `backend/Dockerfile` and `GO_VERSION` in CI. A
   stdlib CVE is fixed by bumping all three; bumping only one lets a fix pass in
   one place and be missing in another.
+- **`database.WithTx` rolls back on *any* error a closure returns.** A closure
+  that needs both to write and to report a failure cannot do so by returning the
+  error: the write is discarded. Record the outcome in a variable, return `nil`
+  to commit, and return the error *after* the transaction. The expired-approval
+  transition was broken this way — it updated `agent_actions.status` to `expired`
+  and then returned `ErrExpired` from inside the transaction, so the caller saw
+  the right error while the row stayed `proposed` and the deadline was never
+  enforced. Assert persisted state by reading the table, not the returned struct;
+  a rollback leaves the caller holding a struct that describes a write the
+  database never kept. When a second path enforces the same invariant as a
+  background sweep, both must apply the same reconciliation, or a row the sweep
+  no longer matches stays stranded.
+- **A "still in flight" guard must name every in-flight state, not the obvious
+  one.** The webhook replay guard refused only `status = 'pending'`, but a delivery
+  a worker has claimed is `delivering` — so an operator could replay a delivery
+  that was being sent at that moment, granting a second window the in-progress
+  attempt would consume and allowing one event to produce two sends. The route also
+  nests a delivery under its subscription (`/webhooks/{id}/deliveries/{deliveryId}
+  /replay`), and both ids are required path parameters, so the mutating statement
+  filters on `subscription_id` as well as `organization_id`; a handler that reads
+  only one half of the path lets the same request mean two different things. When a
+  status column gains a state, check every guard that enumerates states — the
+  `CHECK` constraint lists the full set.
+- **A webhook subscription's event list must come from the server, never a local
+  constant.** The form once hard-coded bare names (`contact.created`) while the
+  dispatcher matched namespaced ones (`crm.contact.created`), so a subscription
+  created in the UI was accepted and enabled and then delivered nothing — a failure
+  that looks like a network fault and is invisible in the UI. The vocabulary is
+  `outbox.EventTypes()`, published as `event_types` on `/api/v1/system/capabilities`;
+  the picker reads it. `TestWebhookEventVocabularyMatchesTheDispatcher` fails if the
+  two ever diverge.
 - **The audit log is append-only**, so a user who has acted can never be deleted
   — the FK cascade is blocked by a trigger. Disable the account instead
   (`status` must be one of `invited`, `active`, `suspended`, `blocked`).

@@ -120,6 +120,13 @@ const (
 	PermApprovalsRead   Permission = "approvals.read"
 	PermApprovalsDecide Permission = "approvals.decide"
 	PermSystemSettings  Permission = "system.settings"
+
+	// Agent permissions. Reading the queue and starting a run are separate: an
+	// operator who reviews and decides on what the agent proposes does not need the
+	// right to set the agent running, and the two duties are usually held by
+	// different people.
+	PermAgentRead Permission = "agent.read"
+	PermAgentRun  Permission = "agent.run"
 )
 
 // All returns every permission in the catalog, sorted.
@@ -162,6 +169,7 @@ var catalog = map[Permission]struct{}{
 	PermNotificationsRead: {}, PermEmailManage: {}, PermTelegramManage: {},
 	PermAIRead: {}, PermAIToolsExecute: {}, PermAIConfigure: {},
 	PermApprovalsRead: {}, PermApprovalsDecide: {}, PermSystemSettings: {},
+	PermAgentRead: {}, PermAgentRun: {},
 }
 
 // Known reports whether p is part of the catalog.
@@ -238,7 +246,18 @@ func (p *Principal) HasAny(perms ...Permission) bool {
 }
 
 // Permissions returns the sorted permission set, for /auth/me and diagnostics.
+//
+// A platform owner holds every permission by way of Has, so the set it reports
+// must be the whole catalog rather than the role-derived subset it happens to
+// carry. Otherwise the API allows an operation the owner's own /auth/me says it
+// cannot perform, and the interface hides a page the server would serve.
 func (p *Principal) Permissions() []Permission {
+	if p == nil {
+		return nil
+	}
+	if p.IsPlatformOwner {
+		return All()
+	}
 	out := make([]Permission, 0, len(p.permissions))
 	for perm := range p.permissions {
 		out = append(out, perm)

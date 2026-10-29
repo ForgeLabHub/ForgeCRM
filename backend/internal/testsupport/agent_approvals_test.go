@@ -1,0 +1,1116 @@
+//go:build integration
+
+// Integration tests for the human-in-the-loop agent execution model (ADR 0005).
+//
+// These tests drive the real state machine against a real PostgreSQL schema and a
+// real tool registry. Nothing is mocked, because every property that matters here
+// is a property of the interaction between the code and the database:
+//
+//   - the approved→executed claim is a guarded UPDATE, so "exactly once" is a
+//     claim about concurrent transactions, not about a function's return value;
+//   - the decision signature is verified against a stored row, so tamper-evidence
+//     is a claim about what the database holds;
+//   - the deny list and the budget are enforced in SQL, so they are claims about
+//     what can be written.
+//
+// Run with:
+//
+//	FORGECRM_TEST_DATABASE_URL=postgres://... go test -tags=integration ./internal/testsupport/...
+package testsupport
+
+import (
+	"context"
+	"errors"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/geff1778/forgecrm/internal/agent"
+	"github.com/geff1778/forgecrm/internal/ai"
+	"github.com/geff1778/forgecrm/internal/audit"
+	"github.com/geff1778/forgecrm/internal/crm"
+	"github.com/geff1778/forgecrm/internal/database"
+	"github.com/geff1778/forgecrm/internal/httpx"
+	"github.com/geff1778/forgecrm/internal/outbox"
+	"github.com/geff1778/forgecrm/internal/rbac"
+)
+
+// agentFixture is a fully wired agent runtime over a migrated database.
+type agentFixture struct {
+	db     *database.DB
+	svc    *agent.Service
+	org    uuid.UUID
+	userID uuid.UUID
+}
+
+// newAgentFixture builds the service graph the API builds, over the test schema.
+func newAgentFixture(t *testing.T, orgSlug, roleKey string) *agentFixture {
+	t.Helper()
+	db := connectOrSkip(t)
+	freshSchema(t, db)
+
+	auditLog := audit.New(db)
+	crmSvc := crm.NewService(db, auditLog, outbox.NewStore(db))
+	registry := ai.NewToolRegistry(crmSvc, auditLog)
+	executor := ai.NewAgentExecutor(db, rbac.NewService(db), registry)
+
+	svc, err := agent.NewService(db, auditLog, executor, agent.Config{
+		PlatformSecret: "integration-test-platform-secret",
+		DeniedTools:    ai.DeniedToolNames(),
+	})
+	if err != nil {
+		t.Fatalf("build the agent service: %v", err)
+	}
+
+	org := insertOrganization(t, db, orgSlug)
+	userID := seedMember(t, db, org, roleKey)
+
+	return &agentFixture{db: db, svc: svc, org: org, userID: userID}
+}
+
+// seedMember creates an active user who is a member of the organization holding
+// the given role template's permissions.
+func seedMember(t *testing.T, db *database.DB, org uuid.UUID, roleKey string) uuid.UUID {
+	t.Helper()
+	ctx := context.Background()
+
+	var userID uuid.UUID
+	if err := db.Pool().QueryRow(ctx, `
+INSERT INTO users (email, password_hash, display_name, status)
+VALUES ($1, 'x', 'Agent Operator', 'active') RETURNING id`,
+		"agent-"+uuid.NewString()[:8]+"@example.test").Scan(&userID); err != nil {
+		t.Fatalf("insert user: %v", err)
+	}
+
+	if _, err := db.Pool().Exec(ctx,
+		`INSERT INTO memberships (user_id, organization_id, status) VALUES ($1, $2, 'active')`,
+		userID, org); err != nil {
+		t.Fatalf("add membership: %v", err)
+	}
+
+	// Copy the platform template into the organization, which is what the real
+	// provisioning path does, then grant it. A user with no role would have no
+	// permissions and every execution would be refused for the wrong reason.
+	var roleID uuid.UUID
+	if err := db.Pool().QueryRow(ctx, `
+INSERT INTO roles (organization_id, key, name, is_system)
+SELECT $1, key, name, true FROM roles
+WHERE organization_id IS NULL AND key = $2
+RETURNING id`, org, roleKey).Scan(&roleID); err != nil {
+		t.Fatalf("provision role %q: %v", roleKey, err)
+	}
+	if _, err := db.Pool().Exec(ctx, `
+INSERT INTO role_permissions (role_id, permission_key)
+SELECT $1, permission_key FROM role_permissions rp
+JOIN roles r ON r.id = rp.role_id
+WHERE r.organization_id IS NULL AND r.key = $2`, roleID, roleKey); err != nil {
+		t.Fatalf("copy role permissions for %q: %v", roleKey, err)
+	}
+	if _, err := db.Pool().Exec(ctx,
+		`INSERT INTO user_roles (user_id, role_id, organization_id) VALUES ($1, $2, $3)`,
+		userID, roleID, org); err != nil {
+		t.Fatalf("grant role %q: %v", roleKey, err)
+	}
+	return userID
+}
+
+// startRun opens a run with a generous budget.
+func (f *agentFixture) startRun(t *testing.T, goal string) *agent.Run {
+	t.Helper()
+	run, err := f.svc.StartRun(context.Background(), f.org, f.userID, goal, 100000, 50)
+	if err != nil {
+		t.Fatalf("start run: %v", err)
+	}
+	return run
+}
+
+// proposeCreateTask proposes the confirm-tier create_task tool.
+func (f *agentFixture) proposeCreateTask(t *testing.T, run *agent.Run, title, key string) *agent.Action {
+	t.Helper()
+	args := map[string]any{"title": title}
+	hash, err := agent.ArgumentsHash(args)
+	if err != nil {
+		t.Fatalf("hash arguments: %v", err)
+	}
+	action, err := f.svc.Propose(context.Background(), agent.Proposal{
+		RunID:          run.ID,
+		OrganizationID: f.org,
+		ToolName:       "create_task",
+		Arguments:      args,
+		RiskTier:       agent.TierConfirm,
+		Summary:        "Create a task",
+		IdempotencyKey: key,
+	})
+	if err != nil {
+		t.Fatalf("propose action: %v", err)
+	}
+	if action.ArgumentsHash != hash {
+		t.Fatalf("stored hash %q does not match the computed hash %q", action.ArgumentsHash, hash)
+	}
+	return action
+}
+
+// countTasks counts tasks in the organization.
+func (f *agentFixture) countTasks(t *testing.T) int {
+	t.Helper()
+	var n int
+	if err := f.db.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM tasks WHERE organization_id = $1`, f.org).Scan(&n); err != nil {
+		t.Fatalf("count tasks: %v", err)
+	}
+	return n
+}
+
+// actionStatus reads the status straight from the table, not from the value a
+// service call returned. The distinction is the whole point of these tests: a
+// rollback leaves the caller holding an in-memory struct that describes an update
+// the database never kept.
+func (f *agentFixture) actionStatus(t *testing.T, actionID uuid.UUID) string {
+	t.Helper()
+	var status string
+	if err := f.db.Pool().QueryRow(context.Background(),
+		`SELECT status FROM agent_actions WHERE id = $1`, actionID).Scan(&status); err != nil {
+		t.Fatalf("read action status: %v", err)
+	}
+	return status
+}
+
+// runStatus reads a run's status from the table.
+func (f *agentFixture) runStatus(t *testing.T, runID uuid.UUID) string {
+	t.Helper()
+	var status string
+	if err := f.db.Pool().QueryRow(context.Background(),
+		`SELECT status FROM agent_runs WHERE id = $1`, runID).Scan(&status); err != nil {
+		t.Fatalf("read run status: %v", err)
+	}
+	return status
+}
+
+// countApprovals counts decision rows for an action.
+func (f *agentFixture) countApprovals(t *testing.T, actionID uuid.UUID) int {
+	t.Helper()
+	var n int
+	if err := f.db.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM agent_approvals WHERE action_id = $1`, actionID).Scan(&n); err != nil {
+		t.Fatalf("count approvals: %v", err)
+	}
+	return n
+}
+
+// ageActionPastDeadline moves an action's deadline into the past, so a decision on
+// it takes the expiry path without the test sleeping.
+func (f *agentFixture) ageActionPastDeadline(t *testing.T, actionID uuid.UUID) {
+	t.Helper()
+	if _, err := f.db.Pool().Exec(context.Background(),
+		`UPDATE agent_actions SET expires_at = now() - interval '1 hour' WHERE id = $1`,
+		actionID); err != nil {
+		t.Fatalf("age the action past its deadline: %v", err)
+	}
+}
+
+// TestAgentApprovalExecutesOnce is the core property: an approved action performs
+// its effect, a repeated execution does not perform it again, and the task the
+// agent asked for exists exactly once.
+func TestAgentApprovalExecutesOnce(t *testing.T) {
+	f := newAgentFixture(t, "agent-happy", "sales_representative")
+	ctx := context.Background()
+
+	run := f.startRun(t, "Create a follow-up task")
+	action := f.proposeCreateTask(t, run, "Follow up with Acme", "happy-1")
+
+	// The run must be waiting: a confirm-tier proposal suspends it.
+	waiting, err := f.svc.GetRun(ctx, f.org, run.ID)
+	if err != nil {
+		t.Fatalf("get run: %v", err)
+	}
+	if waiting.Status != agent.RunWaitingApproval {
+		t.Fatalf("run status = %q, want %q", waiting.Status, agent.RunWaitingApproval)
+	}
+
+	decider := agent.Decider{UserID: f.userID, OrganizationID: f.org}
+	decided, _, err := f.svc.Decide(ctx, decider, action.ID, agent.Decision{
+		Approve: true, ArgumentsHash: action.ArgumentsHash,
+	})
+	if err != nil {
+		t.Fatalf("decide approve: %v", err)
+	}
+	if decided.Status != agent.ActionExecuted {
+		t.Fatalf("action status = %q, want %q", decided.Status, agent.ActionExecuted)
+	}
+	if n := f.countTasks(t); n != 1 {
+		t.Fatalf("task count = %d, want 1", n)
+	}
+
+	// A second execution attempt must be a no-op: the effect already happened.
+	replayed, err := f.svc.ExecuteApprovedAction(ctx, action.ID, decider)
+	if err != nil {
+		t.Fatalf("replay execution: %v", err)
+	}
+	if replayed.Status != agent.ActionExecuted {
+		t.Fatalf("replayed status = %q, want %q", replayed.Status, agent.ActionExecuted)
+	}
+	if n := f.countTasks(t); n != 1 {
+		t.Fatalf("task count after replay = %d, want 1: the effect ran twice", n)
+	}
+}
+
+// TestAgentDecisionRefusesChangedArguments is the time-of-check/time-of-use guard.
+// If the action changes after the operator saw it, the decision does not apply to
+// what they saw and must be refused.
+func TestAgentDecisionRefusesChangedArguments(t *testing.T) {
+	f := newAgentFixture(t, "agent-toctou", "sales_representative")
+	ctx := context.Background()
+
+	run := f.startRun(t, "Create a task")
+	action := f.proposeCreateTask(t, run, "Original title", "toctou-1")
+
+	decider := agent.Decider{UserID: f.userID, OrganizationID: f.org}
+	// The operator submits a hash that does not match the stored one: they approved
+	// something else.
+	_, _, err := f.svc.Decide(ctx, decider, action.ID, agent.Decision{
+		Approve: true, ArgumentsHash: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+	})
+	if !errors.Is(err, agent.ErrActionChanged) {
+		t.Fatalf("decide with a mismatched hash: err = %v, want ErrActionChanged", err)
+	}
+	if n := f.countTasks(t); n != 0 {
+		t.Fatalf("task count = %d, want 0: a refused decision must not execute", n)
+	}
+
+	// The action must still be proposed, so a correct decision can follow.
+	still, err := f.svc.GetAction(ctx, f.org, action.ID)
+	if err != nil {
+		t.Fatalf("get action: %v", err)
+	}
+	if still.Status != agent.ActionProposed {
+		t.Fatalf("action status = %q, want it to remain proposed", still.Status)
+	}
+}
+
+// TestAgentActionCannotBeDecidedTwice makes a double click safe.
+func TestAgentActionCannotBeDecidedTwice(t *testing.T) {
+	f := newAgentFixture(t, "agent-twice", "sales_representative")
+	ctx := context.Background()
+
+	run := f.startRun(t, "Create a task")
+	action := f.proposeCreateTask(t, run, "Decide me once", "twice-1")
+
+	decider := agent.Decider{UserID: f.userID, OrganizationID: f.org}
+	if _, _, err := f.svc.Decide(ctx, decider, action.ID, agent.Decision{
+		Approve: true, ArgumentsHash: action.ArgumentsHash,
+	}); err != nil {
+		t.Fatalf("first decision: %v", err)
+	}
+
+	_, _, err := f.svc.Decide(ctx, decider, action.ID, agent.Decision{
+		Approve: false, ArgumentsHash: action.ArgumentsHash,
+	})
+	if !errors.Is(err, agent.ErrAlreadyDecided) {
+		t.Fatalf("second decision: err = %v, want ErrAlreadyDecided", err)
+	}
+	if n := f.countTasks(t); n != 1 {
+		t.Fatalf("task count = %d, want 1", n)
+	}
+}
+
+// TestAgentCrossOrganizationActionIsInvisible is the tenant-isolation check. A
+// decider in another organization must not be able to decide this action, and must
+// not be able to tell it exists.
+func TestAgentCrossOrganizationActionIsInvisible(t *testing.T) {
+	f := newAgentFixture(t, "agent-iso-a", "sales_representative")
+	ctx := context.Background()
+
+	run := f.startRun(t, "Create a task")
+	action := f.proposeCreateTask(t, run, "Tenant A task", "iso-1")
+
+	otherOrg := insertOrganization(t, f.db, "agent-iso-b")
+	otherUser := seedMember(t, f.db, otherOrg, "sales_representative")
+
+	_, _, err := f.svc.Decide(ctx, agent.Decider{UserID: otherUser, OrganizationID: otherOrg}, action.ID,
+		agent.Decision{Approve: true, ArgumentsHash: action.ArgumentsHash})
+	if !errors.Is(err, httpx.ErrNotFound) {
+		t.Fatalf("cross-organization decision: err = %v, want ErrNotFound", err)
+	}
+	if n := f.countTasks(t); n != 0 {
+		t.Fatalf("task count = %d, want 0", n)
+	}
+}
+
+// TestAgentExecutionRefusesForgedSignature is what makes the signature
+// load-bearing rather than decorative. An approval row written by direct database
+// access, without the platform secret, does not verify and the action is refused
+// instead of executed.
+func TestAgentExecutionRefusesForgedSignature(t *testing.T) {
+	f := newAgentFixture(t, "agent-forge", "sales_representative")
+	ctx := context.Background()
+
+	run := f.startRun(t, "Create a task")
+	action := f.proposeCreateTask(t, run, "Forged approval", "forge-1")
+
+	decider := agent.Decider{UserID: f.userID, OrganizationID: f.org}
+	if _, _, err := f.svc.Decide(ctx, decider, action.ID, agent.Decision{
+		Approve: true, ArgumentsHash: action.ArgumentsHash,
+	}); err != nil {
+		t.Fatalf("decide approve: %v", err)
+	}
+
+	// Simulate an attacker with write access to the database but not the secret:
+	// they flip the approval to a decision they can produce a plausible signature
+	// for, and reset the action so it can be executed again.
+	if _, err := f.db.Pool().Exec(ctx,
+		`UPDATE agent_approvals SET signature = 'forged' WHERE action_id = $1`, action.ID); err != nil {
+		t.Fatalf("forge the signature: %v", err)
+	}
+	if _, err := f.db.Pool().Exec(ctx,
+		`UPDATE agent_actions SET status = 'approved' WHERE id = $1`, action.ID); err != nil {
+		t.Fatalf("reset the action: %v", err)
+	}
+
+	if _, err := f.svc.ExecuteApprovedAction(ctx, action.ID, decider); !errors.Is(err, agent.ErrBadSignature) {
+		t.Fatalf("execute with a forged signature: err = %v, want ErrBadSignature", err)
+	}
+	if n := f.countTasks(t); n != 1 {
+		t.Fatalf("task count = %d, want 1: the forged approval must not execute a second effect", n)
+	}
+}
+
+// TestAgentSweepExpiresUndecidedProposals checks that "waiting for approval"
+// cannot become "waiting forever": an undecided proposal expires and the run that
+// was waiting on it fails rather than hanging.
+func TestAgentSweepExpiresUndecidedProposals(t *testing.T) {
+	f := newAgentFixture(t, "agent-sweep", "sales_representative")
+	ctx := context.Background()
+
+	run := f.startRun(t, "Create a task nobody decides")
+	action := f.proposeCreateTask(t, run, "Never decided", "sweep-1")
+
+	// Age the proposal past its deadline.
+	if _, err := f.db.Pool().Exec(ctx,
+		`UPDATE agent_actions SET expires_at = now() - interval '1 hour' WHERE id = $1`, action.ID); err != nil {
+		t.Fatalf("age the proposal: %v", err)
+	}
+
+	n, err := f.svc.SweepExpired(ctx)
+	if err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("swept %d proposals, want 1", n)
+	}
+
+	swept, err := f.svc.GetAction(ctx, f.org, action.ID)
+	if err != nil {
+		t.Fatalf("get action: %v", err)
+	}
+	if swept.Status != agent.ActionExpired {
+		t.Fatalf("action status = %q, want %q", swept.Status, agent.ActionExpired)
+	}
+	// A decision on an expired proposal must be refused.
+	if _, _, err := f.svc.Decide(ctx, agent.Decider{UserID: f.userID, OrganizationID: f.org}, action.ID,
+		agent.Decision{Approve: true, ArgumentsHash: action.ArgumentsHash}); err == nil {
+		t.Fatal("a decision on an expired proposal was accepted")
+	}
+
+	after, err := f.svc.GetRun(ctx, f.org, run.ID)
+	if err != nil {
+		t.Fatalf("get run: %v", err)
+	}
+	if after.Status != agent.RunFailed {
+		t.Fatalf("run status = %q, want %q: a run waiting on an expired proposal must not hang",
+			after.Status, agent.RunFailed)
+	}
+}
+
+// TestAgentDeniedToolCannotBeProposed checks the deny list is consulted before the
+// insert, so a denied tool cannot even enter the queue to be approved later.
+func TestAgentDeniedToolCannotBeProposed(t *testing.T) {
+	f := newAgentFixture(t, "agent-deny", "sales_representative")
+	ctx := context.Background()
+
+	run := f.startRun(t, "Try a denied tool")
+	_, err := f.svc.Propose(ctx, agent.Proposal{
+		RunID:          run.ID,
+		OrganizationID: f.org,
+		ToolName:       "users.delete",
+		Arguments:      map[string]any{"id": "someone"},
+		RiskTier:       agent.TierDestructive,
+		Summary:        "Delete a user",
+		IdempotencyKey: "deny-1",
+	})
+	if err == nil {
+		t.Fatal("a denied tool was proposed")
+	}
+	var apiErr *httpx.APIError
+	if !errors.As(err, &apiErr) || apiErr.Status != 403 {
+		t.Fatalf("proposing a denied tool: err = %v, want a 403", err)
+	}
+}
+
+// TestAgentActionCapIsEnforced checks the cap bounds how many proposals a looping
+// agent can create, which is what stops it filling the approvals queue.
+func TestAgentActionCapIsEnforced(t *testing.T) {
+	f := newAgentFixture(t, "agent-cap", "sales_representative")
+	ctx := context.Background()
+
+	run, err := f.svc.StartRun(ctx, f.org, f.userID, "Loop", 100000, 1)
+	if err != nil {
+		t.Fatalf("start run: %v", err)
+	}
+
+	f.proposeCreateTask(t, run, "First", "cap-1")
+
+	_, err = f.svc.Propose(ctx, agent.Proposal{
+		RunID:          run.ID,
+		OrganizationID: f.org,
+		ToolName:       "create_task",
+		Arguments:      map[string]any{"title": "Second"},
+		RiskTier:       agent.TierConfirm,
+		Summary:        "Second task",
+		IdempotencyKey: "cap-2",
+	})
+	if !errors.Is(err, agent.ErrBudgetExceeded) {
+		t.Fatalf("second proposal: err = %v, want ErrBudgetExceeded", err)
+	}
+}
+
+// TestAgentTokenBudgetFailsTheRun checks the token budget is a hard limit: the run
+// fails when it is exceeded rather than continuing to spend.
+func TestAgentTokenBudgetFailsTheRun(t *testing.T) {
+	f := newAgentFixture(t, "agent-budget", "sales_representative")
+	ctx := context.Background()
+
+	run, err := f.svc.StartRun(ctx, f.org, f.userID, "Spend", 100, 50)
+	if err != nil {
+		t.Fatalf("start run: %v", err)
+	}
+
+	if _, err := f.svc.AddTokens(ctx, f.org, run.ID, 60); err != nil {
+		t.Fatalf("first spend: %v", err)
+	}
+	if _, err := f.svc.AddTokens(ctx, f.org, run.ID, 60); !errors.Is(err, agent.ErrBudgetExceeded) {
+		t.Fatalf("overspend: err = %v, want ErrBudgetExceeded", err)
+	}
+
+	after, err := f.svc.GetRun(ctx, f.org, run.ID)
+	if err != nil {
+		t.Fatalf("get run: %v", err)
+	}
+	if after.Status != agent.RunFailed {
+		t.Fatalf("run status = %q, want %q after the budget was exceeded", after.Status, agent.RunFailed)
+	}
+}
+
+// TestAgentExecutionUsesCurrentPermissions is the "no stale authority" check: a
+// role revoked between the proposal and the approval takes effect, so an approval
+// cannot be used to exercise a permission the user no longer holds.
+func TestAgentExecutionUsesCurrentPermissions(t *testing.T) {
+	f := newAgentFixture(t, "agent-revoke", "sales_representative")
+	ctx := context.Background()
+
+	run := f.startRun(t, "Create a task")
+	action := f.proposeCreateTask(t, run, "After revocation", "revoke-1")
+
+	// Revoke the user's roles after the proposal was made.
+	if _, err := f.db.Pool().Exec(ctx,
+		`DELETE FROM user_roles WHERE user_id = $1 AND organization_id = $2`, f.userID, f.org); err != nil {
+		t.Fatalf("revoke roles: %v", err)
+	}
+
+	decider := agent.Decider{UserID: f.userID, OrganizationID: f.org}
+	_, _, err := f.svc.Decide(ctx, decider, action.ID, agent.Decision{
+		Approve: true, ArgumentsHash: action.ArgumentsHash,
+	})
+	if err == nil {
+		t.Fatal("execution succeeded with a revoked permission set")
+	}
+	if n := f.countTasks(t); n != 0 {
+		t.Fatalf("task count = %d, want 0: a revoked permission must block the effect", n)
+	}
+
+	// The decision itself stands: the human did decide, and the audit trail must
+	// record that. It is the effect that was refused.
+	after, err := f.svc.GetAction(ctx, f.org, action.ID)
+	if err != nil {
+		t.Fatalf("get action: %v", err)
+	}
+	if after.Status == agent.ActionExecuted {
+		t.Fatal("the action is marked executed though the effect was refused")
+	}
+	approvals, err := f.svc.ListApprovals(ctx, f.org, action.ID)
+	if err != nil {
+		t.Fatalf("list approvals: %v", err)
+	}
+	if len(approvals) != 1 || approvals[0].Decision != "approve" {
+		t.Fatalf("approvals = %+v, want exactly one recorded approval", approvals)
+	}
+}
+
+// TestAgentDestructiveActionRequiresStepUp is the ADR 0005 requirement that the
+// destructive tier needs more than an authenticated session: a second factor. The
+// decision from a session that has not presented one must be refused, and the
+// refusal must not be a claim the caller can make — it is a property of the
+// decider the server resolved.
+func TestAgentDestructiveActionRequiresStepUp(t *testing.T) {
+	f := newAgentFixture(t, "agent-stepup", "sales_manager")
+	ctx := context.Background()
+
+	run := f.startRun(t, "Export everything off-platform")
+	args := map[string]any{"account_id": uuid.NewString()}
+	hash, err := agent.ArgumentsHash(args)
+	if err != nil {
+		t.Fatalf("hash arguments: %v", err)
+	}
+	action, err := f.svc.Propose(ctx, agent.Proposal{
+		RunID:          run.ID,
+		OrganizationID: f.org,
+		ToolName:       "export_account",
+		Arguments:      args,
+		RiskTier:       agent.TierDestructive,
+		Summary:        "Export an account off-platform",
+		IdempotencyKey: "stepup-1",
+	})
+	if err != nil {
+		t.Fatalf("propose destructive action: %v", err)
+	}
+	if action.ArgumentsHash != hash {
+		t.Fatalf("stored hash %q != computed %q", action.ArgumentsHash, hash)
+	}
+
+	// Without a step-up the decision is refused, and nothing is executed.
+	_, _, err = f.svc.Decide(ctx, agent.Decider{UserID: f.userID, OrganizationID: f.org},
+		action.ID, agent.Decision{Approve: true, ArgumentsHash: action.ArgumentsHash})
+	if !errors.Is(err, agent.ErrStepUpRequired) {
+		t.Fatalf("destructive decision without step-up: err = %v, want ErrStepUpRequired", err)
+	}
+	still, err := f.svc.GetAction(ctx, f.org, action.ID)
+	if err != nil {
+		t.Fatalf("get action: %v", err)
+	}
+	if still.Status != agent.ActionProposed {
+		t.Fatalf("action status = %q, want it to remain proposed after a refused decision", still.Status)
+	}
+
+	// With a step-up the same decision is accepted. The action then proceeds to
+	// execution and fails on the unknown tool, which is a different failure from the
+	// step-up refusal: the point is that the step-up gate was passed.
+	_, _, err = f.svc.Decide(ctx, agent.Decider{UserID: f.userID, OrganizationID: f.org, StepUpVerified: true},
+		action.ID, agent.Decision{Approve: true, ArgumentsHash: action.ArgumentsHash})
+	if errors.Is(err, agent.ErrStepUpRequired) {
+		t.Fatalf("the step-up gate refused a decision that carried a verified step-up")
+	}
+	decided, err := f.svc.GetAction(ctx, f.org, action.ID)
+	if err != nil {
+		t.Fatalf("get action: %v", err)
+	}
+	if decided.Status == agent.ActionProposed {
+		t.Fatalf("the action is still proposed after a verified step-up decision: err = %v", err)
+	}
+}
+
+// TestAgentConfirmActionNeedsNoStepUp checks the requirement is scoped to the
+// destructive tier. A confirm-tier action is decided by an authenticated session
+// alone; requiring a step-up for every task creation would train operators to
+// click through it.
+func TestAgentConfirmActionNeedsNoStepUp(t *testing.T) {
+	f := newAgentFixture(t, "agent-nostepup", "sales_representative")
+	ctx := context.Background()
+
+	run := f.startRun(t, "Create a task")
+	action := f.proposeCreateTask(t, run, "No step-up needed", "nostepup-1")
+
+	_, _, err := f.svc.Decide(ctx, agent.Decider{UserID: f.userID, OrganizationID: f.org},
+		action.ID, agent.Decision{Approve: true, ArgumentsHash: action.ArgumentsHash})
+	if err != nil {
+		t.Fatalf("confirm-tier decision without a step-up was refused: %v", err)
+	}
+	if n := f.countTasks(t); n != 1 {
+		t.Fatalf("task count = %d, want 1", n)
+	}
+}
+
+// TestAgentProposalIsIdempotentUnderItsKey checks that a retried proposal returns
+// the existing action rather than creating a second one, so a retry cannot put two
+// copies of the same effect in the queue.
+func TestAgentProposalIsIdempotentUnderItsKey(t *testing.T) {
+	f := newAgentFixture(t, "agent-idem", "sales_representative")
+	ctx := context.Background()
+
+	run := f.startRun(t, "Create a task")
+	first := f.proposeCreateTask(t, run, "Idempotent", "idem-1")
+
+	second, err := f.svc.Propose(ctx, agent.Proposal{
+		RunID:          run.ID,
+		OrganizationID: f.org,
+		ToolName:       "create_task",
+		Arguments:      map[string]any{"title": "Idempotent"},
+		RiskTier:       agent.TierConfirm,
+		Summary:        "Create a task",
+		IdempotencyKey: "idem-1",
+	})
+	if err != nil {
+		t.Fatalf("retried proposal: %v", err)
+	}
+	if second.ID != first.ID {
+		t.Fatalf("the retried proposal created a second action: %s != %s", second.ID, first.ID)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Decision-time expiry (regression for the rolled-back expiry)
+// ---------------------------------------------------------------------------
+
+// TestAgentExpiredDecisionIsCommittedAndRefused is the regression for the defect
+// where the expiry update was rolled back.
+//
+// Decide used to run `UPDATE agent_actions SET status = 'expired'` and then return
+// ErrExpired from inside WithTx. WithTx rolls back on any returned error, so the
+// expiry was discarded: the caller got the right error while the row stayed
+// `proposed`, and every later request took the same path. The status is therefore
+// asserted by reading the table after the call returns, not from the returned
+// struct.
+func TestAgentExpiredDecisionIsCommittedAndRefused(t *testing.T) {
+	f := newAgentFixture(t, "agent-expire-commit", "sales_representative")
+	ctx := context.Background()
+
+	run := f.startRun(t, "Create a task that will expire")
+	action := f.proposeCreateTask(t, run, "Expire me", "expire-commit-1")
+	f.ageActionPastDeadline(t, action.ID)
+
+	decider := agent.Decider{UserID: f.userID, OrganizationID: f.org}
+	_, _, err := f.svc.Decide(ctx, decider, action.ID, agent.Decision{
+		Approve: true, ArgumentsHash: action.ArgumentsHash,
+	})
+	if !errors.Is(err, agent.ErrExpired) {
+		t.Fatalf("decide on an expired action: err = %v, want ErrExpired", err)
+	}
+
+	// The committed status is the assertion. Against the old code this read
+	// "proposed" while the error said ErrExpired.
+	if got := f.actionStatus(t, action.ID); got != agent.ActionExpired {
+		t.Fatalf("persisted action status = %q, want %q: the expiry was rolled back", got, agent.ActionExpired)
+	}
+	// A refused decision writes no approval and runs no effect.
+	if n := f.countApprovals(t, action.ID); n != 0 {
+		t.Fatalf("approvals = %d, want 0: a refused decision must not record one", n)
+	}
+	if n := f.countTasks(t); n != 0 {
+		t.Fatalf("task count = %d, want 0: an expired action must not execute", n)
+	}
+	// The run must not be left waiting on a proposal that can never be decided.
+	if got := f.runStatus(t, run.ID); got != agent.RunFailed {
+		t.Fatalf("run status = %q, want %q: a run whose only proposal expired must not hang",
+			got, agent.RunFailed)
+	}
+}
+
+// TestAgentExpiredDecisionIsRepeatable checks the expiry is stable under a retry:
+// a second attempt must not approve the action.
+func TestAgentExpiredDecisionIsRepeatable(t *testing.T) {
+	f := newAgentFixture(t, "agent-expire-retry", "sales_representative")
+	ctx := context.Background()
+
+	run := f.startRun(t, "Create a task that will expire")
+	action := f.proposeCreateTask(t, run, "Expire me twice", "expire-retry-1")
+	f.ageActionPastDeadline(t, action.ID)
+
+	decider := agent.Decider{UserID: f.userID, OrganizationID: f.org}
+	if _, _, err := f.svc.Decide(ctx, decider, action.ID, agent.Decision{
+		Approve: true, ArgumentsHash: action.ArgumentsHash,
+	}); !errors.Is(err, agent.ErrExpired) {
+		t.Fatalf("first decision: err = %v, want ErrExpired", err)
+	}
+	// The expiry must be durable, or the retry below would take the same path.
+	if got := f.actionStatus(t, action.ID); got != agent.ActionExpired {
+		t.Fatalf("persisted status after the first attempt = %q, want %q", got, agent.ActionExpired)
+	}
+	// The retry finds an already-expired action, which is refused as already
+	// decided: the expiry is durable, so the retry cannot approve it.
+	_, _, err := f.svc.Decide(ctx, decider, action.ID, agent.Decision{
+		Approve: true, ArgumentsHash: action.ArgumentsHash,
+	})
+	if err == nil {
+		t.Fatal("a retried decision on an expired action was accepted")
+	}
+	if got := f.actionStatus(t, action.ID); got == agent.ActionApproved || got == agent.ActionExecuted {
+		t.Fatalf("persisted status = %q, want it to stay expired", got)
+	}
+	if n := f.countTasks(t); n != 0 {
+		t.Fatalf("task count = %d, want 0", n)
+	}
+}
+
+// TestAgentExpiredDecisionDoesNotFailARunWithAnotherProposal checks the scoped
+// reconciliation: a run that still has a decidable proposal must be left waiting,
+// not failed.
+func TestAgentExpiredDecisionDoesNotFailARunWithAnotherProposal(t *testing.T) {
+	f := newAgentFixture(t, "agent-expire-multi", "sales_representative")
+	ctx := context.Background()
+
+	run := f.startRun(t, "Two proposals")
+	first := f.proposeCreateTask(t, run, "First", "expire-multi-1")
+	f.proposeCreateTask(t, run, "Second", "expire-multi-2")
+	f.ageActionPastDeadline(t, first.ID)
+
+	decider := agent.Decider{UserID: f.userID, OrganizationID: f.org}
+	if _, _, err := f.svc.Decide(ctx, decider, first.ID, agent.Decision{
+		Approve: true, ArgumentsHash: first.ArgumentsHash,
+	}); !errors.Is(err, agent.ErrExpired) {
+		t.Fatalf("decide the expired action: err = %v, want ErrExpired", err)
+	}
+	if got := f.runStatus(t, run.ID); got != agent.RunWaitingApproval {
+		t.Fatalf("run status = %q, want %q: the run still has a decidable proposal",
+			got, agent.RunWaitingApproval)
+	}
+}
+
+// TestAgentConcurrentSweepAndDecisionAgree runs the sweep and a decision at the
+// same moment. Both move the proposal to a terminal state with a guarded
+// `status = 'proposed'` UPDATE, so whichever runs second affects no rows; the
+// statuses they leave must agree and the effect must not run.
+func TestAgentConcurrentSweepAndDecisionAgree(t *testing.T) {
+	f := newAgentFixture(t, "agent-expire-race", "sales_representative")
+	ctx := context.Background()
+
+	run := f.startRun(t, "Race the sweep")
+	action := f.proposeCreateTask(t, run, "Raced", "expire-race-1")
+	f.ageActionPastDeadline(t, action.ID)
+
+	decider := agent.Decider{UserID: f.userID, OrganizationID: f.org}
+	var (
+		wg       sync.WaitGroup
+		start    = make(chan struct{})
+		sweepErr error
+	)
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		<-start
+		_, sweepErr = f.svc.SweepExpired(ctx)
+	}()
+	go func() {
+		defer wg.Done()
+		<-start
+		_, _, _ = f.svc.Decide(ctx, decider, action.ID, agent.Decision{
+			Approve: true, ArgumentsHash: action.ArgumentsHash,
+		})
+	}()
+	close(start)
+	wg.Wait()
+
+	if sweepErr != nil {
+		t.Fatalf("sweep: %v", sweepErr)
+	}
+	// Whichever path ran first, the action must end expired and never approved.
+	if got := f.actionStatus(t, action.ID); got != agent.ActionExpired {
+		t.Fatalf("persisted status = %q, want %q", got, agent.ActionExpired)
+	}
+	if n := f.countTasks(t); n != 0 {
+		t.Fatalf("task count = %d, want 0: a raced decision must not execute", n)
+	}
+	if n := f.countApprovals(t, action.ID); n != 0 {
+		t.Fatalf("approvals = %d, want 0", n)
+	}
+	if got := f.runStatus(t, run.ID); got != agent.RunFailed {
+		t.Fatalf("run status = %q, want %q", got, agent.RunFailed)
+	}
+}
+
+// TestAgentCrossTenantCannotExpireAnotherOrganizationsAction checks the expiry
+// path does not become a way to probe or mutate another tenant's action: the row
+// is loaded FOR UPDATE scoped to the organization, so an id from elsewhere is a
+// not-found before any status is written.
+func TestAgentCrossTenantCannotExpireAnotherOrganizationsAction(t *testing.T) {
+	f := newAgentFixture(t, "agent-expire-iso-a", "sales_representative")
+	ctx := context.Background()
+
+	run := f.startRun(t, "Tenant A")
+	action := f.proposeCreateTask(t, run, "Tenant A action", "expire-iso-1")
+	f.ageActionPastDeadline(t, action.ID)
+
+	otherOrg := insertOrganization(t, f.db, "agent-expire-iso-b")
+	otherUser := seedMember(t, f.db, otherOrg, "sales_representative")
+
+	_, _, err := f.svc.Decide(ctx, agent.Decider{UserID: otherUser, OrganizationID: otherOrg}, action.ID,
+		agent.Decision{Approve: true, ArgumentsHash: action.ArgumentsHash})
+	if !errors.Is(err, httpx.ErrNotFound) {
+		t.Fatalf("cross-tenant decision: err = %v, want ErrNotFound", err)
+	}
+	// The other tenant's attempt must not have expired the action: it is
+	// indistinguishable from an id that does not exist, so it must change nothing.
+	if got := f.actionStatus(t, action.ID); got != agent.ActionProposed {
+		t.Fatalf("persisted status = %q, want %q: another tenant changed this action", got, agent.ActionProposed)
+	}
+}
+
+// TestAgentUnexpiredDecisionStillApproves is the control: the expiry path must not
+// swallow a decision that is still in time. Without it, the fix could pass by
+// refusing everything.
+func TestAgentUnexpiredDecisionStillApproves(t *testing.T) {
+	f := newAgentFixture(t, "agent-expire-control", "sales_representative")
+	ctx := context.Background()
+
+	run := f.startRun(t, "Create a task in time")
+	action := f.proposeCreateTask(t, run, "In time", "expire-control-1")
+
+	decided, _, err := f.svc.Decide(ctx, agent.Decider{UserID: f.userID, OrganizationID: f.org},
+		action.ID, agent.Decision{Approve: true, ArgumentsHash: action.ArgumentsHash})
+	if err != nil {
+		t.Fatalf("decide an unexpired action: %v", err)
+	}
+	if decided.Status != agent.ActionExecuted {
+		t.Fatalf("returned status = %q, want %q", decided.Status, agent.ActionExecuted)
+	}
+	if got := f.actionStatus(t, action.ID); got != agent.ActionExecuted {
+		t.Fatalf("persisted status = %q, want %q", got, agent.ActionExecuted)
+	}
+	if n := f.countTasks(t); n != 1 {
+		t.Fatalf("task count = %d, want 1", n)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Execution: exactly-once under concurrency, and completion
+// ---------------------------------------------------------------------------
+
+// grantRole restores a role the fixture's user holds, so a test can revoke and
+// then re-grant a permission to prove an execution consults the permission set
+// that exists at execution time rather than one captured earlier.
+func (f *agentFixture) grantRole(t *testing.T, roleKey string) {
+	t.Helper()
+	ctx := context.Background()
+	var roleID uuid.UUID
+	if err := f.db.Pool().QueryRow(ctx, `
+SELECT id FROM roles WHERE organization_id = $1 AND key = $2`, f.org, roleKey).Scan(&roleID); err != nil {
+		t.Fatalf("find role %q: %v", roleKey, err)
+	}
+	if _, err := f.db.Pool().Exec(ctx,
+		`INSERT INTO user_roles (user_id, role_id, organization_id) VALUES ($1, $2, $3)`,
+		f.userID, roleID, f.org); err != nil {
+		t.Fatalf("re-grant role %q: %v", roleKey, err)
+	}
+}
+
+// blockingExecutor is an agent.Executor whose effect blocks until the test
+// releases it. It lets a test hold one execution transaction open — with its row
+// lock held — while other callers race the claim, which is the only way to
+// exercise the approved→executed transition as a genuine concurrent race. It also
+// counts how many times the effect was entered, which is the invariant: however
+// many callers race, the effect runs once.
+type blockingExecutor struct {
+	started chan struct{}
+	release chan struct{}
+	once    sync.Once
+	effects int32
+}
+
+func newBlockingExecutor() *blockingExecutor {
+	return &blockingExecutor{started: make(chan struct{}), release: make(chan struct{})}
+}
+
+func (b *blockingExecutor) Execution(string) (agent.ExecutionFunc, error) {
+	return func(ctx context.Context, _ *agent.Action, _ agent.Decider) (any, error) {
+		atomic.AddInt32(&b.effects, 1)
+		b.once.Do(func() { close(b.started) })
+		select {
+		case <-b.release:
+			return map[string]any{"ok": true}, nil
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}, nil
+}
+
+// TestAgentConcurrentExecutionIsExactlyOnce is the concurrency evidence for the
+// claim in ADR 0005 §7: the approved→executed transition admits exactly one
+// effect, however many callers race it.
+//
+// The race has to be built deliberately. Decide auto-executes on approval, so
+// calling Decide and then ExecuteApprovedAction in a loop does not race anything:
+// the second call finds the action already executed and takes the idempotent
+// replay path. To race the claim the winner must be held *inside* its execution
+// transaction while the losers arrive, which is what the blocking executor does.
+// One caller approves; its effect blocks holding the row lock; eight others then
+// race the claim; the effect is released and must have run exactly once.
+func TestAgentConcurrentExecutionIsExactlyOnce(t *testing.T) {
+	db := connectOrSkip(t)
+	freshSchema(t, db)
+	ctx := context.Background()
+
+	auditLog := audit.New(db)
+	org := insertOrganization(t, db, "agent-exec-race-"+uuid.NewString()[:8])
+	userID := seedMember(t, db, org, "sales_representative")
+
+	ex := newBlockingExecutor()
+	svc, err := agent.NewService(db, auditLog, ex, agent.Config{
+		PlatformSecret: "integration-test-platform-secret",
+		DeniedTools:    ai.DeniedToolNames(),
+	})
+	if err != nil {
+		t.Fatalf("build the agent service: %v", err)
+	}
+
+	run, err := svc.StartRun(ctx, org, userID, "Race the execution", 100000, 50)
+	if err != nil {
+		t.Fatalf("start run: %v", err)
+	}
+	args := map[string]any{"title": "Race the execution"}
+	hash, err := agent.ArgumentsHash(args)
+	if err != nil {
+		t.Fatalf("hash arguments: %v", err)
+	}
+	action, err := svc.Propose(ctx, agent.Proposal{
+		RunID:          run.ID,
+		OrganizationID: org,
+		ToolName:       "create_task",
+		Arguments:      args,
+		RiskTier:       agent.TierConfirm,
+		Summary:        "Create a task",
+		IdempotencyKey: "exec-race-1",
+	})
+	if err != nil {
+		t.Fatalf("propose: %v", err)
+	}
+	if action.ArgumentsHash != hash {
+		t.Fatalf("stored hash %q != computed %q", action.ArgumentsHash, hash)
+	}
+
+	decider := agent.Decider{UserID: userID, OrganizationID: org}
+
+	// The winner: approval auto-executes, and the effect blocks with the claim and
+	// its row lock held open.
+	winner := make(chan error, 1)
+	go func() {
+		_, _, err := svc.Decide(ctx, decider, action.ID, agent.Decision{
+			Approve: true, ArgumentsHash: action.ArgumentsHash,
+		})
+		winner <- err
+	}()
+
+	select {
+	case <-ex.started:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the approved effect never started; the race window never opened")
+	}
+
+	// Eight callers race the claim while the winner holds it.
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = svc.ExecuteApprovedAction(ctx, action.ID, decider)
+		}()
+	}
+	// Let the losers reach the claim, then release the winner so it commits.
+	time.Sleep(300 * time.Millisecond)
+	close(ex.release)
+
+	if err := <-winner; err != nil {
+		t.Fatalf("approve and execute: %v", err)
+	}
+	wg.Wait()
+
+	if got := atomic.LoadInt32(&ex.effects); got != 1 {
+		t.Fatalf("the effect ran %d times under a concurrent race, want exactly 1", got)
+	}
+
+	var status string
+	if err := db.Pool().QueryRow(ctx, `SELECT status FROM agent_actions WHERE id = $1`, action.ID).Scan(&status); err != nil {
+		t.Fatalf("read action status: %v", err)
+	}
+	if status != agent.ActionExecuted {
+		t.Fatalf("action status = %q, want %q", status, agent.ActionExecuted)
+	}
+	var approvals int
+	if err := db.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM agent_approvals WHERE action_id = $1`, action.ID).Scan(&approvals); err != nil {
+		t.Fatalf("count approvals: %v", err)
+	}
+	if approvals != 1 {
+		t.Fatalf("approvals = %d, want 1: the race must not write a second decision", approvals)
+	}
+}
+
+// TestAgentExecutionConsultsPermissionsAtExecutionTime proves the executor
+// re-derives the decider's permissions from the database rather than trusting a
+// set captured at propose time. The user's role is revoked after the proposal and
+// then re-granted before execution: the effect must be refused while the role is
+// absent and performed once it is back, which is only possible if the permission
+// set is read at execution time.
+func TestAgentExecutionConsultsPermissionsAtExecutionTime(t *testing.T) {
+	f := newAgentFixture(t, "agent-exec-perm", "sales_representative")
+	ctx := context.Background()
+
+	run := f.startRun(t, "Create a task")
+	action := f.proposeCreateTask(t, run, "Permission re-check", "exec-perm-1")
+	decider := agent.Decider{UserID: f.userID, OrganizationID: f.org}
+
+	// Revoke after the proposal. The approval still records the human decision, but
+	// the execution must be refused because the permission is gone now.
+	if _, err := f.db.Pool().Exec(ctx,
+		`DELETE FROM user_roles WHERE user_id = $1 AND organization_id = $2`, f.userID, f.org); err != nil {
+		t.Fatalf("revoke roles: %v", err)
+	}
+	if _, _, err := f.svc.Decide(ctx, decider, action.ID, agent.Decision{
+		Approve: true, ArgumentsHash: action.ArgumentsHash,
+	}); err == nil {
+		t.Fatal("execution succeeded with a revoked permission set")
+	}
+	if n := f.countTasks(t); n != 0 {
+		t.Fatalf("task count = %d, want 0: a revoked permission must block the effect", n)
+	}
+	if got := f.actionStatus(t, action.ID); got == agent.ActionExecuted {
+		t.Fatal("the action is marked executed though the effect was refused")
+	}
+
+	// Restore the role. The action is still approved, so a fresh execution call must
+	// now succeed — the permission set was re-read, not cached from the first attempt.
+	f.grantRole(t, "sales_representative")
+	executed, err := f.svc.ExecuteApprovedAction(ctx, action.ID, decider)
+	if err != nil {
+		t.Fatalf("execute after the role was restored: %v", err)
+	}
+	if executed.Status != agent.ActionExecuted {
+		t.Fatalf("action status = %q, want %q", executed.Status, agent.ActionExecuted)
+	}
+	if n := f.countTasks(t); n != 1 {
+		t.Fatalf("task count = %d, want 1 after the permission was restored", n)
+	}
+}
+
+// TestAgentCompleteRunClosesARunWithNoProposals documents the run-completion path:
+// a run with nothing left to decide can be moved to the terminal completed state.
+//
+// CompleteRun has no HTTP route and no production caller today, so a run with no
+// outstanding proposals stays in waiting_approval unless it is cancelled or its
+// proposals expire. This test pins the behaviour the method does implement, so a
+// future caller cannot be added against an untested contract.
+func TestAgentCompleteRunClosesARunWithNoProposals(t *testing.T) {
+	f := newAgentFixture(t, "agent-complete", "sales_representative")
+	ctx := context.Background()
+
+	run := f.startRun(t, "Complete me")
+	action := f.proposeCreateTask(t, run, "Decided, then complete", "complete-1")
+	decider := agent.Decider{UserID: f.userID, OrganizationID: f.org}
+	if _, _, err := f.svc.Decide(ctx, decider, action.ID, agent.Decision{
+		Approve: true, ArgumentsHash: action.ArgumentsHash,
+	}); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+
+	if err := f.svc.CompleteRun(ctx, f.org, run.ID); err != nil {
+		t.Fatalf("complete run: %v", err)
+	}
+	if got := f.runStatus(t, run.ID); got != agent.RunCompleted {
+		t.Fatalf("run status = %q, want %q", got, agent.RunCompleted)
+	}
+
+	// Completing a run that is already terminal is a not-found, so a retry cannot
+	// silently re-open or double-record it.
+	if err := f.svc.CompleteRun(ctx, f.org, run.ID); err == nil {
+		t.Fatal("completing an already-completed run was accepted")
+	}
+}

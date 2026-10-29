@@ -127,11 +127,19 @@ func (s *Server) handleReplayDelivery(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// The route nests a delivery under its subscription, so both ids identify the
+	// resource. The subscription is passed to the service rather than dropped: the
+	// guard that mutates the row is scoped by it, so a delivery cannot be replayed
+	// under a subscription it does not belong to.
+	subID, ok := pathUUID(w, r, "id")
+	if !ok {
+		return
+	}
 	deliveryID, ok := pathUUID(w, r, "deliveryId")
 	if !ok {
 		return
 	}
-	if err := s.deps.Events.Replay(r.Context(), p, deliveryID); err != nil {
+	if err := s.deps.Events.Replay(r.Context(), p, subID, deliveryID); err != nil {
 		s.respondDomainError(w, r, err)
 		return
 	}

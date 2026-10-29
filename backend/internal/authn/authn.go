@@ -68,6 +68,24 @@ type Session struct {
 	CSRFToken   string
 	ExpiresAt   time.Time
 	MFAVerified bool
+	// StepUpAt is when this session last presented a second factor, if ever. A
+	// destructive decision requires it to be recent; nil means never.
+	StepUpAt *time.Time
+}
+
+// StepUpWindow is how long a second-factor presentation remains valid for a
+// destructive action. It is deliberately short: the point of the step-up is that
+// the operator is present and authenticated now, not that they authenticated at
+// some point during a long session.
+const StepUpWindow = 15 * time.Minute
+
+// SteppedUp reports whether the session presented a second factor within the
+// window.
+func (s *Session) SteppedUp() bool {
+	if s == nil || s.StepUpAt == nil {
+		return false
+	}
+	return time.Since(*s.StepUpAt) <= StepUpWindow
 }
 
 // Service performs authentication operations.
@@ -348,20 +366,47 @@ func (s *Service) createSession(ctx context.Context, userID uuid.UUID, ip, userA
 	expires := time.Now().Add(s.cfg.SessionTTL)
 
 	var sess Session
+	// step_up_at is set here because both callers have just presented a factor:
+	// the password, plus a TOTP code when MFA is enabled. A destructive decision
+	// made within StepUpWindow of this is therefore backed by a factor presented
+	// now; one made from an older session is refused until the operator steps up
+	// again.
 	const q = `
-		INSERT INTO sessions (user_id, token_hash, csrf_secret, expires_at, ip, user_agent, mfa_verified)
-		VALUES ($1, $2, $3, $4, NULLIF($5, '')::inet, $6, $7)
-		RETURNING id, expires_at`
+		INSERT INTO sessions (user_id, token_hash, csrf_secret, expires_at, ip, user_agent, mfa_verified, step_up_at)
+		VALUES ($1, $2, $3, $4, NULLIF($5, '')::inet, $6, $7, now())
+		RETURNING id, expires_at, step_up_at`
+	var stepUpAt time.Time
 	err = s.db.Q(ctx).QueryRow(ctx, q,
 		userID, secrets.HashToken(token), []byte(csrfSecret), expires,
-		ip, userAgent, mfaVerified).Scan(&sess.ID, &sess.ExpiresAt)
+		ip, userAgent, mfaVerified).Scan(&sess.ID, &sess.ExpiresAt, &stepUpAt)
 	if err != nil {
 		return nil, "", fmt.Errorf("create session: %w", err)
 	}
 	sess.UserID = userID
 	sess.MFAVerified = mfaVerified
+	sess.StepUpAt = &stepUpAt
 	sess.CSRFToken = s.keyring.DeriveCSRF([]byte(csrfSecret))
 	return &sess, token, nil
+}
+
+// StepUp refreshes a session's second-factor timestamp after the operator has
+// presented a factor again.
+//
+// This is what makes the destructive tier's requirement enforceable over the life
+// of a session: a session that has been open longer than the window must present a
+// factor again before it can authorise a destructive action. The timestamp is
+// updated in the database rather than returned to the caller, so the decision is
+// durable and cannot be replayed by a client that simply claims it stepped up.
+func (s *Service) StepUp(ctx context.Context, sessionID uuid.UUID) error {
+	const q = `UPDATE sessions SET step_up_at = now() WHERE id = $1 AND revoked_at IS NULL`
+	tag, err := s.db.Q(ctx).Exec(ctx, q, sessionID)
+	if err != nil {
+		return fmt.Errorf("record step-up: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrSessionInvalid
+	}
+	return nil
 }
 
 // ResolveSession validates a raw session token and returns the session.
@@ -377,12 +422,13 @@ func (s *Service) ResolveSession(ctx context.Context, token string) (*Session, e
 		csrfSecret  []byte
 		revokedAt   *time.Time
 		mfaVerified bool
+		stepUpAt    *time.Time
 	)
 	const q = `
-		SELECT id, user_id, csrf_secret, expires_at, revoked_at, mfa_verified
+		SELECT id, user_id, csrf_secret, expires_at, revoked_at, mfa_verified, step_up_at
 		FROM sessions WHERE token_hash = $1`
 	err := s.db.Q(ctx).QueryRow(ctx, q, secrets.HashToken(token)).Scan(
-		&sess.ID, &sess.UserID, &csrfSecret, &sess.ExpiresAt, &revokedAt, &mfaVerified)
+		&sess.ID, &sess.UserID, &csrfSecret, &sess.ExpiresAt, &revokedAt, &mfaVerified, &stepUpAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrSessionInvalid
 	}
@@ -397,6 +443,7 @@ func (s *Service) ResolveSession(ctx context.Context, token string) (*Session, e
 	}
 	sess.CSRFToken = s.keyring.DeriveCSRF(csrfSecret)
 	sess.MFAVerified = true
+	sess.StepUpAt = stepUpAt
 	return &sess, nil
 }
 
@@ -627,6 +674,65 @@ func (s *Service) VerifyMFA(ctx context.Context, ticket, code, ip, userAgent str
 		Message: "multi-factor verification succeeded", IP: ip, UserAgent: userAgent,
 	})
 	return sess, token, nil
+}
+
+// StepUpFactor re-verifies a factor for the session's user and, on success,
+// refreshes the session's step-up timestamp.
+//
+// The factor depends on how the account is protected. With MFA enabled it is a
+// TOTP or recovery code, which is a true second factor. Without MFA the best
+// available factor is the password, re-presented: weaker, but still proof that the
+// person at the keyboard knows a secret the session cookie alone does not carry.
+// The distinction is recorded in the audit entry so an auditor can see which kind
+// of factor backed a destructive decision.
+//
+// A failed attempt is audited as a security event but does not lock the account:
+// the endpoint is already behind a session and a rate limit, and locking on a
+// mistyped code would let an attacker with a stolen cookie deny the real user
+// access.
+func (s *Service) StepUpFactor(ctx context.Context, sessionID, userID uuid.UUID, code, password string) error {
+	var mfaEnabled bool
+	var hash *string
+	const q = `SELECT mfa_enabled, password_hash FROM users WHERE id = $1 AND status = 'active'`
+	if err := s.db.Q(ctx).QueryRow(ctx, q, userID).Scan(&mfaEnabled, &hash); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrInvalidCredentials
+		}
+		return fmt.Errorf("load user for step-up: %w", err)
+	}
+
+	kind := "password"
+	ok := false
+	if mfaEnabled {
+		kind = "totp"
+		var err error
+		ok, err = s.verifyTOTPOrRecovery(ctx, userID, code)
+		if err != nil {
+			return err
+		}
+	} else {
+		if hash == nil || *hash == "" {
+			return ErrInvalidCredentials
+		}
+		ok = secrets.VerifyPassword(password, *hash) == nil
+	}
+
+	if !ok {
+		s.audit.RecordSecurityAsync(audit.SecurityEvent{
+			UserID: audit.UUIDPtr(userID), Type: "auth.step_up_failed", Severity: "warn",
+			Message: "step-up verification failed", Metadata: map[string]any{"factor": kind},
+		})
+		return ErrInvalidCredentials
+	}
+
+	if err := s.StepUp(ctx, sessionID); err != nil {
+		return err
+	}
+	s.audit.RecordSecurityAsync(audit.SecurityEvent{
+		UserID: audit.UUIDPtr(userID), Type: "auth.step_up_succeeded", Severity: "info",
+		Message: "step-up verification succeeded", Metadata: map[string]any{"factor": kind},
+	})
+	return nil
 }
 
 // verifyTOTPOrRecovery accepts either a TOTP code or an unused recovery code.
