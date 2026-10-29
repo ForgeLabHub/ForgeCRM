@@ -139,6 +139,24 @@ once it reaches 1.0.
 
 ### Fixed
 
+- **The worker aborted an in-flight job on shutdown instead of draining it.** Each
+  job's context derived from the signal context, so SIGTERM cancelled the job in
+  hand at the same instant it stopped the poll loops: a job that was mid-write was
+  killed with its row still `running` and its write lost, and the requeue sweep
+  only returned the row fifteen minutes later. The loops and the claim step now
+  watch a context cancelled on the signal, while job execution and the bookkeeping
+  that records its outcome watch a separate one cancelled only after
+  `FORGECRM_WORKER_SHUTDOWN_GRACE` (30s default) has elapsed.
+  `docker-compose.yml` sets `stop_grace_period: 45s` on the worker so Docker does
+  not SIGKILL it before the drain window closes. `TestWorkerDrainsInFlightJobOnShutdown`
+  fails against the old wiring and passes against this one.
+
+- **A user could see their sessions but not end one.** The list endpoint, the
+  revoke endpoint and `sessionsApi.revoke` all existed, but nothing in the
+  interface called revoke, so a session left open on a lost device could only be
+  closed by a password change. The Security page's sessions tab now offers a
+  revoke control on every session but the current one.
+
 - **`expected_close_date` failed to scan.** The column is a PostgreSQL `date` and
   was read into a `*string`, which pgx cannot encode in binary format, so any deal
   that had a close date failed to load from `ListDeals`, `GetDeal` and the workflow

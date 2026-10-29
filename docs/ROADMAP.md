@@ -259,7 +259,7 @@ where it is going. Strategy and Definition of Done: `docs/MASTER_PLAN.md`.
 | 3.2 | Read and safe-write MCP tools | **PARTIAL** — 8 tools are reachable over the protocol; the read/write split is currently per-tool (the `dangerous` flag plus a required `confirm` acknowledgement), not a separate credential scope |
 | 3.3 | MCP credential model, revocation, read/write split | **NOT_STARTED** — MCP currently authenticates with the caller's browser session; a dedicated credential with its own scope and revocation is not implemented |
 | 3.4 | MCP UI and client config examples | **PARTIAL** — the AI & MCP page lists tools and can invoke one, with a confirmation checkbox for mutating tools. Client configuration examples live in `docs/mcp/`; a copy-to-clipboard generator is not built |
-| 3.5 | Contextual AI, calibrated confidence, graceful failure, human handoff | **NOT_STARTED** |
+| 3.5 | Contextual AI, calibrated confidence, graceful failure, human handoff | **PARTIAL** — `internal/ai` assembles a permission-checked, PII-masked context for an account, contact, deal, ticket or task and runs summarise / risks / next-steps / draft / recap / ask through the provider abstraction, surfaced in the CRM record screens. Human handoff is the existing approval path: the model drafts, the user saves. Calibrated confidence is not implemented |
 
 ## Phases 4–9 — Planned
 
