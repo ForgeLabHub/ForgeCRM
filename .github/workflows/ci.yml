@@ -254,10 +254,20 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: backend/go.sum
 
-      - name: Scan for committed secrets
-        uses: gitleaks/gitleaks-action@v2
+      # gitleaks-action@v2 требует платную лицензию для организаций и без
+      # GITLEAKS_LICENSE падает, ничего не проверив. Тот же gitleaks
+      # закреплённой версии запускается напрямую: воспроизводимо и без секретов.
+      - name: Install gitleaks (pinned)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_VERSION: "8.28.0"
+        run: |
+          curl -sSfL -o /tmp/gitleaks.tgz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          tar -xzf /tmp/gitleaks.tgz -C /tmp gitleaks
+          /tmp/gitleaks version
+
+      - name: Scan for committed secrets
+        run: /tmp/gitleaks git --config .gitleaks.toml --redact --no-banner -v .
 
       - name: govulncheck
         working-directory: backend
