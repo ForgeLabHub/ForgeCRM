@@ -437,6 +437,39 @@ func (h *harness) actionArgumentsHash(actionID uuid.UUID) string {
 	return hash
 }
 
+// ageActionPastDeadline moves an action's deadline into the past so a decision
+// takes the expiry path without the test sleeping.
+func (h *harness) ageActionPastDeadline(actionID uuid.UUID) {
+	h.t.Helper()
+	if _, err := h.db.Pool().Exec(h.t.Context(),
+		`UPDATE agent_actions SET expires_at = now() - interval '1 hour' WHERE id = $1`, actionID); err != nil {
+		h.t.Fatalf("age the action past its deadline: %v", err)
+	}
+}
+
+// actionRunID reads the run an action belongs to.
+func (h *harness) actionRunID(actionID uuid.UUID) uuid.UUID {
+	h.t.Helper()
+	var runID uuid.UUID
+	if err := h.db.Pool().QueryRow(h.t.Context(),
+		`SELECT run_id FROM agent_actions WHERE id = $1`, actionID).Scan(&runID); err != nil {
+		h.t.Fatalf("read action run_id: %v", err)
+	}
+	return runID
+}
+
+// runStatus reads a run's status, so a test can assert that the run was reconciled
+// with its action's expiry.
+func (h *harness) runStatus(runID uuid.UUID) string {
+	h.t.Helper()
+	var status string
+	if err := h.db.Pool().QueryRow(h.t.Context(),
+		`SELECT status FROM agent_runs WHERE id = $1`, runID).Scan(&status); err != nil {
+		h.t.Fatalf("read run status: %v", err)
+	}
+	return status
+}
+
 // actionStatus reads an action's status, so a test can assert that a refused
 // decision left the row untouched.
 func (h *harness) actionStatus(actionID uuid.UUID) string {
@@ -448,4 +481,51 @@ func (h *harness) actionStatus(actionID uuid.UUID) string {
 		h.t.Fatalf("read action status: %v", err)
 	}
 	return status
+}
+
+// TestExpiredDecisionOverHTTPCommitsTheExpiry is the HTTP-level counterpart of the
+// decision-time expiry regression.
+//
+// The service test proves the row is committed; this proves the endpoint that
+// operators actually reach behaves the same way — a 409 with the expiry code — and
+// that the row behind it is really expired, not just reported as such. It also
+// checks the run is reconciled, which the API path must do for the same reason the
+// service path does: the sweep will not revisit a row that is already expired.
+func TestExpiredDecisionOverHTTPCommitsTheExpiry(t *testing.T) {
+	h := newHarness(t)
+
+	org := h.seedOrganization("Expired Decision")
+	userID := h.seedUser("agent-expired@example.test", "Agent-Expired-2026!", "Operator")
+	// sales_manager holds approvals.decide; a role without it would fail the permission
+	// check before reaching the expiry path this test is about.
+	h.joinOrganization(userID, org, "sales_manager")
+	user := h.login("agent-expired@example.test", "Agent-Expired-2026!")
+
+	actionID := h.seedDestructiveAction(org, userID)
+	// Age the action past its deadline. The decision below therefore takes the
+	// expiry path rather than the normal one.
+	h.ageActionPastDeadline(actionID)
+	runID := h.actionRunID(actionID)
+	// A proposal of this tier moves its run into waiting_approval, which is the state
+	// the seeded row does not start in. Reproduce it, so the reconciliation below is
+	// tested against the state a real proposal leaves behind.
+	if _, err := h.db.Pool().Exec(h.t.Context(),
+		`UPDATE agent_runs SET status = 'waiting_approval' WHERE id = $1`, runID); err != nil {
+		h.t.Fatalf("move the run to waiting_approval: %v", err)
+	}
+
+	rec := h.do(user, http.MethodPost, "/api/v1/agent/actions/"+actionID.String()+"/decide",
+		`{"approve":true,"arguments_hash":"`+h.actionArgumentsHash(actionID)+`"}`)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("decide on an expired action: status %d, want 409 (body %s)", rec.Code, rec.Body.String())
+	}
+	// The persisted status is the assertion: against the buggy code the response was
+	// the same 409 while the row stayed proposed.
+	if got := h.actionStatus(actionID); got != agent.ActionExpired {
+		t.Fatalf("persisted action status = %q, want %q: the expiry was rolled back", got, agent.ActionExpired)
+	}
+	// The run whose only proposal expired must not be left waiting.
+	if got := h.runStatus(runID); got != agent.RunFailed {
+		t.Fatalf("run status = %q, want %q", got, agent.RunFailed)
+	}
 }

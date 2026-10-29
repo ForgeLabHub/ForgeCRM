@@ -125,6 +125,18 @@ schema change requires a rebuild, not just a restart.
   `go.mod`'s `go` directive, `backend/Dockerfile` and `GO_VERSION` in CI. A
   stdlib CVE is fixed by bumping all three; bumping only one lets a fix pass in
   one place and be missing in another.
+- **`database.WithTx` rolls back on *any* error a closure returns.** A closure
+  that needs both to write and to report a failure cannot do so by returning the
+  error: the write is discarded. Record the outcome in a variable, return `nil`
+  to commit, and return the error *after* the transaction. The expired-approval
+  transition was broken this way — it updated `agent_actions.status` to `expired`
+  and then returned `ErrExpired` from inside the transaction, so the caller saw
+  the right error while the row stayed `proposed` and the deadline was never
+  enforced. Assert persisted state by reading the table, not the returned struct;
+  a rollback leaves the caller holding a struct that describes a write the
+  database never kept. When a second path enforces the same invariant as a
+  background sweep, both must apply the same reconciliation, or a row the sweep
+  no longer matches stays stranded.
 - **A webhook subscription's event list must come from the server, never a local
   constant.** The form once hard-coded bare names (`contact.created`) while the
   dispatcher matched namespaced ones (`crm.contact.created`), so a subscription

@@ -354,6 +354,36 @@ func (s *Service) ListActions(ctx context.Context, orgID uuid.UUID, status strin
 	return out, total, rows.Err()
 }
 
+// noProposedActions is the predicate that identifies a run with nothing left to
+// decide. A run in that state can make no progress, so it is failed rather than
+// left waiting for a decision that can no longer arrive.
+//
+// It is shared by the sweep (which applies it to every run) and the decision-time
+// expiry (which applies it to one run), so the two cannot disagree about when a
+// run is stranded.
+const noProposedActions = `NOT EXISTS (
+		SELECT 1 FROM agent_actions a
+		WHERE a.run_id = r.id AND a.status = 'proposed'
+	)`
+
+// failRunIfNoProposals fails a single run that is waiting for approval and has no
+// proposed action left.
+//
+// It is the scoped counterpart of the sweep's reconciliation: a decision that
+// expires the last proposal of a run must fail that run in the same transaction,
+// or the run stays in waiting_approval — and the sweep, whose expiry UPDATE then
+// matches nothing, never revisits it.
+func (s *Service) failRunIfNoProposals(ctx context.Context, orgID, runID uuid.UUID, reason string) error {
+	q := `
+		UPDATE agent_runs r SET status = $1, error = $2, finished_at = now()
+		WHERE r.id = $3 AND r.organization_id = $4 AND r.status = 'waiting_approval'
+		  AND ` + noProposedActions
+	if _, err := s.db.Q(ctx).Exec(ctx, q, RunFailed, reason, runID, orgID); err != nil {
+		return fmt.Errorf("fail run with no decidable proposals: %w", err)
+	}
+	return nil
+}
+
 // SweepExpired moves proposals past their deadline to expired and fails the runs
 // that were waiting on them. It returns the number of proposals expired.
 //
@@ -374,13 +404,10 @@ func (s *Service) SweepExpired(ctx context.Context) (int64, error) {
 	}
 	// A run waiting on a proposal that expired can make no progress, so it is
 	// failed rather than left waiting for a decision that can no longer arrive.
-	const runQ = `
+	runQ := `
 		UPDATE agent_runs r SET status = $1, error = $2, finished_at = now()
 		WHERE r.status = 'waiting_approval'
-		  AND NOT EXISTS (
-		      SELECT 1 FROM agent_actions a
-		      WHERE a.run_id = r.id AND a.status = 'proposed'
-		  )`
+		  AND ` + noProposedActions
 	if _, err := s.db.Q(ctx).Exec(ctx, runQ, RunFailed, "approval request expired"); err != nil {
 		return n, fmt.Errorf("fail runs whose proposals expired: %w", err)
 	}

@@ -47,17 +47,25 @@ type Approval struct {
 //     not-found rather than a distinguishable error.
 //  2. The status must be `proposed`. A decision on an already-decided action is
 //     refused, which is what makes a double click safe.
-//  3. The deadline must not have passed.
+//  3. The deadline must not have passed. If it has, the action is moved to
+//     `expired` and that transition is committed before the refusal is returned,
+//     so a deadline is enforced once and the proposal never stays decidable.
 //  4. The submitted arguments hash must equal the stored one. This is the
 //     time-of-check/time-of-use guard: if the action changed after the operator
 //     saw it, the decision does not apply to what they saw and is refused.
+//  5. A destructive action requires a second factor, resolved from the session.
 //
-// Only after all four does the decision become durable and, for an approval, the
-// effect run.
+// Only after all five does the decision become durable and, for an approval, the
+// effect run. Every refusal before that point leaves the action decidable (or
+// expired), writes no approval and runs no effect.
 func (s *Service) Decide(ctx context.Context, d Decider, actionID uuid.UUID, decision Decision) (*Action, *Approval, error) {
 	var (
 		action Action
 		appr   Approval
+		// expired records that the deadline had passed. It is set inside the
+		// transaction and read after it: the expiry has to commit, and a
+		// transaction cannot both commit and return an error.
+		expired bool
 	)
 	verdict := "reject"
 	if decision.Approve {
@@ -85,14 +93,44 @@ func (s *Service) Decide(ctx context.Context, d Decider, actionID uuid.UUID, dec
 			return ErrAlreadyDecided
 		}
 
-		// Step 3: the deadline.
+		// Step 3: the deadline. The expiry is recorded and *committed*, then the
+		// refusal is returned after the transaction — returning ErrExpired from
+		// inside would roll the UPDATE back and leave the proposal looking
+		// decidable forever. Committing first also means a concurrent sweep and a
+		// concurrent decision cannot both move the row: each is a guarded
+		// `status = 'proposed'` UPDATE, so whichever runs second affects no rows.
 		if time.Now().After(action.ExpiresAt) {
-			if _, err := s.db.Q(ctx).Exec(ctx,
-				`UPDATE agent_actions SET status = $2 WHERE id = $1 AND status = 'proposed'`,
-				action.ID, ActionExpired); err != nil {
+			const expireQ = `
+				UPDATE agent_actions SET status = $2
+				WHERE id = $1 AND organization_id = $3 AND status = 'proposed'`
+			if _, err := s.db.Q(ctx).Exec(ctx, expireQ, action.ID, ActionExpired, action.OrganizationID); err != nil {
 				return fmt.Errorf("expire action: %w", err)
 			}
-			return ErrExpired
+			// The decision is refused, so no approval row is written here and no
+			// effect is run. The audit entry commits with the expiry, in this
+			// transaction, so the record cannot be lost by a later rollback.
+			if err := s.audit.Record(ctx, audit.Entry{
+				OrganizationID: &action.OrganizationID, ActorUserID: &d.UserID, ActorType: "user",
+				Action: string(audit.ActionAgentActionExpired), EntityType: "agent_action", EntityID: action.ID.String(),
+				Metadata: map[string]any{
+					"tool": action.ToolName, "arguments_hash": action.ArgumentsHash,
+					"reason": "deadline passed at decision time",
+				},
+			}); err != nil {
+				return err
+			}
+			// Keep the run consistent with the sweep's model: if this was the run's
+			// last proposal, the run can make no progress and is failed here, in the
+			// same transaction. Leaving it to the sweep would not work — the sweep
+			// only reconciles runs when it expires something itself, and the row is
+			// already expired by then.
+			if err := s.failRunIfNoProposals(ctx, action.OrganizationID, action.RunID,
+				"approval request expired"); err != nil {
+				return err
+			}
+			expired = true
+			action.Status = ActionExpired
+			return nil
 		}
 
 		// Step 4: the action must be what the operator saw.
@@ -164,6 +202,12 @@ func (s *Service) Decide(ctx context.Context, d Decider, actionID uuid.UUID, dec
 	})
 	if err != nil {
 		return nil, nil, err
+	}
+
+	// The deadline passed: the expiry above is committed, and the client is told
+	// the request expired. No approval was written and no effect ran.
+	if expired {
+		return &action, nil, ErrExpired
 	}
 
 	// On rejection there is nothing more to do: the absence of an execution is the

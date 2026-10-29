@@ -140,8 +140,23 @@ the effect again.
 
 A run in `waiting_approval` holds no connection and no CPU. The state is a row, so
 it survives a restart, a redeploy, or a multi-hour pause. `agent_actions.expires_at`
-bounds the wait; an expiry sweeper moves overdue proposals to `expired` and fails
-the run. Without a bound, "waiting" degrades into "hung forever".
+bounds the wait. Without a bound, "waiting" degrades into "hung forever".
+
+Two paths enforce the deadline, and they agree by construction:
+
+- The **sweeper** moves every overdue proposal to `expired` and fails the runs that
+  were waiting on them.
+- A **decision that arrives too late** takes the same transition: the expiry is
+  committed, and the refusal is returned *after* the transaction. Returning the
+  refusal from inside the transaction would roll the expiry back — `WithTx`
+  discards everything a closure reports an error for — leaving the row `proposed`
+  and the deadline unenforced. Both paths move the row with a guarded
+  `status = 'proposed'` update, so a sweep and a decision racing at the same
+  moment cannot both act: whichever runs second affects no rows.
+
+Both paths also fail a run that has no proposed action left, so a run never waits
+on a decision that can no longer arrive. A decision that expires one proposal of a
+run which still has another leaves the run waiting.
 
 ### 9. Limits are enforced, not advised
 

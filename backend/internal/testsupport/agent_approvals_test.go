@@ -21,6 +21,7 @@ package testsupport
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/google/uuid"
@@ -159,6 +160,53 @@ func (f *agentFixture) countTasks(t *testing.T) int {
 		t.Fatalf("count tasks: %v", err)
 	}
 	return n
+}
+
+// actionStatus reads the status straight from the table, not from the value a
+// service call returned. The distinction is the whole point of these tests: a
+// rollback leaves the caller holding an in-memory struct that describes an update
+// the database never kept.
+func (f *agentFixture) actionStatus(t *testing.T, actionID uuid.UUID) string {
+	t.Helper()
+	var status string
+	if err := f.db.Pool().QueryRow(context.Background(),
+		`SELECT status FROM agent_actions WHERE id = $1`, actionID).Scan(&status); err != nil {
+		t.Fatalf("read action status: %v", err)
+	}
+	return status
+}
+
+// runStatus reads a run's status from the table.
+func (f *agentFixture) runStatus(t *testing.T, runID uuid.UUID) string {
+	t.Helper()
+	var status string
+	if err := f.db.Pool().QueryRow(context.Background(),
+		`SELECT status FROM agent_runs WHERE id = $1`, runID).Scan(&status); err != nil {
+		t.Fatalf("read run status: %v", err)
+	}
+	return status
+}
+
+// countApprovals counts decision rows for an action.
+func (f *agentFixture) countApprovals(t *testing.T, actionID uuid.UUID) int {
+	t.Helper()
+	var n int
+	if err := f.db.Pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM agent_approvals WHERE action_id = $1`, actionID).Scan(&n); err != nil {
+		t.Fatalf("count approvals: %v", err)
+	}
+	return n
+}
+
+// ageActionPastDeadline moves an action's deadline into the past, so a decision on
+// it takes the expiry path without the test sleeping.
+func (f *agentFixture) ageActionPastDeadline(t *testing.T, actionID uuid.UUID) {
+	t.Helper()
+	if _, err := f.db.Pool().Exec(context.Background(),
+		`UPDATE agent_actions SET expires_at = now() - interval '1 hour' WHERE id = $1`,
+		actionID); err != nil {
+		t.Fatalf("age the action past its deadline: %v", err)
+	}
 }
 
 // TestAgentApprovalExecutesOnce is the core property: an approved action performs
@@ -605,5 +653,218 @@ func TestAgentProposalIsIdempotentUnderItsKey(t *testing.T) {
 	}
 	if second.ID != first.ID {
 		t.Fatalf("the retried proposal created a second action: %s != %s", second.ID, first.ID)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Decision-time expiry (regression for the rolled-back expiry)
+// ---------------------------------------------------------------------------
+
+// TestAgentExpiredDecisionIsCommittedAndRefused is the regression for the defect
+// where the expiry update was rolled back.
+//
+// Decide used to run `UPDATE agent_actions SET status = 'expired'` and then return
+// ErrExpired from inside WithTx. WithTx rolls back on any returned error, so the
+// expiry was discarded: the caller got the right error while the row stayed
+// `proposed`, and every later request took the same path. The status is therefore
+// asserted by reading the table after the call returns, not from the returned
+// struct.
+func TestAgentExpiredDecisionIsCommittedAndRefused(t *testing.T) {
+	f := newAgentFixture(t, "agent-expire-commit", "sales_representative")
+	ctx := context.Background()
+
+	run := f.startRun(t, "Create a task that will expire")
+	action := f.proposeCreateTask(t, run, "Expire me", "expire-commit-1")
+	f.ageActionPastDeadline(t, action.ID)
+
+	decider := agent.Decider{UserID: f.userID, OrganizationID: f.org}
+	_, _, err := f.svc.Decide(ctx, decider, action.ID, agent.Decision{
+		Approve: true, ArgumentsHash: action.ArgumentsHash,
+	})
+	if !errors.Is(err, agent.ErrExpired) {
+		t.Fatalf("decide on an expired action: err = %v, want ErrExpired", err)
+	}
+
+	// The committed status is the assertion. Against the old code this read
+	// "proposed" while the error said ErrExpired.
+	if got := f.actionStatus(t, action.ID); got != agent.ActionExpired {
+		t.Fatalf("persisted action status = %q, want %q: the expiry was rolled back", got, agent.ActionExpired)
+	}
+	// A refused decision writes no approval and runs no effect.
+	if n := f.countApprovals(t, action.ID); n != 0 {
+		t.Fatalf("approvals = %d, want 0: a refused decision must not record one", n)
+	}
+	if n := f.countTasks(t); n != 0 {
+		t.Fatalf("task count = %d, want 0: an expired action must not execute", n)
+	}
+	// The run must not be left waiting on a proposal that can never be decided.
+	if got := f.runStatus(t, run.ID); got != agent.RunFailed {
+		t.Fatalf("run status = %q, want %q: a run whose only proposal expired must not hang",
+			got, agent.RunFailed)
+	}
+}
+
+// TestAgentExpiredDecisionIsRepeatable checks the expiry is stable under a retry:
+// a second attempt must not approve the action.
+func TestAgentExpiredDecisionIsRepeatable(t *testing.T) {
+	f := newAgentFixture(t, "agent-expire-retry", "sales_representative")
+	ctx := context.Background()
+
+	run := f.startRun(t, "Create a task that will expire")
+	action := f.proposeCreateTask(t, run, "Expire me twice", "expire-retry-1")
+	f.ageActionPastDeadline(t, action.ID)
+
+	decider := agent.Decider{UserID: f.userID, OrganizationID: f.org}
+	if _, _, err := f.svc.Decide(ctx, decider, action.ID, agent.Decision{
+		Approve: true, ArgumentsHash: action.ArgumentsHash,
+	}); !errors.Is(err, agent.ErrExpired) {
+		t.Fatalf("first decision: err = %v, want ErrExpired", err)
+	}
+	// The expiry must be durable, or the retry below would take the same path.
+	if got := f.actionStatus(t, action.ID); got != agent.ActionExpired {
+		t.Fatalf("persisted status after the first attempt = %q, want %q", got, agent.ActionExpired)
+	}
+	// The retry finds an already-expired action, which is refused as already
+	// decided: the expiry is durable, so the retry cannot approve it.
+	_, _, err := f.svc.Decide(ctx, decider, action.ID, agent.Decision{
+		Approve: true, ArgumentsHash: action.ArgumentsHash,
+	})
+	if err == nil {
+		t.Fatal("a retried decision on an expired action was accepted")
+	}
+	if got := f.actionStatus(t, action.ID); got == agent.ActionApproved || got == agent.ActionExecuted {
+		t.Fatalf("persisted status = %q, want it to stay expired", got)
+	}
+	if n := f.countTasks(t); n != 0 {
+		t.Fatalf("task count = %d, want 0", n)
+	}
+}
+
+// TestAgentExpiredDecisionDoesNotFailARunWithAnotherProposal checks the scoped
+// reconciliation: a run that still has a decidable proposal must be left waiting,
+// not failed.
+func TestAgentExpiredDecisionDoesNotFailARunWithAnotherProposal(t *testing.T) {
+	f := newAgentFixture(t, "agent-expire-multi", "sales_representative")
+	ctx := context.Background()
+
+	run := f.startRun(t, "Two proposals")
+	first := f.proposeCreateTask(t, run, "First", "expire-multi-1")
+	f.proposeCreateTask(t, run, "Second", "expire-multi-2")
+	f.ageActionPastDeadline(t, first.ID)
+
+	decider := agent.Decider{UserID: f.userID, OrganizationID: f.org}
+	if _, _, err := f.svc.Decide(ctx, decider, first.ID, agent.Decision{
+		Approve: true, ArgumentsHash: first.ArgumentsHash,
+	}); !errors.Is(err, agent.ErrExpired) {
+		t.Fatalf("decide the expired action: err = %v, want ErrExpired", err)
+	}
+	if got := f.runStatus(t, run.ID); got != agent.RunWaitingApproval {
+		t.Fatalf("run status = %q, want %q: the run still has a decidable proposal",
+			got, agent.RunWaitingApproval)
+	}
+}
+
+// TestAgentConcurrentSweepAndDecisionAgree runs the sweep and a decision at the
+// same moment. Both move the proposal to a terminal state with a guarded
+// `status = 'proposed'` UPDATE, so whichever runs second affects no rows; the
+// statuses they leave must agree and the effect must not run.
+func TestAgentConcurrentSweepAndDecisionAgree(t *testing.T) {
+	f := newAgentFixture(t, "agent-expire-race", "sales_representative")
+	ctx := context.Background()
+
+	run := f.startRun(t, "Race the sweep")
+	action := f.proposeCreateTask(t, run, "Raced", "expire-race-1")
+	f.ageActionPastDeadline(t, action.ID)
+
+	decider := agent.Decider{UserID: f.userID, OrganizationID: f.org}
+	var (
+		wg       sync.WaitGroup
+		start    = make(chan struct{})
+		sweepErr error
+	)
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		<-start
+		_, sweepErr = f.svc.SweepExpired(ctx)
+	}()
+	go func() {
+		defer wg.Done()
+		<-start
+		_, _, _ = f.svc.Decide(ctx, decider, action.ID, agent.Decision{
+			Approve: true, ArgumentsHash: action.ArgumentsHash,
+		})
+	}()
+	close(start)
+	wg.Wait()
+
+	if sweepErr != nil {
+		t.Fatalf("sweep: %v", sweepErr)
+	}
+	// Whichever path ran first, the action must end expired and never approved.
+	if got := f.actionStatus(t, action.ID); got != agent.ActionExpired {
+		t.Fatalf("persisted status = %q, want %q", got, agent.ActionExpired)
+	}
+	if n := f.countTasks(t); n != 0 {
+		t.Fatalf("task count = %d, want 0: a raced decision must not execute", n)
+	}
+	if n := f.countApprovals(t, action.ID); n != 0 {
+		t.Fatalf("approvals = %d, want 0", n)
+	}
+	if got := f.runStatus(t, run.ID); got != agent.RunFailed {
+		t.Fatalf("run status = %q, want %q", got, agent.RunFailed)
+	}
+}
+
+// TestAgentCrossTenantCannotExpireAnotherOrganizationsAction checks the expiry
+// path does not become a way to probe or mutate another tenant's action: the row
+// is loaded FOR UPDATE scoped to the organization, so an id from elsewhere is a
+// not-found before any status is written.
+func TestAgentCrossTenantCannotExpireAnotherOrganizationsAction(t *testing.T) {
+	f := newAgentFixture(t, "agent-expire-iso-a", "sales_representative")
+	ctx := context.Background()
+
+	run := f.startRun(t, "Tenant A")
+	action := f.proposeCreateTask(t, run, "Tenant A action", "expire-iso-1")
+	f.ageActionPastDeadline(t, action.ID)
+
+	otherOrg := insertOrganization(t, f.db, "agent-expire-iso-b")
+	otherUser := seedMember(t, f.db, otherOrg, "sales_representative")
+
+	_, _, err := f.svc.Decide(ctx, agent.Decider{UserID: otherUser, OrganizationID: otherOrg}, action.ID,
+		agent.Decision{Approve: true, ArgumentsHash: action.ArgumentsHash})
+	if !errors.Is(err, httpx.ErrNotFound) {
+		t.Fatalf("cross-tenant decision: err = %v, want ErrNotFound", err)
+	}
+	// The other tenant's attempt must not have expired the action: it is
+	// indistinguishable from an id that does not exist, so it must change nothing.
+	if got := f.actionStatus(t, action.ID); got != agent.ActionProposed {
+		t.Fatalf("persisted status = %q, want %q: another tenant changed this action", got, agent.ActionProposed)
+	}
+}
+
+// TestAgentUnexpiredDecisionStillApproves is the control: the expiry path must not
+// swallow a decision that is still in time. Without it, the fix could pass by
+// refusing everything.
+func TestAgentUnexpiredDecisionStillApproves(t *testing.T) {
+	f := newAgentFixture(t, "agent-expire-control", "sales_representative")
+	ctx := context.Background()
+
+	run := f.startRun(t, "Create a task in time")
+	action := f.proposeCreateTask(t, run, "In time", "expire-control-1")
+
+	decided, _, err := f.svc.Decide(ctx, agent.Decider{UserID: f.userID, OrganizationID: f.org},
+		action.ID, agent.Decision{Approve: true, ArgumentsHash: action.ArgumentsHash})
+	if err != nil {
+		t.Fatalf("decide an unexpired action: %v", err)
+	}
+	if decided.Status != agent.ActionExecuted {
+		t.Fatalf("returned status = %q, want %q", decided.Status, agent.ActionExecuted)
+	}
+	if got := f.actionStatus(t, action.ID); got != agent.ActionExecuted {
+		t.Fatalf("persisted status = %q, want %q", got, agent.ActionExecuted)
+	}
+	if n := f.countTasks(t); n != 1 {
+		t.Fatalf("task count = %d, want 1", n)
 	}
 }
