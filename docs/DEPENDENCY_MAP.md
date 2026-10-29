@@ -323,4 +323,7 @@ composition (wiring, api, cmd/*)
 
 `httpx` importing `ratelimit` is the one edge where a platform package reaches
 "sideways" into another platform package; it is intentional (the rate-limit
-middleware lives with the other middleware) and creates no cycle.
+middleware lives with the other middleware) and creates no cycle. `httpx` also
+depends on `logging`. Those two are its only in-module dependencies, and both are
+proven leaves, so `httpx` is itself extractable and is proven so by the harness in
+`scripts/extract-test/httpx`.

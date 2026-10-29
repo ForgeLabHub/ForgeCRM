@@ -155,6 +155,46 @@ go test -count=1 ./...   # ok  example.com/logging  (10 tests)
 
 ---
 
+## Candidate 5 — `internal/httpx` — **READY**
+
+**Why:** the HTTP layer every handler is written against — the RFC 9457 error
+envelope, the JSON writers, pagination and sort parsing, the access-log, recovery,
+security-header and rate-limit middleware, and the trusted-proxy client-address
+resolver. Its only in-module dependencies are `logging` and `ratelimit`, both
+already proven, so the whole layer lifts out without reaching into the
+application.
+
+**Blocker that was:** none structural; it was simply never run. `httpx` was
+marked `almost` on the judgement that it *is* the shared HTTP substrate and so is
+rarely worth extracting on its own. That judgement is about desirability, not
+feasibility, and the two were conflated: the useful guarantee is that the layer
+*can* lift out, because that is what keeps a handler from reaching into it and
+dragging the application layer back in.
+
+**Evidence:**
+
+```bash
+scripts/extract-test/httpx/setup.sh
+#   copied internal/httpx -> . (8 files)
+#   copied internal/logging -> logging (2 files)
+#   copied internal/ratelimit -> ratelimit (5 files)
+#   ok    no import of the ForgeCRM monolith
+#   ok    go build ./...
+#   ok    go test ./...
+#   ok    go run ./cmd/smoke
+#   ok    httpx extracts cleanly
+```
+
+The package's own tests run in the extracted project, including the client-address
+trust tests, and a smoke writes and reads a JSON list response, drives a
+rate-limited handler to a 429 with headers on the allowed response, and resolves a
+client address.
+
+**Files that move:** `internal/httpx/*.go` (4 sources + 4 test files), with
+`internal/logging` and `internal/ratelimit` as declared dependencies.
+
+---
+
 ## Candidates assessed but not extracted
 
 These were evaluated from the dependency graph and marked without an extraction
@@ -192,13 +232,14 @@ run, because each has a concrete blocker that an extraction would only confirm.
 | `objectstore` | **READY** | Extracted with `netguard`; built, shared provider contract passed for `Memory` and real S3 wire protocol, smoke ran. |
 | `secrets` | **READY** | Zero internal deps; extracted, built, its own 20 tests ran (the package gained them in this slice), smoke ran. |
 | `logging` | **READY** | Standard library only; extracted, built, its own tests ran (added in this slice), smoke ran. |
+| `httpx` | **READY** | Depends only on `logging` and `ratelimit`; extracted with both, built, its own tests ran, smoke drove a 429. |
 | everything else | **ALMOST** / **NOT READY** | Concrete blocker listed above. |
 
 **No module is marked `READY` without an extraction run recorded here**, and the
 run is now automated: `scripts/extract-test/run.sh` performs it for every module in
 `modules.txt` on each CI run. `analytics`, `ratelimit`, `netguard`, `objectstore`,
-`secrets` and `logging` pass that bar today.
+`secrets`, `logging` and `httpx` pass that bar today.
 
-The six `READY` modules are proven by the harness, not by this document. If the
+The seven `READY` modules are proven by the harness, not by this document. If the
 harness ever fails for one of them, the status here is wrong and the harness is
 right.

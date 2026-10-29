@@ -212,7 +212,7 @@ func TestCoreDoesNotImportCompositionOrHTTP(t *testing.T) {
 // graph, so a regression is caught by `go test ./...` and not only by the heavier
 // extraction harness in scripts/extract-test.
 //
-// Four modules are pinned:
+// Five modules are pinned:
 //
 //   - netguard is the SSRF guard. It is a leaf: it must depend on nothing inside
 //     this module and nothing outside the standard library. That is what lets the
@@ -225,6 +225,9 @@ func TestCoreDoesNotImportCompositionOrHTTP(t *testing.T) {
 //     depend on netguard and on third-party libraries, but on no application-layer
 //     package — not the database, not the audit log, not RBAC, not HTTP error
 //     types. A single such import is what would make it unextractable.
+//   - httpx is the HTTP layer. It may depend only on logging and ratelimit, the
+//     two leaves it is built on; a dependency on the database, RBAC or a domain
+//     service is what would stop it from lifting out of the monolith.
 //
 // This is the cheap, always-on half of the check. The extraction harness is the
 // expensive half that actually compiles the module on its own; the two are
@@ -266,6 +269,16 @@ func TestExtractionBoundaryHolds(t *testing.T) {
 				if to := internalPkg(imp); forbiddenForObjectstore[to] {
 					t.Errorf("objectstore imports %s; the storage boundary must not depend on the application layer",
 						to)
+				}
+			}
+		case "httpx":
+			// httpx may depend only on its two proven leaves. A dependency on the
+			// database, RBAC or a domain service is what would stop the HTTP layer
+			// from lifting out, and is the coupling the extraction harness catches.
+			allowed := map[string]bool{"logging": true, "ratelimit": true}
+			for _, imp := range p.Imports {
+				if to := internalPkg(imp); to != "" && !allowed[to] {
+					t.Errorf("httpx imports %s; the HTTP layer may depend only on logging and ratelimit", to)
 				}
 			}
 		}

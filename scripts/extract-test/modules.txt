@@ -14,6 +14,7 @@
 # objectstore   the object-storage layer, extracted from internal/storage in this slice
 # secrets       password hashing, tokens and the AES-GCM keyring; x/crypto only
 # logging       structured logging with central secret redaction; standard library only
+# httpx         the HTTP layer: error envelope, JSON writers, middleware, client address
 
 netguard
 analytics
@@ -21,3 +22,4 @@ ratelimit
 objectstore
 secrets
 logging
+httpx

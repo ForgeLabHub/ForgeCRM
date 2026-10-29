@@ -388,9 +388,12 @@ Two things this document deliberately does not do:
 - **Internal deps:** `logging, ratelimit`.
 - **External deps:** `github.com/go-chi/chi/v5`, `github.com/google/uuid`.
 - **Fake:** `SubjectFunc` injects the rate-limit subject.
-- **Tests:** 4 unit files.
-- **Extract:** `almost` — small and cohesive, but it *is* the shared HTTP
-  substrate, so extraction is rarely desirable.
+- **Tests:** 4 unit files, including the client-address trust tests.
+- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/httpx`
+  together with `logging` and `ratelimit`. It is the shared HTTP substrate, so it
+  is not usually *desirable* to extract on its own, but it is now *possible*, and
+  that is what keeps a handler from reaching into it and dragging the application
+  layer back in.
 - **Cut lines:** moves with `logging` and `ratelimit`.
 
 ### internal/ratelimit  — pluggable limiter
@@ -633,10 +636,10 @@ Two things this document deliberately does not do:
   seams without a shipped fake: `ai.Provider`, `events.Poster`,
   `integrations.Adapter`, `migratex.Source`, `agent.Executor`,
   `database.Querier`, `objectstore.ObjectStore`, `ratelimit.Store`.
-- **Extract status:** six modules are `yes` — `analytics`, `ratelimit`, `netguard`,
-  `objectstore`, `secrets` and `logging` — because they were actually extracted,
-  built, tested and run in a clean module, now by the automated harness in
-  `scripts/extract-test/`. The statuses here match `EXTRACT_READY.md` exactly.
+- **Extract status:** seven modules are `yes` — `analytics`, `ratelimit`, `netguard`,
+  `objectstore`, `secrets`, `logging` and `httpx` — because they were actually
+  extracted, built, tested and run in a clean module, now by the automated harness
+  in `scripts/extract-test/`. The statuses here match `EXTRACT_READY.md` exactly.
 - **Gaps found:** the packages with **no `_test.go` at all** are `audit`, `crm`,
   `events`, `forecast`, `jobs`, `migrate`, `migratex`, `migrations`, `notify`,
   `risk`, `simulate`, `wiring`. Of these, `crm`, `events`, `forecast`, `risk` and

@@ -146,6 +146,18 @@ Both are acceptable outcomes; silently importing half the monolith is not.
   before this slice; it now ships tests pinning the redaction control.
 - **Hidden dependencies found:** none.
 
+### `httpx` — READY
+
+- **Internal imports:** `logging`, `ratelimit` (both proven leaves, copied into
+  the extracted module).
+- **Commands:** `scripts/extract-test/httpx/setup.sh` — `go build`, `go test` and a
+  smoke that round-trips a JSON list response, drives a rate-limited handler to a
+  429 (with the limit header on the allowed response) and resolves a client
+  address.
+- **Result:** built, tested and ran standalone. The package's own tests, including
+  the client-address trust tests, run in the extracted module.
+- **Hidden dependencies found:** none.
+
 ### `secrets` — ALMOST (superseded by READY above)
 
 - **Source SHA:** `7a6d67f`
@@ -188,7 +200,7 @@ should notice. The harness was itself verified to fail: replacing `objectstore`'
 `netguard` import with `integrations` made both the harness and the archtest report
 the violation, and giving `logging` an in-module import made the archtest fail.
 
-`modules.txt` lists six modules today: `netguard`, `analytics`, `ratelimit`,
-`objectstore`, `secrets` and `logging`.
+`modules.txt` lists seven modules today: `netguard`, `analytics`, `ratelimit`,
+`objectstore`, `secrets`, `logging` and `httpx`.
 
 See `scripts/extract-test/README.md` for how to add a module.

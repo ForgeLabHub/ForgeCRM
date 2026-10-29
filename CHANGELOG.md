@@ -25,9 +25,24 @@ once it reaches 1.0.
   passes. A CI job `extraction` runs the harness, and `TestExtractionBoundaryHolds`
   in `internal/archtest` enforces the same boundary cheaply on every
   `go test ./...`; the two are independent, so neither a stale check nor a skipped
-  job can hide a violation. Six modules are proven today: the four above plus
-  `secrets` and `logging`, which became provable once they gained their own tests
-  (see below).
+  job can hide a violation. Seven modules are proven today: the four above plus
+  `secrets` and `logging`, which became provable once they gained their own tests,
+  and `httpx` (see below).
+
+- **The HTTP layer is now extraction-proven.** `internal/httpx` — the error
+  envelope, the JSON writers, pagination and sort parsing, the access-log,
+  recovery, security-header and rate-limit middleware, and the trusted-proxy
+  client-address resolver — depends only on `internal/logging` and
+  `internal/ratelimit`, both already proven leaves, so the whole layer lifts out
+  of the monolith. `scripts/extract-test/httpx` copies it and its two
+  dependencies into a clean module, builds it, runs its own tests (including the
+  client-address trust tests) and runs a smoke that round-trips a JSON list
+  response, drives a rate-limited handler to a 429 with the limit header on the
+  allowed response, and resolves a client address. It was marked `almost` before
+  on the judgement that it *is* the shared HTTP substrate and so is rarely worth
+  extracting; that is about desirability, not feasibility, and the guarantee worth
+  having is that the layer *can* lift out, because that is what keeps a handler
+  from reaching into it and dragging the application layer back in.
 
 - **`secrets` and `logging` have their own tests, and are now extraction-proven.**
   Both were standard-library-or-near leaves with no `_test.go` at all, so an
