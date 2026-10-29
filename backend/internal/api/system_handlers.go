@@ -73,6 +73,15 @@ type capabilitiesResponse struct {
 	MFA      bool `json:"mfa"`
 	Webhooks bool `json:"webhooks"`
 	ToolAPI  bool `json:"tool_api"`
+	// Storage reports whether file attachments can be stored. It is true only when
+	// an object store is actually configured: with no endpoint the document routes
+	// answer 503, so a client that read a bare "documents are supported" would
+	// offer an upload that cannot succeed. It tests the running service, not the
+	// presence of settings.
+	Storage bool `json:"storage"`
+	// MaxUploadBytes is the configured single-object limit, so a client can refuse
+	// an oversized file before spending the upload. Zero when storage is off.
+	MaxUploadBytes int64 `json:"max_upload_bytes"`
 	// MCP reports whether a standard MCP client can connect. It can: the protocol
 	// transport (JSON-RPC 2.0, initialize, tools/list, tools/call) is implemented
 	// in internal/ai/mcp_protocol.go. It is separate from ToolAPI because the two
@@ -111,6 +120,12 @@ func (s *Server) handleCapabilities(w http.ResponseWriter, r *http.Request) {
 		// application's own shape. It is kept separate from the MCP flag below: this
 		// is not the protocol, and a client that needs the protocol must read `mcp`.
 		ToolAPI: true,
+		// Storage is true only when an object store is configured. With no
+		// endpoint the service reports itself off and the document routes answer
+		// 503, so the interface must read this flag rather than assume the routes
+		// work.
+		Storage:        s.deps.Storage.Enabled(),
+		MaxUploadBytes: s.deps.Storage.MaxObjectBytes(),
 		// A standard MCP client can connect: the JSON-RPC 2.0 transport, the
 		// initialize handshake and tools/list and tools/call are implemented.
 		MCP: true,

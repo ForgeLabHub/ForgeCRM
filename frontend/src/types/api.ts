@@ -692,6 +692,10 @@ export interface Capabilities {
   webhooks: boolean
   /** Tools over HTTP (`tools/list`, `tools/call`). Not a full MCP server. */
   tool_api: boolean
+  /** File attachments can be stored. False when no object store is configured. */
+  storage: boolean
+  /** The single-object upload limit in bytes. Zero when storage is off. */
+  max_upload_bytes: number
   /** OIDC settings present. The authorisation-code flow is not implemented. */
   oidc_configured: boolean
   import_formats: string[]

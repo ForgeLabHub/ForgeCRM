@@ -8,6 +8,7 @@ import type { Contact, ContactInput } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
 import { ResourceList, type Column } from '../components/ResourceList'
 import { AssistPanel } from '../components/AssistPanel'
+import { AttachmentPanel } from '../components/AttachmentPanel'
 import { BulkArchiveButton } from '../components/BulkArchiveButton'
 import {
   Alert,
@@ -417,6 +418,8 @@ export function ContactDetailPage() {
       </Card>
 
       <AssistPanel entityType="contact" entityId={id} />
+
+      <AttachmentPanel entityType="contact" entityId={id} />
 
       <ContactFormDialog
         open={editing}

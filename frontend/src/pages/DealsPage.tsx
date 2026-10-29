@@ -8,6 +8,7 @@ import type { Deal, DealInput, Pipeline } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
 import { ResourceList, type Column } from '../components/ResourceList'
 import { AssistPanel } from '../components/AssistPanel'
+import { AttachmentPanel } from '../components/AttachmentPanel'
 import { BulkArchiveButton } from '../components/BulkArchiveButton'
 import {
   Alert,
@@ -702,6 +703,8 @@ export function DealDetailPage() {
       </div>
 
       <AssistPanel entityType="deal" entityId={id} />
+
+      <AttachmentPanel entityType="deal" entityId={id} />
 
       <DealFormDialog
         open={editing}

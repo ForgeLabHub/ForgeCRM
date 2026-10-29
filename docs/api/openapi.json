@@ -30422,6 +30422,9 @@
             },
             "type": "array"
           },
+          "max_upload_bytes": {
+            "type": "integer"
+          },
           "mcp": {
             "type": "boolean"
           },
@@ -30435,6 +30438,9 @@
             "type": "array"
           },
           "oidc_configured": {
+            "type": "boolean"
+          },
+          "storage": {
             "type": "boolean"
           },
           "telegram": {
@@ -30453,10 +30459,12 @@
           "email",
           "event_types",
           "import_formats",
+          "max_upload_bytes",
           "mcp",
           "mfa",
           "migration_sources",
           "oidc_configured",
+          "storage",
           "telegram",
           "tool_api",
           "webhooks"

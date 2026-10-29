@@ -140,3 +140,32 @@ func TestCapabilitiesReportsImplementedSubsystems(t *testing.T) {
 		}
 	}
 }
+
+// TestCapabilitiesStorageFlagMatchesTheService pins the storage capability.
+//
+// The flag is the interface's only signal that uploads can work. It must report
+// the running service, not the presence of settings: with no object store the
+// document routes answer 503, so a client that read a bare "documents exist" would
+// offer an upload that cannot succeed. A nil service — a deployment that never
+// built one — must report false rather than panic, which Enabled() guarantees.
+func TestCapabilitiesStorageFlagMatchesTheService(t *testing.T) {
+	cfg := &config.Config{}
+	srv := newTestServer(t, &Deps{Config: cfg, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+
+	rec := httptest.NewRecorder()
+	srv.handleCapabilities(rec, httptest.NewRequest(http.MethodGet, "/api/v1/system/capabilities", nil))
+
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+
+	// No store is configured in this server, so storage must be off — and the
+	// response must still be well-formed, which a nil dereference would not be.
+	if body["storage"] != false {
+		t.Errorf("storage is %v, want false when no object store is configured", body["storage"])
+	}
+	if _, ok := body["max_upload_bytes"]; !ok {
+		t.Error(`the response has no "max_upload_bytes", which a client needs to refuse an oversized file early`)
+	}
+}
