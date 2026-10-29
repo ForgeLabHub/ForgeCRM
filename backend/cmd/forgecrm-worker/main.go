@@ -145,48 +145,64 @@ func run() error {
 
 	workerID := hostnameOrRandom()
 
+	// Two contexts, because "stop taking work" and "abandon the work in hand" are
+	// different moments. The pollers and the claim step watch loopCtx and stop the
+	// instant the signal arrives; a job that has already been claimed keeps running
+	// on jobCtx, which is cancelled only after the shutdown grace period so the
+	// process cannot be held open indefinitely by one slow job.
+	loopCtx, loopCancel := context.WithCancel(ctx)
+	defer loopCancel()
+	jobCtx, jobCancel := context.WithCancel(context.WithoutCancel(ctx))
+	defer jobCancel()
+	grace := cfg.WorkerShutdownGrace
+	if grace <= 0 {
+		grace = 30 * time.Second
+	}
+
+	var loops sync.WaitGroup
+	var workers sync.WaitGroup
+
 	// The outbox drain runs alongside the job workers: it is what turns committed
 	// domain events into webhook deliveries.
-	var wg sync.WaitGroup
-	wg.Add(1)
+	loops.Add(1)
 	go func() {
-		defer wg.Done()
-		runOutboxLoop(ctx, log, outboxStore, dispatcher, wfEngine, workerID+"-outbox", cfg.WorkerPollEvery)
+		defer loops.Done()
+		runOutboxLoop(loopCtx, log, outboxStore, dispatcher, wfEngine, workerID+"-outbox", cfg.WorkerPollEvery)
 	}()
 
 	// Stale job recovery: a worker that died mid-job would otherwise leave the row
 	// running forever.
-	wg.Add(1)
+	loops.Add(1)
 	go func() {
-		defer wg.Done()
-		runRequeueLoop(ctx, log, queue)
+		defer loops.Done()
+		runRequeueLoop(loopCtx, log, queue)
 	}()
 
 	// Scheduled maintenance: the retention sweep handler existed but nothing ever
 	// enqueued it, so finished jobs, delivered webhooks and application logs grew
 	// without bound. This loop is what makes the retention policy real.
-	wg.Add(1)
+	loops.Add(1)
 	go func() {
-		defer wg.Done()
-		runMaintenanceLoop(ctx, log, queue)
+		defer loops.Done()
+		runMaintenanceLoop(loopCtx, log, queue)
 	}()
 
 	// Webhook delivery: the loop that actually sends the rows the dispatcher
 	// creates. Without it a subscription was registered, matching events were
 	// recorded as deliveries, and the endpoint was never called.
-	wg.Add(1)
+	loops.Add(1)
 	go func() {
-		defer wg.Done()
-		runDeliveryLoop(ctx, log, registry.sender, cfg.WorkerPollEvery)
+		defer loops.Done()
+		runDeliveryLoop(loopCtx, log, registry.sender, cfg.WorkerPollEvery)
 	}()
 
 	// Workflow scheduler: fires due schedule-triggered workflows and resumes
 	// paused runs whose delay has elapsed. Both use claim-based selection, so
 	// several worker replicas can run this without double-firing.
-	wg.Add(1)
+	loops.Add(1)
 	go func() {
-		defer wg.Done()
-		runWorkflowSchedulerLoop(ctx, log, wfEngine, cfg.WorkerPollEvery)
+		defer loops.Done()
+		runWorkflowSchedulerLoop(loopCtx, log, wfEngine, cfg.WorkerPollEvery)
 	}()
 
 	concurrency := cfg.WorkerConcurrency
@@ -194,17 +210,35 @@ func run() error {
 		concurrency = 1
 	}
 	for i := 0; i < concurrency; i++ {
-		wg.Add(1)
+		workers.Add(1)
 		go func(n int) {
-			defer wg.Done()
-			workerLoop(ctx, log, queue, registry, fmt.Sprintf("%s-%d", workerID, n), cfg.WorkerPollEvery)
+			defer workers.Done()
+			workerLoop(loopCtx, jobCtx, log, queue, registry.handle, fmt.Sprintf("%s-%d", workerID, n), cfg.WorkerPollEvery)
 		}(i)
 	}
 
 	<-ctx.Done()
-	log.Info("shutdown signal received; waiting for in-flight jobs")
-	wg.Wait()
-	log.Info("worker shutdown complete")
+
+	// Stop the long-running loops, but let an in-flight job finish: a job that has
+	// already been claimed is not safe to abort mid-write, and its row is 'running'
+	// so nothing else will pick it up. The loops watch loopCtx; the job goroutines
+	// watch jobCtx, cancelled only once the grace period has elapsed.
+	log.Info("shutdown signal received; waiting for in-flight jobs", "grace", grace)
+	loopCancel()
+	loops.Wait()
+	drained := make(chan struct{})
+	go func() {
+		workers.Wait()
+		close(drained)
+	}()
+	select {
+	case <-drained:
+		log.Info("worker shutdown complete; all in-flight jobs finished")
+	case <-time.After(grace):
+		log.Warn("shutdown grace elapsed; abandoning in-flight jobs", "grace", grace)
+		jobCancel()
+		<-drained
+	}
 	return nil
 }
 
@@ -366,8 +400,16 @@ func (r *handlerRegistry) retentionSweep(ctx context.Context) error {
 // Loops
 // ---------------------------------------------------------------------------
 
-func workerLoop(ctx context.Context, log *slog.Logger, queue *jobs.Queue,
-	registry *handlerRegistry, workerID string, poll time.Duration) {
+// jobHandler runs one claimed job. It is a function rather than a method on the
+// registry so a test can drive workerLoop with its own handler and a real queue.
+type jobHandler func(ctx context.Context, queue *jobs.Queue, job *jobs.Job) error
+
+// workerLoop claims and runs jobs until loopCtx is cancelled. Job execution and
+// the bookkeeping that records its outcome run on jobCtx, which outlives the
+// shutdown signal for the grace period: a claimed job must reach a terminal state
+// (succeeded or failed) rather than being killed mid-write and left 'running'.
+func workerLoop(loopCtx, jobCtx context.Context, log *slog.Logger, queue *jobs.Queue,
+	handle jobHandler, workerID string, poll time.Duration) {
 
 	if poll <= 0 {
 		poll = 2 * time.Second
@@ -375,37 +417,43 @@ func workerLoop(ctx context.Context, log *slog.Logger, queue *jobs.Queue,
 	log.Info("worker started", "worker_id", workerID)
 	for {
 		select {
-		case <-ctx.Done():
+		case <-loopCtx.Done():
 			return
 		default:
 		}
 
-		job, err := queue.Claim(ctx, workerID)
+		job, err := queue.Claim(loopCtx, workerID)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				return
 			}
 			log.Warn("could not claim a job", "error", err)
-			sleepCtx(ctx, poll)
+			sleepCtx(loopCtx, poll)
 			continue
 		}
 		if job == nil {
-			sleepCtx(ctx, poll)
+			sleepCtx(loopCtx, poll)
 			continue
 		}
 
-		jobCtx, cancel := context.WithTimeout(ctx, 30*time.Minute)
-		err = registry.handle(jobCtx, queue, job)
+		// A running job still stops when the whole process is going down: jobCtx is
+		// cancelled once the grace period has elapsed, and the 30-minute cap is the
+		// ordinary bound on a single job.
+		runCtx, cancel := context.WithTimeout(jobCtx, 30*time.Minute)
+		err = handle(runCtx, queue, job)
 		cancel()
 
+		// The outcome is recorded on jobCtx, not runCtx: a job whose run context was
+		// just cancelled would otherwise fail to mark itself failed, leaving the row
+		// 'running' until the requeue sweep notices it.
 		if err != nil {
 			log.Error("job failed", "job_id", job.ID, "kind", job.Kind, "error", err)
-			if ferr := queue.Fail(ctx, job, err); ferr != nil {
+			if ferr := queue.Fail(jobCtx, job, err); ferr != nil {
 				log.Error("could not record the job failure", "job_id", job.ID, "error", ferr)
 			}
 			continue
 		}
-		if err := queue.Complete(ctx, job.ID, map[string]any{"status": "done"}); err != nil {
+		if err := queue.Complete(jobCtx, job.ID, map[string]any{"status": "done"}); err != nil {
 			log.Error("could not mark the job complete", "job_id", job.ID, "error", err)
 		}
 	}

@@ -69,6 +69,10 @@ type Config struct {
 	WorkerConcurrency int
 	WorkerPollEvery   time.Duration
 	JobMaxAttempts    int
+	// WorkerShutdownGrace bounds how long the worker waits for an in-flight job to
+	// finish after a shutdown signal. Past it the job's context is cancelled and the
+	// run is abandoned, so the process still exits inside its container stop window.
+	WorkerShutdownGrace time.Duration
 
 	ImportMaxUploadBytes   int64
 	ImportMaxUnpackedBytes int64
@@ -311,6 +315,9 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	if c.WorkerPollEvery, err = envDuration("FORGECRM_WORKER_POLL", 2*time.Second); err != nil {
+		return nil, err
+	}
+	if c.WorkerShutdownGrace, err = envDuration("FORGECRM_WORKER_SHUTDOWN_GRACE", 30*time.Second); err != nil {
 		return nil, err
 	}
 
