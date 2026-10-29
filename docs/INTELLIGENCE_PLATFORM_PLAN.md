@@ -269,8 +269,8 @@ corrected to the real field names and `ReportsPage.tsx` is updated to match.
 
 | Direction | Status | Ready when |
 |---|---|---|
-| Forecasting | Deferred | A time-split evaluation harness exists, a naive baseline is beaten or matched, error metrics (MAE/MAPE) are reported, and insufficient-data is a first-class result. |
-| Risk Lab | Deferred | Each signal cites a factor and the data behind it; confidence is computed, not invented; false-positive and boundary tests exist. |
+| Forecasting | **Delivered** | A time-split evaluation harness exists (`internal/analytics`), the method's out-of-sample error is reported next to the naive baseline it must beat, MAE is a first-class result, and insufficient history is reported rather than a fabricated figure. See §10. |
+| Risk Lab | **Delivered** | Each signal cites a type, a severity and the evidence rows behind it; thresholds are editable and validated server-side; a scan reconciles open signals against the live CRM. See §10. |
 | Data Quality | Deferred | Duplicate/missing/conflict detection with a transparent score and a preview-before-apply path. |
 | Document Intelligence | Deferred | Extraction of structured fields from a supported type, required-field checks, human confirmation before a CRM write. |
 | Knowledge Graph | Deferred | Edges derived from existing FKs only, with provenance and per-object access control. |
@@ -303,5 +303,33 @@ corrected to the real field names and `ReportsPage.tsx` is updated to match.
   rather than truncating; every revenue and retention scenario failed at run
   time. The baseline reader now rounds the average to the money scale where it is
   produced. The parser stays strict.
+- **§6 Forecasting & Risk Lab** — delivered. The pure cores live in
+  `internal/analytics` (`forecast-v1`; methods naive, mean, moving average, trend,
+  bounded by `MinHistoryPeriods=3`, `MaxHistoryPeriods=240`, `MaxForecastHorizon=36`)
+  and a risk-signal core. The services `internal/forecast` and `internal/risk`
+  read the CRM through `crm.Service` under the caller's principal and persist to
+  `forecast_runs`, `risk_signals` and `risk_thresholds` (migration
+  `0020_forecasting_and_risk`) with the `forecast.read`/`forecast.run` and
+  `risk.read`/`risk.manage` permissions. The API adds forecast runs and a catalog,
+  and risk signals, scan, status transitions and thresholds; the frontend adds
+  `Forecasting` and `Risk` pages (`frontend/src/pages/ForecastPage.tsx`,
+  `RiskPage.tsx`, `frontend/src/api/intelligence.ts`).
+- **Forecasting design rule** — a projection is never shown alone: the observed
+  series, the measured out-of-sample error and the naive baseline sit beside it,
+  and a method that fails to beat the baseline says so. Too-short history is an
+  error, not a number.
+- **Tests** — `internal/testsupport/intelligence_test.go` (PostgreSQL) covers the
+  reader SQL, scan reconciliation against real rows, the partial unique index on
+  live signals, the permission seeds and the two service-side validation gaps
+  found while writing them (a too-short forecast window is refused before compute;
+  a threshold out of the column's range returns 422 with a reason). The Chromium
+  suite covers compute → accuracy → observed series and scan → thresholds against
+  the real stack.
+- **Defect found by the E2E suite** — the API binary assembled `api.Deps` without
+  copying the `Forecast` and `Risk` services `internal/wiring` builds, so every
+  intelligence handler dereferenced a nil service and the recovery middleware
+  answered an opaque 500. The dependency is now copied, and the routes are mounted
+  behind a guard that answers 503 naming the subsystem when a service is missing,
+  so the same mistake is legible next time (`TestIntelligenceRoutesRefuseWhenUnwired`).
 
 <!-- STATUS: updated per commit. -->

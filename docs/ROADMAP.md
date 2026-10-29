@@ -244,6 +244,38 @@ baseline reader now rounds the average to the money scale where it is produced;
 the parser is left strict, because rounding there would hide the same class of
 mistake elsewhere.
 
+## Cycle 12 — Intelligence Platform: the Forecasting & Risk Lab
+
+| # | Item | Status |
+|---|---|---|
+| 12.1 | Pure forecasting core | **VERIFIED** — `internal/analytics`, `forecast-v1`: naive, mean, moving-average and trend methods over integer-minor-unit money; history window bounded by `MinHistoryPeriods=3` / `MaxHistoryPeriods=240`, horizon by `MaxForecastHorizon=36`. Reports measured out-of-sample error (MAE) beside the naive baseline; insufficient history is a first-class error, never a fabricated number |
+| 12.2 | `internal/forecast` service + persistence | **VERIFIED** — reads revenue history through `crm.Service` under the caller's principal, persists a run to `forecast_runs` freezing params, history and algorithm version. Enforces `forecast.run`/`forecast.read` in the service and filters by `organization_id` |
+| 12.3 | `internal/risk` service + persistence | **VERIFIED** — scans the CRM for stalled deals, overdue tasks, accounts without contact, unusual deal amounts, conversion drops and stage concentration; keeps a live signal only while it holds (partial unique index on live signal per org+type); each signal cites its evidence rows. `Thresholds.validateBounds()` mirrors the column bounds so an out-of-range update returns 422 with a reason |
+| 12.4 | Migration `0020_forecasting_and_risk` + permission seed | **VERIFIED** — `forecast_runs`, `risk_signals` and `risk_thresholds`, all tenant-scoped, with the live-signal partial unique index and history indexes; `forecast.read`, `forecast.run`, `risk.read`, `risk.manage` seeded to roles |
+| 12.5 | API surface + OpenAPI | **VERIFIED** — forecast runs and a session-only catalog; risk signals, scan, status transitions and thresholds; contract rows in `internal/api/contract.go`; `go run ./cmd/openapi-gen -check` reports the spec current |
+| 12.6 | Frontend pages | **VERIFIED** — `frontend/src/pages/ForecastPage.tsx`, `RiskPage.tsx` and `frontend/src/api/intelligence.ts`, with `Forecasting` and `Risk` entries in the Workspace navigation. A projection is never shown alone: observed series, measured error and the naive baseline sit beside it |
+| 12.7 | Tests: unit, PostgreSQL integration, frontend, E2E | **VERIFIED** — `internal/testsupport/intelligence_test.go` (PostgreSQL), `frontend/src/pages/ForecastPage.test.tsx` / `RiskPage.test.tsx`, and the Chromium suite in `e2e/platform.spec.ts` |
+
+### Evidence
+
+| Check | Command | Result |
+|---|---|---|
+| Formatting | `gofmt -l ./cmd ./internal` | clean |
+| Vet | `go vet ./...` | clean |
+| Unit tests | `go test -count=1 ./...` | all packages pass |
+| Integration tests | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration -count=1 -p 1 ./...` | passes against real PostgreSQL |
+| OpenAPI currency | `go run ./cmd/openapi-gen -check` | spec current |
+| Frontend | `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` | typecheck clean, lint 0 errors, 92 tests pass, build succeeds |
+| E2E (Chromium) | `npx playwright test --project=chromium` | 43 passed, including the Forecasting compute → accuracy → observed-series path and the Risk scan → thresholds path |
+
+A real defect was found by the Chromium suite and fixed: the API binary assembled
+`api.Deps` without copying the `Forecast` and `Risk` services that
+`internal/wiring` builds, so every intelligence handler dereferenced a nil service
+and the recovery middleware answered an opaque 500. The dependency is now copied,
+and the routes are mounted behind a guard that answers 503 naming the subsystem
+when a service is missing, so the same mistake is legible next time
+(`TestIntelligenceRoutesRefuseWhenUnwired`).
+
 ---
 
 # Master plan phases

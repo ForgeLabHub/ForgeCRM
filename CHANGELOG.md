@@ -10,6 +10,35 @@ once it reaches 1.0.
 
 ### Added
 
+- **The Forecasting & Risk Lab.** Two explainable intelligence surfaces built on
+  the same pure-core pattern as the Simulation Lab. The maths lives in
+  `internal/analytics` (`forecast-v1`): naive, mean, moving-average and trend
+  methods over integer-minor-unit money, with the history window bounded by
+  `MinHistoryPeriods=3`, `MaxHistoryPeriods=240` and the horizon by
+  `MaxForecastHorizon=36`. `internal/forecast` reads the revenue history through
+  `crm.Service` under the caller's principal and persists a run to
+  `forecast_runs`, freezing its parameters, its history and the algorithm version
+  so a projection stays explainable after the CRM data moves on. A projection is
+  never shown alone: the observed series, the measured out-of-sample error (MAE)
+  and the naive baseline sit beside it, and a method that fails to beat the
+  baseline says so rather than presenting a number. Too-short history is an error,
+  not a fabricated figure. `internal/risk` scans the CRM for explainable
+  conditions (stalled deal, overdue task, account without contact, unusual deal
+  amount, conversion drop, stage concentration) and keeps a signal only while it
+  holds, with a partial unique index on the live signal per organization and type;
+  each signal cites the evidence rows behind it. Thresholds are stored per
+  organization in `risk_thresholds`, editable, and validated server-side so an
+  out-of-range value returns 422 with a reason rather than a raw constraint error.
+  Migration `0020_forecasting_and_risk` adds the three tables and the four
+  permissions (`forecast.read`, `forecast.run`, `risk.read`, `risk.manage`). The
+  API adds forecast runs and a session-only catalog, and risk signals, scan,
+  status transitions and thresholds; the frontend adds `Forecasting` and `Risk`
+  pages that state plainly when there is not enough history. `internal/testsupport/
+  intelligence_test.go` covers the reader SQL, scan reconciliation against real
+  rows, the partial unique index and the permission seeds on PostgreSQL, and the
+  Chromium suite covers compute → accuracy → observed series and scan → thresholds
+  against the real stack.
+
 - **The Simulation Lab.** A saved "what if" scenario is computed against the live
   CRM and reported as a comparison, without ever modifying CRM data. Three
   scenario kinds are real: a **funnel** walk over pipeline stages (change deal
