@@ -174,6 +174,11 @@ func (s *Service) SetThresholds(ctx context.Context, p *rbac.Principal, t Thresh
 	if t.StageConcentrationRatio <= 0 {
 		t.StageConcentrationRatio = def.StageConcentrationRatio
 	}
+	// Validate against the same bounds the columns enforce, so an out-of-range value
+	// is refused with a clear reason rather than surfacing a raw constraint error.
+	if err := t.validateBounds(); err != nil {
+		return Thresholds{}, err
+	}
 
 	const q = `
 		INSERT INTO risk_thresholds
@@ -514,6 +519,32 @@ func (s *Service) SetStatus(ctx context.Context, p *rbac.Principal, id uuid.UUID
 		return nil, err
 	}
 	return sig, nil
+}
+
+// validateBounds checks a fully-defaulted threshold set against the same bounds
+// the columns enforce, so a range error is a 422 with a reason rather than a raw
+// constraint violation.
+func (t Thresholds) validateBounds() error {
+	bounds := []struct {
+		name string
+		v    int
+		lo   int
+		hi   int
+	}{
+		{"stalled_deal_days", t.StalledDealDays, 1, 3650},
+		{"overdue_task_days", t.OverdueTaskDays, 1, 3650},
+		{"account_no_contact_days", t.AccountNoContactDays, 1, 3650},
+		{"amount_spike_ratio", t.AmountSpikeRatio, 10000, 1000000},
+		{"conversion_drop_ratio", t.ConversionDropRatio, 1, 10000},
+		{"stage_concentration_ratio", t.StageConcentrationRatio, 1, 10000},
+	}
+	for _, b := range bounds {
+		if b.v < b.lo || b.v > b.hi {
+			return fmt.Errorf("%w: %s must be between %d and %d, got %d",
+				ErrValidation, b.name, b.lo, b.hi, b.v)
+		}
+	}
+	return nil
 }
 
 // signalKey is the identity of a live signal: the rule and the record it is about.
