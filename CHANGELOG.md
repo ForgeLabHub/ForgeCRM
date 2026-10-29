@@ -10,6 +10,18 @@ once it reaches 1.0.
 
 ### Added
 
+- **Sweep indexes for the intelligence history.** Migration
+  `0021_intelligence_retention_indexes` adds `simulation_runs_created_at_idx` and
+  `forecast_runs_created_at_idx`, following the rule migration `0017` set: a
+  retention sweep filters on its time column alone and no organization, so it
+  needs an index that leads with that column. The existing indexes on those tables
+  lead with `organization_id` for the per-org list views and cannot serve the
+  sweep, which would otherwise scan the table — the largest one the sweep touches
+  on a deployment that has used the labs. `risk_signals` needs none: migration
+  `0020` already created `risk_signals_terminal_idx` for exactly this sweep.
+  `TestRetentionSweepIndexesExist` asserts every sweep index is present after
+  migrations run, so a future migration cannot drop one unnoticed.
+
 - **Retention now covers the intelligence history.** The Simulation and
   Forecasting & Risk Labs write tables that grow with use and no policy pruned
   them: `simulation_runs`, `forecast_runs` and `risk_signals`. Each is now a
@@ -23,6 +35,14 @@ once it reaches 1.0.
   retention is enabled, and a dry run still previews.
 
 ### Fixed
+
+- **`scripts/docs-check.sh` reported 98 broken links that were not broken.** The
+  link scan walked into `frontend/node_modules` and read the READMEs of vendored
+  packages, so the CI job failed on links inside dependencies nobody maintains.
+  The scan now excludes `node_modules`, `.git`, `dist` and `coverage`. The script
+  also now checks that the table and migration counts in `docs/database/schema.md`
+  match the code, which is how the document had drifted to "65 tables, 19
+  migrations" three migrations after it was last true.
 
 - **A mistyped retention window was accepted and silently ignored.** The
   `RetentionConfig` documentation promised that a policy key the registry does not

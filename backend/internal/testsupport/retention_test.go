@@ -706,3 +706,43 @@ VALUES
 		t.Errorf("kept signal statuses = %v, want [acknowledged open]", kept)
 	}
 }
+
+// TestRetentionSweepIndexesExist pins the indexes the sweep depends on. A sweep
+// filters on the time column alone (plus a status predicate where one exists) and
+// no organization, so it needs an index that leads with that column. The per-org
+// list indexes lead with organization_id and cannot serve it, so each sweep table
+// gets a dedicated one — migrations 0015, 0017 and 0021. This asserts they are
+// present after migrations run, so a future migration that drops or renames one is
+// caught rather than silently turning the sweep into a table scan.
+func TestRetentionSweepIndexesExist(t *testing.T) {
+	db := connectOrSkip(t)
+	freshSchema(t, db)
+
+	ctx := context.Background()
+	want := []string{
+		// 0015: the operational tables.
+		"webhook_deliveries_delivered_at_idx",
+		"jobs_finished_at_idx",
+		"ai_tasks_finished_at_idx",
+		"integration_runs_finished_at_idx",
+		// 0017: the run history.
+		"workflow_runs_finished_at_idx",
+		"agent_runs_finished_at_idx",
+		"events_inbox_processed_idx",
+		// 0020: the terminal risk signals.
+		"risk_signals_terminal_idx",
+		// 0021: the intelligence run history.
+		"simulation_runs_created_at_idx",
+		"forecast_runs_created_at_idx",
+	}
+	for _, name := range want {
+		var exists bool
+		if err := db.Pool().QueryRow(ctx,
+			`SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = $1)`, name).Scan(&exists); err != nil {
+			t.Fatalf("query index %s: %v", name, err)
+		}
+		if !exists {
+			t.Errorf("retention sweep index %s is missing; the sweep for its table would scan the whole table", name)
+		}
+	}
+}

@@ -64,8 +64,29 @@ while IFS= read -r line; do
     bad "$file -> $target (битая ссылка)"
     broken=$((broken + 1))
   fi
-done < <(grep -rnoE '\[[^]]*\]\([^)]+\)' --include='*.md' . 2>/dev/null)
+done < <(grep -rnoE '\[[^]]*\]\([^)]+\)' --include='*.md' \
+  --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=dist \
+  --exclude-dir=coverage . 2>/dev/null)
 [ "$broken" -eq 0 ] && ok "битых относительных ссылок нет"
+
+printf '\nСчётчики схемы\n'
+# Числа в docs/database/schema.md обязаны совпадать с кодом: миграции — файлы в
+# backend/internal/migrations, таблицы — из CREATE TABLE в них. Без этой проверки
+# документ тихо отстаёт от схемы, и «65 таблиц, 19 миграций» переживает три
+# миграции, как это уже было.
+schema=docs/database/schema.md
+if [ -s "$schema" ]; then
+  doc_migrations=$(grep -oE '\*\*[0-9]+ миграц' "$schema" | grep -oE '[0-9]+' | head -1)
+  doc_tables=$(grep -oE '\*\*[0-9]+ таблиц' "$schema" | grep -oE '[0-9]+' | head -1)
+  real_migrations=$(ls backend/internal/migrations/*.up.sql 2>/dev/null | wc -l | tr -d ' ')
+  real_tables=$(grep -rhoE 'CREATE TABLE [a-z_]+' backend/internal/migrations/*.up.sql 2>/dev/null | awk '{print $3}' | sort -u | wc -l | tr -d ' ')
+  [ "$doc_migrations" = "$real_migrations" ] \
+    && ok "schema.md: миграций $real_migrations" \
+    || bad "schema.md говорит «$doc_migrations миграций», в коде $real_migrations"
+  [ "$doc_tables" = "$real_tables" ] \
+    && ok "schema.md: таблиц $real_tables" \
+    || bad "schema.md говорит «$doc_tables таблиц», в коде $real_tables"
+fi
 
 printf '\nМатрица проверок\n'
 matrix=docs/verification/matrix.md

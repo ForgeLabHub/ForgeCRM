@@ -1,6 +1,6 @@
 # Схема данных
 
-PostgreSQL 17, схема `forgecrm`, **65 таблиц**, **19 миграций**. Полное описание
+PostgreSQL 17, схема `forgecrm`, **68 таблиц**, **21 миграция**. Полное описание
 столбцов — в SQL (`backend/internal/migrations/*.up.sql`); здесь — карта владения и
 связей, чтобы понять, кто за что отвечает.
 
@@ -16,6 +16,7 @@ PostgreSQL 17, схема `forgecrm`, **65 таблиц**, **19 миграций
 | События и вебхуки | `events_inbox`, `outbox_events`, `webhook_subscriptions`, `webhook_deliveries` | `events`, `outbox` |
 | AI и агенты | `ai_providers`, `ai_tasks`, `ai_insights`, `agent_runs`, `agent_actions`, `agent_approvals` | `ai`, `agent` |
 | Аналитика и симуляция | `simulation_scenarios`, `simulation_runs` | `simulate`; расчёты — `analytics` (без БД) |
+| Прогнозы и риски | `forecast_runs`, `risk_signals`, `risk_thresholds` | `analytics`; расчёты — `analytics/forecast.go`, `analytics/risk.go` |
 | Интеграции | `integrations`, `integration_runs`, `documents`, `telegram_links`, `email_log` | `integrations`, `storage`, `notify` |
 | Платформа | `jobs`, `audit_log`, `security_events`, `app_logs`, `app_settings`, `notifications`, `idempotency_keys` | `jobs`, `audit`, `logging`, `secrets` |
 
@@ -48,8 +49,11 @@ users 1─* sessions, mfa_factors, user_roles
 ## Индексы
 
 Индексы добавляются миграцией, а не вручную на проде. Отдельные миграции
-`0015_retention_indexes` и `0017_retention_sweep_indexes` существуют потому, что
-retention-выборки без них деградируют на больших объёмах.
+`0015_retention_indexes`, `0017_retention_sweep_indexes` и
+`0021_intelligence_retention_indexes` существуют потому, что retention-выборки без
+них деградируют на больших объёмах. `risk_signals` не нужен отдельный индекс в
+0021: миграция 0020 уже создала `risk_signals_terminal_idx` — частичный индекс по
+`status_changed_at` для терминальных статусов, ровно под этот sweep.
 
 ## Проверка
 
