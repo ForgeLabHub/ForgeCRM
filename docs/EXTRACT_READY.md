@@ -95,12 +95,22 @@ needs no third-party module at all.
 
 ---
 
-## Candidate 3 — `internal/secrets` — **ALMOST**
+## Candidate 3 — `internal/secrets` — **READY**
 
 **Why:** **zero internal imports**; a small, pure crypto helper library
-(Argon2 hashing, HMAC signing, token generation).
+(Argon2 hashing, HMAC signing, token generation, the AES-GCM keyring).
 
-**Evidence (performed at `7a6d67f`):**
+**Blocker that was, and how it was cleared:** the package shipped **no `_test.go`
+of its own**, so an extraction reported `[no test files]` and the behaviour was
+covered only indirectly through `authn` inside the monolith — exactly the
+"tests pass only in the monolith" condition the Definition of Done forbids.
+`secrets_test.go` now lives with the package: round-trip and salted hashing, the
+malformed-hash path distinguished from a mismatch, a fresh nonce per encryption,
+decryption refused under the wrong key and under tampering, and the CSRF/webhook
+signatures binding secret, timestamp and body. The tests run in the extracted
+project, so the proof is behavioural.
+
+**Evidence (performed at `7a6d67f`; re-run by the harness after this slice):**
 
 ```bash
 T=/tmp/extract-secrets
@@ -108,28 +118,31 @@ rm -rf $T && mkdir -p $T
 cp backend/internal/secrets/*.go $T/
 cd $T && printf 'module example.com/secrets\n\ngo 1.26.10\n\nrequire golang.org/x/crypto v0.58.0\n' > go.mod
 go build ./...   # BUILD_OK
-go test -count=1 ./...   # ?   example.com/secrets   [no test files]
+go test -count=1 ./...   # ok  example.com/secrets  (20 tests)
 ```
 
-A standalone smoke hashed and verified a password (`secrets.VerifyPassword`
-returned `nil`).
+A standalone smoke hashes a password, verifies it, rejects a wrong one and
+round-trips a value through the keyring.
 
-**Blocker:** the package ships **no `_test.go` of its own** — the extracted
-project reports `[no test files]`. `READY` requires the module's own tests to run
-in isolation, and there are none to run. The behaviour is covered only indirectly
-through `authn` inside the monolith, which is exactly the "tests pass only in the
-monolith" condition the Definition of Done forbids.
-
-**Next actions:** port the password/token assertions that currently live inside
-`authn` tests into `secrets` tests; then the module can be re-assessed as `READY`.
+**Files that move:** `internal/secrets/*.go` (1 source + 1 test file). The only
+third-party dependency is `golang.org/x/crypto`.
 
 ---
 
-## Candidate 4 — `internal/logging` — **ALMOST**
+## Candidate 4 — `internal/logging` — **READY**
 
-**Why:** zero internal imports, 158 lines, pure `log/slog` setup and redaction.
+**Why:** zero internal imports, pure `log/slog` setup and central redaction. It is
+the foundation every other package logs through, so keeping it a leaf is a
+structural guarantee, not a convenience.
 
-**Evidence (performed at `7a6d67f`):**
+**Blocker that was, and how it was cleared:** no tests. `logging_test.go` now
+pins the security property the package exists for — a password or token passed as
+a log field never reaches the output, including through `With` and through a
+nested group — plus the context helpers and the level/format wiring of `New`. A
+test asserts `New` returns the redacting handler, so a refactor that dropped the
+wrapper would fail.
+
+**Evidence:**
 
 ```bash
 T=/tmp/extract-logging
@@ -137,11 +150,8 @@ cp backend/internal/logging/*.go $T/
 cd $T && printf 'module example.com/logging\n\ngo 1.26.10\n' > go.mod
 go build ./...   # BUILD_OK
 go vet ./...     # VET_OK
+go test -count=1 ./...   # ok  example.com/logging  (10 tests)
 ```
-
-**Blocker:** no tests, and it is a helper rather than a module with a lifecycle —
-extracting it yields little reuse. It is `ALMOST` structurally but not a
-high-value extraction target.
 
 ---
 
@@ -180,15 +190,15 @@ run, because each has a concrete blocker that an extraction would only confirm.
 | `ratelimit` | **READY** | Zero internal deps; extracted, built, unit-tested (Redis path compiled, not run). |
 | `netguard` | **READY** | Standard library only; extracted, built, tested, smoke ran (blocked loopback/metadata, allowed public). |
 | `objectstore` | **READY** | Extracted with `netguard`; built, shared provider contract passed for `Memory` and real S3 wire protocol, smoke ran. |
-| `secrets` | **ALMOST** | Extracts and builds, but ships no tests of its own. |
-| `logging` | **ALMOST** | Extracts and builds; no tests; low reuse value. |
+| `secrets` | **READY** | Zero internal deps; extracted, built, its own 20 tests ran (the package gained them in this slice), smoke ran. |
+| `logging` | **READY** | Standard library only; extracted, built, its own tests ran (added in this slice), smoke ran. |
 | everything else | **ALMOST** / **NOT READY** | Concrete blocker listed above. |
 
 **No module is marked `READY` without an extraction run recorded here**, and the
 run is now automated: `scripts/extract-test/run.sh` performs it for every module in
-`modules.txt` on each CI run. `analytics`, `ratelimit`, `netguard` and
-`objectstore` pass that bar today.
+`modules.txt` on each CI run. `analytics`, `ratelimit`, `netguard`, `objectstore`,
+`secrets` and `logging` pass that bar today.
 
-The four `READY` modules are proven by the harness, not by this document. If the
+The six `READY` modules are proven by the harness, not by this document. If the
 harness ever fails for one of them, the status here is wrong and the harness is
 right.

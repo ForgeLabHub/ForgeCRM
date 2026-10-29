@@ -25,7 +25,22 @@ once it reaches 1.0.
   passes. A CI job `extraction` runs the harness, and `TestExtractionBoundaryHolds`
   in `internal/archtest` enforces the same boundary cheaply on every
   `go test ./...`; the two are independent, so neither a stale check nor a skipped
-  job can hide a violation.
+  job can hide a violation. Six modules are proven today: the four above plus
+  `secrets` and `logging`, which became provable once they gained their own tests
+  (see below).
+
+- **`secrets` and `logging` have their own tests, and are now extraction-proven.**
+  Both were standard-library-or-near leaves with no `_test.go` at all, so an
+  extraction reported `[no test files]` and their behaviour was covered only
+  indirectly through `authn` and the API — the "tests pass only in the monolith"
+  condition the Definition of Done forbids. `secrets_test.go` pins the properties
+  that matter for a credential path: hashing round-trips, a hash is salted, a
+  malformed stored hash is distinguished from a wrong password, the keyring uses a
+  fresh nonce per encryption, and a ciphertext is refused under the wrong key and
+  under tampering. `logging_test.go` pins the redaction control: a password or
+  token passed as a log field never reaches the output, including through `With`
+  and through a nested group, and a test asserts `New` still returns the redacting
+  handler. Both now extract, build, test and run in a clean module.
 
 - **The object-storage layer is now a module of its own.** `internal/objectstore`
   holds the provider contract (`ObjectStore`), the in-process `Memory` and the

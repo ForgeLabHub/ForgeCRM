@@ -509,8 +509,9 @@ Two things this document deliberately does not do:
 - **Internal deps:** none.
 - **External deps:** `golang.org/x/crypto/argon2`.
 - **Fake:** not applicable (pure crypto).
-- **Tests:** none in-package; exercised via `authn`.
-- **Extract:** `almost` — **zero internal deps**.
+- **Tests:** `secrets_test.go` (20 tests: hashing, the malformed-hash path, the
+  keyring, CSRF and webhook signatures).
+- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/secrets`.
 - **Cut lines:** the whole package moves.
 
 ### internal/config
@@ -534,8 +535,9 @@ Two things this document deliberately does not do:
 - **Internal deps:** none.
 - **External deps:** stdlib `log/slog`.
 - **Fake:** not applicable.
-- **Tests:** none in-package.
-- **Extract:** `almost` — **zero internal deps**.
+- **Tests:** `logging_test.go` (redaction through `New`, `With` and nested
+  groups; context helpers; level/format wiring).
+- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/logging`.
 - **Cut lines:** moves alone.
 
 ### internal/migrate / internal/migrations
@@ -631,16 +633,17 @@ Two things this document deliberately does not do:
   seams without a shipped fake: `ai.Provider`, `events.Poster`,
   `integrations.Adapter`, `migratex.Source`, `agent.Executor`,
   `database.Querier`, `objectstore.ObjectStore`, `ratelimit.Store`.
-- **Extract status:** four modules are `yes` — `analytics`, `ratelimit`, `netguard`
-  and `objectstore` — because they were actually extracted, built, tested and run in
-  a clean module, now by the automated harness in `scripts/extract-test/`. The
-  statuses here match `EXTRACT_READY.md` exactly.
+- **Extract status:** six modules are `yes` — `analytics`, `ratelimit`, `netguard`,
+  `objectstore`, `secrets` and `logging` — because they were actually extracted,
+  built, tested and run in a clean module, now by the automated harness in
+  `scripts/extract-test/`. The statuses here match `EXTRACT_READY.md` exactly.
 - **Gaps found:** the packages with **no `_test.go` at all** are `audit`, `crm`,
-  `events`, `forecast`, `jobs`, `logging`, `migrate`, `migratex`, `migrations`,
-  `notify`, `risk`, `secrets`, `simulate`, `wiring`. Of these, `crm`, `events`,
-  `forecast`, `risk` and `simulate` have integration coverage through
-  `internal/testsupport`; `audit`, `jobs`, `logging`, `notify`, `secrets` and
-  `wiring` are covered only indirectly. `ai` has two real `Provider`
-  implementations but no in-process fake; there is no `NoopStore` in `ratelimit`
-  and no `AllowAll` authorizer anywhere (authorization is enforced inline in `api`
-  middleware plus `crm` ownership checks).
+  `events`, `forecast`, `jobs`, `migrate`, `migratex`, `migrations`, `notify`,
+  `risk`, `simulate`, `wiring`. Of these, `crm`, `events`, `forecast`, `risk` and
+  `simulate` have integration coverage through `internal/testsupport`; `audit`,
+  `jobs`, `notify` and `wiring` are covered only indirectly. `logging` and
+  `secrets` gained in-package tests in the extraction slice, which is what let
+  them be marked `READY`. `ai` has two real `Provider` implementations but no
+  in-process fake; there is no `NoopStore` in `ratelimit` and no `AllowAll`
+  authorizer anywhere (authorization is enforced inline in `api` middleware plus
+  `crm` ownership checks).

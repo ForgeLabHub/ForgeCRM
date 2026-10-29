@@ -126,18 +126,39 @@ Both are acceptable outcomes; silently importing half the monolith is not.
   no HTTP error type.
 - **Hidden dependencies found:** none.
 
-### `secrets` — ALMOST
+### `secrets` — READY
+
+- **Internal imports:** none (`golang.org/x/crypto` only).
+- **Commands:** `scripts/extract-test/secrets/setup.sh` — `go build`, `go test`
+  and a smoke that hashes, verifies, rejects a mismatch and round-trips a value
+  through the keyring.
+- **Result:** built, tested and ran standalone. The package shipped no tests
+  before this slice; it now ships 20, and they run in the extracted project.
+- **Hidden dependencies found:** none.
+
+### `logging` — READY
+
+- **Internal imports:** none (standard library only).
+- **Commands:** `scripts/extract-test/logging/setup.sh` — `go build`, `go test` and
+  a smoke that logs a secret through `New` and asserts it is absent from the
+  output.
+- **Result:** built, tested and ran standalone. The package shipped no tests
+  before this slice; it now ships tests pinning the redaction control.
+- **Hidden dependencies found:** none.
+
+### `secrets` — ALMOST (superseded by READY above)
 
 - **Source SHA:** `7a6d67f`
 - **Commands:** copied, built (`ok`) and a smoke hashed/verified a password.
-- **Blocker:** `go test ./...` reported `[no test files]` — the package ships no
-  tests of its own, so "the module's own tests run in isolation" cannot be
-  satisfied.
+- **Blocker (now cleared):** `go test ./...` reported `[no test files]` — the
+  package shipped no tests of its own, so "the module's own tests run in isolation"
+  could not be satisfied. The package now ships `secrets_test.go`.
 
-### `logging` — ALMOST
+### `logging` — ALMOST (superseded by READY above)
 
 - **Commands:** copied, `go build ./...` and `go vet ./...` both clean.
-- **Blocker:** no tests, and low reuse value as a standalone module.
+- **Blocker (now cleared):** no tests. The package now ships `logging_test.go`,
+  which pins the redaction control.
 
 ## Next extraction candidate
 
@@ -165,6 +186,9 @@ The job fails if a module claimed `READY` no longer builds or tests in isolation
 which is the point: extraction readiness is a property that can regress, and CI
 should notice. The harness was itself verified to fail: replacing `objectstore`'s
 `netguard` import with `integrations` made both the harness and the archtest report
-the violation.
+the violation, and giving `logging` an in-module import made the archtest fail.
+
+`modules.txt` lists six modules today: `netguard`, `analytics`, `ratelimit`,
+`objectstore`, `secrets` and `logging`.
 
 See `scripts/extract-test/README.md` for how to add a module.

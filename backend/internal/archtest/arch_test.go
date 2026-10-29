@@ -212,11 +212,15 @@ func TestCoreDoesNotImportCompositionOrHTTP(t *testing.T) {
 // graph, so a regression is caught by `go test ./...` and not only by the heavier
 // extraction harness in scripts/extract-test.
 //
-// Two modules are pinned:
+// Four modules are pinned:
 //
 //   - netguard is the SSRF guard. It is a leaf: it must depend on nothing inside
 //     this module and nothing outside the standard library. That is what lets the
 //     object store use the guard without importing the Integration Hub.
+//   - secrets is password hashing, tokens and the credential keyring. It is a leaf
+//     too, so it can be built and tested on its own.
+//   - logging is structured logging with central redaction; a leaf as well, and the
+//     foundation every other package logs through.
 //   - objectstore is the object-storage layer carved out of `storage`. It may
 //     depend on netguard and on third-party libraries, but on no application-layer
 //     package — not the database, not the audit log, not RBAC, not HTTP error
@@ -244,13 +248,17 @@ func TestExtractionBoundaryHolds(t *testing.T) {
 		"testsupport":  true,
 	}
 
+	// netguard, secrets and logging are the modules the extraction harness proves
+	// standalone as leaves: each must have no import whose target begins with
+	// modulePath.
 	for path, p := range graph {
-		switch internalPkg(path) {
-		case "netguard":
+		name := internalPkg(path)
+		switch name {
+		case "netguard", "secrets", "logging":
 			for _, imp := range p.Imports {
 				if strings.HasPrefix(imp, modulePath) {
-					t.Errorf("netguard imports %s; it must be a leaf with no in-module dependency",
-						strings.TrimPrefix(imp, modulePath))
+					t.Errorf("%s imports %s; it must be a leaf with no in-module dependency",
+						name, strings.TrimPrefix(imp, modulePath))
 				}
 			}
 		case "objectstore":

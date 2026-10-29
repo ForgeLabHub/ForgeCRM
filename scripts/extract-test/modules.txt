@@ -12,8 +12,12 @@
 # analytics     money, ratio and scenario maths; no dependency at all
 # ratelimit     fixed-window limiter with in-memory and Redis stores
 # objectstore   the object-storage layer, extracted from internal/storage in this slice
+# secrets       password hashing, tokens and the AES-GCM keyring; x/crypto only
+# logging       structured logging with central secret redaction; standard library only
 
 netguard
 analytics
 ratelimit
 objectstore
+secrets
+logging
