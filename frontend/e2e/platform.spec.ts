@@ -307,7 +307,7 @@ test.describe('workflow templates', () => {
     const template = picker.getByRole('button', { name: /Notify the owner about an overdue deal/ })
     await expect(template).toBeVisible()
     await template.click()
-    await picker.getByRole('button', { name: 'Create' }).click()
+    await picker.getByRole('button', { name: 'Create', exact: true }).click()
 
     // Creating from a template returns a real workflow, which the page reads back.
     await expect(page.getByText(/Created .* from a template/i)).toBeVisible()
