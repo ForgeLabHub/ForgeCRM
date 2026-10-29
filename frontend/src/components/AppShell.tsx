@@ -48,6 +48,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: '/webhooks', label: 'Webhooks', permission: 'webhooks.manage' },
       { to: '/events', label: 'Events', permission: 'events.read' },
+      { to: '/workflows', label: 'Workflows', permission: 'workflows.read' },
       { to: '/jobs', label: 'Background jobs', permission: 'jobs.read' },
       { to: '/approvals', label: 'Agent approvals', permission: 'approvals.read' },
       { to: '/ai', label: 'AI & MCP', permission: 'ai.read' },

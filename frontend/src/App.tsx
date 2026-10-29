@@ -16,6 +16,7 @@ import { IntegrationsPage } from './pages/IntegrationsPage'
 import { MigrationsPage } from './pages/MigrationsPage'
 import { WebhooksPage } from './pages/WebhooksPage'
 import { EventsPage } from './pages/EventsPage'
+import { WorkflowsPage } from './pages/WorkflowsPage'
 import { JobsPage } from './pages/JobsPage'
 import { AiPage } from './pages/AiPage'
 import { ApprovalsPage } from './pages/ApprovalsPage'
@@ -190,6 +191,14 @@ export function App() {
           element={
             <RequirePermission permission="events.read">
               <EventsPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="workflows"
+          element={
+            <RequirePermission permission="workflows.read">
+              <WorkflowsPage />
             </RequirePermission>
           }
         />
