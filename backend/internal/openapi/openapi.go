@@ -196,6 +196,7 @@ var SessionOnly = map[string]string{
 	"GET /api/v1/system/info":           "Build and version information.",
 	"GET /api/v1/system/capabilities":   "Advertised capabilities of the running instance.",
 	"GET /api/v1/simulation/catalog":    "The scenario catalog the Simulation Lab can compute. Static metadata about the engine, exposing no tenant data.",
+	"GET /api/v1/forecast/catalog":      "The forecasting methods the engine can compute. Static metadata about the engine, exposing no tenant data.",
 }
 
 // Public is the union of Anonymous and SessionOnly, for callers that only need to

@@ -7,6 +7,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/ai"
 	"github.com/geff1778/forgecrm/internal/crm"
 	"github.com/geff1778/forgecrm/internal/events"
+	"github.com/geff1778/forgecrm/internal/forecast"
 	"github.com/geff1778/forgecrm/internal/httpx"
 	"github.com/geff1778/forgecrm/internal/importx"
 	"github.com/geff1778/forgecrm/internal/integrations"
@@ -401,6 +402,53 @@ func APIContract() openapi.Contract {
 		"never as a fabricated number."
 	c.BodyDescriptions["POST /api/v1/simulation/scenarios/{id}/runs"] = "Optional. `pipeline_id` restricts the " +
 		"funnel baseline; `from` and `to` restrict the period. An empty body uses the defaults."
+
+	// --- Forecasting --------------------------------------------------------
+	// The method catalog is session-only metadata. A run stores the series it was
+	// computed from and its result, both exact JSON documents written by
+	// internal/analytics; `result` carries money as integer minor units, so it is a
+	// passthrough rather than a typed component.
+	//
+	// simulate.CatalogEntry and forecast.CatalogEntry are both named "CatalogEntry";
+	// without distinct component names one type's fields would describe the other.
+	c.TypeNames[reflect.TypeOf(forecast.CatalogEntry{})] = "ForecastCatalogEntry"
+	c.Responses["GET /api/v1/forecast/catalog"] = reflect.TypeOf(forecastCatalogResponse{})
+	c.Responses["GET /api/v1/forecast/runs"] = reflect.TypeOf(forecastRunListResponse{})
+	c.RequestBodies["POST /api/v1/forecast/runs"] = reflect.TypeOf(createForecastRunRequest{})
+	c.RequiredBody["CreateForecastRunRequest"] = []string{"method", "horizon"}
+	c.Responses["POST /api/v1/forecast/runs"] = reflect.TypeOf(forecastRunResponse{})
+	c.SuccessStatus["POST /api/v1/forecast/runs"] = 201
+	c.Responses["GET /api/v1/forecast/runs/{id}"] = reflect.TypeOf(forecastRunResponse{})
+	c.BodyDescriptions["POST /api/v1/forecast/runs"] = "Compute and store a revenue forecast. `method` is " +
+		"`mean`, `moving_average` or `trend`; `horizon` is how many future periods to project. `window` is " +
+		"required for `moving_average`. The reply carries the projected points, the observed series they were " +
+		"computed from, and the measured out-of-sample accuracy next to a naive baseline. Too little history is " +
+		"reported as a 422 with the reason, never as a fabricated number."
+
+	// --- Risk ---------------------------------------------------------------
+	// A signal's `evidence` is the observed values behind the decision, so the
+	// document is a passthrough. Thresholds are a per-organization setting.
+	c.Responses["GET /api/v1/risk/signals"] = reflect.TypeOf(riskSignalListResponse{})
+	c.Responses["POST /api/v1/risk/scan"] = reflect.TypeOf(riskScanResponse{})
+	c.Responses["GET /api/v1/risk/signals/{id}"] = reflect.TypeOf(riskSignalResponse{})
+	c.RequestBodies["POST /api/v1/risk/signals/{id}/status"] = reflect.TypeOf(setRiskStatusRequest{})
+	c.RequiredBody["SetRiskStatusRequest"] = []string{"status"}
+	c.Responses["POST /api/v1/risk/signals/{id}/status"] = reflect.TypeOf(riskSignalResponse{})
+	c.Responses["GET /api/v1/risk/thresholds"] = reflect.TypeOf(riskThresholdsResponse{})
+	c.RequestBodies["PUT /api/v1/risk/thresholds"] = reflect.TypeOf(riskThresholdsResponse{})
+	c.Responses["PUT /api/v1/risk/thresholds"] = reflect.TypeOf(riskThresholdsResponse{})
+	c.QueryParams["GET /api/v1/risk/signals"] = []openapi.QueryParam{
+		{Name: "status", Schema: map[string]any{"type": "string"}, Description: "Restrict to one status: open, acknowledged, resolved or dismissed."},
+		{Name: "severity", Schema: map[string]any{"type": "string"}, Description: "Restrict to one severity: info, warn, high or critical."},
+		{Name: "type", Schema: map[string]any{"type": "string"}, Description: "Restrict to one signal type, for example stalled_deal."},
+		{Name: "include_terminal", Schema: map[string]any{"type": "boolean"}, Description: "Include resolved and dismissed signals, which are hidden by default."},
+	}
+	c.BodyDescriptions["POST /api/v1/risk/signals/{id}/status"] = "Move a signal to `acknowledged`, " +
+		"`dismissed` or `resolved`. Any other value is refused. The move is recorded in the audit log."
+	c.BodyDescriptions["PUT /api/v1/risk/thresholds"] = "The organization's risk thresholds. A day count " +
+		"or a ratio left at zero keeps the default. Ratios are basis points (10000 = 1.0), matching the " +
+		"detector's own representation."
+
 	// --- System -------------------------------------------------------------
 	c.Responses["GET /api/v1/system/info"] = reflect.TypeOf(systemInfoResponse{})
 	c.Responses["GET /api/v1/system/capabilities"] = reflect.TypeOf(capabilitiesResponse{})

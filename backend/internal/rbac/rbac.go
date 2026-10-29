@@ -142,6 +142,15 @@ const (
 	PermSimulationRead   Permission = "simulation.read"
 	PermSimulationManage Permission = "simulation.manage"
 	PermSimulationRun    Permission = "simulation.run"
+
+	// Forecasting and Risk. Reading a forecast or a risk signal (read) is separate
+	// from producing one: a forecast is computed against the whole organization's
+	// history, so the right to spend that compute is its own permission, and the risk
+	// thresholds are a shared setting (manage). None of these can modify CRM data.
+	PermForecastRead Permission = "forecast.read"
+	PermForecastRun  Permission = "forecast.run"
+	PermRiskRead     Permission = "risk.read"
+	PermRiskManage   Permission = "risk.manage"
 )
 
 // All returns every permission in the catalog, sorted.
@@ -187,6 +196,7 @@ var catalog = map[Permission]struct{}{
 	PermAgentRead: {}, PermAgentRun: {},
 	PermWorkflowsRead: {}, PermWorkflowsManage: {}, PermWorkflowsRun: {},
 	PermSimulationRead: {}, PermSimulationManage: {}, PermSimulationRun: {},
+	PermForecastRead: {}, PermForecastRun: {}, PermRiskRead: {}, PermRiskManage: {},
 }
 
 // Known reports whether p is part of the catalog.

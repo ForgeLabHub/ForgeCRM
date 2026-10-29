@@ -28,6 +28,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/crm"
 	"github.com/geff1778/forgecrm/internal/database"
 	"github.com/geff1778/forgecrm/internal/events"
+	"github.com/geff1778/forgecrm/internal/forecast"
 	"github.com/geff1778/forgecrm/internal/httpx"
 	"github.com/geff1778/forgecrm/internal/importx"
 	"github.com/geff1778/forgecrm/internal/integrations"
@@ -38,6 +39,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/outbox"
 	"github.com/geff1778/forgecrm/internal/ratelimit"
 	"github.com/geff1778/forgecrm/internal/rbac"
+	"github.com/geff1778/forgecrm/internal/risk"
 	"github.com/geff1778/forgecrm/internal/secrets"
 	"github.com/geff1778/forgecrm/internal/simulate"
 	"github.com/geff1778/forgecrm/internal/storage"
@@ -80,6 +82,12 @@ type Deps struct {
 	// Simulation is the Simulation Lab. It computes saved scenarios against a
 	// baseline read through the CRM service. It cannot modify CRM data.
 	Simulation *simulate.Service
+	// Forecast computes a revenue forecast from the organization's history. It
+	// cannot modify CRM data.
+	Forecast *forecast.Service
+	// Risk scans the CRM for explainable risk conditions and keeps the signals an
+	// operator works through. It cannot modify CRM data.
+	Risk *risk.Service
 	// Storage is the optional S3-compatible attachment store. A nil or disabled
 	// service reports itself off; the document routes answer 503 rather than 500.
 	Storage *storage.Service
@@ -326,6 +334,7 @@ func (s *Server) buildRouter() chi.Router {
 			s.mountAgent(r)
 			s.mountWorkflows(r)
 			s.mountSimulation(r)
+			s.mountIntelligence(r)
 			s.mountDocuments(r)
 			s.mountMCP(r)
 			s.mountNotifications(r)
