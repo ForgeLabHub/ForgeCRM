@@ -1,4 +1,4 @@
-package storage
+package objectstore
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 
-	"github.com/geff1778/forgecrm/internal/integrations"
+	"github.com/geff1778/forgecrm/internal/netguard"
 )
 
 // S3Config configures an S3-compatible store.
@@ -303,7 +303,7 @@ func normaliseEndpoint(raw string) (endpoint string, secure bool, err error) {
 }
 
 // guardEndpoint refuses an endpoint that resolves to a private or loopback
-// address. It reuses the integration SSRF rules so there is one definition of
+// address. It uses the shared outbound guard so there is one definition of
 // "internal" in the codebase.
 func guardEndpoint(endpoint string) error {
 	host, _, err := net.SplitHostPort(endpoint)
@@ -315,7 +315,7 @@ func guardEndpoint(endpoint string) error {
 		return fmt.Errorf("storage: resolve the endpoint %q: %w", host, err)
 	}
 	for _, ip := range ips {
-		if integrations.IsBlockedIP(ip) {
+		if netguard.IsBlockedIP(ip) {
 			return fmt.Errorf(
 				"storage: the endpoint %q resolves to %s, which is a private or loopback address; "+
 					"set FORGECRM_STORAGE_ALLOW_PRIVATE_ENDPOINT=true to permit a self-hosted store",

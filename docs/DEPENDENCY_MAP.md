@@ -56,12 +56,14 @@ graph TD
   end
 
   subgraph platform["Platform / infrastructure"]
+    NETGUARD[netguard]
     RBAC[rbac]
     AUDIT[audit]
     DATABASE[database]
     HTTPX[httpx]
     RATELIMIT[ratelimit]
     RETENTION[retention]
+    OBJECTSTORE[objectstore]
     STORAGE[storage]
     JOBS[jobs]
     OUTBOX[outbox]
@@ -169,6 +171,7 @@ graph TD
   INTEGRATIONS --> AUDIT
   INTEGRATIONS --> DATABASE
   INTEGRATIONS --> HTTPX
+  INTEGRATIONS --> NETGUARD
   INTEGRATIONS --> RBAC
   INTEGRATIONS --> SECRETS
   EVENTS --> AUDIT
@@ -200,10 +203,11 @@ graph TD
   HTTPX --> RATELIMIT
   RETENTION --> AUDIT
   RETENTION --> DATABASE
+  OBJECTSTORE --> NETGUARD
   STORAGE --> AUDIT
   STORAGE --> DATABASE
   STORAGE --> HTTPX
-  STORAGE --> INTEGRATIONS
+  STORAGE --> OBJECTSTORE
   STORAGE --> RBAC
   JOBS --> DATABASE
   OUTBOX --> DATABASE
@@ -275,10 +279,12 @@ that reach for a *specific* piece of infrastructure rather than the substrate:
 
 - `ratelimit` → Redis (only when `RedisStore` is constructed; `MemoryStore` needs
   nothing).
-- `storage` → S3/MinIO (`minio-go`).
+- `objectstore` → S3/MinIO (`minio-go`), and `netguard` for the endpoint check.
+- `storage` → PostgreSQL (metadata rows); it delegates the object mechanism to
+  `objectstore`.
 - `notify` → SMTP (`net/smtp`), Telegram (HTTP).
 - `ai` → an HTTP AI provider.
-- `integrations`/`events` → outbound HTTP through the SSRF guard.
+- `integrations`/`events` → outbound HTTP through `netguard`.
 
 ### 4. Modules tied to global application state
 
@@ -297,8 +303,9 @@ on `context.Context` (`database.WithTx` / `database.TxFromContext`), which
 
 `database`, `logging`, `httpx`, `rbac`, `audit`, `secrets`, `config`. These are
 the components an extraction must either carry or invert behind an interface.
-The three lightest — `logging`, `secrets`, `analytics` — have **zero** internal
-dependencies and are the natural first extractions.
+The lightest — `analytics`, `netguard` (both zero internal dependencies) and
+`logging`/`secrets` — are the natural first extractions, and `analytics` and
+`netguard` have been extracted and proven by `scripts/extract-test/`.
 
 ### 7. Dependency direction (the rule the code follows)
 
@@ -308,8 +315,8 @@ domain (crm, analytics)
 application (importx, migratex, ai, agent, workflow, simulate, forecast, risk,
              integrations, events, notify, authn)
    ↑
-platform (rbac, audit, database, httpx, ratelimit, retention, storage, jobs,
-          outbox, secrets, config, logging)
+platform (netguard, rbac, audit, database, httpx, ratelimit, retention,
+          objectstore, storage, jobs, outbox, secrets, config, logging)
    ↑
 composition (wiring, api, cmd/*)
 ```

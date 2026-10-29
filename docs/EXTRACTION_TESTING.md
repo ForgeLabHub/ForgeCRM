@@ -104,6 +104,28 @@ Both are acceptable outcomes; silently importing half the monolith is not.
   `integration`) needs a live Redis; the Redis code path compiled but was not
   executed in the clean project. Recorded, not glossed over.
 
+### `netguard` — READY
+
+- **Internal imports:** none (standard library only).
+- **Commands:** `scripts/extract-test/netguard/setup.sh` — `go build`, `go test`,
+  and a smoke that asserts loopback, link-local metadata and `file://` are refused
+  while a public literal address is allowed.
+- **Result:** built, tested and ran standalone with no dependency at all.
+- **Hidden dependencies found:** none. The setup asserts the `go.mod` has no
+  `require` block, so a third-party dependency would fail the extraction.
+
+### `objectstore` — READY
+
+- **Internal imports:** `netguard` only, copied into a subdirectory of the extracted
+  module and re-pointed at it.
+- **Commands:** `scripts/extract-test/objectstore/setup.sh` — `go build`, `go test`
+  (the shared provider contract runs against `Memory` and against a real S3 wire
+  protocol via `gofakes3`), and a smoke that stores, reads, lists, presigns and
+  deletes an object.
+- **Result:** built, tested and ran standalone. No database, no audit log, no RBAC,
+  no HTTP error type.
+- **Hidden dependencies found:** none.
+
 ### `secrets` — ALMOST
 
 - **Source SHA:** `7a6d67f`
@@ -119,17 +141,30 @@ Both are acceptable outcomes; silently importing half the monolith is not.
 
 ## Next extraction candidate
 
-`internal/storage` is the recommended next target after the core blocks. It
-already has the shape the procedure wants — an `ObjectStore` interface with a real
-in-process `Memory` fake and an `S3` adapter — so the fake-adapter step (step 6)
-is already satisfied. Its blocker is that `Service` imports `audit`, `database`,
-`httpx`, `integrations` and `rbac`; the extraction would lift `ObjectStore`,
-`Memory` and `S3` as a sub-package and leave `Service` behind. That split is the
-work, and the extract-test would prove it.
+`internal/storage`'s provider layer was the recommended next target, and it is now
+done: `internal/objectstore` is extracted and proven. `Service` stays behind by
+design, because its authorization, metadata and reconciliation are application
+concerns.
+
+The next candidates, in order of how much the boundary has to change first, are in
+`docs/EXTRACT_READY.md`: `rbac` (split the pure catalog and `Principal` from the
+DB-backed service), `retention` (extract the engine, inject a table catalog), and
+`integrations` (the SSRF guard is already out; the rest needs `secrets` and
+`audit`).
 
 ## Automating this
 
-The procedure becomes `scripts/extract-test/<module>.sh`, driven by a table of
-modules with status `READY`, and a CI job `extract-test` runs it. The job fails if
-a module claimed `READY` no longer builds or tests in isolation — which is the
-point: extraction readiness is a property that can regress, and CI should notice.
+The procedure is implemented as `scripts/extract-test/`, driven by the table in
+`scripts/extract-test/modules.txt`. Each module has a `setup.sh` that performs
+steps 3–10 of the procedure above; `run.sh` runs every module's setup and fails if
+any of them fails. A CI job `extraction` runs it, and `internal/archtest`'s
+`TestExtractionBoundaryHolds` enforces the same boundaries from the import graph on
+every `go test ./...`.
+
+The job fails if a module claimed `READY` no longer builds or tests in isolation —
+which is the point: extraction readiness is a property that can regress, and CI
+should notice. The harness was itself verified to fail: replacing `objectstore`'s
+`netguard` import with `integrations` made both the harness and the archtest report
+the violation.
+
+See `scripts/extract-test/README.md` for how to add a module.

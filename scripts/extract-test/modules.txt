@@ -1,0 +1,19 @@
+# Modules the extraction harness proves independent of the ForgeCRM monolith.
+#
+# One module per line, below the blank line. Each has a
+# scripts/extract-test/<module>/setup.sh that copies it into a clean Go module and
+# builds, tests and runs it there.
+#
+# A module is listed here only when its extraction actually passes. Listing a
+# module that does not extract would make the harness lie, which is worse than not
+# listing it.
+#
+# netguard      the SSRF guard; standard library only, the leaf everything else may depend on
+# analytics     money, ratio and scenario maths; no dependency at all
+# ratelimit     fixed-window limiter with in-memory and Redis stores
+# objectstore   the object-storage layer, extracted from internal/storage in this slice
+
+netguard
+analytics
+ratelimit
+objectstore

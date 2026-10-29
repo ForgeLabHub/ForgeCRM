@@ -269,21 +269,24 @@ Two things this document deliberately does not do:
 - **Extract:** `no`.
 - **Cut lines:** as `simulate`.
 
-### internal/integrations  — adapter lifecycle + SSRF guard
+### internal/integrations  — adapter lifecycle
 - **Responsibility:** external integration adapters (REST, webhook-out, SMTP
-  probe, database descriptor) and the outbound SSRF guard.
+  probe, database descriptor). The outbound SSRF guard it used to own now lives in
+  `internal/netguard`; the names below are re-exported for existing callers.
 - **Public API:** `Hub`, `Adapter` (interface), `GuardedClient`, `Integration`,
   `Run`, `Schema`, `Table`, `Column`, `Record`, `ReadRequest`, `WriteResult`,
   `Status`, `CreateRequest`; funcs `NewHub`, `NewGuardedClient`,
-  `ValidateOutboundURL`, `IsBlockedIP`; `ErrWriteNotSupported`.
-- **Internal deps:** `audit, database, httpx, rbac, secrets`.
+  `ValidateOutboundURL`, `IsBlockedIP` (the last four re-export `netguard`);
+  `ErrWriteNotSupported`.
+- **Internal deps:** `audit, database, httpx, netguard, rbac, secrets`.
 - **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`.
 - **Fake:** `Adapter` is the seam; `webhookOutAdapter`/`restAdapter` are real
   implementations.
-- **Tests:** `integrations` unit tests (SSRF, URL validation) + integration.
-- **Extract:** `almost` — the SSRF guard + `Adapter` contract are portable.
-- **Cut lines:** the guard and the `Adapter` interface move; the persistence does
-  not.
+- **Tests:** `integrations` unit tests (URL validation) + integration. The SSRF
+  tests moved to `netguard`.
+- **Extract:** `almost` — the SSRF guard is already out; the rest needs `secrets`
+  and `audit`.
+- **Cut lines:** the guard moved to `netguard`; the persistence does not.
 
 ### internal/events  — inbound events + webhook delivery
 - **Responsibility:** accept inbound events, verify signatures/timestamps, and
@@ -420,24 +423,58 @@ Two things this document deliberately does not do:
 - **Extract:** `almost` — 2 internal deps, self-contained logic.
 - **Cut lines:** moves with `audit`/`database`.
 
-### internal/storage  — S3-compatible object store
-- **Responsibility:** attachments: upload/download, metadata, entity binding,
-  tenant/rights checks, size/type limits, safe object keys, orphan reconciliation.
-- **Public API:** `Service`, `ObjectStore` (interface), `Memory`, `S3`, `Config`,
-  `S3Config`, `Document`, `ObjectInfo`, `ObjectMeta`, `UploadInput`,
-  `ReconcileReport`; funcs `New`, `NewMemory`, `NewS3`; `ErrNotConfigured`,
-  `ErrObjectMissing`.
-- **Internal deps:** `audit, database, httpx, integrations, rbac`.
-- **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`,
-  `github.com/minio/minio-go/v7`, `.../pkg/credentials`.
-- **Fake:** `Memory` (`NewMemory`) is a **real in-process `ObjectStore`** — a
-  genuine fake for the S3 adapter.
+### internal/netguard  — outbound SSRF guard
+- **Responsibility:** the single place that decides whether an outbound request
+  destination is safe: rejects loopback, private, link-local, multicast and
+  unspecified addresses, and non-`http(s)` schemes, for the URL itself and for
+  every resolved IP. Used by the Integration Hub and by the S3 object store.
+- **Public API:** `GuardedClient`, `NewGuardedClient`, `ValidateOutboundURL`,
+  `IsBlockedIP`; `ErrBlocked`.
+- **Internal deps:** none — **standard library only.**
+- **External deps:** none beyond stdlib.
+- **Fake:** none needed; the decision is pure.
+- **Tests:** `netguard_test.go`.
+- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/netguard`;
+  the setup also asserts the `go.mod` stays free of any `require`.
+- **Cut lines:** already cut. It is a leaf, so anything may depend on it and it
+  depends on nothing.
+
+### internal/objectstore  — object-storage provider layer
+- **Responsibility:** the storage *mechanism*: the `ObjectStore` contract, the
+  in-process `Memory` provider, the S3-compatible `S3` provider, and the pure
+  helpers for object keys and content types. It does **not** decide who may read or
+  write an object, and it does not touch the database — that is `storage.Service`.
+- **Public API:** `ObjectStore` (interface), `Memory`, `S3`, `ObjectInfo`,
+  `ObjectMeta`, `NormaliseContentType`, `IsAllowedContentType`; funcs `NewMemory`,
+  `NewS3`; `ErrObjectMissing`.
+- **Internal deps:** `netguard`.
+- **External deps:** `github.com/google/uuid`, `github.com/minio/minio-go/v7`,
+  `.../pkg/credentials`.
+- **Fake:** `Memory` (`NewMemory`) is a **real in-process `ObjectStore`**, used by
+  both tests and the local development profile.
+- **Tests:** `contract_test.go` (the shared behaviour contract, run against
+  `Memory`), `s3_contract_test.go` (the same contract against a real S3 wire
+  protocol via `gofakes3`), `helpers_test.go`.
+- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/objectstore`.
+- **Cut lines:** already cut, out of `internal/storage`. `storage.Service` depends
+  on it; the dependency does not point back.
+
+### internal/storage  — attachment service (authorization + metadata)
+- **Responsibility:** attachments: upload/download orchestration, metadata rows,
+  entity binding, tenant/rights checks, size/type limits, orphan reconciliation.
+  Delegates the mechanism to `internal/objectstore`.
+- **Public API:** `Service`, `Config`, `Document`, `UploadInput`,
+  `ReconcileReport`; funcs `New`; `ErrNotConfigured`. The `ObjectStore`, `Memory`,
+  `S3`, `ObjectInfo` and `ObjectMeta` names are re-exported as aliases so existing
+  callers are unchanged.
+- **Internal deps:** `audit, database, httpx, objectstore, rbac`.
+- **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`.
+- **Fake:** `objectstore.Memory` through the re-exported `NewMemory`.
 - **Tests:** `storage_test.go` (key/extension/entity rules) +
-  `testsupport/storage_s3_test.go`, `storage_test.go` (gofakes3-backed).
-- **Extract:** `almost` — `ObjectStore` + `Memory` + `S3` are portable; the
-  `Service` binds to `crm`-adjacent `rbac`/`audit`.
-- **Cut lines:** the `ObjectStore` interface, `Memory`, `S3` move cleanly; the
-  `Service` needs `rbac`/`audit`.
+  `testsupport/storage_s3_test.go`.
+- **Extract:** `no` — `Service` binds to `rbac`/`audit`/`database` by design; the
+  portable half (`objectstore`) has already been lifted out.
+- **Cut lines:** the provider layer moved to `internal/objectstore`; `Service` stays.
 
 ### internal/jobs
 - **Responsibility:** the background job queue: enqueue, claim (`SKIP LOCKED`),
@@ -589,14 +626,15 @@ Two things this document deliberately does not do:
 - **Packages with ≥8 internal deps:** `api` (26), `wiring` (22), `importx` (10),
   `ai` (9), `events` (8); `cmd/forgecrm-worker` (17) and `cmd/forgecrm-api` (11)
   are composition roots, not modules.
-- **Real in-process fakes that exist today:** `storage.Memory` (`NewMemory`),
-  `ratelimit.MemoryStore`. Documented injection seams without a shipped fake:
-  `ai.Provider`, `events.Poster`, `integrations.Adapter`, `migratex.Source`,
-  `agent.Executor`, `database.Querier`, `storage.ObjectStore`, `ratelimit.Store`.
-- **Extract status:** two modules are `yes` — `analytics` and `ratelimit` — because
-  they were actually extracted, built, tested and run in a clean module (evidence
-  in `EXTRACT_READY.md`). Everything else is `almost` or `no`; the statuses here
-  match `EXTRACT_READY.md` exactly.
+- **Real in-process fakes that exist today:** `objectstore.Memory` (`NewMemory`,
+  re-exported as `storage.NewMemory`), `ratelimit.MemoryStore`. Documented injection
+  seams without a shipped fake: `ai.Provider`, `events.Poster`,
+  `integrations.Adapter`, `migratex.Source`, `agent.Executor`,
+  `database.Querier`, `objectstore.ObjectStore`, `ratelimit.Store`.
+- **Extract status:** four modules are `yes` — `analytics`, `ratelimit`, `netguard`
+  and `objectstore` — because they were actually extracted, built, tested and run in
+  a clean module, now by the automated harness in `scripts/extract-test/`. The
+  statuses here match `EXTRACT_READY.md` exactly.
 - **Gaps found:** the packages with **no `_test.go` at all** are `audit`, `crm`,
   `events`, `forecast`, `jobs`, `logging`, `migrate`, `migratex`, `migrations`,
   `notify`, `risk`, `secrets`, `simulate`, `wiring`. Of these, `crm`, `events`,

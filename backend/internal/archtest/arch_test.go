@@ -208,6 +208,62 @@ func TestCoreDoesNotImportCompositionOrHTTP(t *testing.T) {
 	}
 }
 
+// TestExtractionBoundaryHolds pins the extraction-ready property in the import
+// graph, so a regression is caught by `go test ./...` and not only by the heavier
+// extraction harness in scripts/extract-test.
+//
+// Two modules are pinned:
+//
+//   - netguard is the SSRF guard. It is a leaf: it must depend on nothing inside
+//     this module and nothing outside the standard library. That is what lets the
+//     object store use the guard without importing the Integration Hub.
+//   - objectstore is the object-storage layer carved out of `storage`. It may
+//     depend on netguard and on third-party libraries, but on no application-layer
+//     package — not the database, not the audit log, not RBAC, not HTTP error
+//     types. A single such import is what would make it unextractable.
+//
+// This is the cheap, always-on half of the check. The extraction harness is the
+// expensive half that actually compiles the module on its own; the two are
+// deliberately independent, so neither a stale archtest nor a skipped CI job can
+// hide a violation.
+func TestExtractionBoundaryHolds(t *testing.T) {
+	graph := loadGraph(t)
+
+	// The application layer, as named in TestApplicationServicesDependOnTheCore...
+	// plus the infrastructure a storage provider must not know about.
+	forbiddenForObjectstore := map[string]bool{
+		"api":          true,
+		"crm":          true,
+		"database":     true,
+		"audit":        true,
+		"rbac":         true,
+		"httpx":        true,
+		"storage":      true,
+		"integrations": true,
+		"wiring":       true,
+		"testsupport":  true,
+	}
+
+	for path, p := range graph {
+		switch internalPkg(path) {
+		case "netguard":
+			for _, imp := range p.Imports {
+				if strings.HasPrefix(imp, modulePath) {
+					t.Errorf("netguard imports %s; it must be a leaf with no in-module dependency",
+						strings.TrimPrefix(imp, modulePath))
+				}
+			}
+		case "objectstore":
+			for _, imp := range p.Imports {
+				if to := internalPkg(imp); forbiddenForObjectstore[to] {
+					t.Errorf("objectstore imports %s; the storage boundary must not depend on the application layer",
+						to)
+				}
+			}
+		}
+	}
+}
+
 // TestEveryInternalPackageIsReachableFromACommand catches dead packages.
 //
 // A package no binary can reach is either an unfinished extraction or a leftover.

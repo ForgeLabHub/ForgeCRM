@@ -115,6 +115,25 @@ jobs:
           /tmp/forgecrm-api -migrate
           /tmp/forgecrm-api -migrate   # a second run must be a no-op
 
+  extraction:
+    name: Extraction (each module builds without the monolith)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend/go.sum
+
+      # "Extraction-ready" is only a fact if removing the monolith still leaves the
+      # module working. This job does exactly that: it copies each module in
+      # scripts/extract-test/modules.txt into a clean Go module and builds, tests and
+      # runs it there. The archtest enforces the same boundary cheaply on every
+      # `go test`; this is the version that cannot be fooled by a stale import list.
+      - name: Run the extraction harness
+        run: ./scripts/extract-test/run.sh
+
   frontend:
     name: Frontend (lint, typecheck, test, build)
     runs-on: ubuntu-latest

@@ -152,14 +152,14 @@ run, because each has a concrete blocker that an extraction would only confirm.
 
 | Module | Status | Evidence | Blockers | Next actions |
 | --- | --- | --- | --- | --- |
-| `internal/storage` | **ALMOST** | `ObjectStore` interface + real `Memory` fake (`NewMemory`) + `S3` adapter already exist; `storage_test.go` covers key/extension/entity rules. | `Service` imports `audit, database, httpx, integrations, rbac` (5). | Extract `ObjectStore`+`Memory`+`S3` as a sub-package; leave `Service` behind. |
+| `internal/storage` | **SPLIT — `objectstore` READY** | The provider layer was lifted into `internal/objectstore` and extracted: `go build`, the shared provider contract (Memory and real S3 wire protocol) and a smoke all pass in a clean module. `Service` keeps the authorization, metadata and reconciliation and stays behind. | `Service` still imports `audit, database, httpx, rbac`. That is correct — those are its job — and it is why only the provider layer was lifted. | None for `objectstore`. `Service` is not an extraction target; it is the application layer. |
 | `internal/outbox` | **ALMOST** | Small surface (`Store`, `Envelope`, `Event`, `EventTypes`); has a unit test. | Depends on `database`, `logging`; the outbox is meaningless without the app's transaction. | Document the `database` dependency; it is a substrate-bound module. |
 | `internal/retention` | **ALMOST** | Self-contained logic; unit + integration tests; dry-run by default. | Depends on `audit`, `database`; policy table is application-specific. | Extract the engine, inject a table catalog. |
 | `internal/audit` | **ALMOST** | Small surface (`Logger`, `Entry`, `Action`); append-only enforced by a DB trigger. | Depends on `database`, `logging`; no in-package tests; schema lives in migration 0001. | Move schema ownership with it or provide a migration. |
 | `internal/rbac` | **ALMOST** | `NewPrincipal` gives a test fake; catalog is a plain const block. | Depends on `database`; catalog must match migration 0004. | Split the pure catalog + `Principal` from the DB-backed `Service`. |
 | `internal/jobs` | **ALMOST** | One internal dep (`database`); clear responsibility. | Uses `FOR UPDATE … SKIP LOCKED`; PostgreSQL-specific. | Would need a dialect abstraction. |
 | `internal/agent` | **ALMOST** | `Executor` interface seam; unit + integration tests. | Depends on `audit, database, httpx`. | Fine to leave; it is small and cohesive. |
-| `internal/integrations` | **ALMOST** | `Adapter` interface + `GuardedClient` SSRF guard; unit tests. | Depends on `audit, database, httpx, rbac, secrets`. | The guard alone is extractable. |
+| `internal/integrations` | **ALMOST** | `Adapter` interface; unit tests. | Depends on `audit, database, httpx, rbac, secrets`. | The SSRF guard alone was extracted: it now lives in `internal/netguard` (standard library only) and `integrations` re-exports it. |
 | `internal/crm` | **ALMOST** | The domain core; nothing imports it back, so the boundary is one-directional. | Depends on `httpx` and `outbox` (platform concerns) besides `audit/database/rbac`. | Invert `httpx`/`outbox` behind interfaces first. |
 | `internal/ai` | **NOT READY** | 9 internal deps; binds to `crm` for context. | `agent, audit, config, crm, database, httpx, logging, ratelimit, rbac`. | Split `Provider`+prompt+confidence (portable) from the context assembly (bound). |
 | `internal/importx` | **NOT READY** | 10 internal deps; writes into `crm`. | `parsers/` and `safe/` are separable; the service is not. | Extract the two sub-packages only. |
@@ -178,9 +178,17 @@ run, because each has a concrete blocker that an extraction would only confirm.
 | --- | --- | --- |
 | `analytics` | **READY** | Zero internal deps; extracted, built, tested, smoke ran. |
 | `ratelimit` | **READY** | Zero internal deps; extracted, built, unit-tested (Redis path compiled, not run). |
+| `netguard` | **READY** | Standard library only; extracted, built, tested, smoke ran (blocked loopback/metadata, allowed public). |
+| `objectstore` | **READY** | Extracted with `netguard`; built, shared provider contract passed for `Memory` and real S3 wire protocol, smoke ran. |
 | `secrets` | **ALMOST** | Extracts and builds, but ships no tests of its own. |
 | `logging` | **ALMOST** | Extracts and builds; no tests; low reuse value. |
 | everything else | **ALMOST** / **NOT READY** | Concrete blocker listed above. |
 
-**No module is marked `READY` without an extraction run recorded here.**
-`analytics` and `ratelimit` are the two that pass that bar today.
+**No module is marked `READY` without an extraction run recorded here**, and the
+run is now automated: `scripts/extract-test/run.sh` performs it for every module in
+`modules.txt` on each CI run. `analytics`, `ratelimit`, `netguard` and
+`objectstore` pass that bar today.
+
+The four `READY` modules are proven by the harness, not by this document. If the
+harness ever fails for one of them, the status here is wrong and the harness is
+right.

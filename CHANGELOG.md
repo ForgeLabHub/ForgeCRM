@@ -10,6 +10,42 @@ once it reaches 1.0.
 
 ### Added
 
+- **An extraction harness that proves a module stands alone.** "This module is
+  extraction-ready" was a claim nobody tested: a package builds inside the
+  monolith while depending on half of it, and that only fails when someone tries
+  to take it out. `scripts/extract-test/` now does the extraction for real — it
+  copies a module into a clean Go module without ForgeCRM, and builds, tests and
+  runs it there, so a reach back into the application layer is a compile error
+  rather than a discovery made months later. Four modules are proven today:
+  `netguard` (standard library only), `analytics` (no dependency at all),
+  `ratelimit` (with the Redis client) and `objectstore` (with `netguard`). The
+  module's own tests run in the extracted project, so the proof covers behaviour
+  and not just compilation, and a `cmd/smoke` program exercises the public API.
+  `scripts/extract-test/modules.txt` lists only modules whose extraction actually
+  passes. A CI job `extraction` runs the harness, and `TestExtractionBoundaryHolds`
+  in `internal/archtest` enforces the same boundary cheaply on every
+  `go test ./...`; the two are independent, so neither a stale check nor a skipped
+  job can hide a violation.
+
+- **The object-storage layer is now a module of its own.** `internal/objectstore`
+  holds the provider contract (`ObjectStore`), the in-process `Memory` and the
+  S3-compatible `S3`, plus the pure key and content-type helpers. It depends on
+  `internal/netguard` and third-party libraries, and on nothing from the
+  application layer — no database, no audit log, no RBAC, no HTTP error type.
+  `internal/storage` keeps authorization, the metadata rows and the reconciliation
+  between an object and its row, and depends on the new package; its public API is
+  unchanged, so no caller moved. The package's tests now include a shared
+  behaviour contract run against both providers, and the S3 run is a real S3 wire
+  protocol (via `gofakes3`) rather than an interface mock, so signing, path-style
+  addressing and the 404-to-`ErrObjectMissing` translation are exercised.
+
+- **The SSRF guard is a leaf package.** It moved from `internal/integrations` to
+  `internal/netguard`, where it depends on nothing but the standard library. The
+  object store needs exactly these rules — an S3 endpoint is an SSRF target — but
+  must not import the Integration Hub to get them. `integrations` re-exports the
+  names it always did (`GuardedClient`, `NewGuardedClient`, `ValidateOutboundURL`,
+  `IsBlockedIP`), so no call site changed.
+
 - **Sweep indexes for the intelligence history.** Migration
   `0021_intelligence_retention_indexes` adds `simulation_runs_created_at_idx` and
   `forecast_runs_created_at_idx`, following the rule migration `0017` set: a

@@ -21,10 +21,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"mime"
 	"net/url"
-	"path"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -34,18 +31,21 @@ import (
 	"github.com/geff1778/forgecrm/internal/audit"
 	"github.com/geff1778/forgecrm/internal/database"
 	"github.com/geff1778/forgecrm/internal/httpx"
+	"github.com/geff1778/forgecrm/internal/objectstore"
 	"github.com/geff1778/forgecrm/internal/rbac"
 )
 
-// ErrNotConfigured is returned when object storage is disabled. It is a distinct
-// error so a handler can answer "this deployment has no object storage" rather
-// than a generic failure, and so a caller can tell "off" from "broken".
-var ErrNotConfigured = errors.New("object storage is not configured")
-
-// ErrObjectMissing is returned when the metadata row exists but the object does
-// not. This is the state a failed delete or a manual bucket edit leaves behind,
-// and naming it lets the caller distinguish it from a missing record.
-var ErrObjectMissing = errors.New("the stored object is missing")
+// The provider contract and its implementations (Memory, S3) live in
+// internal/objectstore, which has no database, audit or RBAC dependency and can be
+// extracted on its own. They are re-exported here so every existing caller keeps
+// using storage.ObjectStore, storage.Memory, storage.S3 and so on, and the public
+// API of this package is unchanged.
+var (
+	// ErrNotConfigured is returned when object storage is disabled.
+	ErrNotConfigured = objectstore.ErrNotConfigured
+	// ErrObjectMissing is returned when a row exists but the object does not.
+	ErrObjectMissing = objectstore.ErrObjectMissing
+)
 
 // Entity types a document may be attached to. A document with no entity is a
 // free-standing attachment owned by the organization.
@@ -72,52 +72,11 @@ var entityPermissions = map[string]rbac.Permission{
 	EntityTask:    rbac.PermTasksRead,
 }
 
-// defaultDeniedTypes are refused when no explicit allow-list is configured. They
-// are executables and active content that a CRM has no reason to serve back.
-var defaultDeniedTypes = []string{
-	"application/x-msdownload",
-	"application/x-executable",
-	"application/x-sharedlib",
-	"application/x-dosexec",
-	"application/x-msdos-program",
-}
-
-// ObjectMeta is a listed object: enough to decide whether it is referenced and
-// whether it is old enough to be considered an orphan.
-type ObjectMeta struct {
-	Key          string
-	Size         int64
-	LastModified time.Time
-}
-
-// ObjectInfo describes a stored object.
-type ObjectInfo struct {
-	Key         string
-	Size        int64
-	ContentType string
-	ETag        string
-}
-
-// ObjectStore is the provider contract. Every method takes the object key, never
-// a filesystem path: the key namespace belongs to this package, so a provider
-// implementation cannot be handed a traversal.
-type ObjectStore interface {
-	// Put stores an object and returns its metadata. size may be -1 when unknown.
-	Put(ctx context.Context, key string, r io.Reader, size int64, contentType string) (ObjectInfo, error)
-	// Get opens an object for reading.
-	Get(ctx context.Context, key string) (io.ReadCloser, ObjectInfo, error)
-	// Stat returns an object's metadata without reading it.
-	Stat(ctx context.Context, key string) (ObjectInfo, error)
-	// Delete removes an object. Deleting a missing object is not an error.
-	Delete(ctx context.Context, key string) error
-	// PresignGet returns a time-limited download URL.
-	PresignGet(ctx context.Context, key string, ttl time.Duration) (*url.URL, error)
-	// List returns the objects under a key prefix. It is used by reconciliation,
-	// which is the only caller that walks the store rather than addressing a known key.
-	List(ctx context.Context, prefix string) ([]ObjectMeta, error)
-	// Enabled reports whether the store is usable.
-	Enabled() bool
-}
+// ObjectMeta, ObjectInfo and ObjectStore are the provider contract, defined in
+// internal/objectstore and aliased here for the existing callers.
+type ObjectMeta = objectstore.ObjectMeta
+type ObjectInfo = objectstore.ObjectInfo
+type ObjectStore = objectstore.ObjectStore
 
 // Config configures the service.
 type Config struct {
@@ -635,65 +594,28 @@ func (s *Service) entityExists(ctx context.Context, orgID uuid.UUID, entityType 
 
 // checkContentType enforces the allow-list when one is configured.
 func (s *Service) checkContentType(contentType string) error {
-	if len(s.cfg.AllowedContentTypes) == 0 {
-		for _, denied := range defaultDeniedTypes {
-			if strings.EqualFold(contentType, denied) {
-				return httpx.ValidationError(map[string]string{
-					"content_type": "this file type is not accepted"})
-			}
-		}
+	if objectstore.IsAllowedContentType(contentType, s.cfg.AllowedContentTypes) {
 		return nil
 	}
-	for _, allowed := range s.cfg.AllowedContentTypes {
-		if strings.EqualFold(contentType, allowed) {
-			return nil
-		}
+	if len(s.cfg.AllowedContentTypes) == 0 {
+		return httpx.ValidationError(map[string]string{
+			"content_type": "this file type is not accepted"})
 	}
 	return httpx.ValidationError(map[string]string{
 		"content_type": fmt.Sprintf("content type %q is not accepted", contentType)})
 }
 
-// objectKey builds the storage key. The organization and document ids form the
-// prefix so a listing is naturally partitioned by tenant, and the leaf is a
-// sanitised extension only: the client filename never reaches the key, so a name
-// containing ".." or a separator cannot escape the prefix.
+// objectKey and normaliseContentType are the pure key/type helpers, defined in
+// internal/objectstore. They are kept here as thin wrappers so the package's
+// existing unexported call sites and tests are unchanged.
 func objectKey(orgID, docID uuid.UUID, filename string) string {
-	ext := strings.ToLower(filepath.Ext(filepath.Base(filename)))
-	if !isSafeExtension(ext) {
-		ext = ""
-	}
-	return path.Join("org", orgID.String(), "documents", docID.String()+ext)
+	return objectstore.ObjectKey(orgID, docID, filename)
 }
 
-func isSafeExtension(ext string) bool {
-	if len(ext) < 2 || len(ext) > 12 {
-		return false
-	}
-	if ext[0] != '.' {
-		return false
-	}
-	for _, r := range ext[1:] {
-		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9') {
-			return false
-		}
-	}
-	return true
-}
+func isSafeExtension(ext string) bool { return objectstore.IsSafeExtension(ext) }
 
-// normaliseContentType picks a content type, preferring the declared one and
-// falling back to the extension, then to a generic binary type.
 func normaliseContentType(declared, filename string) string {
-	if ct := strings.TrimSpace(declared); ct != "" {
-		if mt, _, err := mime.ParseMediaType(ct); err == nil {
-			return mt
-		}
-	}
-	if mt := mime.TypeByExtension(strings.ToLower(filepath.Ext(filename))); mt != "" {
-		if parsed, _, err := mime.ParseMediaType(mt); err == nil {
-			return parsed
-		}
-	}
-	return "application/octet-stream"
+	return objectstore.NormaliseContentType(declared, filename)
 }
 
 func requirePerm(p *rbac.Principal, perm rbac.Permission) error {
