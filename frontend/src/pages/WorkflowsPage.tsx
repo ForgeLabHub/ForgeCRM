@@ -5,11 +5,15 @@ import { systemApi } from '../api/admin'
 import {
   workflowsApi,
   type Workflow,
+  type WorkflowExportDocument,
   type WorkflowInput,
   type WorkflowRun,
+  type WorkflowStep,
+  type WorkflowTemplate,
 } from '../api/workflows'
 import { ResourceList, type Column } from '../components/ResourceList'
 import { Badge, PageHeader, StatusBadge, Timestamp } from '../components/ui'
+import { WorkflowEditor, definitionToJSON, validateDefinition } from '../components/WorkflowEditor'
 import { useAuth } from '../hooks/useAuth'
 
 /**
@@ -42,12 +46,34 @@ function triggerLabel(wf: Workflow): string {
   }
 }
 
+/**
+ * Fetches a workflow's portable document and hands it to the browser as a download.
+ *
+ * The document is the server's export, not a client-built JSON: a client that
+ * assembled one could drift from the import contract, and the whole point of a
+ * portable document is that the server produces and consumes the same shape.
+ */
+async function downloadExport(wf: Workflow) {
+  const doc = await workflowsApi.export(wf.id)
+  const blob = new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${wf.name.replace(/[^a-z0-9._-]+/gi, '-').toLowerCase()}.workflow.json`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 export function WorkflowsPage() {
   const { can } = useAuth()
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState<Workflow | null>(null)
   const [creating, setCreating] = useState(false)
   const [historyFor, setHistoryFor] = useState<Workflow | null>(null)
+  const [browsingTemplates, setBrowsingTemplates] = useState(false)
+  const [importing, setImporting] = useState(false)
   const [notice, setNotice] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null)
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['workflows'] })
@@ -121,6 +147,9 @@ export function WorkflowsPage() {
           <button type="button" className="btn btn--ghost btn--sm" onClick={() => setHistoryFor(row)}>
             Runs
           </button>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => downloadExport(row)}>
+            Export
+          </button>
           {can('workflows.run') ? (
             <button
               type="button"
@@ -185,14 +214,22 @@ export function WorkflowsPage() {
         columns={columns}
         rowKey={(row) => row.id}
         emptyTitle="No workflows yet"
-        emptyText="A workflow reacts to an event, runs on a schedule, or runs when you ask it to."
+        emptyText="A workflow reacts to an event, runs on a schedule, or runs when you ask it to. Start from a template or write one."
         searchable
         searchPlaceholder="Search workflows…"
         actions={
           can('workflows.manage') ? (
-            <button type="button" className="btn btn--primary btn--sm" onClick={() => setCreating(true)}>
-              New workflow
-            </button>
+            <div className="row" style={{ gap: 6 }}>
+              <button type="button" className="btn btn--secondary btn--sm" onClick={() => setBrowsingTemplates(true)}>
+                From a template
+              </button>
+              <button type="button" className="btn btn--secondary btn--sm" onClick={() => setImporting(true)}>
+                Import
+              </button>
+              <button type="button" className="btn btn--primary btn--sm" onClick={() => setCreating(true)}>
+                New workflow
+              </button>
+            </div>
           ) : null
         }
       />
@@ -208,6 +245,28 @@ export function WorkflowsPage() {
             setCreating(false)
             setEditing(null)
             setNotice({ tone: 'success', text: 'Saved.' })
+            invalidate()
+          }}
+        />
+      ) : null}
+
+      {browsingTemplates ? (
+        <TemplatePicker
+          onClose={() => setBrowsingTemplates(false)}
+          onCreated={(name) => {
+            setBrowsingTemplates(false)
+            setNotice({ tone: 'success', text: `Created "${name}" from a template.` })
+            invalidate()
+          }}
+        />
+      ) : null}
+
+      {importing ? (
+        <ImportDialog
+          onClose={() => setImporting(false)}
+          onImported={(name) => {
+            setImporting(false)
+            setNotice({ tone: 'success', text: `Imported "${name}".` })
             invalidate()
           }}
         />
@@ -241,16 +300,20 @@ function WorkflowDialog({ workflow, onClose, onSaved }: WorkflowDialogProps) {
   const [timezone, setTimezone] = useState(workflow?.schedule_timezone ?? 'UTC')
   const [maxDepth, setMaxDepth] = useState(workflow?.max_depth ?? 5)
   const { eventTypes, isLoading: eventsLoading } = useEventTypes()
-  const [definition, setDefinition] = useState(() =>
-    JSON.stringify(
-      workflow?.definition ?? {
-        steps: [{ id: 'notify', type: 'create_task', args: { title: 'Follow up', priority: 'normal' } }],
-      },
-      null,
-      2,
-    ),
+  const [steps, setSteps] = useState<WorkflowStep[]>(
+    () =>
+      workflow?.definition?.steps ?? [
+        { id: 'notify', type: 'create_task', args: { title: 'Follow up', priority: 'normal' } },
+      ],
   )
+  // The raw JSON view and the structured view are two renderings of the same steps.
+  // Switching to raw serialises the current steps; switching back parses what is in
+  // the textarea, so an edit made in either view is what gets saved.
+  const [mode, setMode] = useState<'structured' | 'json'>('structured')
+  const [rawJSON, setRawJSON] = useState(() => definitionToJSON(steps))
   const [error, setError] = useState<string | null>(null)
+
+  const validation = validateDefinition(steps)
 
   const saveMutation = useMutation({
     mutationFn: (body: WorkflowInput) =>
@@ -259,17 +322,45 @@ function WorkflowDialog({ workflow, onClose, onSaved }: WorkflowDialogProps) {
     onError: (err) => setError(errorMessage(err)),
   })
 
-  function submit() {
+  function switchToJSON() {
+    setRawJSON(definitionToJSON(steps))
+    setMode('json')
+  }
+
+  function switchToStructured() {
     setError(null)
-    let parsed: { steps: unknown[] }
     try {
-      parsed = JSON.parse(definition)
+      const parsed = JSON.parse(rawJSON)
+      if (!parsed || !Array.isArray(parsed.steps)) {
+        setError('The definition needs a "steps" array.')
+        return
+      }
+      setSteps(parsed.steps as WorkflowStep[])
+      setMode('structured')
     } catch {
       setError('The definition is not valid JSON.')
-      return
     }
-    if (!parsed || !Array.isArray(parsed.steps) || parsed.steps.length === 0) {
-      setError('The definition needs a non-empty "steps" array.')
+  }
+
+  function submit() {
+    setError(null)
+    let finalSteps = steps
+    if (mode === 'json') {
+      try {
+        const parsed = JSON.parse(rawJSON)
+        if (!parsed || !Array.isArray(parsed.steps) || parsed.steps.length === 0) {
+          setError('The definition needs a non-empty "steps" array.')
+          return
+        }
+        finalSteps = parsed.steps as WorkflowStep[]
+        setSteps(finalSteps)
+      } catch {
+        setError('The definition is not valid JSON.')
+        return
+      }
+    }
+    if (!name.trim()) {
+      setError('Give the workflow a name.')
       return
     }
     if (triggerType === 'event' && !eventType) {
@@ -282,7 +373,7 @@ function WorkflowDialog({ workflow, onClose, onSaved }: WorkflowDialogProps) {
     }
     const body: WorkflowInput = {
       name: name.trim(),
-      definition: parsed as WorkflowInput['definition'],
+      definition: { steps: finalSteps },
       trigger_type: triggerType,
       max_depth: maxDepth,
     }
@@ -401,21 +492,50 @@ function WorkflowDialog({ workflow, onClose, onSaved }: WorkflowDialogProps) {
             </div>
           ) : null}
 
-          <label className="field" htmlFor="workflow-definition">
-            <span className="field__label">Definition (JSON)</span>
-            <textarea
-              id="workflow-definition"
-              className="input mono"
-              rows={14}
-              value={definition}
-              onChange={(e) => setDefinition(e.target.value)}
-              spellCheck={false}
-            />
+          <div className="field">
+            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="field__label">Definition</span>
+              <div className="row" style={{ gap: 6 }}>
+                {mode === 'structured' ? (
+                  <button type="button" className="btn btn--ghost btn--sm" onClick={switchToJSON}>
+                    Edit as JSON
+                  </button>
+                ) : (
+                  <button type="button" className="btn btn--ghost btn--sm" onClick={switchToStructured}>
+                    Edit as form
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {mode === 'structured' ? (
+              <WorkflowEditor steps={steps} eventTypes={eventTypes} onChange={setSteps} />
+            ) : (
+              <textarea
+                id="workflow-definition"
+                className="input mono"
+                rows={14}
+                value={rawJSON}
+                aria-label="workflow definition JSON"
+                onChange={(e) => setRawJSON(e.target.value)}
+                spellCheck={false}
+              />
+            )}
+
+            {mode === 'structured' && !validation.ok ? (
+              <ul className="text-danger text-sm" style={{ margin: 0, paddingLeft: 18 }} role="alert">
+                {validation.errors.map((msg) => (
+                  <li key={msg}>{msg}</li>
+                ))}
+              </ul>
+            ) : null}
+
             <span className="field__hint">
-              Steps: condition, branch, create_task, update_deal, create_ticket, notify, delay. Use{' '}
-              <code>{'{{path}}'}</code> to reference the triggering event.
+              Steps: condition, branch, create_task, update_deal, create_ticket, notify, delay, find_deals,
+              foreach. Use <code>{'{{path}}'}</code> to reference the triggering event; inside a foreach,{' '}
+              <code>{'{{item.field}}'}</code> reads the current item.
             </span>
-          </label>
+          </div>
 
           <label className="field" htmlFor="workflow-max-depth" style={{ maxWidth: 200 }}>
             <span className="field__label">Max chain depth</span>
@@ -551,6 +671,202 @@ function RunHistoryDrawer({ workflow, onClose }: { workflow: Workflow; onClose: 
             Close
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The template picker.
+ *
+ * The catalog comes from the server, so a template cannot be offered that the
+ * server would reject: each entry is created through `/workflow-templates/{id}/create`,
+ * which re-validates the template's definition on the server before storing it. The
+ * event each template triggers on is shown, because a template that names an event
+ * the platform does not emit is the failure this avoids — it would be created,
+ * enabled and never fire.
+ */
+function TemplatePicker({ onClose, onCreated }: { onClose: () => void; onCreated: (name: string) => void }) {
+  const [selected, setSelected] = useState<WorkflowTemplate | null>(null)
+  const [name, setName] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  const templatesQuery = useQuery({
+    queryKey: ['workflow-templates'],
+    queryFn: () => workflowsApi.templates(),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const createMutation = useMutation({
+    mutationFn: () => workflowsApi.createFromTemplate(selected!.id, name.trim() || undefined),
+    onSuccess: (wf) => onCreated(wf.name),
+    onError: (err) => setError(errorMessage(err)),
+  })
+
+  const templates = templatesQuery.data?.items ?? []
+  const byCategory = templates.reduce<Record<string, WorkflowTemplate[]>>((acc, t) => {
+    ;(acc[t.category] ??= []).push(t)
+    return acc
+  }, {})
+
+  return (
+    <Modal title="Start from a template" onClose={onClose}>
+      {error ? <div className="alert alert--danger" role="alert">{error}</div> : null}
+      {templatesQuery.isLoading ? <p className="text-subtle">Loading…</p> : null}
+      {templatesQuery.isError ? (
+        <div className="alert alert--danger" role="alert">{errorMessage(templatesQuery.error)}</div>
+      ) : null}
+
+      {Object.entries(byCategory).map(([category, items]) => (
+        <div key={category} className="stack" style={{ gap: 6 }}>
+          <h3 style={{ textTransform: 'capitalize' }}>{category}</h3>
+          <ul className="stack" style={{ listStyle: 'none', padding: 0 }}>
+            {items.map((t) => (
+              <li key={t.id}>
+                <button
+                  type="button"
+                  className="card"
+                  style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    borderColor: selected?.id === t.id ? 'var(--color-accent)' : undefined,
+                  }}
+                  onClick={() => {
+                    setSelected(t)
+                    setName(t.name)
+                    setError(null)
+                  }}
+                >
+                  <div className="card__body stack" style={{ gap: 4 }}>
+                    <strong>{t.name}</strong>
+                    <span className="text-subtle text-sm">{t.description}</span>
+                    <span className="mono text-sm">
+                      {t.trigger_type === 'event'
+                        ? `on ${t.event_type}`
+                        : t.trigger_type === 'schedule'
+                          ? `every ${t.schedule_cron} (${t.schedule_timezone ?? 'UTC'})`
+                          : 'manual'}{' '}
+                      · {t.definition.steps.length} step(s)
+                    </span>
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+
+      {selected ? (
+        <label className="field" htmlFor="template-name">
+          <span className="field__label">Name for the new workflow</span>
+          <input id="template-name" className="input" value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+      ) : null}
+
+      <div className="form-actions" style={{ margin: 0 }}>
+        <button type="button" className="btn btn--secondary" onClick={onClose}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="btn btn--primary"
+          disabled={!selected || createMutation.isPending}
+          onClick={() => createMutation.mutate()}
+        >
+          {createMutation.isPending ? 'Creating…' : 'Create'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+/**
+ * The import dialog. The document is parsed on the client only to catch an obvious
+ * mistake early; the server is what validates the format, the version, the
+ * definition and the event, and its message is shown verbatim so a refused import
+ * says why.
+ */
+function ImportDialog({ onClose, onImported }: { onClose: () => void; onImported: (name: string) => void }) {
+  const [text, setText] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  const importMutation = useMutation({
+    mutationFn: (doc: WorkflowExportDocument) => workflowsApi.import(doc),
+    onSuccess: (wf) => onImported(wf.name),
+    onError: (err) => setError(errorMessage(err)),
+  })
+
+  function submit() {
+    setError(null)
+    let doc: WorkflowExportDocument
+    try {
+      doc = JSON.parse(text) as WorkflowExportDocument
+    } catch {
+      setError('That is not valid JSON.')
+      return
+    }
+    importMutation.mutate(doc)
+  }
+
+  return (
+    <Modal title="Import a workflow" onClose={onClose}>
+      {error ? <div className="alert alert--danger" role="alert">{error}</div> : null}
+      <label className="field" htmlFor="import-document">
+        <span className="field__label">Portable document</span>
+        <textarea
+          id="import-document"
+          className="input mono"
+          rows={14}
+          value={text}
+          spellCheck={false}
+          placeholder='{"format":"forgecrm.workflow","format_version":1,…}'
+          onChange={(e) => setText(e.target.value)}
+        />
+        <span className="field__hint">
+          Paste a document produced by Export. The server rejects a document whose format, version or event
+          it does not recognise, and says which.
+        </span>
+      </label>
+      <div className="form-actions" style={{ margin: 0 }}>
+        <button type="button" className="btn btn--secondary" onClick={onClose}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="btn btn--primary"
+          disabled={!text.trim() || importMutation.isPending}
+          onClick={submit}
+        >
+          {importMutation.isPending ? 'Importing…' : 'Import'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+/** A shared modal shell, so every dialog has the same focus and dismissal behaviour. */
+function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(16, 24, 40, 0.45)',
+        zIndex: 60,
+        overflowY: 'auto',
+        padding: 'var(--space-5)',
+      }}
+      onClick={onClose}
+    >
+      <div className="card" style={{ maxWidth: 760, margin: '0 auto' }} onClick={(e) => e.stopPropagation()}>
+        <div className="card__header">
+          <h2>{title}</h2>
+        </div>
+        <div className="card__body stack">{children}</div>
       </div>
     </div>
   )

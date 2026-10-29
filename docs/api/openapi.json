@@ -27038,11 +27038,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Run"
                 }
               }
             }
@@ -27191,11 +27191,509 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ListResponseWorkflowStepRun"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed: bad JSON, an unknown field, or a missing required parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session, or the session has expired. Sign in again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but the caller lacks the required permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such resource, or none visible to the caller's organization.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request conflicts with current state, such as a duplicate external identifier.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A field failed validation. `error.details` names each field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests. Retry after the interval in `Retry-After`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected failure. The detail is deliberately generic; the cause is in the server log.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workflow-templates": {
+      "get": {
+        "operationId": "getWorkflow-templates",
+        "tags": [
+          "crm"
+        ],
+        "summary": "List workflow-templates",
+        "description": "Requires the `workflows.read` permission.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size. Values above the server maximum are clamped, not rejected.",
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Free-text filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Field to sort by. An unknown field is rejected.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "schema": {
+              "default": "desc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListResponseWorkflowTemplate"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed: bad JSON, an unknown field, or a missing required parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session, or the session has expired. Sign in again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but the caller lacks the required permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such resource, or none visible to the caller's organization.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request conflicts with current state, such as a duplicate external identifier.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A field failed validation. `error.details` names each field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests. Retry after the interval in `Retry-After`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected failure. The detail is deliberately generic; the cause is in the server log.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workflow-templates/{id}": {
+      "get": {
+        "operationId": "getWorkflow-templatesById",
+        "tags": [
+          "crm"
+        ],
+        "summary": "Get one workflow-template by id",
+        "description": "Requires the `workflows.read` permission.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Template"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed: bad JSON, an unknown field, or a missing required parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session, or the session has expired. Sign in again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but the caller lacks the required permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such resource, or none visible to the caller's organization.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request conflicts with current state, such as a duplicate external identifier.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A field failed validation. `error.details` names each field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests. Retry after the interval in `Retry-After`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected failure. The detail is deliberately generic; the cause is in the server log.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workflow-templates/{id}/create": {
+      "post": {
+        "operationId": "postWorkflow-templatesByIdCreate",
+        "tags": [
+          "crm"
+        ],
+        "summary": "Perform an action on a create",
+        "description": "Requires the `workflows.manage` permission.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workflow"
                 }
               }
             }
@@ -27383,11 +27881,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ListResponseWorkflowWorkflow"
                 }
               }
             }
@@ -27521,13 +28019,176 @@
         ],
         "summary": "Create a workflow",
         "description": "Requires the `workflows.manage` permission.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInput"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Workflow"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed: bad JSON, an unknown field, or a missing required parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session, or the session has expired. Sign in again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but the caller lacks the required permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such resource, or none visible to the caller's organization.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request conflicts with current state, such as a duplicate external identifier.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A field failed validation. `error.details` names each field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests. Retry after the interval in `Retry-After`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected failure. The detail is deliberately generic; the cause is in the server log.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workflows/import": {
+      "post": {
+        "operationId": "postWorkflowsImport",
+        "tags": [
+          "crm"
+        ],
+        "summary": "Create an import",
+        "description": "Requires the `workflows.manage` permission.",
+        "requestBody": {
+          "required": true,
+          "description": "A portable workflow document, as produced by `GET /api/v1/workflows/{id}/export`. The `definition` is the same document the workflow stores, so an import is not a second format. A document whose `format` is not `forgecrm.workflow`, whose `format_version` is newer than this server understands, or whose trigger names an event the platform does not emit is refused with the reason.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportDocumentInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workflow"
                 }
               }
             }
@@ -27820,11 +28481,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Workflow"
                 }
               }
             }
@@ -27969,13 +28630,23 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInput"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Workflow"
                 }
               }
             }
@@ -28256,6 +28927,159 @@
         }
       }
     },
+    "/api/v1/workflows/{id}/export": {
+      "get": {
+        "operationId": "getWorkflowsByIdExport",
+        "tags": [
+          "crm"
+        ],
+        "summary": "Get one export by id",
+        "description": "Requires the `workflows.read` permission.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDocument"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed: bad JSON, an unknown field, or a missing required parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session, or the session has expired. Sign in again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but the caller lacks the required permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such resource, or none visible to the caller's organization.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request conflicts with current state, such as a duplicate external identifier.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A field failed validation. `error.details` names each field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests. Retry after the interval in `Retry-After`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected failure. The detail is deliberately generic; the cause is in the server log.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/workflows/{id}/run": {
       "post": {
         "operationId": "postWorkflowsByIdRun",
@@ -28277,11 +29101,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/RunResult"
                 }
               }
             }
@@ -28430,11 +29254,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
+            "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ListResponseWorkflowRun"
                 }
               }
             }
@@ -29986,6 +30810,53 @@
         ],
         "type": "object"
       },
+      "CreateInput": {
+        "properties": {
+          "definition": {
+            "format": "byte",
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "event_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "max_depth": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "schedule_cron": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "schedule_timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "trigger_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "definition",
+          "name",
+          "trigger_type"
+        ],
+        "type": "object"
+      },
       "CreateMigrationRequest": {
         "properties": {
           "config": {
@@ -30639,6 +31510,111 @@
           "code",
           "message"
         ],
+        "type": "object"
+      },
+      "ExportDocument": {
+        "properties": {
+          "definition": {
+            "format": "byte",
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "event_type": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "format_version": {
+            "type": "integer"
+          },
+          "max_depth": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "schedule_cron": {
+            "type": "string"
+          },
+          "schedule_timezone": {
+            "type": "string"
+          },
+          "template": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TemplateRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "trigger_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "definition",
+          "format",
+          "format_version",
+          "name",
+          "trigger_type"
+        ],
+        "type": "object"
+      },
+      "ExportDocumentInput": {
+        "properties": {
+          "definition": {
+            "format": "byte",
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "event_type": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "format_version": {
+            "type": "integer"
+          },
+          "max_depth": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "schedule_cron": {
+            "type": "string"
+          },
+          "schedule_timezone": {
+            "type": "string"
+          },
+          "template": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TemplateRefInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "trigger_type": {
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "ExtractedFile": {
@@ -31791,6 +32767,110 @@
         ],
         "type": "object"
       },
+      "ListResponseWorkflowRun": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Run"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "limit",
+          "offset",
+          "total"
+        ],
+        "type": "object"
+      },
+      "ListResponseWorkflowStepRun": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StepRun"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "limit",
+          "offset",
+          "total"
+        ],
+        "type": "object"
+      },
+      "ListResponseWorkflowTemplate": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Template"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "limit",
+          "offset",
+          "total"
+        ],
+        "type": "object"
+      },
+      "ListResponseWorkflowWorkflow": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Workflow"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "limit",
+          "offset",
+          "total"
+        ],
+        "type": "object"
+      },
       "LoginRequest": {
         "properties": {
           "email": {
@@ -32615,6 +33695,117 @@
         },
         "type": "object"
       },
+      "Run": {
+        "properties": {
+          "correlation_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "next_step_index": {
+            "type": "integer"
+          },
+          "organization_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "paused_until": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "run_depth": {
+            "type": "integer"
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "steps_failed": {
+            "type": "integer"
+          },
+          "steps_succeeded": {
+            "type": "integer"
+          },
+          "steps_total": {
+            "type": "integer"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "trigger_event_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "trigger_type": {
+            "type": "string"
+          },
+          "workflow_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "next_step_index",
+          "organization_id",
+          "run_depth",
+          "started_at",
+          "status",
+          "steps_failed",
+          "steps_succeeded",
+          "steps_total",
+          "trigger_type",
+          "workflow_id"
+        ],
+        "type": "object"
+      },
+      "RunResult": {
+        "properties": {
+          "run_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "status",
+          "summary"
+        ],
+        "type": "object"
+      },
       "SalesSummaryReport": {
         "properties": {
           "avg_deal_amount": {
@@ -32741,6 +33932,55 @@
         "properties": {
           "enabled": {
             "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "StepRun": {
+        "properties": {
+          "detail": {
+            "format": "byte",
+            "type": "string"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "organization_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "step_id": {
+            "type": "string"
+          },
+          "step_index": {
+            "type": "integer"
+          },
+          "step_type": {
+            "type": "string"
           }
         },
         "type": "object"
@@ -33100,6 +34340,76 @@
         ],
         "type": "object"
       },
+      "Template": {
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "definition": {
+            "format": "byte",
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "event_type": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "max_depth": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "schedule_cron": {
+            "type": "string"
+          },
+          "schedule_timezone": {
+            "type": "string"
+          },
+          "trigger_type": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "category",
+          "definition",
+          "description",
+          "id",
+          "name",
+          "trigger_type",
+          "version"
+        ],
+        "type": "object"
+      },
+      "TemplateRef": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "TemplateRefInput": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "Ticket": {
         "properties": {
           "account_id": {
@@ -33389,6 +34699,99 @@
         },
         "required": [
           "subscription"
+        ],
+        "type": "object"
+      },
+      "Workflow": {
+        "properties": {
+          "archived_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_by": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "definition": {
+            "format": "byte",
+            "type": "string"
+          },
+          "definition_schema_version": {
+            "type": "integer"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "event_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "max_depth": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "next_run_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "organization_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "schedule_cron": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "schedule_timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "trigger_type": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "created_at",
+          "created_by",
+          "definition",
+          "definition_schema_version",
+          "enabled",
+          "id",
+          "max_depth",
+          "name",
+          "organization_id",
+          "trigger_type",
+          "updated_at"
         ],
         "type": "object"
       }

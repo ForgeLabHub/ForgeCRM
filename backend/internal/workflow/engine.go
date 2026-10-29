@@ -13,6 +13,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/audit"
 	"github.com/geff1778/forgecrm/internal/crm"
 	"github.com/geff1778/forgecrm/internal/database"
+	"github.com/geff1778/forgecrm/internal/httpx"
 	"github.com/geff1778/forgecrm/internal/logging"
 	"github.com/geff1778/forgecrm/internal/outbox"
 	"github.com/geff1778/forgecrm/internal/rbac"
@@ -45,6 +46,11 @@ type Config struct {
 
 // NewEngine builds an engine.
 func NewEngine(cfg Config) *Engine {
+	// The template catalog is validated against the event vocabulary the engine can
+	// actually be triggered by. Registering it here means every process that builds
+	// an engine — the API and the worker — has it, without either importing the
+	// outbox package into this one (which would be a cycle).
+	RegisterKnownEvents(outbox.EventTypes())
 	return &Engine{
 		db:     cfg.DB,
 		store:  NewStore(cfg.DB),
@@ -256,9 +262,59 @@ func (e *Engine) executeFrom(ctx context.Context, w *Workflow, def *Definition, 
 
 	succeeded, failed := run.StepsSucceeded, run.StepsFailed
 	steps := def.Steps
+	// items holds the result of the most recent find_deals step, which a following
+	// foreach iterates. It lives only for the run, never in a payload.
+	var items []map[string]any
 
 	for i := start; i < len(steps); i++ {
 		step := &steps[i]
+
+		if step.Type == StepFindDeals {
+			found, detail, err := e.findDeals(ctx, p, step, env)
+			if err != nil {
+				return e.failStep(ctx, w, run, i, step, succeeded, failed, err)
+			}
+			items = found
+			if err := e.store.RecordStep(ctx, run.ID, w.OrganizationID, i, step.ID, step.Type, "succeeded", detail, nil); err != nil {
+				return nil, err
+			}
+			succeeded++
+			continue
+		}
+
+		if step.Type == StepForeach {
+			if len(items) == 0 {
+				// Nothing selected. This is a normal outcome for a scheduled sweep, so
+				// the step is recorded as skipped rather than failed and the run continues.
+				if err := e.store.RecordStep(ctx, run.ID, w.OrganizationID, i, step.ID, step.Type, "skipped",
+					map[string]any{"reason": "no items to repeat"}, nil); err != nil {
+					return nil, err
+				}
+				continue
+			}
+			iterations := items
+			truncated := false
+			if len(iterations) > maxForeachItems {
+				iterations = iterations[:maxForeachItems]
+				truncated = true
+			}
+			actions := 0
+			for _, item := range iterations {
+				childEnv := itemContext(env, item)
+				for j := range step.Do {
+					if err := e.runAction(ctx, w, run, p, i, &step.Do[j], childEnv); err != nil {
+						return e.failStep(ctx, w, run, i, &step.Do[j], succeeded, failed, err)
+					}
+					succeeded++
+					actions++
+				}
+			}
+			if err := e.store.RecordStep(ctx, run.ID, w.OrganizationID, i, step.ID, step.Type, "succeeded",
+				map[string]any{"items": len(iterations), "actions": actions, "truncated": truncated}, nil); err != nil {
+				return nil, err
+			}
+			continue
+		}
 
 		if step.Type == StepDelay {
 			d, err := delayFromArgs(step.Args)
@@ -376,6 +432,118 @@ var requiredPermission = map[string]rbac.Permission{
 	// what that user can then act on is governed by their own permissions. The bar is
 	// therefore "this author participates in notifications", not a write right.
 	StepNotify: rbac.PermNotificationsRead,
+	// find_deals reads deals, so it needs the read permission. It is not an action
+	// step, but the query it runs is scoped by the author's principal all the same, and
+	// requiring the permission up front makes a workflow that cannot read deals fail
+	// with a clear message rather than running an empty sweep forever.
+	StepFindDeals: rbac.PermDealsRead,
+}
+
+// findDeals selects the deals a find_deals step names, as the workflow's author.
+//
+// It calls crm.ListDeals, so the query is scoped to the author's organization and
+// to the records their role can see; a workflow cannot use a find step to read a
+// deal its author could not open in the UI. The result is bounded and the bound is
+// reported, so a definition that would select an unbounded set is truncated
+// visibly rather than costing an unbounded amount of work.
+func (e *Engine) findDeals(ctx context.Context, p *rbac.Principal, step *Step, env *EvalContext) ([]map[string]any, map[string]any, error) {
+	if !p.IsPlatformOwner && !p.Has(rbac.PermDealsRead) {
+		return nil, nil, fmt.Errorf("the workflow author does not hold %s, which step %q requires", rbac.PermDealsRead, step.ID)
+	}
+	limit := maxFindResults
+	if n, ok := numberArg(step.Args, "limit"); ok && n > 0 {
+		limit = int(n)
+		if limit > maxFindResults {
+			limit = maxFindResults
+		}
+	}
+
+	q := crm.ListQuery{
+		Pagination: httpx.Pagination{Limit: limit},
+		Sort:       httpx.SortSpec{Column: "expected_close_date"},
+	}
+	if v, ok := argString(step.Args, "status", env); ok && v != "" {
+		q.Status = v
+	}
+	if v, ok := argString(step.Args, "search", env); ok && v != "" {
+		q.Search = v
+	}
+	if id, err := argUUID(step.Args, "owner_id", env); err != nil {
+		return nil, nil, err
+	} else if id != nil {
+		q.OwnerID = id
+	}
+	if id, err := argUUID(step.Args, "account_id", env); err != nil {
+		return nil, nil, err
+	} else if id != nil {
+		q.AccountID = id
+	}
+	if id, err := argUUID(step.Args, "pipeline_id", env); err != nil {
+		return nil, nil, err
+	} else if id != nil {
+		q.PipelineID = id
+	}
+	// A close date more than this many days in the past means the deal is overdue.
+	if days, ok := numberArg(step.Args, "close_date_within_days"); ok && days >= 0 {
+		cutoff := e.now().AddDate(0, 0, int(days))
+		q.ExpectedCloseBefore = &cutoff
+	}
+	// No activity for this many days is the "nothing is happening" test. It uses the
+	// same predicate as the deal's own list view, so the workflow and the UI agree on
+	// what "stale" means.
+	if days, ok := numberArg(step.Args, "stale_days"); ok && days > 0 {
+		cutoff := e.now().AddDate(0, 0, -int(days))
+		q.NoActivitySince = &cutoff
+	}
+
+	deals, total, err := e.crm.ListDeals(ctx, p, q)
+	if err != nil {
+		return nil, nil, err
+	}
+	items := make([]map[string]any, 0, len(deals))
+	for _, d := range deals {
+		item := map[string]any{
+			"id":     d.ID.String(),
+			"title":  d.Title,
+			"amount": d.Amount,
+			"status": d.Status,
+		}
+		if d.AccountID != nil {
+			item["account_id"] = d.AccountID.String()
+		}
+		if d.OwnerUserID != nil {
+			item["owner_user_id"] = d.OwnerUserID.String()
+		}
+		if d.ExpectedCloseDate != nil {
+			item["expected_close_date"] = *d.ExpectedCloseDate
+		}
+		items = append(items, item)
+	}
+	detail := map[string]any{
+		"entity": FindEntityDeals,
+		"count":  len(items),
+		"total":  total,
+	}
+	if total > int64(len(items)) {
+		detail["truncated"] = true
+	}
+	return items, detail, nil
+}
+
+// itemContext returns a context for one foreach iteration. The item's fields are
+// exposed under "item." so a nested step reads them as {{item.title}} and cannot
+// accidentally read the trigger event's fields under the same bare names.
+func itemContext(parent *EvalContext, item map[string]any) *EvalContext {
+	fields := map[string]any{}
+	if parent != nil {
+		for k, v := range parent.Fields {
+			fields[k] = v
+		}
+	}
+	for k, v := range item {
+		fields["item."+k] = v
+	}
+	return &EvalContext{Fields: fields}
 }
 
 // runAction executes one non-control step.

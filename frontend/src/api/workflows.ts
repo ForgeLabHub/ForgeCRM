@@ -32,7 +32,70 @@ export interface WorkflowStep {
   id: string
   type: string
   args?: Record<string, unknown>
+  /** condition and branch carry a predicate. */
+  condition?: WorkflowCondition
+  /** branch carries both arms; each is a list of action steps. */
+  then?: WorkflowStep[]
+  else?: WorkflowStep[]
+  /** foreach carries the steps it repeats, once per selected item. */
+  do?: WorkflowStep[]
 }
+
+export interface WorkflowCondition {
+  field: string
+  op: string
+  value?: unknown
+}
+
+/**
+ * A catalog template. The `definition` is the same document a workflow stores, so
+ * creating from a template is a create with a pre-filled definition — there is no
+ * second format to learn.
+ */
+export interface WorkflowTemplate {
+  id: string
+  version: number
+  category: string
+  name: string
+  description: string
+  trigger_type: 'event' | 'schedule' | 'manual'
+  event_type?: string
+  schedule_cron?: string
+  schedule_timezone?: string
+  max_depth?: number
+  definition: { steps: WorkflowStep[] }
+}
+
+/** The portable document an export produces and an import accepts. */
+export interface WorkflowExportDocument {
+  format: string
+  format_version: number
+  name: string
+  description?: string
+  trigger_type: 'event' | 'schedule' | 'manual'
+  event_type?: string
+  schedule_cron?: string
+  schedule_timezone?: string
+  max_depth?: number
+  definition: { steps: WorkflowStep[] }
+  template?: { id: string; version: number }
+}
+
+/** The step types the engine runs. The editor offers exactly these. */
+export const WORKFLOW_STEP_TYPES = [
+  'condition',
+  'branch',
+  'create_task',
+  'update_deal',
+  'create_ticket',
+  'notify',
+  'delay',
+  'find_deals',
+  'foreach',
+] as const
+
+/** The condition operators the evaluator understands. */
+export const CONDITION_OPERATORS = ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'in', 'contains', 'exists'] as const
 
 export interface WorkflowRun {
   id: string
@@ -111,4 +174,25 @@ export const workflowsApi = {
   // most the definition's step count, so pagination would be ceremony.
   runSteps: (runId: string) =>
     api.get<{ items: WorkflowStepRun[] }>(`/api/v1/workflow-runs/${runId}/steps`),
+
+  // --- Templates and the portable document ---------------------------------
+
+  /** The built-in catalog. Readable with workflows.read, since it is only a starting point. */
+  templates: () => api.get<ListResponse<WorkflowTemplate>>('/api/v1/workflow-templates'),
+
+  template: (id: string) => api.get<WorkflowTemplate>(`/api/v1/workflow-templates/${id}`),
+
+  /**
+   * Creates a workflow from a catalog template. The body is optional and carries only
+   * a name override; everything else — trigger and definition — comes from the server,
+   * so a template cannot be created with a definition the client invented.
+   */
+  createFromTemplate: (id: string, name?: string) =>
+    api.post<Workflow>(`/api/v1/workflow-templates/${id}/create`, name ? { name } : {}),
+
+  /** The portable document for a workflow, as produced by export. */
+  export: (id: string) => api.get<WorkflowExportDocument>(`/api/v1/workflows/${id}/export`),
+
+  /** Imports a portable document. The server validates format, version, definition and event. */
+  import: (doc: WorkflowExportDocument) => api.post<Workflow>('/api/v1/workflows/import', doc),
 }

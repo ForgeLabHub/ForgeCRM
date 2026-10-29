@@ -51,6 +51,33 @@ const (
 	StepCreateTicket = "create_ticket"
 	StepNotify       = "notify"
 	StepDelay        = "delay"
+	// StepFindDeals selects deals matching the conditions in its args and makes them
+	// available to a following foreach. It exists because the useful CRM automations
+	// are about a set of records ("deals past their close date"), not one record named
+	// by an event, and an event-triggered workflow alone cannot express that.
+	StepFindDeals = "find_deals"
+	// StepForeach runs its nested steps once per item produced by a preceding
+	// find_deals step. Its steps may only be action steps: a nested condition or
+	// branch would make the resume point after a delay ambiguous, and nesting a delay
+	// is already refused.
+	StepForeach = "foreach"
+)
+
+// ActionSteps are the steps that perform work through crm.Service. A foreach may
+// contain only these, and each is checked against the author's permissions when it
+// runs.
+var ActionSteps = map[string]bool{
+	StepCreateTask:   true,
+	StepUpdateDeal:   true,
+	StepCreateTicket: true,
+	StepNotify:       true,
+}
+
+// FindEntities lists the entities a find_deals step can select. One entity is
+// supported today; the name is explicit so an unknown value is a validation error
+// rather than a silently empty result.
+const (
+	FindEntityDeals = "deals"
 )
 
 // Limits that bound a definition. They are checked at save time so a workflow that
@@ -59,6 +86,13 @@ const (
 	maxStepsPerDefinition = 50
 	maxBranchDepth        = 5
 	maxDelayMinutes       = 60 * 24 * 30 // 30 days
+	// maxFindResults bounds one find_deals step. A workflow that selected an entire
+	// table would take an unbounded amount of work per run, so the query is capped and
+	// the cap is reported in the step detail.
+	maxFindResults = 200
+	// maxForeachItems bounds how many iterations one foreach performs, for the same
+	// reason. The truncation is recorded, never silent.
+	maxForeachItems = 100
 )
 
 // Errors returned while parsing or validating a definition.
@@ -89,6 +123,9 @@ type Step struct {
 	// For StepBranch: the two nested step lists.
 	Then []Step `json:"then,omitempty"`
 	Else []Step `json:"else,omitempty"`
+
+	// For StepForeach: the steps run once per item. Only action steps are allowed.
+	Do []Step `json:"do,omitempty"`
 }
 
 // Condition is a single comparison or a boolean combination of conditions.
@@ -174,6 +211,37 @@ func validateSteps(steps []Step, depth int, seen map[string]bool, inBranch bool)
 			if len(s.Args) == 0 {
 				return fmt.Errorf("%w: step %q has no args", ErrInvalidDefinition, s.ID)
 			}
+		case StepFindDeals:
+			if err := validateFindDeals(s); err != nil {
+				return err
+			}
+		case StepForeach:
+			if len(s.Do) == 0 {
+				return fmt.Errorf("%w: step %q has no steps to repeat", ErrInvalidDefinition, s.ID)
+			}
+			if len(s.Do) > maxStepsPerDefinition {
+				return fmt.Errorf("%w: step %q repeats more than %d steps", ErrInvalidDefinition, s.ID, maxStepsPerDefinition)
+			}
+			// A foreach runs action steps only. A nested condition or branch would make
+			// the resume point of a paused run ambiguous, and a delay inside is refused
+			// for the same reason it is refused inside a branch.
+			for j := range s.Do {
+				child := &s.Do[j]
+				if !ActionSteps[child.Type] {
+					return fmt.Errorf("%w: step %q repeats a %q step; a foreach may contain only action steps (create_task, update_deal, create_ticket, notify)",
+						ErrInvalidDefinition, s.ID, child.Type)
+				}
+				if strings.TrimSpace(child.ID) == "" {
+					return fmt.Errorf("%w: a step inside %q has no id", ErrInvalidDefinition, s.ID)
+				}
+				if seen[child.ID] {
+					return fmt.Errorf("%w: duplicate step id %q", ErrInvalidDefinition, child.ID)
+				}
+				seen[child.ID] = true
+				if len(child.Args) == 0 {
+					return fmt.Errorf("%w: step %q has no args", ErrInvalidDefinition, child.ID)
+				}
+			}
 		case StepDelay:
 			if inBranch {
 				return fmt.Errorf("%w: step %q is a delay inside a branch; a delay must be top-level", ErrInvalidDefinition, s.ID)
@@ -185,6 +253,44 @@ func validateSteps(steps []Step, depth int, seen map[string]bool, inBranch bool)
 			return fmt.Errorf("%w: step %q has no type", ErrInvalidDefinition, s.ID)
 		default:
 			return fmt.Errorf("%w: %q", ErrUnknownStepType, s.Type)
+		}
+	}
+	return nil
+}
+
+// validateFindDeals checks a find_deals step's args.
+//
+// The entity is named explicitly and only "deals" is accepted, so a definition that
+// asks for something the engine cannot select is rejected at save time rather than
+// running and quietly matching nothing. The filters are a closed set of bounded
+// lookbacks; an open filter language would let a definition express a query the
+// engine cannot scope to the caller's permissions.
+func validateFindDeals(s *Step) error {
+	entity, _ := s.Args["entity"].(string)
+	if entity == "" {
+		entity = FindEntityDeals
+	}
+	if entity != FindEntityDeals {
+		return fmt.Errorf("%w: step %q selects entity %q; only %q is supported", ErrInvalidDefinition, s.ID, entity, FindEntityDeals)
+	}
+	for _, key := range []string{"status", "owner_id", "account_id", "pipeline_id", "search"} {
+		if v, ok := s.Args[key]; ok {
+			if str, ok := v.(string); ok && strings.TrimSpace(str) == "" {
+				return fmt.Errorf("%w: step %q has an empty %q", ErrInvalidDefinition, s.ID, key)
+			}
+		}
+	}
+	for _, key := range []string{"close_date_within_days", "stale_days", "limit"} {
+		if v, ok := s.Args[key]; ok {
+			n, ok := toFloat(v)
+			if !ok || n < 0 {
+				return fmt.Errorf("%w: step %q has a non-numeric %q", ErrInvalidDefinition, s.ID, key)
+			}
+		}
+	}
+	if v, ok := s.Args["limit"]; ok {
+		if n, ok := toFloat(v); ok && n > maxFindResults {
+			return fmt.Errorf("%w: step %q asks for %d deals; the limit is %d", ErrInvalidDefinition, s.ID, int(n), maxFindResults)
 		}
 	}
 	return nil

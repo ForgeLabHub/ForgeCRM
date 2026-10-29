@@ -13,6 +13,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/jobs"
 	"github.com/geff1778/forgecrm/internal/migratex"
 	"github.com/geff1778/forgecrm/internal/openapi"
+	"github.com/geff1778/forgecrm/internal/workflow"
 )
 
 // APIContract declares, for every operation, the real Go types it decodes and
@@ -333,6 +334,42 @@ func APIContract() openapi.Contract {
 	// --- Notifications and email --------------------------------------------
 	c.RequestBodies["POST /api/v1/admin/email/send"] = reflect.TypeOf(sendEmailRequest{})
 	c.RequiredBody["SendEmailRequest"] = []string{"to", "subject"}
+
+	// --- Workflows ------------------------------------------------------------
+	// The workflow CRUD routes are served but were never given contract rows; the
+	// template catalog and the import/export pair are the new surface, so they are
+	// described here. Import reads the portable export document as raw bytes, so its
+	// request is declared as the document type and the required set names the fields
+	// ImportWorkflow insists on.
+	c.RequestBodies["POST /api/v1/workflows"] = reflect.TypeOf(workflow.CreateInput{})
+	c.RequiredBody["CreateInput"] = []string{"name", "definition", "trigger_type"}
+	c.Responses["POST /api/v1/workflows"] = reflect.TypeOf(workflow.Workflow{})
+	c.Responses["GET /api/v1/workflows"] = reflect.TypeOf(httpx.ListResponse[workflow.Workflow]{})
+	c.Responses["GET /api/v1/workflows/{id}"] = reflect.TypeOf(workflow.Workflow{})
+	c.RequestBodies["PUT /api/v1/workflows/{id}"] = reflect.TypeOf(workflow.CreateInput{})
+	c.RequiredBody["CreateInput"] = []string{"name", "definition", "trigger_type"}
+	c.Responses["PUT /api/v1/workflows/{id}"] = reflect.TypeOf(workflow.Workflow{})
+	c.Responses["POST /api/v1/workflows/{id}/run"] = reflect.TypeOf(workflow.RunResult{})
+	c.Responses["GET /api/v1/workflows/{id}/runs"] = reflect.TypeOf(httpx.ListResponse[workflow.Run]{})
+	c.Responses["GET /api/v1/workflow-runs/{id}"] = reflect.TypeOf(workflow.Run{})
+	c.Responses["GET /api/v1/workflow-runs/{id}/steps"] = reflect.TypeOf(httpx.ListResponse[workflow.StepRun]{})
+
+	c.RequestBodies["POST /api/v1/workflows/import"] = reflect.TypeOf(workflow.ExportDocument{})
+	c.RequiredBody["ExportDocument"] = []string{"format", "format_version", "name", "definition"}
+	c.Responses["POST /api/v1/workflows/import"] = reflect.TypeOf(workflow.Workflow{})
+	c.Responses["GET /api/v1/workflows/{id}/export"] = reflect.TypeOf(workflow.ExportDocument{})
+
+	c.Responses["GET /api/v1/workflow-templates"] = reflect.TypeOf(httpx.ListResponse[workflow.Template]{})
+	c.Responses["GET /api/v1/workflow-templates/{id}"] = reflect.TypeOf(workflow.Template{})
+	c.Responses["POST /api/v1/workflow-templates/{id}/create"] = reflect.TypeOf(workflow.Workflow{})
+
+	c.BodyDescriptions["POST /api/v1/workflows/import"] = "A portable workflow document, as produced by " +
+		"`GET /api/v1/workflows/{id}/export`. The `definition` is the same document the workflow stores, so an " +
+		"import is not a second format. A document whose `format` is not `forgecrm.workflow`, whose " +
+		"`format_version` is newer than this server understands, or whose trigger names an event the platform " +
+		"does not emit is refused with the reason."
+	c.BodyDescriptions["POST /api/v1/workflow-templates/{id}/create"] = "Optional. `name` overrides the " +
+		"template's own name; every other field comes from the template."
 
 	// --- System -------------------------------------------------------------
 	c.Responses["GET /api/v1/system/info"] = reflect.TypeOf(systemInfoResponse{})

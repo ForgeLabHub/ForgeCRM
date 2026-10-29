@@ -369,6 +369,17 @@ type ListQuery struct {
 	PipelineID      *uuid.UUID
 	From            *time.Time
 	To              *time.Time
+	// ExpectedCloseBefore selects deals whose expected close date is before an
+	// instant. It is what a "deal is overdue" query needs, and it is expressed as a
+	// bound rather than a boolean so the caller chooses the cutoff.
+	ExpectedCloseBefore *time.Time
+	// UpdatedBefore selects deals that have not changed since an instant.
+	UpdatedBefore *time.Time
+	// NoActivitySince selects deals with no recorded activity at or after an
+	// instant. It is a separate field from UpdatedBefore because a deal can be edited
+	// (a field corrected) without anyone having interacted with the customer, and the
+	// "nothing is happening" question is about the latter.
+	NoActivitySince *time.Time
 	Extra           map[string]string
 }
 

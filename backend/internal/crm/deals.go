@@ -237,10 +237,15 @@ func (in *DealInput) Validate() error {
 	return nil
 }
 
+// dealColumns is the column list every deal read shares. `expected_close_date` is
+// cast to text because it is a PostgreSQL `date` column: the driver delivers a date
+// in binary format, which will not scan into the *string the DTO and the JSON
+// contract use, so a deal that has a close date would fail to load at all. The cast
+// yields the ISO date the API already promises.
 const dealColumns = `
 	id, organization_id, pipeline_id, stage_id, account_id, primary_contact_id, title,
 	description, amount, currency, discount_percent, discount_approved_by, discount_approved_at,
-	status, expected_close_date, closed_at, lost_reason, owner_user_id, team_id,
+	status, expected_close_date::text, closed_at, lost_reason, owner_user_id, team_id,
 	external_source, external_id, custom_fields, created_at, updated_at, archived_at`
 
 func scanDeal(row rowScanner) (*Deal, error) {
@@ -286,6 +291,24 @@ func (s *Service) ListDeals(ctx context.Context, p *rbac.Principal, q ListQuery)
 	if q.Search != "" {
 		args = append(args, "%"+q.Search+"%")
 		where = append(where, fmt.Sprintf("title ILIKE $%d", len(args)))
+	}
+	// The date filters a scheduled CRM workflow needs. Each is a bound rather than a
+	// boolean so the caller owns the cutoff, and each is applied to the table's own
+	// columns so the existing organization and ownership filters still decide which
+	// rows are visible at all.
+	if q.ExpectedCloseBefore != nil {
+		args = append(args, *q.ExpectedCloseBefore)
+		where = append(where, fmt.Sprintf("expected_close_date < $%d::date", len(args)))
+	}
+	if q.UpdatedBefore != nil {
+		args = append(args, *q.UpdatedBefore)
+		where = append(where, fmt.Sprintf("updated_at < $%d", len(args)))
+	}
+	if q.NoActivitySince != nil {
+		args = append(args, *q.NoActivitySince)
+		where = append(where, fmt.Sprintf(
+			`NOT EXISTS (SELECT 1 FROM activities a WHERE a.deal_id = deals.id AND a.occurred_at >= $%d)`,
+			len(args)))
 	}
 	if !p.Has(rbac.PermDealsArchive) && len(p.TeamIDs) > 0 {
 		args = append(args, p.UserID, p.TeamIDs)

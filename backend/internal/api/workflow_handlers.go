@@ -1,6 +1,7 @@
 package api
 
 import (
+	"io"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -22,6 +23,10 @@ func (s *Server) mountWorkflows(r chi.Router) {
 	r.Route("/workflows", func(r chi.Router) {
 		r.With(s.perm(rbac.PermWorkflowsRead)).Get("/", s.handleListWorkflows)
 		r.With(s.perm(rbac.PermWorkflowsManage)).Post("/", s.handleCreateWorkflow)
+		// Import creates a workflow from a portable document, so it needs the same
+		// authoring permission as a direct create. The document is validated by the
+		// same ParseDefinition the create path uses.
+		r.With(s.perm(rbac.PermWorkflowsManage)).Post("/import", s.handleImportWorkflow)
 		r.Route("/{id}", func(r chi.Router) {
 			r.With(s.perm(rbac.PermWorkflowsRead)).Get("/", s.handleGetWorkflow)
 			r.With(s.perm(rbac.PermWorkflowsManage)).Put("/", s.handleUpdateWorkflow)
@@ -29,7 +34,16 @@ func (s *Server) mountWorkflows(r chi.Router) {
 			r.With(s.perm(rbac.PermWorkflowsManage)).Delete("/", s.handleArchiveWorkflow)
 			r.With(s.perm(rbac.PermWorkflowsRun)).Post("/run", s.handleRunWorkflow)
 			r.With(s.perm(rbac.PermWorkflowsRead)).Get("/runs", s.handleListWorkflowRuns)
+			r.With(s.perm(rbac.PermWorkflowsRead)).Get("/export", s.handleExportWorkflow)
 		})
+	})
+
+	// The template catalog. Reading it needs only workflows.read: a template is a
+	// starting point, and a user who may not author a workflow may still look at one.
+	r.Route("/workflow-templates", func(r chi.Router) {
+		r.With(s.perm(rbac.PermWorkflowsRead)).Get("/", s.handleListWorkflowTemplates)
+		r.With(s.perm(rbac.PermWorkflowsRead)).Get("/{id}", s.handleGetWorkflowTemplate)
+		r.With(s.perm(rbac.PermWorkflowsManage)).Post("/{id}/create", s.handleCreateFromTemplate)
 	})
 
 	r.Route("/workflow-runs", func(r chi.Router) {
@@ -39,6 +53,115 @@ func (s *Server) mountWorkflows(r chi.Router) {
 }
 
 func (s *Server) workflows() *workflow.Engine { return s.deps.Workflows }
+
+// handleListWorkflowTemplates returns the built-in catalog.
+func (s *Server) handleListWorkflowTemplates(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.mustPrincipal(w, r); !ok {
+		return
+	}
+	httpx.WriteJSONList(w, workflow.Templates())
+}
+
+// handleGetWorkflowTemplate returns one catalog entry, or 404.
+func (s *Server) handleGetWorkflowTemplate(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.mustPrincipal(w, r); !ok {
+		return
+	}
+	t, ok := workflow.TemplateByID(chi.URLParam(r, "id"))
+	if !ok {
+		httpx.WriteError(w, r, httpx.NewError(http.StatusNotFound, httpx.CodeNotFound, "no such workflow template"))
+		return
+	}
+	httpx.WriteJSON(w, t)
+}
+
+// handleCreateFromTemplate creates a workflow from a catalog template. The body is
+// optional and may carry a name override; everything else comes from the template.
+func (s *Server) handleCreateFromTemplate(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.mustPrincipal(w, r)
+	if !ok {
+		return
+	}
+	t, ok := workflow.TemplateByID(chi.URLParam(r, "id"))
+	if !ok {
+		httpx.WriteError(w, r, httpx.NewError(http.StatusNotFound, httpx.CodeNotFound, "no such workflow template"))
+		return
+	}
+	var req struct {
+		Name string `json:"name"`
+	}
+	if r.ContentLength != 0 {
+		if err := decodeBody(w, r, &req); err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+	}
+	in, err := workflow.InputFromTemplate(t, req.Name)
+	if err != nil {
+		httpx.WriteError(w, r, httpx.NewError(http.StatusUnprocessableEntity, httpx.CodeValidation, err.Error()))
+		return
+	}
+	wf, err := s.workflows().Store().Create(r.Context(), p, in)
+	if err != nil {
+		s.respondDomainError(w, r, err)
+		return
+	}
+	s.auditWorkflow(r, p, audit.ActionWorkflowCreated, wf.ID, map[string]any{"name": wf.Name, "template": t.ID})
+	httpx.WriteJSONStatus(w, http.StatusCreated, wf)
+}
+
+// handleImportWorkflow creates a workflow from a portable export document.
+func (s *Server) handleImportWorkflow(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.mustPrincipal(w, r)
+	if !ok {
+		return
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxImportBytes))
+	if err != nil {
+		httpx.WriteError(w, r, httpx.NewError(http.StatusBadRequest, httpx.CodeValidation, "could not read the request body"))
+		return
+	}
+	in, err := workflow.ImportWorkflow(body)
+	if err != nil {
+		httpx.WriteError(w, r, httpx.NewError(http.StatusUnprocessableEntity, httpx.CodeValidation, err.Error()))
+		return
+	}
+	wf, err := s.workflows().Store().Create(r.Context(), p, in)
+	if err != nil {
+		s.respondDomainError(w, r, err)
+		return
+	}
+	s.auditWorkflow(r, p, audit.ActionWorkflowCreated, wf.ID, map[string]any{"name": wf.Name, "imported": true})
+	httpx.WriteJSONStatus(w, http.StatusCreated, wf)
+}
+
+// handleExportWorkflow renders a workflow as a portable document.
+func (s *Server) handleExportWorkflow(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.mustPrincipal(w, r)
+	if !ok {
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		httpx.WriteError(w, r, httpx.NewError(http.StatusBadRequest, httpx.CodeValidation, "invalid workflow id"))
+		return
+	}
+	wf, err := s.workflows().Store().Get(r.Context(), p, id)
+	if err != nil {
+		s.respondDomainError(w, r, err)
+		return
+	}
+	doc, err := workflow.ExportWorkflow(wf, nil)
+	if err != nil {
+		httpx.WriteError(w, r, httpx.NewError(http.StatusInternalServerError, httpx.CodeInternal, err.Error()))
+		return
+	}
+	httpx.WriteJSON(w, doc)
+}
+
+// maxImportBytes bounds an import body. A workflow document is small; the limit
+// stops a large body from being read into memory before it is rejected.
+const maxImportBytes = 1 << 20 // 1 MiB
 
 func (s *Server) handleListWorkflows(w http.ResponseWriter, r *http.Request) {
 	p, ok := s.mustPrincipal(w, r)
