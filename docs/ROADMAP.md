@@ -278,6 +278,24 @@ when a service is missing, so the same mistake is legible next time
 
 ---
 
+## Cycle 13 — Graceful AI provider failure
+
+| # | Item | Status |
+|---|---|---|
+| 13.1 | An unreachable or timed-out provider is a retryable outage | **VERIFIED** — `internal/ai/ai.go` `classifyProviderError` recognises a deadline or a transport-level failure and wraps it as `ErrProviderUnavailable`; `HTTPErrorFrom` maps it to a 503 with code `unavailable`. A provider that answered with an application error is passed through unchanged, so a 4xx is not disguised as "try again shortly" |
+| 13.2 | The API reports the outage distinctly from "not configured" | **VERIFIED** — `respondDomainError` routes `ErrProviderUnavailable` alongside `ErrDisabled` (503/`disabled`) and `ErrRateLimited` (429); the three states stay distinct |
+| 13.3 | The panel offers a retry only when retrying could work | **VERIFIED** — `AssistPanel` renders a "Try again" control only when the error envelope's `retryable` flag is set, so a permission refusal gets no button that cannot work |
+
+### Evidence
+
+| Check | Command | Result |
+|---|---|---|
+| Unit tests | `go test -count=1 ./internal/ai/... ./internal/httpx/...` | pass, including `provider_error_test.go` (classification, mapping, wrapping) |
+| Integration test | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration -count=1 -run TestAssistReportsAnUnreachableProvider ./internal/testsupport/` | passes against real PostgreSQL; the `ai_tasks` row is asserted `failed` with a recorded error |
+| Frontend unit | `npx vitest run src/components/AssistPanel.test.tsx` | 9 pass, including retry-button presence and absence |
+
+---
+
 # Master plan phases
 
 The cycles above describe how the platform was built. The phases below describe
@@ -325,7 +343,7 @@ where it is going. Strategy and Definition of Done: `docs/MASTER_PLAN.md`.
 | 3.2 | Read and safe-write MCP tools | **PARTIAL** — 8 tools are reachable over the protocol; the read/write split is currently per-tool (the `dangerous` flag plus a required `confirm` acknowledgement), not a separate credential scope |
 | 3.3 | MCP credential model, revocation, read/write split | **NOT_STARTED** — MCP currently authenticates with the caller's browser session; a dedicated credential with its own scope and revocation is not implemented |
 | 3.4 | MCP UI and client config examples | **PARTIAL** — the AI & MCP page lists tools and can invoke one, with a confirmation checkbox for mutating tools. Client configuration examples live in `docs/mcp/`; a copy-to-clipboard generator is not built |
-| 3.5 | Contextual AI, calibrated confidence, graceful failure, human handoff | **PARTIAL** — `internal/ai` assembles a permission-checked, PII-masked context for an account, contact, deal, ticket or task and runs summarise / risks / next-steps / draft / recap / ask through the provider abstraction, surfaced in the CRM record screens. Human handoff is the existing approval path: the model drafts, the user saves. Calibrated confidence is implemented as a server-computed grounding score (`internal/ai/confidence.go`): it is not the model's self-reported number, which is uncalibrated by nature, but a score the server derives from signals it can verify — whether the reply was structured, whether the figures in it appear in the CRM facts the model was given, and whether the context was complete. The basis is returned alongside the level so the panel shows the reason, not a bare number |
+| 3.5 | Contextual AI, calibrated confidence, graceful failure, human handoff | **PARTIAL** — `internal/ai` assembles a permission-checked, PII-masked context for an account, contact, deal, ticket or task and runs summarise / risks / next-steps / draft / recap / ask through the provider abstraction, surfaced in the CRM record screens. Human handoff is the existing approval path: the model drafts, the user saves. Calibrated confidence is implemented as a server-computed grounding score (`internal/ai/confidence.go`): it is not the model's self-reported number, which is uncalibrated by nature, but a score the server derives from signals it can verify — whether the reply was structured, whether the figures in it appear in the CRM facts the model was given, and whether the context was complete. The basis is returned alongside the level so the panel shows the reason, not a bare number. Graceful failure is implemented (cycle 13): no provider → 503 `disabled`, rate cap → 429 `rate_limited`, unreachable or timed-out provider → retryable 503 `unavailable`, each distinct; the panel offers a retry only for the retryable case. Streaming responses are not implemented |
 
 ## Phases 4–9 — Planned
 
