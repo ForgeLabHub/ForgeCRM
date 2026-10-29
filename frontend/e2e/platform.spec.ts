@@ -269,11 +269,11 @@ test.describe('workflow automation', () => {
 
     const dialog = page.getByRole('dialog')
     const name = `E2E workflow ${Date.now()}`
-    await dialog.getByLabel('Name').fill(name)
+    await dialog.locator('#workflow-name').fill(name)
 
     // The definition is edited as JSON. Replace the prefilled document with a
     // notify-free action so the run cannot depend on another record existing.
-    const definition = dialog.getByLabel('Definition (JSON)')
+    const definition = dialog.locator('#workflow-definition')
     await definition.fill(
       JSON.stringify(
         { steps: [{ id: 't1', type: 'create_task', args: { title: 'Created by the E2E workflow' } }] },
@@ -291,6 +291,23 @@ test.describe('workflow automation', () => {
     // Run it, and assert the run is reported as succeeded.
     await row.getByRole('button', { name: 'Run', exact: true }).click()
     await expect(page.getByText(/the run succeeded/i)).toBeVisible()
+  })
+})
+
+test.describe('workflow triggers', () => {
+  test('the event picker offers the canonical names the engine matches', async ({ authedPage: page }) => {
+    await page.goto('/workflows')
+    await page.getByRole('button', { name: 'New workflow' }).click()
+
+    const dialog = page.getByRole('dialog')
+    await dialog.locator('#workflow-trigger').selectOption('event')
+
+    // An event-triggered workflow matches the exact committed name, which is
+    // namespaced. Offering a bare name produces a workflow that is accepted and
+    // then never fires, so the picker must read the server's vocabulary.
+    const options = await dialog.locator('#workflow-event-type option').allTextContents()
+    expect(options).toContain('crm.deal.won')
+    expect(options).not.toContain('deal.won')
   })
 })
 

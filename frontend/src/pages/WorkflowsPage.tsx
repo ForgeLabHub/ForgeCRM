@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { errorMessage } from '../api/client'
+import { systemApi } from '../api/admin'
 import {
   workflowsApi,
   type Workflow,
@@ -10,6 +11,24 @@ import {
 import { ResourceList, type Column } from '../components/ResourceList'
 import { Badge, PageHeader, StatusBadge, Timestamp } from '../components/ui'
 import { useAuth } from '../hooks/useAuth'
+
+/**
+ * The event vocabulary is read from the server, never hard-coded.
+ *
+ * An event-triggered workflow matches on the exact committed event name, which is
+ * namespaced ("crm.deal.won"). A form that offers or suggests a bare name
+ * ("deal.won") produces a workflow that is accepted, enabled and then never fires —
+ * the same silent-no-match failure the webhook form once had. The canonical list is
+ * `event_types` on `/system/capabilities`, which is `outbox.EventTypes()`.
+ */
+function useEventTypes() {
+  const query = useQuery({
+    queryKey: ['system', 'capabilities'],
+    queryFn: systemApi.capabilities,
+    staleTime: 5 * 60 * 1000,
+  })
+  return { eventTypes: query.data?.event_types ?? [], isLoading: query.isLoading }
+}
 
 /** The trigger of a workflow, rendered as one line. */
 function triggerLabel(wf: Workflow): string {
@@ -221,6 +240,7 @@ function WorkflowDialog({ workflow, onClose, onSaved }: WorkflowDialogProps) {
   const [cron, setCron] = useState(workflow?.schedule_cron ?? '0 9 * * 1-5')
   const [timezone, setTimezone] = useState(workflow?.schedule_timezone ?? 'UTC')
   const [maxDepth, setMaxDepth] = useState(workflow?.max_depth ?? 5)
+  const { eventTypes, isLoading: eventsLoading } = useEventTypes()
   const [definition, setDefinition] = useState(() =>
     JSON.stringify(
       workflow?.definition ?? {
@@ -250,6 +270,14 @@ function WorkflowDialog({ workflow, onClose, onSaved }: WorkflowDialogProps) {
     }
     if (!parsed || !Array.isArray(parsed.steps) || parsed.steps.length === 0) {
       setError('The definition needs a non-empty "steps" array.')
+      return
+    }
+    if (triggerType === 'event' && !eventType) {
+      setError('Choose the event this workflow reacts to.')
+      return
+    }
+    if (triggerType === 'schedule' && !cron.trim()) {
+      setError('A schedule trigger needs a cron expression.')
       return
     }
     const body: WorkflowInput = {
@@ -289,9 +317,10 @@ function WorkflowDialog({ workflow, onClose, onSaved }: WorkflowDialogProps) {
         <div className="card__body stack">
           {error ? <div className="alert alert--danger" role="alert">{error}</div> : null}
 
-          <label className="field">
+          <label className="field" htmlFor="workflow-name">
             <span className="field__label">Name</span>
             <input
+              id="workflow-name"
               className="input"
               value={name}
               maxLength={200}
@@ -300,14 +329,20 @@ function WorkflowDialog({ workflow, onClose, onSaved }: WorkflowDialogProps) {
             />
           </label>
 
-          <label className="field">
+          <label className="field" htmlFor="workflow-description">
             <span className="field__label">Description (optional)</span>
-            <input className="input" value={description} onChange={(e) => setDescription(e.target.value)} />
+            <input
+              id="workflow-description"
+              className="input"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
           </label>
 
-          <label className="field">
+          <label className="field" htmlFor="workflow-trigger">
             <span className="field__label">Trigger</span>
             <select
+              id="workflow-trigger"
               className="input"
               value={triggerType}
               onChange={(e) => setTriggerType(e.target.value as WorkflowInput['trigger_type'])}
@@ -319,35 +354,57 @@ function WorkflowDialog({ workflow, onClose, onSaved }: WorkflowDialogProps) {
           </label>
 
           {triggerType === 'event' ? (
-            <label className="field">
+            <label className="field" htmlFor="workflow-event-type">
               <span className="field__label">Event type</span>
-              <input
+              <select
+                id="workflow-event-type"
                 className="input mono"
                 value={eventType}
                 onChange={(e) => setEventType(e.target.value)}
-                placeholder="deal.won"
-              />
-              <span className="field__hint">The event type as it appears in the event log.</span>
+                disabled={eventsLoading}
+              >
+                <option value="">Choose an event…</option>
+                {eventTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+              <span className="field__hint">
+                The canonical event names the server emits. A workflow matches one of these
+                exactly; a name that is not in this list never fires.
+              </span>
             </label>
           ) : null}
 
           {triggerType === 'schedule' ? (
             <div className="row" style={{ gap: 'var(--space-3)', alignItems: 'flex-start' }}>
-              <label className="field" style={{ flex: 1 }}>
+              <label className="field" htmlFor="workflow-cron" style={{ flex: 1 }}>
                 <span className="field__label">Cron expression</span>
-                <input className="input mono" value={cron} onChange={(e) => setCron(e.target.value)} />
+                <input
+                  id="workflow-cron"
+                  className="input mono"
+                  value={cron}
+                  onChange={(e) => setCron(e.target.value)}
+                />
                 <span className="field__hint">Five fields: minute hour day month weekday.</span>
               </label>
-              <label className="field" style={{ flex: 1 }}>
+              <label className="field" htmlFor="workflow-timezone" style={{ flex: 1 }}>
                 <span className="field__label">Timezone</span>
-                <input className="input mono" value={timezone} onChange={(e) => setTimezone(e.target.value)} />
+                <input
+                  id="workflow-timezone"
+                  className="input mono"
+                  value={timezone}
+                  onChange={(e) => setTimezone(e.target.value)}
+                />
               </label>
             </div>
           ) : null}
 
-          <label className="field">
+          <label className="field" htmlFor="workflow-definition">
             <span className="field__label">Definition (JSON)</span>
             <textarea
+              id="workflow-definition"
               className="input mono"
               rows={14}
               value={definition}
@@ -360,9 +417,10 @@ function WorkflowDialog({ workflow, onClose, onSaved }: WorkflowDialogProps) {
             </span>
           </label>
 
-          <label className="field" style={{ maxWidth: 200 }}>
+          <label className="field" htmlFor="workflow-max-depth" style={{ maxWidth: 200 }}>
             <span className="field__label">Max chain depth</span>
             <input
+              id="workflow-max-depth"
               className="input"
               type="number"
               min={1}
