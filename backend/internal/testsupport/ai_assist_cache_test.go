@@ -17,6 +17,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/config"
 	"github.com/geff1778/forgecrm/internal/crm"
 	"github.com/geff1778/forgecrm/internal/outbox"
+	"github.com/geff1778/forgecrm/internal/ratelimit"
 	"github.com/geff1778/forgecrm/internal/rbac"
 )
 
@@ -87,7 +88,13 @@ func TestAssistCacheIsKeyedByTheQuestion(t *testing.T) {
 		Enabled: true, Provider: "openai_compatible", BaseURL: srv.URL,
 		Model: "test-model", Timeout: 5 * time.Second, MaxRequestsMin: 1000,
 	}
-	svc := ai.NewService(cfg, db, audit.New(db), crm.NewService(db, audit.New(db), outbox.NewStore(db)), slog.Default())
+	limiter, err := ratelimit.New(ratelimit.NewMemoryStore(), ratelimit.Policy{
+		Name: "ai", Limit: cfg.MaxRequestsMin, Window: time.Minute, KeyPrefix: "rl:ai",
+	})
+	if err != nil {
+		t.Fatalf("build the limiter: %v", err)
+	}
+	svc := ai.NewService(cfg, db, audit.New(db), crm.NewService(db, audit.New(db), outbox.NewStore(db)), slog.Default(), limiter)
 
 	p := rbac.NewPrincipal(userID, "asker@example.com", "Asker", org,
 		[]rbac.Permission{rbac.PermAIToolsExecute, rbac.PermAIRead, rbac.PermAccountsRead})

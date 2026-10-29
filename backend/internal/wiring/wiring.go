@@ -12,6 +12,7 @@ package wiring
 import (
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/geff1778/forgecrm/internal/agent"
 	"github.com/geff1778/forgecrm/internal/ai"
@@ -28,6 +29,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/migratex"
 	"github.com/geff1778/forgecrm/internal/notify"
 	"github.com/geff1778/forgecrm/internal/outbox"
+	"github.com/geff1778/forgecrm/internal/ratelimit"
 	"github.com/geff1778/forgecrm/internal/rbac"
 	"github.com/geff1778/forgecrm/internal/risk"
 	"github.com/geff1778/forgecrm/internal/secrets"
@@ -85,7 +87,27 @@ type Services struct {
 // other service writes to it; the CRM service is built before the import service
 // because imports write through it; and the tool registry is built last because
 // it depends on the CRM service.
-func Build(cfg *config.Config, db *database.DB, keyring *secrets.Keyring, log *slog.Logger) (*Services, error) {
+//
+// The limiter store is passed in rather than made here so the AI limit shares the
+// same counters as the API and login limits: one store, shared across replicas
+// when Redis is configured, rather than a per-process bucket that multiplies the
+// budget by the replica count.
+func Build(cfg *config.Config, db *database.DB, keyring *secrets.Keyring, log *slog.Logger, store ratelimit.Store) (*Services, error) {
+	// The AI limit is per organization and enforced in the AI layer, where the
+	// caller's organization is known. It fails open: it is a cost and fairness
+	// control, and refusing every model call because a counter is unavailable would
+	// turn a degraded cache into an outage of the whole assistant.
+	aiLimiter, err := ratelimit.New(store, ratelimit.Policy{
+		Name:      "ai",
+		Limit:     cfg.AI.MaxRequestsMin,
+		Window:    time.Minute,
+		FailMode:  ratelimit.FailOpen,
+		KeyPrefix: "rl:ai",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("build the AI rate limiter: %w", err)
+	}
+
 	auditLog := audit.New(db)
 	rbacSvc := rbac.NewService(db)
 	crmSvc := crm.NewService(db, auditLog, outbox.NewStore(db))
@@ -130,7 +152,7 @@ func Build(cfg *config.Config, db *database.DB, keyring *secrets.Keyring, log *s
 		Dispatcher:   events.NewDispatcher(db, auditLog),
 		Email:        notify.NewEmailService(&cfg.Email, db, log),
 		Telegram:     notify.NewTelegramService(&cfg.Telegram, db, log, auditLog, keyring),
-		AI:           ai.NewService(&cfg.AI, db, auditLog, crmSvc, log),
+		AI:           ai.NewService(&cfg.AI, db, auditLog, crmSvc, log, aiLimiter),
 		Tools:        tools,
 		MCP:          ai.NewMCPServer(tools),
 		Agent:        agentSvc,

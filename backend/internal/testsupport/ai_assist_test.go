@@ -37,7 +37,7 @@ func TestAssistRefusesToReadAnotherOrganizationsAccount(t *testing.T) {
 	accountA := insertAccount(t, db, orgA, "Acme in A")
 
 	crmSvc := crm.NewService(db, audit.New(db), outbox.NewStore(db))
-	svc := ai.NewService(nil, db, audit.New(db), crmSvc, nil)
+	svc := ai.NewService(nil, db, audit.New(db), crmSvc, nil, nil)
 
 	// A principal in B with the AI and accounts permissions. The organization
 	// filter, not the permission, is what must refuse this.
@@ -89,7 +89,7 @@ func TestAssembleOmitsDataTheCallerCannotRead(t *testing.T) {
 	}
 
 	crmSvc := crm.NewService(db, audit.New(db), outbox.NewStore(db))
-	svc := ai.NewService(nil, db, audit.New(db), crmSvc, nil)
+	svc := ai.NewService(nil, db, audit.New(db), crmSvc, nil, nil)
 
 	// accounts.read only. No contacts.read, no activities.read, no tasks.read.
 	p := rbac.NewPrincipal(uuid.New(), "p@example.com", "P", org,
@@ -146,7 +146,7 @@ func TestAssistMasksContactPersonalData(t *testing.T) {
 	}
 
 	crmSvc := crm.NewService(db, audit.New(db), outbox.NewStore(db))
-	svc := ai.NewService(nil, db, audit.New(db), crmSvc, nil)
+	svc := ai.NewService(nil, db, audit.New(db), crmSvc, nil, nil)
 
 	p := rbac.NewPrincipal(uuid.New(), "p@example.com", "P", org,
 		[]rbac.Permission{rbac.PermAIToolsExecute, rbac.PermContactsRead})

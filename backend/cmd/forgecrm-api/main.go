@@ -112,18 +112,19 @@ func run() error {
 		return bootstrapAdmin(ctx, db, keyring, cfg, log, *bootstrapEmail)
 	}
 
-	services, err := wiring.Build(cfg, db, keyring, log)
-	if err != nil {
-		return err
-	}
-
-	// The limiter store is built before the server so that an unreachable Redis is a
-	// startup failure. The alternative — starting anyway and discovering it on the
+	// The limiter store is built before the services so that an unreachable Redis is
+	// a startup failure, and so the AI limit shares the same counters as the API and
+	// login limits. The alternative — starting anyway and discovering it on the
 	// first request — reports the problem as a warning about an unenforced limit,
 	// which is easy to miss and means the limit silently is not applied.
 	limiterStore, err := api.NewLimiterStore(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("rate limit store: %w", err)
+	}
+
+	services, err := wiring.Build(cfg, db, keyring, log, limiterStore)
+	if err != nil {
+		return err
 	}
 
 	trustedProxies, err := httpx.TrustedProxiesFrom(cfg.TrustedProxies)

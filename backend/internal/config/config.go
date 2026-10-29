@@ -548,6 +548,12 @@ func (c *Config) Validate() error {
 	if c.AI.Enabled && (c.AI.BaseURL == "" || c.AI.Model == "") {
 		return fmt.Errorf("AI enabled but FORGECRM_AI_BASE_URL or FORGECRM_AI_MODEL is empty")
 	}
+	// The limit is validated here so a bad value is a startup failure next to the
+	// setting, not a wiring error later. Zero means "do not limit"; a negative
+	// value is a mistake, not a way to spell unlimited.
+	if c.AI.MaxRequestsMin < 0 {
+		return fmt.Errorf("FORGECRM_AI_MAX_REQUESTS_PER_MIN must not be negative, got %d", c.AI.MaxRequestsMin)
+	}
 	if c.OIDC.Enabled && (c.OIDC.Issuer == "" || c.OIDC.ClientID == "") {
 		return fmt.Errorf("OIDC enabled but FORGECRM_OIDC_ISSUER or FORGECRM_OIDC_CLIENT_ID is empty")
 	}

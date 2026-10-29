@@ -106,7 +106,7 @@ func newHarnessWithStore(t *testing.T, cfg *config.Config, store ratelimit.Store
 		t.Fatalf("keyring: %v", err)
 	}
 
-	svcs, err := wiring.Build(cfg, db, keyring, logging.New("error", "text"))
+	svcs, err := wiring.Build(cfg, db, keyring, logging.New("error", "text"), store)
 	if err != nil {
 		t.Fatalf("build services: %v", err)
 	}

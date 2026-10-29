@@ -36,6 +36,24 @@ once it reaches 1.0.
 
 ### Fixed
 
+- **The AI request limiter was racy and shared one bucket across all tenants.**
+  The limiter kept a slice of timestamps in the service and appended to it from
+  every request goroutine with no lock: a data race, and on a bad interleaving a
+  slice write that corrupts memory or panics, taking the process down under
+  ordinary concurrent use. It was also a single global bucket, so one busy
+  organization could spend the minute's budget and refuse the assistant to every
+  other tenant on the deployment. It now uses the shared `internal/ratelimit`
+  limiter, keyed by the caller's organization and derived server-side from the
+  authenticated principal. Because it is the same store as the API and login
+  limits, the AI budget is shared across replicas when Redis is configured
+  instead of being multiplied by the replica count. The policy fails open, as a
+  cost and fairness control should: an unreachable counter must not take the
+  assistant down. `TestAILimitIsPerOrganization` and
+  `TestAILimitIsConcurrencySafe` (run under `-race`) are the regressions. The
+  setting is validated at startup, so a negative
+  `FORGECRM_AI_MAX_REQUESTS_PER_MIN` is a startup error rather than a wiring
+  failure.
+
 - **`scripts/docs-check.sh` reported 98 broken links that were not broken.** The
   link scan walked into `frontend/node_modules` and read the READMEs of vendored
   packages, so the CI job failed on links inside dependencies nobody maintains.

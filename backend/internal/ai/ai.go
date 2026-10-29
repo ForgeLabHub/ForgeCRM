@@ -32,6 +32,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/database"
 	"github.com/geff1778/forgecrm/internal/httpx"
 	"github.com/geff1778/forgecrm/internal/logging"
+	"github.com/geff1778/forgecrm/internal/ratelimit"
 )
 
 // Provider abstracts a model backend.
@@ -80,7 +81,14 @@ type Service struct {
 	db       *database.DB
 	audit    *audit.Logger
 	provider Provider
-	limiter  *rateLimiter
+	// limiter bounds how many model calls an organization may make per minute. It
+	// is the shared ratelimit.Limiter rather than a counter held here, because the
+	// request path is concurrent: the type this replaced kept a slice of timestamps
+	// and appended to it from every request goroutine with no lock, which is a data
+	// race and, on a bad interleaving, a slice-write panic that takes the process
+	// down. The shared limiter is also keyed by subject, so one organization
+	// spending the whole budget cannot starve the others.
+	limiter *ratelimit.Limiter
 	// crm is the domain service the contextual path reads through. Every read
 	// goes through it with the caller's principal, so the AI layer cannot see
 	// more than the caller can.
@@ -99,13 +107,18 @@ type Service struct {
 // in which case only the free-form completion path is usable. It is a parameter
 // rather than a field set afterwards so a caller cannot forget it and ship a
 // contextual path that panics on first use.
-func NewService(cfg *config.AIConfig, db *database.DB, auditLog *audit.Logger, crmSvc *crm.Service, log *slog.Logger) *Service {
+//
+// limiter bounds model calls per organization per minute. It is passed in rather
+// than built here so the counters live in the same store as the rest of the
+// platform's limits — shared across replicas when Redis is configured, and the
+// same policy object the API already uses. A nil limiter means "do not limit",
+// which is how a test that does not exercise the limit builds the service.
+func NewService(cfg *config.AIConfig, db *database.DB, auditLog *audit.Logger, crmSvc *crm.Service, log *slog.Logger, limiter *ratelimit.Limiter) *Service {
 	if log == nil {
 		log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
-	s := &Service{cfg: cfg, db: db, audit: auditLog, crm: crmSvc, log: log, now: time.Now}
+	s := &Service{cfg: cfg, db: db, audit: auditLog, crm: crmSvc, log: log, now: time.Now, limiter: limiter}
 	if cfg != nil && cfg.Enabled {
-		s.limiter = newRateLimiter(cfg.MaxRequestsMin, time.Minute)
 		switch cfg.Provider {
 		case "ollama":
 			s.provider = &OllamaProvider{baseURL: cfg.BaseURL, model: cfg.Model, timeout: cfg.Timeout}
@@ -173,7 +186,7 @@ func (s *Service) Complete(ctx context.Context, p principalLike, req CompletionR
 	if !s.Enabled() {
 		return nil, ErrDisabled
 	}
-	if s.limiter != nil && !s.limiter.allow(time.Now()) {
+	if !s.allowRequest(ctx, p) {
 		return nil, ErrRateLimited
 	}
 	timeout := s.cfg.Timeout
@@ -500,37 +513,24 @@ func (p *OpenAICompatibleProvider) Healthy(ctx context.Context) error {
 	return nil
 }
 
-// ---------------------------------------------------------------------------
-// Rate limiting
-// ---------------------------------------------------------------------------
-
-type rateLimiter struct {
-	limit  int
-	window time.Duration
-	hits   []time.Time
-}
-
-func newRateLimiter(limit int, window time.Duration) *rateLimiter {
-	if limit <= 0 {
-		limit = 30
+// allowRequest consumes one unit of the caller's organization budget and reports
+// whether the request may proceed. A nil limiter (a service built without one)
+// allows every request.
+//
+// The subject is keyed by organization rather than held globally: a shared bucket
+// lets one organization spend the whole minute's budget and starve every other
+// tenant on the deployment. It is derived server-side from the authenticated
+// principal, never from anything the caller sends, so a caller cannot pick a key
+// to escape its own limit.
+func (s *Service) allowRequest(ctx context.Context, p principalLike) bool {
+	if s.limiter == nil {
+		return true
 	}
-	return &rateLimiter{limit: limit, window: window}
-}
-
-func (r *rateLimiter) allow(now time.Time) bool {
-	cutoff := now.Add(-r.window)
-	kept := r.hits[:0]
-	for _, t := range r.hits {
-		if t.After(cutoff) {
-			kept = append(kept, t)
-		}
+	subject := "anonymous"
+	if p != nil && p.GetOrganizationID() != uuid.Nil {
+		subject = p.GetOrganizationID().String()
 	}
-	r.hits = kept
-	if len(r.hits) >= r.limit {
-		return false
-	}
-	r.hits = append(r.hits, now)
-	return true
+	return s.limiter.Allow(ctx, subject, s.now()).Allowed
 }
 
 // HTTPErrorFrom maps an AI error to the API error shape.

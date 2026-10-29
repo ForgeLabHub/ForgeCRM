@@ -41,7 +41,7 @@ func TestEntityPermissionsCoverEveryType(t *testing.T) {
 // and no CRM permission is refused before any read.
 func TestAssistRefusesWithoutTheEntityPermission(t *testing.T) {
 	svc := NewService(&config.AIConfig{Enabled: true, Provider: "openai_compatible", Model: "m"},
-		nil, nil, nil, nil)
+		nil, nil, nil, nil, nil)
 	p := principalWith(rbac.PermAIToolsExecute) // no deals.read
 
 	_, err := svc.Assist(context.Background(), p, AssistRequest{
@@ -60,7 +60,7 @@ func TestAssistRefusesWithoutTheEntityPermission(t *testing.T) {
 // TestAssistRejectsAnUnknownEntityType checks that a type outside the map is
 // refused rather than falling through to a default.
 func TestAssistRejectsAnUnknownEntityType(t *testing.T) {
-	svc := NewService(&config.AIConfig{}, nil, nil, nil, nil)
+	svc := NewService(&config.AIConfig{}, nil, nil, nil, nil, nil)
 	_, err := svc.Assist(context.Background(), principalWith(), AssistRequest{
 		EntityType: EntityType("invoice"),
 		EntityID:   uuid.New(),
@@ -74,7 +74,7 @@ func TestAssistRejectsAnUnknownEntityType(t *testing.T) {
 // TestAssistValidatesKindAndQuestion checks the request-level validation, which is
 // what stops a caller reaching the provider with a request that cannot be honoured.
 func TestAssistValidatesKindAndQuestion(t *testing.T) {
-	svc := NewService(&config.AIConfig{}, nil, nil, nil, nil)
+	svc := NewService(&config.AIConfig{}, nil, nil, nil, nil, nil)
 	p := principalWith(rbac.PermDealsRead)
 
 	t.Run("unknown kind", func(t *testing.T) {
@@ -109,7 +109,7 @@ func TestAssistValidatesKindAndQuestion(t *testing.T) {
 // TestDisabledProviderIsReported checks that a disabled AI subsystem is reported
 // as such rather than as a permission problem or an empty answer.
 func TestDisabledProviderIsReported(t *testing.T) {
-	svc := NewService(&config.AIConfig{Enabled: false}, nil, nil, nil, nil)
+	svc := NewService(&config.AIConfig{Enabled: false}, nil, nil, nil, nil, nil)
 	if svc.Enabled() {
 		t.Fatal("a service built from a disabled configuration reports itself enabled")
 	}
@@ -240,7 +240,7 @@ func TestContextHashIsStableAndSensitiveToInput(t *testing.T) {
 // structure: the record data and the user's question are in labelled, delimited
 // context blocks, not concatenated into the instruction region.
 func TestAssemblePromptKeepsFactsAndQuestionInContextBlocks(t *testing.T) {
-	svc := NewService(&config.AIConfig{}, nil, nil, nil, nil)
+	svc := NewService(&config.AIConfig{}, nil, nil, nil, nil, nil)
 	b := &contextBundle{
 		Facts:  []Fact{{Label: "Deal", Value: "Acme renewal"}},
 		Blocks: []ContextBlock{{Label: "activities", Source: "crm.activities", Trust: TrustInternal, Content: "2026-01-01 [call] intro"}},
