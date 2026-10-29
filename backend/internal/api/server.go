@@ -314,6 +314,7 @@ func (s *Server) buildRouter() chi.Router {
 			s.mountEvents(r)
 			s.mountJobs(r)
 			s.mountAI(r)
+			s.mountAIAssist(r)
 			s.mountAgent(r)
 			s.mountWorkflows(r)
 			s.mountMCP(r)

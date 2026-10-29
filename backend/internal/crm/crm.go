@@ -363,6 +363,8 @@ type ListQuery struct {
 	IncludeArchived bool
 	AccountID       *uuid.UUID
 	DealID          *uuid.UUID
+	ContactID       *uuid.UUID
+	TicketID        *uuid.UUID
 	AssigneeID      *uuid.UUID
 	PipelineID      *uuid.UUID
 	From            *time.Time

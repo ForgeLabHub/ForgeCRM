@@ -119,6 +119,14 @@ func (s *Service) ListTasks(ctx context.Context, p *rbac.Principal, q ListQuery)
 		args = append(args, *q.AccountID)
 		where = append(where, fmt.Sprintf("account_id = $%d", len(args)))
 	}
+	if q.ContactID != nil {
+		args = append(args, *q.ContactID)
+		where = append(where, fmt.Sprintf("contact_id = $%d", len(args)))
+	}
+	if q.TicketID != nil {
+		args = append(args, *q.TicketID)
+		where = append(where, fmt.Sprintf("ticket_id = $%d", len(args)))
+	}
 	if q.Search != "" {
 		args = append(args, "%"+q.Search+"%")
 		where = append(where, fmt.Sprintf("title ILIKE $%d", len(args)))
@@ -343,6 +351,14 @@ func (s *Service) ListActivities(ctx context.Context, p *rbac.Principal, q ListQ
 		args = append(args, *q.DealID)
 		where = append(where, fmt.Sprintf("deal_id = $%d", len(args)))
 	}
+	if q.ContactID != nil {
+		args = append(args, *q.ContactID)
+		where = append(where, fmt.Sprintf("contact_id = $%d", len(args)))
+	}
+	if q.TicketID != nil {
+		args = append(args, *q.TicketID)
+		where = append(where, fmt.Sprintf("ticket_id = $%d", len(args)))
+	}
 	if q.Status != "" {
 		args = append(args, q.Status)
 		where = append(where, fmt.Sprintf("type = $%d", len(args)))
@@ -530,6 +546,10 @@ func (s *Service) ListTickets(ctx context.Context, p *rbac.Principal, q ListQuer
 	if q.AccountID != nil {
 		args = append(args, *q.AccountID)
 		where = append(where, fmt.Sprintf("account_id = $%d", len(args)))
+	}
+	if q.ContactID != nil {
+		args = append(args, *q.ContactID)
+		where = append(where, fmt.Sprintf("contact_id = $%d", len(args)))
 	}
 	if q.Search != "" {
 		args = append(args, "%"+q.Search+"%")

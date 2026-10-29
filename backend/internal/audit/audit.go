@@ -201,6 +201,11 @@ const (
 	ActionWorkflowArchived Action = "workflows.archived"
 	ActionWorkflowRunOK    Action = "workflow.run.succeeded"
 	ActionWorkflowRunFail  Action = "workflow.run.failed"
+
+	// Contextual AI. One entry per assistance request, recording who asked about
+	// which record and what it cost. The analysis itself is not recorded: the
+	// trail shows that a model was consulted, not a second copy of its answer.
+	ActionAIInsightGenerated Action = "ai.insight_generated"
 )
 
 func marshalJSONOrNil(v any) ([]byte, error) {

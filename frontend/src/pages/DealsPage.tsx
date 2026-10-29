@@ -7,6 +7,7 @@ import { errorMessage, fieldErrors } from '../api/client'
 import type { Deal, DealInput, Pipeline } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
 import { ResourceList, type Column } from '../components/ResourceList'
+import { AssistPanel } from '../components/AssistPanel'
 import { BulkArchiveButton } from '../components/BulkArchiveButton'
 import {
   Alert,
@@ -699,6 +700,8 @@ export function DealDetailPage() {
           )}
         </Card>
       </div>
+
+      <AssistPanel entityType="deal" entityId={id} />
 
       <DealFormDialog
         open={editing}

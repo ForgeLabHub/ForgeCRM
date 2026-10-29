@@ -116,6 +116,14 @@ func (s *Service) ListContacts(ctx context.Context, p *rbac.Principal, q ListQue
 		args = append(args, *q.OwnerID)
 		where = append(where, fmt.Sprintf("owner_user_id = $%d", len(args)))
 	}
+	if q.DealID != nil {
+		// Contacts reachable through a deal's account, plus the deal's primary contact.
+		args = append(args, *q.DealID)
+		where = append(where, fmt.Sprintf(
+			"(account_id = (SELECT account_id FROM deals WHERE id = $%d AND organization_id = $1)"+
+				" OR id = (SELECT primary_contact_id FROM deals WHERE id = $%d AND organization_id = $1))",
+			len(args), len(args)))
+	}
 	if !p.Has(rbac.PermContactsArchive) && len(p.TeamIDs) > 0 {
 		args = append(args, p.UserID, p.TeamIDs)
 		where = append(where, fmt.Sprintf("(owner_user_id = $%d OR team_id = ANY($%d))", len(args)-1, len(args)))

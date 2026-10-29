@@ -6,6 +6,7 @@ import { errorMessage, fieldErrors } from '../api/client'
 import type { Ticket, TicketInput } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
 import { ResourceList, type Column } from '../components/ResourceList'
+import { AssistPanel } from '../components/AssistPanel'
 import { Alert, Badge, Field, PageHeader, StatusBadge, Timestamp } from '../components/ui'
 
 const STATUSES = ['new', 'open', 'pending', 'resolved', 'closed']
@@ -194,6 +195,11 @@ export function TicketFormDialog({
             {formError ? (
               <div style={{ marginBottom: 'var(--space-4)' }}>
                 <Alert tone="error">{formError}</Alert>
+              </div>
+            ) : null}
+            {editing && ticket ? (
+              <div style={{ marginBottom: 'var(--space-4)' }}>
+                <AssistPanel entityType="ticket" entityId={ticket.id} />
               </div>
             ) : null}
             <div className="form-grid">

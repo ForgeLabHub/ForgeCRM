@@ -292,6 +292,14 @@ func APIContract() openapi.Contract {
 	c.RequiredBody["CreateAITaskRequest"] = []string{"prompt"}
 	c.Responses["POST /api/v1/ai/tasks"] = reflect.TypeOf(aiCompletionResponse{})
 
+	// Contextual AI. The entity type is a query parameter and the identifier is the
+	// path parameter, which keeps every path parameter an identifier.
+	c.RequestBodies["POST /api/v1/ai/assist/{id}"] = reflect.TypeOf(aiAssistRequest{})
+	c.Responses["POST /api/v1/ai/assist/{id}"] = reflect.TypeOf(ai.Insight{})
+	c.Responses["GET /api/v1/ai/assist/{id}/context"] = reflect.TypeOf(aiAssistContextResponse{})
+	c.QueryParams["POST /api/v1/ai/assist/{id}"] = []openapi.QueryParam{entityTypeParam}
+	c.QueryParams["GET /api/v1/ai/assist/{id}/context"] = []openapi.QueryParam{entityTypeParam}
+
 	// The protocol endpoint. `id` is echoed back unchanged and may be a string or a
 	// number, so the schema describes it as either; omit it to send a notification,
 	// which receives an empty 202 and no body.
@@ -412,6 +420,28 @@ type integrationStatusResponse struct {
 
 type webhookCreatedResponse struct {
 	Subscription *events.Subscription `json:"subscription"`
+}
+
+// entityTypeParam is the shared entity-type selector for the contextual AI routes.
+// It is declared once because both routes read it the same way.
+var entityTypeParam = openapi.QueryParam{
+	Name:        "entity_type",
+	Description: "The kind of record the identifier names.",
+	Required:    true,
+	Schema:      map[string]any{"type": "string", "enum": []string{"account", "contact", "deal", "ticket", "task"}},
+}
+
+// aiAssistContextResponse is what the model would be told about a record, returned
+// without calling the model. It is a distinct type from ai.Insight because it has
+// no analysis: showing a caller an empty analysis field would suggest the model had
+// nothing to say, when in fact it was never asked.
+type aiAssistContextResponse struct {
+	EntityType  string          `json:"entity_type"`
+	EntityID    string          `json:"entity_id"`
+	Subject     string          `json:"subject"`
+	Facts       []ai.Fact       `json:"facts"`
+	Disclosures []ai.Disclosure `json:"disclosures"`
+	Available   bool            `json:"available"`
 }
 
 type aiCompletionResponse struct {

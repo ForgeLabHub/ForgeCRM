@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -27,6 +28,7 @@ import (
 
 	"github.com/geff1778/forgecrm/internal/audit"
 	"github.com/geff1778/forgecrm/internal/config"
+	"github.com/geff1778/forgecrm/internal/crm"
 	"github.com/geff1778/forgecrm/internal/database"
 	"github.com/geff1778/forgecrm/internal/httpx"
 	"github.com/geff1778/forgecrm/internal/logging"
@@ -52,6 +54,10 @@ type CompletionRequest struct {
 	Messages    []Message `json:"messages"`
 	MaxTokens   int       `json:"max_tokens,omitempty"`
 	Temperature float64   `json:"temperature,omitempty"`
+	// Kind labels the record in ai_tasks, e.g. "chat" or an assistance kind. It
+	// is what lets an operator see how much of the AI spend went on contextual
+	// assistance rather than on the free-form chat endpoint.
+	Kind string `json:"kind,omitempty"`
 }
 
 // CompletionResponse is a model reply with usage metadata.
@@ -75,12 +81,29 @@ type Service struct {
 	audit    *audit.Logger
 	provider Provider
 	limiter  *rateLimiter
+	// crm is the domain service the contextual path reads through. Every read
+	// goes through it with the caller's principal, so the AI layer cannot see
+	// more than the caller can.
+	crm *crm.Service
+	// log is optional; the contextual path logs a cache-write failure without
+	// failing the request, and must tolerate a service built without a logger.
+	log *slog.Logger
+	// now is overridable in tests.
+	now func() time.Time
 }
 
 // NewService builds the AI service. A disabled configuration yields a service
 // whose methods report ErrDisabled.
-func NewService(cfg *config.AIConfig, db *database.DB, auditLog *audit.Logger) *Service {
-	s := &Service{cfg: cfg, db: db, audit: auditLog}
+//
+// crmSvc is the domain service the contextual path reads through and may be nil,
+// in which case only the free-form completion path is usable. It is a parameter
+// rather than a field set afterwards so a caller cannot forget it and ship a
+// contextual path that panics on first use.
+func NewService(cfg *config.AIConfig, db *database.DB, auditLog *audit.Logger, crmSvc *crm.Service, log *slog.Logger) *Service {
+	if log == nil {
+		log = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+	s := &Service{cfg: cfg, db: db, audit: auditLog, crm: crmSvc, log: log, now: time.Now}
 	if cfg != nil && cfg.Enabled {
 		s.limiter = newRateLimiter(cfg.MaxRequestsMin, time.Minute)
 		switch cfg.Provider {
@@ -196,13 +219,27 @@ func (s *Service) startTask(ctx context.Context, p principalLike, req Completion
 			userID = &u
 		}
 	}
+	kind := strings.TrimSpace(req.Kind)
+	if kind == "" {
+		kind = "chat"
+	}
 	const q = `
 		INSERT INTO ai_tasks (id, organization_id, user_id, provider, model, kind, prompt_summary,
 			status, correlation_id)
-		VALUES ($1,$2,$3,$4,$5,'chat',$6,'running',$7)`
+		VALUES ($1,$2,$3,$4,$5,$6,$7,'running',$8)`
 	_, _ = s.db.Pool().Exec(ctx, q, id, orgID, userID, s.provider.Name(), s.provider.Model(),
-		summary, logging.CorrelationID(ctx))
+		kind, summary, logging.CorrelationID(ctx))
 	return id
+}
+
+// logger returns the service logger, never nil, so a caller can log without
+// checking. A nil logger is a valid service: the AI layer is optional and may be
+// built without one.
+func (s *Service) logger() *slog.Logger {
+	if s == nil || s.log == nil {
+		return slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+	return s.log
 }
 
 func (s *Service) finishTask(ctx context.Context, id uuid.UUID, status string,

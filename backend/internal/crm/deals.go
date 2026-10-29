@@ -279,6 +279,10 @@ func (s *Service) ListDeals(ctx context.Context, p *rbac.Principal, q ListQuery)
 		args = append(args, *q.OwnerID)
 		where = append(where, fmt.Sprintf("owner_user_id = $%d", len(args)))
 	}
+	if q.ContactID != nil {
+		args = append(args, *q.ContactID)
+		where = append(where, fmt.Sprintf("primary_contact_id = $%d", len(args)))
+	}
 	if q.Search != "" {
 		args = append(args, "%"+q.Search+"%")
 		where = append(where, fmt.Sprintf("title ILIKE $%d", len(args)))

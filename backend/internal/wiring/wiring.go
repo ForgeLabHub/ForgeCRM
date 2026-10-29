@@ -106,7 +106,7 @@ func Build(cfg *config.Config, db *database.DB, keyring *secrets.Keyring, log *s
 		Dispatcher:   events.NewDispatcher(db, auditLog),
 		Email:        notify.NewEmailService(&cfg.Email, db, log),
 		Telegram:     notify.NewTelegramService(&cfg.Telegram, db, log, auditLog, keyring),
-		AI:           ai.NewService(&cfg.AI, db, auditLog),
+		AI:           ai.NewService(&cfg.AI, db, auditLog, crmSvc, log),
 		Tools:        tools,
 		MCP:          ai.NewMCPServer(tools),
 		Agent:        agentSvc,

@@ -7,6 +7,7 @@ import { errorMessage, fieldErrors } from '../api/client'
 import type { Account, AccountInput } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
 import { ResourceList, type Column } from '../components/ResourceList'
+import { AssistPanel } from '../components/AssistPanel'
 import { BulkArchiveButton } from '../components/BulkArchiveButton'
 import {
   Alert,
@@ -582,6 +583,8 @@ export function AccountDetailPage() {
           ) : null}
         </div>
       </div>
+
+      <AssistPanel entityType="account" entityId={id} />
 
       <AccountFormDialog
         open={editing}
