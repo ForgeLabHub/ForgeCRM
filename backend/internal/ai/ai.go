@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -74,6 +75,15 @@ var ErrDisabled = errors.New("the AI subsystem is not configured")
 
 // ErrRateLimited is returned when the per-minute request cap is reached.
 var ErrRateLimited = errors.New("AI request rate limit reached")
+
+// ErrProviderUnavailable is returned when the configured provider could not be
+// reached or did not answer in time. It is distinct from ErrDisabled, which says
+// no provider is configured at all: here one is configured and the request may
+// succeed if it is sent again, so it maps to a retryable 503 rather than to the
+// generic 500 an unclassified failure would produce. A caller that saw a 500
+// would reasonably assume a defect and stop retrying; a caller that sees this can
+// wait and try again.
+var ErrProviderUnavailable = errors.New("the AI provider is unavailable")
 
 // Service is the AI layer.
 type Service struct {
@@ -202,7 +212,7 @@ func (s *Service) Complete(ctx context.Context, p principalLike, req CompletionR
 	latency := time.Since(started).Milliseconds()
 	if err != nil {
 		s.finishTask(ctx, taskID, "failed", 0, 0, latency, err)
-		return nil, fmt.Errorf("model call failed: %w", err)
+		return nil, fmt.Errorf("model call failed: %w", classifyProviderError(callCtx, err))
 	}
 	s.finishTask(ctx, taskID, "succeeded", resp.InputTokens, resp.OutputTokens, latency, nil)
 	return resp, nil
@@ -540,7 +550,29 @@ func HTTPErrorFrom(err error) error {
 		return httpx.NewError(503, httpx.CodeDisabled, "the AI subsystem is not configured")
 	case errors.Is(err, ErrRateLimited):
 		return httpx.NewError(429, httpx.CodeRateLimited, "AI request rate limit reached")
+	case errors.Is(err, ErrProviderUnavailable):
+		return httpx.NewError(503, httpx.CodeUnavailable, "the AI provider is unavailable; try again shortly")
 	default:
 		return err
 	}
+}
+
+// classifyProviderError turns a raw provider failure into ErrProviderUnavailable
+// when the request never got an answer. A deadline or a cancelled context and a
+// transport-level error both mean the provider could not be reached, which is a
+// transient condition the caller can retry; anything the provider itself returned
+// as an application error is passed through unchanged so it is not disguised as
+// "try again".
+func classifyProviderError(ctx context.Context, err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return fmt.Errorf("%w: %v", ErrProviderUnavailable, err)
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return fmt.Errorf("%w: %v", ErrProviderUnavailable, err)
+	}
+	return err
 }

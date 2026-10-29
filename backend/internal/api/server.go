@@ -639,7 +639,8 @@ func (s *Server) respondDomainError(w http.ResponseWriter, r *http.Request, err 
 		errors.Is(err, authn.ErrSessionInvalid), errors.Is(err, authn.ErrResetTokenInvalid),
 		errors.Is(err, authn.ErrWeakPassword), errors.Is(err, authn.ErrCSRF):
 		httpx.WriteError(w, r, mapAuthError(err))
-	case errors.Is(err, ai.ErrDisabled), errors.Is(err, ai.ErrRateLimited):
+	case errors.Is(err, ai.ErrDisabled), errors.Is(err, ai.ErrRateLimited),
+		errors.Is(err, ai.ErrProviderUnavailable):
 		httpx.WriteError(w, r, ai.HTTPErrorFrom(err))
 	case errors.Is(err, storage.ErrNotConfigured):
 		httpx.WriteError(w, r, httpx.ErrDisabled)

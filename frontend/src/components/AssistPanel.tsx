@@ -7,9 +7,19 @@ import type {
   AssistInsight,
   AssistKind,
 } from '../api/assist'
-import { errorMessage } from '../api/client'
+import { ApiError, errorMessage } from '../api/client'
 import { useAuth } from '../hooks/useAuth'
 import { Alert, Badge, Card, Skeleton, Timestamp } from './ui'
+
+/**
+ * Reports whether the server marked the failure as one that could succeed if
+ * sent again. The panel offers a retry button only in that case: a retry offered
+ * for a deterministic failure — a validation error, a permission refusal — is a
+ * button that cannot work, which teaches the user to distrust the panel.
+ */
+function isRetryable(error: unknown): boolean {
+  return error instanceof ApiError && error.retryable
+}
 
 /**
  * Contextual AI for one record.
@@ -171,7 +181,29 @@ export function AssistPanel({
           ) : null}
         </div>
 
-        {run.isError ? <Alert tone="error">{errorMessage(run.error)}</Alert> : null}
+        {run.isError ? (
+          <Alert tone="error">
+            <div className="stack">
+              <span>{errorMessage(run.error)}</span>
+              {isRetryable(run.error) ? (
+                // A retryable failure is worth offering as a button, not just as
+                // advice in the message: the whole reason the server marks it
+                // retryable is that sending it again could work, so the panel
+                // gives the user the one action that helps.
+                <div>
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--sm"
+                    onClick={() => run.mutate(false)}
+                    disabled={run.isPending}
+                  >
+                    {run.isPending ? 'Trying…' : 'Try again'}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </Alert>
+        ) : null}
 
         {insight ? <InsightView insight={insight} /> : null}
 

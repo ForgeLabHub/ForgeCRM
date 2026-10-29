@@ -19,6 +19,8 @@ function stubFetch(handlers: {
   context?: unknown
   assist?: unknown
   assistStatus?: number
+  /** When set, the error envelope carries this retryable flag. */
+  assistRetryable?: boolean
 }) {
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input.toString()
@@ -31,7 +33,13 @@ function stubFetch(handlers: {
     if (url.includes('/api/v1/ai/assist/')) {
       if (handlers.assistStatus && handlers.assistStatus >= 400) {
         return Promise.resolve(
-          json({ error: { code: 'forbidden', message: 'permission deals.read is required' } }, handlers.assistStatus),
+          json(
+            {
+              retryable: handlers.assistRetryable ?? false,
+              error: { code: 'forbidden', message: 'permission deals.read is required' },
+            },
+            handlers.assistStatus,
+          ),
         )
       }
       return Promise.resolve(json(handlers.assist))
@@ -158,6 +166,29 @@ describe('AssistPanel', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Run' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/permission deals.read is required/i)
+  })
+
+  it('offers a retry only when the server says the failure is retryable', async () => {
+    // A provider outage is retryable: the server marks it so, and the panel gives
+    // the user the one action that could help.
+    stubFetch({ assist: insight, assistStatus: 503, assistRetryable: true })
+    renderPanel()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Run' }))
+
+    expect(await screen.findByRole('button', { name: 'Try again' })).toBeInTheDocument()
+  })
+
+  it('does not offer a retry for a deterministic failure', async () => {
+    // A permission refusal cannot succeed by resending it, so a retry button
+    // would be a control that never works.
+    stubFetch({ assist: insight, assistStatus: 403, assistRetryable: false })
+    renderPanel()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Run' }))
+
+    await screen.findByRole('alert')
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument()
   })
 
   it('shows the disclosures that qualify an answer', async () => {
