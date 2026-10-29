@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { auditApi } from '../../api/admin'
 import { sessionsApi } from '../../api/admin'
 import { errorMessage } from '../../api/client'
 import { useAuth } from '../../hooks/useAuth'
 import { ResourceList, type Column } from '../../components/ResourceList'
-import { Alert, Badge, Card, PageHeader, TableSkeleton, Timestamp } from '../../components/ui'
+import { Alert, Badge, Card, ConfirmDialog, PageHeader, TableSkeleton, Timestamp } from '../../components/ui'
 import type { SecurityEvent, Session } from '../../types/api'
 
 const eventColumns: Column<SecurityEvent>[] = [
@@ -149,16 +149,31 @@ const sessionColumns: Column<Session>[] = [
 ]
 
 function MySessions() {
+  const queryClient = useQueryClient()
   const sessions = useQuery({ queryKey: ['sessions'], queryFn: () => sessionsApi.list() })
+  const [pending, setPending] = useState<Session | null>(null)
+
+  const revoke = useMutation({
+    mutationFn: (id: string) => sessionsApi.revoke(id),
+    onSuccess: () => {
+      setPending(null)
+      void queryClient.invalidateQueries({ queryKey: ['sessions'] })
+    },
+  })
 
   return (
     <Card title="Active sessions" flush>
+      {revoke.isError ? (
+        <div className="card__body">
+          <Alert tone="error">{errorMessage(revoke.error)}</Alert>
+        </div>
+      ) : null}
       {sessions.isError ? (
         <div className="card__body">
           <Alert tone="error">{errorMessage(sessions.error)}</Alert>
         </div>
       ) : sessions.isLoading ? (
-        <TableSkeleton rows={3} columns={5} />
+        <TableSkeleton rows={3} columns={6} />
       ) : sessions.data?.items.length ? (
         <div className="table-wrap">
           <table>
@@ -167,6 +182,7 @@ function MySessions() {
                 {sessionColumns.map((column) => (
                   <th key={column.key}>{column.header}</th>
                 ))}
+                <th />
               </tr>
             </thead>
             <tbody>
@@ -175,6 +191,20 @@ function MySessions() {
                   {sessionColumns.map((column) => (
                     <td key={column.key}>{column.render(session)}</td>
                   ))}
+                  <td>
+                    {session.current ? (
+                      <span className="text-subtle text-sm">Current</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--sm"
+                        onClick={() => setPending(session)}
+                        disabled={revoke.isPending}
+                      >
+                        Revoke
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -185,6 +215,19 @@ function MySessions() {
           <p className="text-muted">No active sessions.</p>
         </div>
       )}
+
+      <ConfirmDialog
+        open={pending !== null}
+        title="Revoke this session?"
+        text="The device signed in with this session will be signed out and must authenticate again."
+        confirmLabel="Revoke session"
+        danger
+        busy={revoke.isPending}
+        onConfirm={() => {
+          if (pending) revoke.mutate(pending.id)
+        }}
+        onCancel={() => setPending(null)}
+      />
     </Card>
   )
 }
