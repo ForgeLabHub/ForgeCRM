@@ -38,7 +38,7 @@ and compiles but is not yet covered by passing tests.
 | 2.5 | SSRF guard for outbound connections | **VERIFIED** |
 | 2.6 | Postgres + SQLite + REST migration source adapters | **VERIFIED** |
 | 2.7 | Migration reconciliation reports | **VERIFIED** |
-| 2.8 | MySQL/MariaDB adapter | **IN_PROGRESS** — interface + config validation only |
+| 2.8 | MySQL/MariaDB adapter | **DEFERRED** — the direction is assessed from the code in ADR 0008, which records the measured blockers (19 non-test files importing pgx, 64 `RETURNING`, 21 `ON CONFLICT`, 8 `SKIP LOCKED`, 26 `ILIKE`, 16 PostgreSQL migrations using `gen_random_uuid`, `plpgsql` triggers, partial indexes, `jsonb` and arrays). PostgreSQL remains the only supported datastore; no MySQL code is added, and compilation against a MySQL driver is explicitly not treated as support |
 | 2.9 | MSSQL / Oracle adapters | **NOT_STARTED** |
 | 2.10 | CDC adapter | **NOT_STARTED** |
 | 2.11 | S3-compatible artefact storage | **VERIFIED** — `internal/storage`; a provider-agnostic `ObjectStore` with an S3 implementation (AWS, MinIO, Ceph, B2, Wasabi) and a memory store for tests. Metadata in the `documents` table (migration `0016`), server-built object keys, per-route permission checks, an SSRF guard on the endpoint, and an object/row reconciler. The `AttachmentPanel` in the CRM exposes upload, download and archive; `GET /api/v1/system/capabilities` reports `storage` and `max_upload_bytes`. Covered by `internal/testsupport/storage_test.go`, `storage_s3_test.go` and `internal/storage/storage_test.go` |
