@@ -164,9 +164,9 @@ func (e *Engine) ResumeDue(ctx context.Context, limit int) (int, error) {
 // RunEventWorkflow runs one event-triggered workflow for one committed event.
 //
 // It is the entry point the worker calls after draining the outbox. De-duplication
-// happens first: ClaimEventRun inserts the (workflow, event) row, and if it already
-// exists this returns without any effect. Only after the claim does the run begin,
-// so a replayed event cannot produce a second effect.
+// happens first: CreateEventRun inserts the (workflow, event) ledger row in the same
+// transaction that creates the run, and a delivery that loses the claim commits
+// nothing, so a replayed event cannot produce a second effect.
 func (e *Engine) RunEventWorkflow(ctx context.Context, w Workflow, ev outbox.Event) (*RunResult, error) {
 	// The chain this event belongs to. An event emitted by a workflow step carries
 	// that run's correlation id; an event with none starts its own chain, keyed by

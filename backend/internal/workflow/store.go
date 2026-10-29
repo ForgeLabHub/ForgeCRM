@@ -559,25 +559,6 @@ func (s *Store) MatchEventWorkflows(ctx context.Context, orgID uuid.UUID, eventT
 	return out, rows.Err()
 }
 
-// ClaimEventRun records that a workflow has run for an event, returning false when
-// it already has.
-//
-// This is the de-duplication that makes at-least-once delivery safe: the insert
-// either succeeds (first sighting, run) or conflicts (a replay, skip). It must
-// happen before the run's steps have any effect, which is why it is a separate
-// call from the run itself and is checked first.
-func (s *Store) ClaimEventRun(ctx context.Context, workflowID, orgID, eventID, runID uuid.UUID) (bool, error) {
-	const q = `
-		INSERT INTO workflow_run_events (workflow_id, event_id, organization_id, run_id)
-		VALUES ($1,$2,$3,$4)
-		ON CONFLICT (workflow_id, event_id) DO NOTHING`
-	tag, err := s.db.Q(ctx).Exec(ctx, q, workflowID, eventID, orgID, runID)
-	if err != nil {
-		return false, fmt.Errorf("claim event run: %w", err)
-	}
-	return tag.RowsAffected() == 1, nil
-}
-
 // CreateEventRun atomically claims an event and creates the run that will execute it.
 //
 // The de-duplication ledger is the arbiter, not the run table: workflow_run_events
