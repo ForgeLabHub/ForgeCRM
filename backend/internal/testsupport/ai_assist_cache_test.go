@@ -141,4 +141,21 @@ func TestAssistCacheIsKeyedByTheQuestion(t *testing.T) {
 	if got := atomic.LoadInt64(calls); got != 2 {
 		t.Errorf("the provider was called %d times, want 2; the repeat should not reach it", got)
 	}
+
+	// The grounding assessment must be present on both paths and must not change
+	// between them: a cached answer is the same answer, so it is the same
+	// assessment. A score that appeared only on the fresh path would leave the
+	// panel showing a bare answer for every cached one.
+	for name, in := range map[string]*ai.Insight{"fresh": first, "cached": again} {
+		if in.Confidence.Level == "" {
+			t.Errorf("%s: the insight carried no confidence level", name)
+		}
+		if len(in.Confidence.Basis) == 0 {
+			t.Errorf("%s: the confidence carried no basis", name)
+		}
+	}
+	if first.Confidence.Level != again.Confidence.Level || first.Confidence.Score != again.Confidence.Score {
+		t.Errorf("the grounding changed between a fresh and a cached answer: %+v vs %+v",
+			first.Confidence, again.Confidence)
+	}
 }

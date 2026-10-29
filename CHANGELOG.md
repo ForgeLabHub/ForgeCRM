@@ -34,6 +34,10 @@ once it reaches 1.0.
   created for exactly this sweep is now used by it. Nothing is swept unless
   retention is enabled, and a dry run still previews.
 
+### Added
+
+- **Calibrated confidence for contextual AI.** An `ai.Insight` now carries a `confidence` object: a level (`high`/`medium`/`low`), a score, and a `basis` list that names the signals behind it. It is not the model's self-reported confidence — that is a stylistic token, not a probability, and is high whether or not the answer is right. The server computes the score instead from what it can verify: whether the reply was structured, whether the figures in it appear in the CRM facts the model was given, and whether the context was complete (masked, truncated or omitted data lowers it). The `AssistPanel` shows the level and the reason, so the user sees why an answer was scored as it was rather than being handed a bare number. Unit tests in `internal/ai/confidence_test.go`; the cache integration test asserts the assessment is identical on a fresh and a cached answer.
+
 ### Fixed
 
 - **The AI request limiter was racy and shared one bucket across all tenants.**

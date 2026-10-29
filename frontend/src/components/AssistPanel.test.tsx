@@ -85,6 +85,11 @@ const insight = {
   analysis: 'The deal has stalled for two weeks.',
   recommendations: ['Call the buyer', 'Send a revised quote'],
   disclosures: [],
+  confidence: {
+    level: 'high',
+    score: 0.9,
+    basis: ['every figure in the answer (1) appears in the record'],
+  },
   generated_at: '2026-01-01T00:00:00Z',
 }
 
@@ -167,5 +172,24 @@ describe('AssistPanel', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Run' }))
 
     expect(await screen.findByText(/Only the most recent 20 activities/i)).toBeInTheDocument()
+  })
+
+  it('shows the grounding level and its reason, not a bare number', async () => {
+    stubFetch({
+      assist: {
+        ...insight,
+        confidence: {
+          level: 'low',
+          score: 0.4,
+          basis: ['2 of 3 figures in the answer do not appear in the record (e.g. 48,000)'],
+        },
+      },
+    })
+    renderPanel()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Run' }))
+
+    expect(await screen.findByText(/Weakly grounded/i)).toBeInTheDocument()
+    expect(screen.getByText(/do not appear in the record/i)).toBeInTheDocument()
   })
 })

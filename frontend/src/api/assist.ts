@@ -33,6 +33,21 @@ export interface AssistDraft {
 }
 
 /**
+ * The server's grounding assessment of an insight.
+ *
+ * This is not the model's self-reported confidence — the server computes it from
+ * signals it can check: whether the reply was structured, whether the figures in
+ * it appear in the CRM facts the model was given, and whether the context was
+ * complete. `basis` says which of those applied, so the number is never shown
+ * without its reason.
+ */
+export interface AssistConfidence {
+  level: 'high' | 'medium' | 'low'
+  score: number
+  basis: string[]
+}
+
+/**
  * The three groups are separate on purpose. Facts come from the CRM; analysis and
  * recommendations are the model's output. The interface must label the last two
  * as such — they are not CRM values.
@@ -49,6 +64,7 @@ export interface AssistInsight {
   recommendations: string[]
   draft?: AssistDraft
   disclosures: AssistDisclosure[]
+  confidence: AssistConfidence
   generated_at: string
 }
 

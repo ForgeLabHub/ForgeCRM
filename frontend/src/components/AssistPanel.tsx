@@ -1,7 +1,12 @@
 import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { assistApi } from '../api/assist'
-import type { AssistEntityType, AssistInsight, AssistKind } from '../api/assist'
+import type {
+  AssistConfidence,
+  AssistEntityType,
+  AssistInsight,
+  AssistKind,
+} from '../api/assist'
 import { errorMessage } from '../api/client'
 import { useAuth } from '../hooks/useAuth'
 import { Alert, Badge, Card, Skeleton, Timestamp } from './ui'
@@ -190,6 +195,8 @@ function InsightView({ insight }: { insight: AssistInsight }) {
         </Alert>
       ) : null}
 
+      <ConfidenceNote confidence={insight.confidence} />
+
       <section>
         <h3 className="text-sm">What the assistant was told (from the CRM)</h3>
         <ul className="text-sm" style={{ margin: 0, paddingLeft: '1.1rem' }}>
@@ -241,6 +248,44 @@ function InsightView({ insight }: { insight: AssistInsight }) {
         </section>
       ) : null}
     </div>
+  )
+}
+
+/**
+ * Shows how well the answer is grounded in the record.
+ *
+ * The level is a badge and the basis is spelled out, so the user sees why the
+ * server scored it that way rather than being handed a bare number. A low score
+ * is a prompt to check the record, not a claim that the answer is wrong.
+ */
+function ConfidenceNote({ confidence }: { confidence: AssistConfidence }) {
+  const tone =
+    confidence.level === 'high'
+      ? 'success'
+      : confidence.level === 'medium'
+        ? 'warning'
+        : 'danger'
+  const label =
+    confidence.level === 'high'
+      ? 'Well grounded'
+      : confidence.level === 'medium'
+        ? 'Partly grounded'
+        : 'Weakly grounded'
+  return (
+    <section>
+      <h3 className="text-sm">
+        Grounding <Badge tone={tone}>{label}</Badge>
+      </h3>
+      <ul className="text-muted text-sm" style={{ margin: 0, paddingLeft: '1.1rem' }}>
+        {confidence.basis.map((b, i) => (
+          <li key={i}>{b}</li>
+        ))}
+      </ul>
+      <p className="text-muted text-sm">
+        How closely this answer stays inside the record, judged by the server — not a
+        guarantee that it is correct.
+      </p>
+    </section>
   )
 }
 

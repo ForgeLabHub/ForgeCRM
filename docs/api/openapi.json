@@ -33637,6 +33637,23 @@
         },
         "type": "object"
       },
+      "Confidence": {
+        "properties": {
+          "basis": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "level": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
       "ConnectionConfig": {
         "properties": {
           "base_url": {
@@ -35094,6 +35111,9 @@
           "cached": {
             "type": "boolean"
           },
+          "confidence": {
+            "$ref": "#/components/schemas/Confidence"
+          },
           "disclosures": {
             "items": {
               "$ref": "#/components/schemas/Disclosure"
@@ -35145,6 +35165,7 @@
         "required": [
           "analysis",
           "cached",
+          "confidence",
           "disclosures",
           "entity_id",
           "entity_type",

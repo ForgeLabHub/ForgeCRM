@@ -152,7 +152,11 @@ type Insight struct {
 	Recommendations []string     `json:"recommendations"`
 	Draft           *Draft       `json:"draft,omitempty"`
 	Disclosures     []Disclosure `json:"disclosures"`
-	GeneratedAt     time.Time    `json:"generated_at"`
+	// Confidence is the server's grounding assessment of this insight. It is not
+	// the model's self-report; see the type's documentation. It is always present
+	// so a client never has to decide what a missing score means.
+	Confidence  Confidence `json:"confidence"`
+	GeneratedAt time.Time  `json:"generated_at"`
 }
 
 // AssistRequest is one request for contextual assistance.
@@ -1095,7 +1099,9 @@ func (s *Service) Assist(ctx context.Context, p *rbac.Principal, req AssistReque
 				Kind: req.Kind, EntityType: req.EntityType, EntityID: req.EntityID.String(),
 				Cached: true, Provider: cached.Provider, Model: cached.Model,
 				Facts: b.Facts, Analysis: cached.Analysis, Recommendations: cached.Recs,
-				Draft: cached.Draft, Disclosures: b.Disclosures, GeneratedAt: cached.CreatedAt,
+				Draft: cached.Draft, Disclosures: b.Disclosures,
+				Confidence:  computeConfidence(cached.Analysis, cached.Recs, b.Facts, b.Disclosures),
+				GeneratedAt: cached.CreatedAt,
 			}, nil
 		}
 	}
@@ -1129,7 +1135,9 @@ func (s *Service) Assist(ctx context.Context, p *rbac.Principal, req AssistReque
 		Kind: req.Kind, EntityType: req.EntityType, EntityID: req.EntityID.String(),
 		Cached: false, Provider: s.ProviderName(), Model: resp.Model,
 		Facts: b.Facts, Analysis: out.Analysis, Recommendations: out.Recommendations,
-		Draft: out.Draft, Disclosures: disclosures, GeneratedAt: s.now(),
+		Draft: out.Draft, Disclosures: disclosures,
+		Confidence:  computeConfidence(out.Analysis, out.Recommendations, b.Facts, disclosures),
+		GeneratedAt: s.now(),
 	}, nil
 }
 
