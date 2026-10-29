@@ -33,6 +33,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/tasks', label: 'Tasks', permission: 'tasks.read' },
       { to: '/tickets', label: 'Support', permission: 'tickets.read' },
       { to: '/reports', label: 'Reports', permission: 'reports.read' },
+      { to: '/simulation', label: 'Simulation Lab', permission: 'simulation.read' },
     ],
   },
   {

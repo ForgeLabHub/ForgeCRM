@@ -10,6 +10,42 @@ once it reaches 1.0.
 
 ### Added
 
+- **The Simulation Lab.** A saved "what if" scenario is computed against the live
+  CRM and reported as a comparison, without ever modifying CRM data. Three
+  scenario kinds are real: a **funnel** walk over pipeline stages (change deal
+  inflow or a stage's conversion), a **revenue** model (change average ticket,
+  win rate or deal count), and a **retention** model (change the churn rate). The
+  maths lives in `internal/analytics`, a pure package that imports only the
+  standard library and never uses a float for money — amounts are integer minor
+  units, and every operation that can produce a fraction rounds once at a defined
+  boundary. `internal/simulate` reads the baseline through `crm.Service` under the
+  caller's principal and persists scenarios and runs in `simulation_scenarios` /
+  `simulation_runs` (migration `0019_simulation_lab`), with three seeded
+  permissions (`simulation.read`, `simulation.manage`, `simulation.run`). A run
+  freezes its parameters, its baseline and the algorithm version, so a result
+  computed months ago stays interpretable and reproducible after the CRM data and
+  the code move on. A scenario with too little history reports "insufficient data"
+  rather than a fabricated zero. The API adds scenario CRUD, run, preview and a
+  session-only catalog; the frontend adds a `Simulation Lab` page that shows the
+  observed CRM figures and the modelled figures in separate columns, with the
+  model's assumptions stated next to them.
+
+- **A real defect fixed in the baseline reader.** `avg(amount)` over
+  `numeric(18,2)` returns a much higher scale (`500.0000000000000000`), which the
+  exact money parser refuses rather than truncating. Every revenue and retention
+  scenario therefore failed at run time. The reader now rounds the average to the
+  money scale where it is produced. The parser is left strict: rounding there
+  would hide the same class of mistake everywhere else.
+
+- **Tests for the Simulation Lab.** `internal/testsupport/simulation_test.go`
+  covers scenario CRUD and archiving, the per-organization unique name, parameter
+  validation on save, tenant isolation, the permission check inside the service, a
+  hand-computed funnel result, preview not persisting, insufficient-data being
+  reported, reproducibility, the down migration, and the read-only property (no
+  deal, task, activity, job or outbox row changes across a run).
+  `frontend/src/pages/SimulationPage.test.tsx` covers the page, and the Chromium
+  suite covers create → save → run → history against the real stack.
+
 - **Abandoned import extraction directories are now swept.** `CleanupTemp` removed
   the directory for the import that produced it on the path that returns normally,
   but a worker that died mid-import left its extraction root behind, and nothing

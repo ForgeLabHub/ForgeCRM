@@ -66,12 +66,17 @@ backend/
     integrations  adapter interface, hub, SSRF guard
     notify        SMTP email + Telegram adapters, templates, send log
     ai            provider interface, Ollama + OpenAI-compatible, MCP tools
+    analytics     pure scenario maths: exact money, ratios, funnel/revenue/retention
+    simulate      Simulation Lab: saved scenarios, runs, catalog, API service
     api           router and handlers (thin; no business logic)
 ```
 
 Dependency rule: `api` may import `crm`, `importx`, …; those may import `audit`, `jobs`,
 `rbac`, `database`; **none** of the platform packages may import `api`. No domain package
 imports another domain package except through an interface it declares itself.
+`analytics` is the exception that proves the rule: it imports nothing but the standard
+library, so the arithmetic can be reviewed and unit-tested with no database, no clock and
+no service. `simulate` depends on `analytics` and on `crm` for the read-only baseline.
 
 ## 3. Identity, sessions, authorization
 

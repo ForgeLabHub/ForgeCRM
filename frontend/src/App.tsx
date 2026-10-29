@@ -17,6 +17,7 @@ import { MigrationsPage } from './pages/MigrationsPage'
 import { WebhooksPage } from './pages/WebhooksPage'
 import { EventsPage } from './pages/EventsPage'
 import { WorkflowsPage } from './pages/WorkflowsPage'
+import { SimulationPage } from './pages/SimulationPage'
 import { JobsPage } from './pages/JobsPage'
 import { AiPage } from './pages/AiPage'
 import { ApprovalsPage } from './pages/ApprovalsPage'
@@ -199,6 +200,14 @@ export function App() {
           element={
             <RequirePermission permission="workflows.read">
               <WorkflowsPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="simulation"
+          element={
+            <RequirePermission permission="simulation.read">
+              <SimulationPage />
             </RequirePermission>
           }
         />

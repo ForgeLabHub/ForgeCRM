@@ -212,6 +212,40 @@ date the API already promised.
 
 ---
 
+## Cycle 11 — Intelligence Platform: the Simulation Lab
+
+| # | Item | Status |
+|---|---|---|
+| 11.1 | Pure analytics core (exact money, ratios, scenario maths) | **VERIFIED** — `internal/analytics`; imports only the standard library, never a float for money. Algorithm version `simulate-v1` is stored with every run so a result computed by an older version stays interpretable |
+| 11.2 | CRM baseline reader | **VERIFIED** — `crm.Service.Baseline` reads the caller's own organization under `reports.read` and returns per-stage and period aggregates with explicit warnings for excluded currencies and a missing pipeline |
+| 11.3 | `internal/simulate` service + persistence | **VERIFIED** — `CreateScenario`, `ListScenarios`, `GetScenario`, `ArchiveScenario`, `RunScenario`, `Preview`, `ListRuns`. Enforces `simulation.manage`/`simulation.run`/`simulation.read` in the service, not only at the route, and filters every query by `organization_id` |
+| 11.4 | Migration `0019_simulation_lab` + permission seed | **VERIFIED** — `simulation_scenarios` and `simulation_runs`, both tenant-scoped, with the name-unique-per-org partial index and the run-history indexes; the three permissions are seeded to roles and `TestSeedDataMatchesThePermissionCatalog` keeps the catalog and the seed in step |
+| 11.5 | API surface + OpenAPI | **VERIFIED** — scenario CRUD, run, preview and a session-only catalog; contract rows in `internal/api/contract.go`; `go run ./cmd/openapi-gen -check` reports the spec current |
+| 11.6 | Simulation Lab frontend | **VERIFIED** — `frontend/src/pages/SimulationPage.tsx` and `frontend/src/api/simulation.ts`, a `Simulation Lab` entry in the Workspace navigation. Observed CRM figures and modelled figures are shown in separate columns with the model's assumptions, so a suggestion is never presented as a recorded fact |
+| 11.7 | Tests: unit, PostgreSQL integration, frontend, E2E | **VERIFIED** — `internal/testsupport/simulation_test.go` (PostgreSQL), `frontend/src/pages/SimulationPage.test.tsx`, and the Chromium suite in `e2e/platform.spec.ts` |
+
+### Evidence
+
+| Check | Command | Result |
+|---|---|---|
+| Formatting | `gofmt -l ./cmd ./internal` | clean |
+| Vet | `go vet ./...` | clean |
+| Unit tests | `go test -count=1 ./...` | all packages pass |
+| Integration tests | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration -count=1 -p 1 ./...` | passes against real PostgreSQL |
+| OpenAPI currency | `go run ./cmd/openapi-gen -check` | spec current |
+| Frontend | `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` | typecheck clean, lint 0 errors, 79 tests pass, build succeeds |
+| E2E (Chromium) | `npx playwright test --project=chromium` | 38 passed, including the Simulation Lab create → save → run → history path |
+
+A real defect was found by the integration tests and fixed: `avg(amount)` over
+`numeric(18,2)` returns a much higher scale (`500.0000000000000000`), and the
+exact money parser refuses a value with more than two decimals rather than
+truncating it, so every revenue and retention scenario failed at run time. The
+baseline reader now rounds the average to the money scale where it is produced;
+the parser is left strict, because rounding there would hide the same class of
+mistake elsewhere.
+
+---
+
 # Master plan phases
 
 The cycles above describe how the platform was built. The phases below describe

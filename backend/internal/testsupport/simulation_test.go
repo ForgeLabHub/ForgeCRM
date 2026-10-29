@@ -300,6 +300,64 @@ func TestSimulationPreviewPersistsNothing(t *testing.T) {
 	}
 }
 
+// TestSimulationNeverWritesCRMRows proves the boundary the plan promises: the lab
+// reads CRM data and writes only to its own tables. A run must not change any
+// deal, task or activity, and it must not enqueue a job or emit an event.
+func TestSimulationNeverWritesCRMRows(t *testing.T) {
+	f := newSimFixture(t, "sim-readonly", "analyst")
+	p := f.principal(t)
+	ctx := context.Background()
+
+	pipelineID, stages := insertSimPipeline(t, f.db, f.org, "Sales", []struct {
+		Name        string
+		Probability int
+	}{{"Stage", 30}})
+	insertSimDeal(t, f.db, f.org, pipelineID, stages[0], "D1", "1000.00", "open")
+	insertSimDeal(t, f.db, f.org, pipelineID, stages[0], "D2", "2000.00", "won")
+
+	counts := func() (deals, tasks, activities, jobs, outbox int) {
+		t.Helper()
+		for _, q := range []struct {
+			query string
+			dst   *int
+		}{
+			{`SELECT count(*) FROM deals`, &deals},
+			{`SELECT count(*) FROM tasks`, &tasks},
+			{`SELECT count(*) FROM activities`, &activities},
+			{`SELECT count(*) FROM jobs`, &jobs},
+			{`SELECT count(*) FROM outbox_events`, &outbox},
+		} {
+			if err := f.db.Pool().QueryRow(ctx, q.query).Scan(q.dst); err != nil {
+				t.Fatalf("count (%s): %v", q.query, err)
+			}
+		}
+		return
+	}
+
+	beforeDeals, beforeTasks, beforeActivities, beforeJobs, beforeOutbox := counts()
+
+	sc, err := f.svc.CreateScenario(ctx, p, simulate.CreateScenarioInput{
+		Name: "Read only", Kind: analytics.KindRevenue,
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := f.svc.RunScenario(ctx, p, sc.ID, simulate.RunInput{}); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if _, err := f.svc.Preview(ctx, p, simulate.PreviewInput{Kind: analytics.KindRevenue}); err != nil {
+		t.Fatalf("preview: %v", err)
+	}
+
+	afterDeals, afterTasks, afterActivities, afterJobs, afterOutbox := counts()
+	if beforeDeals != afterDeals || beforeTasks != afterTasks || beforeActivities != afterActivities ||
+		beforeJobs != afterJobs || beforeOutbox != afterOutbox {
+		t.Fatalf("CRM or queue state changed across a run: deals %d->%d tasks %d->%d activities %d->%d jobs %d->%d outbox %d->%d",
+			beforeDeals, afterDeals, beforeTasks, afterTasks, beforeActivities, afterActivities,
+			beforeJobs, afterJobs, beforeOutbox, afterOutbox)
+	}
+}
+
 // TestSimulationInsufficientDataIsReported checks that a scenario with too little
 // CRM history returns ErrInsufficientData rather than a fabricated zero.
 func TestSimulationInsufficientDataIsReported(t *testing.T) {

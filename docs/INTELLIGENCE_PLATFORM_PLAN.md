@@ -281,7 +281,27 @@ corrected to the real field names and `ReportsPage.tsx` is updated to match.
 ## 10. Status
 
 - **§1 audit** — done, this document.
-- **§2–§5 analytics core + Simulation Lab** — see the status line below, updated
-  as each step lands.
+- **§2–§5 analytics core + Simulation Lab** — done. The pure core
+  (`internal/analytics`, exact money and ratios, `simulate-v1`) landed first; the
+  `crm` baseline reader, the `internal/simulate` service, migration
+  `0019_simulation_lab` with the three permission seeds, the API surface
+  (scenario CRUD, run, preview, a session-only catalog) and the OpenAPI
+  regeneration followed. The frontend is a `Simulation Lab` entry in the
+  Workspace navigation (`frontend/src/pages/SimulationPage.tsx`,
+  `frontend/src/api/simulation.ts`).
+- **Tests** — `internal/testsupport/simulation_test.go` (PostgreSQL) covers
+  scenario CRUD and archiving, the per-organization unique name, parameter
+  validation on save, tenant isolation, the permission check inside the service,
+  a hand-computed funnel result, preview not persisting, insufficient-data being
+  reported, reproducibility, the down migration, and the read-only property
+  (deals/tasks/activities/jobs/outbox unchanged across a run).
+  `frontend/src/pages/SimulationPage.test.tsx` covers the page; the Chromium
+  suite (`e2e/platform.spec.ts`) covers create → save → run → history and the
+  preview path against the real stack.
+- **Defect found by the tests** — `avg(amount)` over `numeric(18,2)` returns a
+  higher scale (`500.0000000000000000`), which the exact money parser refuses
+  rather than truncating; every revenue and retention scenario failed at run
+  time. The baseline reader now rounds the average to the money scale where it is
+  produced. The parser stays strict.
 
 <!-- STATUS: updated per commit. -->

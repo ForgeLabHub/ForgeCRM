@@ -241,6 +241,7 @@ test.describe('workspace pages render live data', () => {
     { path: '/tasks', title: 'Tasks' },
     { path: '/tickets', title: 'Support' },
     { path: '/reports', title: 'Reports' },
+    { path: '/simulation', title: 'Simulation Lab' },
     { path: '/imports', title: 'Import Center' },
     { path: '/integrations', title: 'Integrations' },
     { path: '/webhooks', title: 'Webhooks' },
@@ -368,6 +369,56 @@ test.describe('workflow triggers', () => {
     const options = await dialog.locator('#workflow-event-type option').allTextContents()
     expect(options).toContain('crm.deal.won')
     expect(options).not.toContain('deal.won')
+  })
+})
+
+test.describe('simulation lab', () => {
+  test('a scenario can be built, saved and run against the real pipeline', async ({
+    authedPage: page,
+  }) => {
+    await page.goto('/simulation')
+
+    // Start from the catalog. The entry is offered only if the server registered
+    // it, so this also checks the catalog endpoint is reachable.
+    await page.getByRole('button', { name: 'Sales funnel' }).click()
+
+    // Name the scenario uniquely for this run.
+    const name = `E2E scenario ${Date.now()}`
+    await page.locator('#sim-name').fill(name)
+
+    // Save it, which persists a real row.
+    await page.getByRole('button', { name: 'Save scenario' }).click()
+
+    // The saved scenario appears in the list and opens with a run control.
+    await page.getByRole('button', { name: new RegExp(name) }).click()
+    const run = page.getByRole('button', { name: 'Run scenario' })
+    await expect(run).toBeVisible()
+    await run.click()
+
+    // A run either produces a comparison or reports that there is not enough CRM
+    // history. Both are correct outcomes; what must never happen is a number
+    // invented from nothing, so the assertion is that one of the two is shown.
+    await expect(
+      page.getByText(/Observed \(CRM\)|insufficient data/i),
+    ).toBeVisible()
+
+    // The run history is shown regardless, so a completed run is always recorded.
+    await expect(page.getByText('Run history')).toBeVisible()
+  })
+
+  test('previewing a scenario writes nothing but shows a comparison', async ({
+    authedPage: page,
+  }) => {
+    await page.goto('/simulation')
+    await page.getByRole('button', { name: 'Revenue and terms' }).click()
+    await page.getByRole('button', { name: 'Preview' }).click()
+
+    // Either a comparison is shown, or the server explained there is not enough
+    // history — but never a fabricated figure. Both are acceptable outcomes;
+    // silence is not.
+    await expect(
+      page.getByText(/Observed \(CRM\)|insufficient data/i),
+    ).toBeVisible()
   })
 })
 
