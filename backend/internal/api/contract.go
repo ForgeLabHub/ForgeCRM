@@ -371,6 +371,36 @@ func APIContract() openapi.Contract {
 	c.BodyDescriptions["POST /api/v1/workflow-templates/{id}/create"] = "Optional. `name` overrides the " +
 		"template's own name; every other field comes from the template."
 
+	// --- Simulation Lab -----------------------------------------------------
+	// The scenario catalog is session-only metadata: it describes the engine, not
+	// the tenant. The scenario CRUD and the run/preview pair are the data surface.
+	// A run's `result` carries money as integer minor units, so the document is a
+	// passthrough rather than a typed component.
+	c.Responses["GET /api/v1/simulation/catalog"] = reflect.TypeOf(catalogResponse{})
+	c.Responses["GET /api/v1/simulation/scenarios"] = reflect.TypeOf(scenarioListResponse{})
+	c.RequestBodies["POST /api/v1/simulation/scenarios"] = reflect.TypeOf(createScenarioRequest{})
+	c.RequiredBody["CreateScenarioRequest"] = []string{"name", "kind"}
+	c.Responses["POST /api/v1/simulation/scenarios"] = reflect.TypeOf(scenarioResponse{})
+	c.SuccessStatus["POST /api/v1/simulation/scenarios"] = 201
+	c.Responses["GET /api/v1/simulation/scenarios/{id}"] = reflect.TypeOf(scenarioResponse{})
+	c.Responses["POST /api/v1/simulation/scenarios/{id}/runs"] = reflect.TypeOf(runResponse{})
+	c.SuccessStatus["POST /api/v1/simulation/scenarios/{id}/runs"] = 201
+	c.Responses["GET /api/v1/simulation/scenarios/{id}/runs"] = reflect.TypeOf(runListResponse{})
+	c.Responses["POST /api/v1/simulation/preview"] = reflect.TypeOf(previewResponse{})
+	c.RequestBodies["POST /api/v1/simulation/preview"] = reflect.TypeOf(previewRequest{})
+	c.RequiredBody["PreviewRequest"] = []string{"kind"}
+	c.RequestBodies["POST /api/v1/simulation/scenarios/{id}/runs"] = reflect.TypeOf(simulationRunRequest{})
+
+	c.BodyDescriptions["POST /api/v1/simulation/scenarios"] = "A saved scenario. `params` is the " +
+		"scenario parameter document; percentages are changes relative to the current value (20 means 20% more). " +
+		"Parameters are validated on save, so a stored scenario cannot hold a value that will fail at run time. " +
+		"The scenario kind must be one of `funnel`, `revenue` or `retention`."
+	c.BodyDescriptions["POST /api/v1/simulation/preview"] = "An unsaved parameter set to compute without " +
+		"persisting. Same parameter document as a saved scenario. The reply carries the comparison, the baseline " +
+		"it was computed against, and any warnings. Insufficient CRM history is reported as a 422 with the reason, " +
+		"never as a fabricated number."
+	c.BodyDescriptions["POST /api/v1/simulation/scenarios/{id}/runs"] = "Optional. `pipeline_id` restricts the " +
+		"funnel baseline; `from` and `to` restrict the period. An empty body uses the defaults."
 	// --- System -------------------------------------------------------------
 	c.Responses["GET /api/v1/system/info"] = reflect.TypeOf(systemInfoResponse{})
 	c.Responses["GET /api/v1/system/capabilities"] = reflect.TypeOf(capabilitiesResponse{})

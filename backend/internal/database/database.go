@@ -168,6 +168,13 @@ func IsUniqueViolation(err error) bool {
 	return false
 }
 
+// IsNoRows reports whether err means a query returned no row. It is the sentinel
+// pgx returns from QueryRow.Scan, wrapped here so callers outside this package do
+// not import the driver directly.
+func IsNoRows(err error) bool {
+	return errors.Is(err, pgx.ErrNoRows)
+}
+
 // IsForeignKeyViolation reports whether err is a foreign-key violation.
 func IsForeignKeyViolation(err error) bool {
 	var pgErr *pgconn.PgError

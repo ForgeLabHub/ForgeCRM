@@ -29,6 +29,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/outbox"
 	"github.com/geff1778/forgecrm/internal/rbac"
 	"github.com/geff1778/forgecrm/internal/secrets"
+	"github.com/geff1778/forgecrm/internal/simulate"
 	"github.com/geff1778/forgecrm/internal/storage"
 	"github.com/geff1778/forgecrm/internal/workflow"
 )
@@ -64,6 +65,10 @@ type Services struct {
 	// rbac.Service the API uses, so a workflow action is authorized exactly like the
 	// equivalent API call.
 	Workflows *workflow.Engine
+	// Simulation is the Simulation Lab. It reads a baseline through crm.Service
+	// and computes scenarios with the pure arithmetic in internal/analytics. It
+	// cannot modify CRM data.
+	Simulation *simulate.Service
 }
 
 // Build constructs every service from the given configuration and database.
@@ -121,6 +126,7 @@ func Build(cfg *config.Config, db *database.DB, keyring *secrets.Keyring, log *s
 		Tools:        tools,
 		MCP:          ai.NewMCPServer(tools),
 		Agent:        agentSvc,
+		Simulation:   simulate.NewService(db, crmSvc, auditLog),
 		Workflows: workflow.NewEngine(workflow.Config{
 			DB:     db,
 			CRM:    crmSvc,

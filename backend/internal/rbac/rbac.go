@@ -134,6 +134,14 @@ const (
 	PermWorkflowsRead   Permission = "workflows.read"
 	PermWorkflowsManage Permission = "workflows.manage"
 	PermWorkflowsRun    Permission = "workflows.run"
+
+	// Simulation Lab. Reading a saved scenario (read), saving or deleting one
+	// (manage) and computing one (run) are separate rights, on the same reasoning
+	// as the workflow permissions: modelling a "what if" is not the same act as
+	// being allowed to spend compute on it. None of these can modify CRM data.
+	PermSimulationRead   Permission = "simulation.read"
+	PermSimulationManage Permission = "simulation.manage"
+	PermSimulationRun    Permission = "simulation.run"
 )
 
 // All returns every permission in the catalog, sorted.
@@ -178,6 +186,7 @@ var catalog = map[Permission]struct{}{
 	PermApprovalsRead: {}, PermApprovalsDecide: {}, PermSystemSettings: {},
 	PermAgentRead: {}, PermAgentRun: {},
 	PermWorkflowsRead: {}, PermWorkflowsManage: {}, PermWorkflowsRun: {},
+	PermSimulationRead: {}, PermSimulationManage: {}, PermSimulationRun: {},
 }
 
 // Known reports whether p is part of the catalog.

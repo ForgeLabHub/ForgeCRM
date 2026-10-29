@@ -39,6 +39,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/ratelimit"
 	"github.com/geff1778/forgecrm/internal/rbac"
 	"github.com/geff1778/forgecrm/internal/secrets"
+	"github.com/geff1778/forgecrm/internal/simulate"
 	"github.com/geff1778/forgecrm/internal/storage"
 	"github.com/geff1778/forgecrm/internal/workflow"
 )
@@ -76,6 +77,9 @@ type Deps struct {
 	// type, so a workflow defined here runs with exactly the same authorization as
 	// one run from the scheduler.
 	Workflows *workflow.Engine
+	// Simulation is the Simulation Lab. It computes saved scenarios against a
+	// baseline read through the CRM service. It cannot modify CRM data.
+	Simulation *simulate.Service
 	// Storage is the optional S3-compatible attachment store. A nil or disabled
 	// service reports itself off; the document routes answer 503 rather than 500.
 	Storage *storage.Service
@@ -321,6 +325,7 @@ func (s *Server) buildRouter() chi.Router {
 			s.mountAIAssist(r)
 			s.mountAgent(r)
 			s.mountWorkflows(r)
+			s.mountSimulation(r)
 			s.mountDocuments(r)
 			s.mountMCP(r)
 			s.mountNotifications(r)

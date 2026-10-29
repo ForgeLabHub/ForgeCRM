@@ -195,6 +195,7 @@ var SessionOnly = map[string]string{
 	"POST /api/v1/auth/step-up":         "Re-present a factor to refresh the second-factor window a destructive agent decision requires.",
 	"GET /api/v1/system/info":           "Build and version information.",
 	"GET /api/v1/system/capabilities":   "Advertised capabilities of the running instance.",
+	"GET /api/v1/simulation/catalog":    "The scenario catalog the Simulation Lab can compute. Static metadata about the engine, exposing no tenant data.",
 }
 
 // Public is the union of Anonymous and SessionOnly, for callers that only need to
