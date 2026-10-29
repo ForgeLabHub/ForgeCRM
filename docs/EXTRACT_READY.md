@@ -195,6 +195,74 @@ client address.
 
 ---
 
+## Candidate 6 — `internal/importx/safe` — **READY**
+
+**Why:** the untrusted-archive extractor. It is the single place in the codebase
+that writes bytes chosen by an uploader to disk, and it is the guard against path
+traversal, symlinks, zip bombs, oversized entries and deep nesting. It has no
+in-module dependency at all, so the whole package moves.
+
+**Blocker that was:** none; it was simply never run. It is the strongest kind of
+extraction claim precisely because the code handles attacker-controlled input:
+"the security tests run in isolation, in a clean module" is worth more here than
+anywhere else.
+
+**Evidence:**
+
+```bash
+scripts/extract-test/safe/setup.sh
+#   copied internal/importx/safe -> . (4 files)
+#   ok    no import of the ForgeCRM monolith
+#   ok    go build ./...
+#   ok    go test ./...          # ~24 tests, incl. traversal, symlink, zip bomb
+#   ok    go run ./cmd/smoke     # roundtrip, traversal refused, zip bomb refused
+#   ok    importx/safe extracts cleanly
+```
+
+**Files that move:** `internal/importx/safe/*.go` (2 sources + 2 test files). No
+dependency moves with it.
+
+---
+
+## Candidate 7 — `internal/importx/parsers` — **READY**
+
+**Why:** it converts CSV/TSV/JSON/JSONL/XLSX/XML into the common row model the
+Import Center maps to CRM fields. It has no in-module dependency, so the whole
+package moves; its only external dependency is the spreadsheet library.
+
+**Blocker that was:** it shipped **no tests of its own**, so the extraction
+reported `[no test files]` and nothing pinned its behaviour. Writing the tests
+found two real bugs, both now fixed:
+
+- **XLSX could not be parsed at all.** `Parse` applied the UTF-8 text check to
+  every format, but XLSX is a zip of XML parts and is binary by construction, so
+  every workbook was rejected with "file is not valid UTF-8". The check is now
+  skipped for the one binary format it was never meant to see.
+- **XML split every record in two.** A record's attributes and its nested
+  elements were emitted as separate rows — `<contact id="1"><name>Ada</name>` came
+  out as `{@id:1}` and `{name:Ada}` — and the record element was inferred as the
+  document root, so a normal export produced a column set of `[@id name]` with no
+  row holding both. The parser was rewritten to keep one row per record, flatten
+  nested elements to dotted keys (matching the JSON parser) and infer the record
+  element as the root's first child.
+
+**Evidence:**
+
+```bash
+scripts/extract-test/parsers/setup.sh
+#   copied internal/importx/parsers -> . (3 files)
+#   ok    no import of the ForgeCRM monolith
+#   ok    go build ./...
+#   ok    go test ./...          # 19 tests added in this slice
+#   ok    go run ./cmd/smoke
+#   ok    importx/parsers extracts cleanly
+```
+
+**Files that move:** `internal/importx/parsers/*.go` (3 sources + 1 test file),
+with `github.com/xuri/excelize/v2` as its declared dependency.
+
+---
+
 ## Candidates assessed but not extracted
 
 These were evaluated from the dependency graph and marked without an extraction
@@ -233,13 +301,15 @@ run, because each has a concrete blocker that an extraction would only confirm.
 | `secrets` | **READY** | Zero internal deps; extracted, built, its own 20 tests ran (the package gained them in this slice), smoke ran. |
 | `logging` | **READY** | Standard library only; extracted, built, its own tests ran (added in this slice), smoke ran. |
 | `httpx` | **READY** | Depends only on `logging` and `ratelimit`; extracted with both, built, its own tests ran, smoke drove a 429. |
+| `importx/safe` | **READY** | A leaf; extracted, its ~24 security tests ran, smoke refused a traversal and a zip bomb. |
+| `importx/parsers` | **READY** | A leaf; extracted, 19 tests added in this slice (they found and fixed two bugs), smoke ran. |
 | everything else | **ALMOST** / **NOT READY** | Concrete blocker listed above. |
 
 **No module is marked `READY` without an extraction run recorded here**, and the
 run is now automated: `scripts/extract-test/run.sh` performs it for every module in
 `modules.txt` on each CI run. `analytics`, `ratelimit`, `netguard`, `objectstore`,
-`secrets`, `logging` and `httpx` pass that bar today.
+`secrets`, `logging`, `httpx`, `importx/safe` and `importx/parsers` pass that bar today.
 
-The seven `READY` modules are proven by the harness, not by this document. If the
+The nine `READY` modules are proven by the harness, not by this document. If the
 harness ever fails for one of them, the status here is wrong and the harness is
 right.

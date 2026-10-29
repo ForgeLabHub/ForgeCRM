@@ -153,6 +153,45 @@ Two things this document deliberately does not do:
 - **Cut lines:** `parsers/` and `safe/` are separable sub-packages; the service
   itself is not.
 
+### internal/importx/safe  — untrusted-archive extraction
+- **Responsibility:** the one place that writes bytes chosen by an uploader to
+  disk. It detects a container from its magic bytes and refuses a path traversal,
+  a symlink, an oversized entry, a zip bomb and excessive nesting, writing into a
+  private `0700` root it owns.
+- **Public API:** `Limits`, `DefaultLimits`, `Extractor`, `NewExtractor`,
+  `Format`, `DetectFormat`, `ExtractedFile`, `ExtractResult`, `IsArchive`,
+  `IsSupported`, and the `Err*` rejections (`ErrTooManyEntries`, `ErrTooLarge`,
+  `ErrEntryTooLarge`, `ErrTooDeep`, `ErrUnsafePath`, `ErrUnsupportedLink`,
+  `ErrRatioExceeded`, `ErrUnsupportedType`).
+- **Internal deps:** none — it is a leaf.
+- **External deps:** `github.com/ulikunitz/xz` (standard library for zip/tar/gzip/bzip2).
+- **Fake:** operates on local temp directories; no external service.
+- **Tests:** 2 unit files (~24 tests) covering traversal, symlinks, zip bombs,
+  deep nesting, corrupt data and independent fixture decoding.
+- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/safe`.
+  Because it is the code that handles attacker-controlled input, "it can be lifted
+  out and its security tests run in isolation" is worth more here than anywhere
+  else.
+- **Cut lines:** moves on its own; nothing inside `importx` needs to move with it.
+
+### internal/importx/parsers  — tabular source parsing
+- **Responsibility:** convert CSV/TSV/JSON/JSONL/XLSX/XML into a common row model,
+  reporting the inferred column set, the detected types and any row-level problems
+  instead of guessing silently.
+- **Public API:** `Parse`, `Stream`, `Detect`, `ListSheets`, `Format`, `Row`,
+  `Result`, `RowError`, `Options`, `StreamOptions`, `Batch`, `ParseDate`,
+  `ParseBool`, `ParseNumber`.
+- **Internal deps:** none — it is a leaf.
+- **External deps:** `github.com/xuri/excelize/v2`.
+- **Tests:** added in this slice; pins header normalisation, row recovery, type
+  inference, XLSX sheet handling, XML records and encoding rejection. See the
+  bug note below.
+- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/parsers`.
+  Writing its tests found two real bugs, both fixed: XLSX was rejected by the
+  UTF-8 check applied to every format, and the XML parser split each record into
+  an attribute row and a field row.
+- **Cut lines:** moves on its own; nothing inside `importx` needs to move with it.
+
 ### internal/migratex  — external data migration
 - **Responsibility:** move data from an external source (PostgreSQL, SQLite,
   REST) into ForgeCRM, with reconciliation records.
@@ -636,10 +675,11 @@ Two things this document deliberately does not do:
   seams without a shipped fake: `ai.Provider`, `events.Poster`,
   `integrations.Adapter`, `migratex.Source`, `agent.Executor`,
   `database.Querier`, `objectstore.ObjectStore`, `ratelimit.Store`.
-- **Extract status:** seven modules are `yes` — `analytics`, `ratelimit`, `netguard`,
-  `objectstore`, `secrets`, `logging` and `httpx` — because they were actually
-  extracted, built, tested and run in a clean module, now by the automated harness
-  in `scripts/extract-test/`. The statuses here match `EXTRACT_READY.md` exactly.
+- **Extract status:** nine modules are `yes` — `analytics`, `ratelimit`, `netguard`,
+  `objectstore`, `secrets`, `logging`, `httpx`, `importx/safe` and
+  `importx/parsers` — because they were actually extracted, built, tested and run
+  in a clean module, now by the automated harness in `scripts/extract-test/`. The
+  statuses here match `EXTRACT_READY.md` exactly.
 - **Gaps found:** the packages with **no `_test.go` at all** are `audit`, `crm`,
   `events`, `forecast`, `jobs`, `migrate`, `migratex`, `migrations`, `notify`,
   `risk`, `simulate`, `wiring`. Of these, `crm`, `events`, `forecast`, `risk` and

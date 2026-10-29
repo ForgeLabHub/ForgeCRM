@@ -13,6 +13,7 @@ package archtest
 import (
 	"encoding/json"
 	"os/exec"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -212,7 +213,7 @@ func TestCoreDoesNotImportCompositionOrHTTP(t *testing.T) {
 // graph, so a regression is caught by `go test ./...` and not only by the heavier
 // extraction harness in scripts/extract-test.
 //
-// Five modules are pinned:
+// Seven modules are pinned:
 //
 //   - netguard is the SSRF guard. It is a leaf: it must depend on nothing inside
 //     this module and nothing outside the standard library. That is what lets the
@@ -221,6 +222,11 @@ func TestCoreDoesNotImportCompositionOrHTTP(t *testing.T) {
 //     too, so it can be built and tested on its own.
 //   - logging is structured logging with central redaction; a leaf as well, and the
 //     foundation every other package logs through.
+//   - importx/safe is the untrusted-archive extractor: the one place that writes
+//     uploader-chosen bytes to disk. It is a leaf, so nothing it does can be
+//     influenced by the application around it.
+//   - importx/parsers is the tabular source parser. It is a leaf too, so the whole
+//     package lifts out with only its spreadsheet dependency.
 //   - objectstore is the object-storage layer carved out of `storage`. It may
 //     depend on netguard and on third-party libraries, but on no application-layer
 //     package — not the database, not the audit log, not RBAC, not HTTP error
@@ -251,38 +257,93 @@ func TestExtractionBoundaryHolds(t *testing.T) {
 		"testsupport":  true,
 	}
 
-	// netguard, secrets and logging are the modules the extraction harness proves
-	// standalone as leaves: each must have no import whose target begins with
-	// modulePath.
+	// The pinned modules, keyed by their path relative to internal/. A leaf must
+	// import nothing inside the module at all; a scoped module names the in-module
+	// packages it is allowed to reach.
+	//
+	// The key is the full relative path, not internalPkg's first segment: a nested
+	// package like importx/safe would otherwise never match its case and the test
+	// would pass while checking nothing.
+	leaves := map[string]bool{
+		"netguard":        true,
+		"secrets":         true,
+		"logging":         true,
+		"importx/safe":    true,
+		"importx/parsers": true,
+	}
+	allowedDeps := map[string]map[string]bool{
+		// httpx may depend only on its two proven leaves. A dependency on the
+		// database, RBAC or a domain service is what would stop the HTTP layer
+		// from lifting out, and is the coupling the extraction harness catches.
+		"httpx": {"logging": true, "ratelimit": true},
+	}
+	forbiddenDeps := map[string]map[string]bool{
+		"objectstore": forbiddenForObjectstore,
+	}
+
+	seen := map[string]bool{}
 	for path, p := range graph {
-		name := internalPkg(path)
-		switch name {
-		case "netguard", "secrets", "logging":
+		rel := strings.TrimPrefix(path, modulePath+"internal/")
+		if leaves[rel] || allowedDeps[rel] != nil || forbiddenDeps[rel] != nil {
+			seen[rel] = true
+		}
+		if leaves[rel] {
 			for _, imp := range p.Imports {
 				if strings.HasPrefix(imp, modulePath) {
 					t.Errorf("%s imports %s; it must be a leaf with no in-module dependency",
-						name, strings.TrimPrefix(imp, modulePath))
+						rel, strings.TrimPrefix(imp, modulePath+"internal/"))
 				}
 			}
-		case "objectstore":
+			continue
+		}
+		if allowed, ok := allowedDeps[rel]; ok {
 			for _, imp := range p.Imports {
-				if to := internalPkg(imp); forbiddenForObjectstore[to] {
-					t.Errorf("objectstore imports %s; the storage boundary must not depend on the application layer",
-						to)
+				if !strings.HasPrefix(imp, modulePath+"internal/") {
+					continue
+				}
+				if to := strings.TrimPrefix(imp, modulePath+"internal/"); !allowed[to] {
+					t.Errorf("%s imports %s; it may depend only on %s", rel, to, keys(allowed))
 				}
 			}
-		case "httpx":
-			// httpx may depend only on its two proven leaves. A dependency on the
-			// database, RBAC or a domain service is what would stop the HTTP layer
-			// from lifting out, and is the coupling the extraction harness catches.
-			allowed := map[string]bool{"logging": true, "ratelimit": true}
+			continue
+		}
+		if forbidden, ok := forbiddenDeps[rel]; ok {
 			for _, imp := range p.Imports {
-				if to := internalPkg(imp); to != "" && !allowed[to] {
-					t.Errorf("httpx imports %s; the HTTP layer may depend only on logging and ratelimit", to)
+				if to := strings.TrimPrefix(imp, modulePath+"internal/"); forbidden[to] {
+					t.Errorf("%s imports %s; the storage boundary must not depend on the application layer", rel, to)
 				}
 			}
 		}
 	}
+
+	// A pinned module that is not in the graph would make its case above match
+	// nothing and the test pass while checking nothing. That is the failure mode
+	// this test exists to prevent, so it is itself checked.
+	for rel := range leaves {
+		if !seen[rel] {
+			t.Errorf("the extraction boundary pins %s, but no such package is in the graph; the check is a no-op", rel)
+		}
+	}
+	for rel := range allowedDeps {
+		if !seen[rel] {
+			t.Errorf("the extraction boundary pins %s, but no such package is in the graph; the check is a no-op", rel)
+		}
+	}
+	for rel := range forbiddenDeps {
+		if !seen[rel] {
+			t.Errorf("the extraction boundary pins %s, but no such package is in the graph; the check is a no-op", rel)
+		}
+	}
+}
+
+// keys renders an allow-list for an error message.
+func keys(m map[string]bool) string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return strings.Join(out, ", ")
 }
 
 // TestEveryInternalPackageIsReachableFromACommand catches dead packages.

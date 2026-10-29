@@ -158,6 +158,27 @@ Both are acceptable outcomes; silently importing half the monolith is not.
   the client-address trust tests, run in the extracted module.
 - **Hidden dependencies found:** none.
 
+### `importx/safe` — READY
+
+- **Internal imports:** none.
+- **Commands:** `scripts/extract-test/safe/setup.sh` — `go build`, `go test` and a
+  smoke that round-trips a ZIP, refuses a path traversal and refuses a zip bomb.
+- **Result:** built, tested and ran standalone; the package's ~24 security tests
+  (traversal, symlink, zip bomb, deep nesting, corrupt data) run in the extracted
+  module.
+- **Hidden dependencies found:** none.
+
+### `importx/parsers` — READY
+
+- **Internal imports:** none.
+- **Commands:** `scripts/extract-test/parsers/setup.sh` — `go build`, `go test` and
+  a smoke that parses a CSV and a JSON export.
+- **Result:** built, tested and ran standalone. The package had no tests; 19 were
+  added in this slice, and they found two real bugs — XLSX was rejected by the
+  UTF-8 check applied to every format, and the XML parser emitted a record's
+  attributes and nested elements as separate rows. Both are fixed.
+- **Hidden dependencies found:** none.
+
 ### `secrets` — ALMOST (superseded by READY above)
 
 - **Source SHA:** `7a6d67f`
@@ -174,10 +195,10 @@ Both are acceptable outcomes; silently importing half the monolith is not.
 
 ## Next extraction candidate
 
-`internal/storage`'s provider layer was the recommended next target, and it is now
-done: `internal/objectstore` is extracted and proven. `Service` stays behind by
-design, because its authorization, metadata and reconciliation are application
-concerns.
+The two `importx` sub-packages, `safe` and `parsers`, are now extracted and
+proven; they were the cheapest remaining targets because both are leaves with no
+in-module dependency, and running the parsers extraction is what surfaced its two
+real bugs.
 
 The next candidates, in order of how much the boundary has to change first, are in
 `docs/EXTRACT_READY.md`: `rbac` (split the pure catalog and `Principal` from the
@@ -200,7 +221,8 @@ should notice. The harness was itself verified to fail: replacing `objectstore`'
 `netguard` import with `integrations` made both the harness and the archtest report
 the violation, and giving `logging` an in-module import made the archtest fail.
 
-`modules.txt` lists seven modules today: `netguard`, `analytics`, `ratelimit`,
-`objectstore`, `secrets`, `logging` and `httpx`.
+`modules.txt` lists nine modules today: `netguard`, `analytics`, `ratelimit`,
+`objectstore`, `secrets`, `logging`, `httpx`, `safe` (internal/importx/safe) and
+`parsers` (internal/importx/parsers).
 
 See `scripts/extract-test/README.md` for how to add a module.

@@ -25,9 +25,41 @@ once it reaches 1.0.
   passes. A CI job `extraction` runs the harness, and `TestExtractionBoundaryHolds`
   in `internal/archtest` enforces the same boundary cheaply on every
   `go test ./...`; the two are independent, so neither a stale check nor a skipped
-  job can hide a violation. Seven modules are proven today: the four above plus
-  `secrets` and `logging`, which became provable once they gained their own tests,
-  and `httpx` (see below).
+  job can hide a violation. Nine modules are proven today: the four above plus
+  `secrets` and `logging` (which became provable once they gained their own tests),
+  `httpx`, and `importx/safe` and `importx/parsers` (added in this slice).
+
+- **The untrusted-archive extractor is now extraction-proven.** `internal/importx/safe`
+  is the single place in the codebase that writes bytes chosen by an uploader to
+  disk, and the guard against path traversal, symlinks, zip bombs, oversized
+  entries and deep nesting. It has no in-module dependency at all, so the whole
+  package moves: `scripts/extract-test/safe` builds it, runs its ~24 security
+  tests in a clean module and runs a smoke that round-trips a ZIP and then refuses
+  both a path traversal and a zip bomb. The security tests running in isolation is
+  the strongest form of this claim, and it is exactly where attacker-controlled
+  input is handled.
+
+- **The tabular parsers are now extraction-proven, and the extraction found two
+  real bugs in them.** `internal/importx/parsers` had **no tests of its own**, so
+  nothing pinned its behaviour. Writing them found:
+  - **XLSX could not be parsed at all.** `Parse` applied its UTF-8 text check to
+    every format, but XLSX is a zip of XML parts and is binary by construction, so
+    every workbook was rejected with "file is not valid UTF-8". The check is now
+    skipped for the one binary format it was never meant to see.
+  - **The XML parser split every record in two.** A record's attributes and its
+    nested elements were emitted as separate rows — `<contact id="1"><name>Ada
+    </name></contact>` came out as `{@id:1}` and `{name:Ada}` — and the record
+    element was inferred as the document root. The parser was rewritten to keep
+    one row per record, flatten nested elements to dotted keys (matching the JSON
+    parser) and infer the record element as the root's first child.
+  The package now has 19 tests, extracts, builds, tests and runs in a clean module.
+
+- **The extraction-boundary archtest could silently check nothing for a nested
+  package.** `TestExtractionBoundaryHolds` keyed its cases on `internalPkg`, which
+  returns only the first path segment; a pinned module like `importx/safe` would
+  therefore never match its case and the test would pass while verifying nothing.
+  The check now keys on the full path relative to `internal/`, and fails loudly if
+  a pinned module is not in the graph at all — the no-op is itself caught.
 
 - **The HTTP layer is now extraction-proven.** `internal/httpx` — the error
   envelope, the JSON writers, pagination and sort parsing, the access-log,

@@ -15,6 +15,8 @@
 # secrets       password hashing, tokens and the AES-GCM keyring; x/crypto only
 # logging       structured logging with central secret redaction; standard library only
 # httpx         the HTTP layer: error envelope, JSON writers, middleware, client address
+# safe          untrusted-archive extraction (internal/importx/safe); a leaf
+# parsers       tabular source parsing (internal/importx/parsers); a leaf
 
 netguard
 analytics
@@ -23,3 +25,5 @@ objectstore
 secrets
 logging
 httpx
+safe
+parsers

@@ -327,3 +327,9 @@ middleware lives with the other middleware) and creates no cycle. `httpx` also
 depends on `logging`. Those two are its only in-module dependencies, and both are
 proven leaves, so `httpx` is itself extractable and is proven so by the harness in
 `scripts/extract-test/httpx`.
+
+`importx`'s two sub-packages, `parsers` and `safe`, are leaves: neither imports
+anything else in this module. `safe` (untrusted-archive extraction) and `parsers`
+(tabular source parsing) are both extracted and proven by
+`scripts/extract-test/safe` and `scripts/extract-test/parsers`; the service in
+`importx` itself remains application code.
