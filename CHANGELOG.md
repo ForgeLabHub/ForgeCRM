@@ -12,10 +12,11 @@ once it reaches 1.0.
 
 - **The Forecasting & Risk Lab.** Two explainable intelligence surfaces built on
   the same pure-core pattern as the Simulation Lab. The maths lives in
-  `internal/analytics` (`forecast-v1`): naive, mean, moving-average and trend
-  methods over integer-minor-unit money, with the history window bounded by
+  `internal/analytics` (`forecast-v1`): mean, moving-average and trend methods
+  over integer-minor-unit money, with the history window bounded by
   `MinHistoryPeriods=3`, `MaxHistoryPeriods=240` and the horizon by
-  `MaxForecastHorizon=36`. `internal/forecast` reads the revenue history through
+  `MaxForecastHorizon=36`. The naive (last-value) projection is the baseline the
+  measured error is compared against, not a selectable method. `internal/forecast` reads the revenue history through
   `crm.Service` under the caller's principal and persists a run to
   `forecast_runs`, freezing its parameters, its history and the algorithm version
   so a projection stays explainable after the CRM data moves on. A projection is
@@ -29,7 +30,7 @@ once it reaches 1.0.
   each signal cites the evidence rows behind it. Thresholds are stored per
   organization in `risk_thresholds`, editable, and validated server-side so an
   out-of-range value returns 422 with a reason rather than a raw constraint error.
-  Migration `0020_forecasting_and_risk` adds the three tables and the four
+  Migration `0020_forecasting_risk` adds the three tables and the four
   permissions (`forecast.read`, `forecast.run`, `risk.read`, `risk.manage`). The
   API adds forecast runs and a session-only catalog, and risk signals, scan,
   status transitions and thresholds; the frontend adds `Forecasting` and `Risk`

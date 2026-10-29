@@ -304,12 +304,13 @@ corrected to the real field names and `ReportsPage.tsx` is updated to match.
   time. The baseline reader now rounds the average to the money scale where it is
   produced. The parser stays strict.
 - **§6 Forecasting & Risk Lab** — delivered. The pure cores live in
-  `internal/analytics` (`forecast-v1`; methods naive, mean, moving average, trend,
-  bounded by `MinHistoryPeriods=3`, `MaxHistoryPeriods=240`, `MaxForecastHorizon=36`)
-  and a risk-signal core. The services `internal/forecast` and `internal/risk`
+  `internal/analytics` (`forecast-v1`; selectable methods mean, moving average and
+  trend, with the naive last-value projection as the baseline the error is measured
+  against, bounded by `MinHistoryPeriods=3`, `MaxHistoryPeriods=240`,
+  `MaxForecastHorizon=36`) and a risk-signal core. The services `internal/forecast` and `internal/risk`
   read the CRM through `crm.Service` under the caller's principal and persist to
   `forecast_runs`, `risk_signals` and `risk_thresholds` (migration
-  `0020_forecasting_and_risk`) with the `forecast.read`/`forecast.run` and
+  `0020_forecasting_risk`) with the `forecast.read`/`forecast.run` and
   `risk.read`/`risk.manage` permissions. The API adds forecast runs and a catalog,
   and risk signals, scan, status transitions and thresholds; the frontend adds
   `Forecasting` and `Risk` pages (`frontend/src/pages/ForecastPage.tsx`,
