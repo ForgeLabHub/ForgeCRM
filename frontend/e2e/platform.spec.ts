@@ -212,6 +212,26 @@ test.describe('accounts', () => {
   })
 })
 
+test.describe('contextual AI', () => {
+  test('the assistant appears on a record and reports when no provider is configured', async ({
+    authedPage: page,
+  }) => {
+    const name = `E2E AI ${RUN_ID}`
+    await createAccount(page, name)
+
+    await page.goto('/accounts')
+    await page.getByText(name).click()
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(name)
+
+    // The panel is part of the record card, so it must render without the user
+    // opening anything. The E2E stack configures no provider, and the panel must
+    // say so plainly rather than fail or offer assistance it cannot deliver.
+    const assistant = page.getByRole('heading', { name: 'Assistant' })
+    await expect(assistant).toBeVisible()
+    await expect(page.getByText(/No AI provider is configured/i)).toBeVisible()
+  })
+})
+
 test.describe('workspace pages render live data', () => {
   const pages = [
     { path: '/accounts', title: 'Accounts' },
