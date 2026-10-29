@@ -152,6 +152,25 @@ once it reaches 1.0.
 
 ### Fixed
 
+- **The contextual-AI insight cache never worked.** `ai_insights` (migration 0014)
+  had no `recommendations` or `draft` column and typed `analysis` as `jsonb`, while
+  the service inserts and reads all three with `analysis` as plain text. Every
+  cache write therefore failed on a missing column, and the failure was swallowed
+  by design — a cache write is best effort so a failed store does not fail a
+  request the user already paid for — so the feature appeared to work while every
+  page view was a new billable model call. Migration `0018_ai_insights_columns`
+  adds the two columns and converts `analysis` to `text` (unwrapping any existing
+  value with `#>> '{}'`).
+
+- **A cached insight could be served for the wrong question.** The read filtered on
+  `(organization, entity, kind)` but not on `context_hash`, even though the table's
+  unique key includes it precisely because two requests of the same kind can carry
+  different input. Asking a second question about a record returned the first
+  question's cached reply and presented it as an answer to the new one. The read now
+  filters on `context_hash`, and the lookup index leads with it.
+  `TestAssistCacheIsKeyedByTheQuestion` drives the real provider client through a
+  fake endpoint and fails if either the hash filter or the columns regress.
+
 - **An attachment uploaded through the UI was stored unattached and untitled.** The
   multipart handler returned as soon as it reached the `file` part, so every part
   after it was discarded. The frontend appends `file` first and then `title` and

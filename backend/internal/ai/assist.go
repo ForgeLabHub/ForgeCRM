@@ -967,8 +967,15 @@ type cachedInsight struct {
 	CreatedAt   time.Time
 }
 
-// loadCachedInsight returns the newest unexpired row for this entity and kind.
-func (s *Service) loadCachedInsight(ctx context.Context, orgID uuid.UUID, ref AssistRequest) (*cachedInsight, error) {
+// loadCachedInsight returns the unexpired row for exactly this input.
+//
+// The lookup includes context_hash, not only the entity and kind. Two requests of
+// the same kind can carry different input — two different questions, or the same
+// question after the record changed — and each stores its own row under the same
+// unique key. Without the hash in the WHERE clause the newest row for the kind is
+// returned regardless of what was asked, so a second question would be answered
+// with the first question's cached reply and reported as an answer to the new one.
+func (s *Service) loadCachedInsight(ctx context.Context, orgID uuid.UUID, ref AssistRequest, hash string) (*cachedInsight, error) {
 	if s.db == nil {
 		return nil, nil
 	}
@@ -976,7 +983,7 @@ func (s *Service) loadCachedInsight(ctx context.Context, orgID uuid.UUID, ref As
 		SELECT facts, analysis, recommendations, draft, disclosures, provider, model, created_at
 		FROM ai_insights
 		WHERE organization_id = $1 AND entity_type = $2 AND entity_id = $3 AND kind = $4
-		  AND expires_at > now()
+		  AND context_hash = $5 AND expires_at > now()
 		ORDER BY created_at DESC
 		LIMIT 1`
 	var (
@@ -985,7 +992,7 @@ func (s *Service) loadCachedInsight(ctx context.Context, orgID uuid.UUID, ref As
 		provider, model           string
 		createdAt                 time.Time
 	)
-	err := s.db.Pool().QueryRow(ctx, q, orgID, string(ref.EntityType), ref.EntityID, string(ref.Kind)).
+	err := s.db.Pool().QueryRow(ctx, q, orgID, string(ref.EntityType), ref.EntityID, string(ref.Kind), hash).
 		Scan(&facts, &analysis, &recs, &discs, &draft, &provider, &model, &createdAt)
 	if err != nil {
 		// No row is the common case, not a failure.
@@ -1083,7 +1090,7 @@ func (s *Service) Assist(ctx context.Context, p *rbac.Principal, req AssistReque
 	hash := contextHash(req, b, s.ModelName())
 
 	if !req.Refresh {
-		if cached, err := s.loadCachedInsight(ctx, p.OrganizationID, req); err == nil && cached != nil {
+		if cached, err := s.loadCachedInsight(ctx, p.OrganizationID, req, hash); err == nil && cached != nil {
 			return &Insight{
 				Kind: req.Kind, EntityType: req.EntityType, EntityID: req.EntityID.String(),
 				Cached: true, Provider: cached.Provider, Model: cached.Model,
