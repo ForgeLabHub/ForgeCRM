@@ -285,6 +285,7 @@ when a service is missing, so the same mistake is legible next time
 | 13.1 | An unreachable or timed-out provider is a retryable outage | **VERIFIED** — `internal/ai/ai.go` `classifyProviderError` recognises a deadline or a transport-level failure and wraps it as `ErrProviderUnavailable`; `HTTPErrorFrom` maps it to a 503 with code `unavailable`. A provider that answered with an application error is passed through unchanged, so a 4xx is not disguised as "try again shortly" |
 | 13.2 | The API reports the outage distinctly from "not configured" | **VERIFIED** — `respondDomainError` routes `ErrProviderUnavailable` alongside `ErrDisabled` (503/`disabled`) and `ErrRateLimited` (429); the three states stay distinct |
 | 13.3 | The panel offers a retry only when retrying could work | **VERIFIED** — `AssistPanel` renders a "Try again" control only when the error envelope's `retryable` flag is set, so a permission refusal gets no button that cannot work |
+| 13.4 | A configured-but-unreachable provider is visible before a request is spent | **VERIFIED** — the panel reads the reachability the status endpoint already reports (`healthy` plus the probe error) and warns when a provider is configured but the probe did not reach it; the controls stay enabled, because the probe can be stale, so the user is warned, not blocked |
 
 ### Evidence
 
@@ -292,7 +293,8 @@ when a service is missing, so the same mistake is legible next time
 |---|---|---|
 | Unit tests | `go test -count=1 ./internal/ai/... ./internal/httpx/...` | pass, including `provider_error_test.go` (classification, mapping, wrapping) |
 | Integration test | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration -count=1 -run TestAssistReportsAnUnreachableProvider ./internal/testsupport/` | passes against real PostgreSQL; the `ai_tasks` row is asserted `failed` with a recorded error |
-| Frontend unit | `npx vitest run src/components/AssistPanel.test.tsx` | 9 pass, including retry-button presence and absence |
+| Frontend unit | `npx vitest run src/components/AssistPanel.test.tsx` | 11 pass, including retry-button presence and absence and the pre-request reachability warning |
+| E2E (Chromium) | `npx playwright test --project=chromium` | 43 passed, 1 skipped (the no-provider case is skipped when a provider is configured, and vice versa) |
 
 ---
 
