@@ -22,7 +22,9 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -866,5 +868,249 @@ func TestAgentUnexpiredDecisionStillApproves(t *testing.T) {
 	}
 	if n := f.countTasks(t); n != 1 {
 		t.Fatalf("task count = %d, want 1", n)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Execution: exactly-once under concurrency, and completion
+// ---------------------------------------------------------------------------
+
+// grantRole restores a role the fixture's user holds, so a test can revoke and
+// then re-grant a permission to prove an execution consults the permission set
+// that exists at execution time rather than one captured earlier.
+func (f *agentFixture) grantRole(t *testing.T, roleKey string) {
+	t.Helper()
+	ctx := context.Background()
+	var roleID uuid.UUID
+	if err := f.db.Pool().QueryRow(ctx, `
+SELECT id FROM roles WHERE organization_id = $1 AND key = $2`, f.org, roleKey).Scan(&roleID); err != nil {
+		t.Fatalf("find role %q: %v", roleKey, err)
+	}
+	if _, err := f.db.Pool().Exec(ctx,
+		`INSERT INTO user_roles (user_id, role_id, organization_id) VALUES ($1, $2, $3)`,
+		f.userID, roleID, f.org); err != nil {
+		t.Fatalf("re-grant role %q: %v", roleKey, err)
+	}
+}
+
+// blockingExecutor is an agent.Executor whose effect blocks until the test
+// releases it. It lets a test hold one execution transaction open — with its row
+// lock held — while other callers race the claim, which is the only way to
+// exercise the approved→executed transition as a genuine concurrent race. It also
+// counts how many times the effect was entered, which is the invariant: however
+// many callers race, the effect runs once.
+type blockingExecutor struct {
+	started chan struct{}
+	release chan struct{}
+	once    sync.Once
+	effects int32
+}
+
+func newBlockingExecutor() *blockingExecutor {
+	return &blockingExecutor{started: make(chan struct{}), release: make(chan struct{})}
+}
+
+func (b *blockingExecutor) Execution(string) (agent.ExecutionFunc, error) {
+	return func(ctx context.Context, _ *agent.Action, _ agent.Decider) (any, error) {
+		atomic.AddInt32(&b.effects, 1)
+		b.once.Do(func() { close(b.started) })
+		select {
+		case <-b.release:
+			return map[string]any{"ok": true}, nil
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}, nil
+}
+
+// TestAgentConcurrentExecutionIsExactlyOnce is the concurrency evidence for the
+// claim in ADR 0005 §7: the approved→executed transition admits exactly one
+// effect, however many callers race it.
+//
+// The race has to be built deliberately. Decide auto-executes on approval, so
+// calling Decide and then ExecuteApprovedAction in a loop does not race anything:
+// the second call finds the action already executed and takes the idempotent
+// replay path. To race the claim the winner must be held *inside* its execution
+// transaction while the losers arrive, which is what the blocking executor does.
+// One caller approves; its effect blocks holding the row lock; eight others then
+// race the claim; the effect is released and must have run exactly once.
+func TestAgentConcurrentExecutionIsExactlyOnce(t *testing.T) {
+	db := connectOrSkip(t)
+	freshSchema(t, db)
+	ctx := context.Background()
+
+	auditLog := audit.New(db)
+	org := insertOrganization(t, db, "agent-exec-race-"+uuid.NewString()[:8])
+	userID := seedMember(t, db, org, "sales_representative")
+
+	ex := newBlockingExecutor()
+	svc, err := agent.NewService(db, auditLog, ex, agent.Config{
+		PlatformSecret: "integration-test-platform-secret",
+		DeniedTools:    ai.DeniedToolNames(),
+	})
+	if err != nil {
+		t.Fatalf("build the agent service: %v", err)
+	}
+
+	run, err := svc.StartRun(ctx, org, userID, "Race the execution", 100000, 50)
+	if err != nil {
+		t.Fatalf("start run: %v", err)
+	}
+	args := map[string]any{"title": "Race the execution"}
+	hash, err := agent.ArgumentsHash(args)
+	if err != nil {
+		t.Fatalf("hash arguments: %v", err)
+	}
+	action, err := svc.Propose(ctx, agent.Proposal{
+		RunID:          run.ID,
+		OrganizationID: org,
+		ToolName:       "create_task",
+		Arguments:      args,
+		RiskTier:       agent.TierConfirm,
+		Summary:        "Create a task",
+		IdempotencyKey: "exec-race-1",
+	})
+	if err != nil {
+		t.Fatalf("propose: %v", err)
+	}
+	if action.ArgumentsHash != hash {
+		t.Fatalf("stored hash %q != computed %q", action.ArgumentsHash, hash)
+	}
+
+	decider := agent.Decider{UserID: userID, OrganizationID: org}
+
+	// The winner: approval auto-executes, and the effect blocks with the claim and
+	// its row lock held open.
+	winner := make(chan error, 1)
+	go func() {
+		_, _, err := svc.Decide(ctx, decider, action.ID, agent.Decision{
+			Approve: true, ArgumentsHash: action.ArgumentsHash,
+		})
+		winner <- err
+	}()
+
+	select {
+	case <-ex.started:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the approved effect never started; the race window never opened")
+	}
+
+	// Eight callers race the claim while the winner holds it.
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = svc.ExecuteApprovedAction(ctx, action.ID, decider)
+		}()
+	}
+	// Let the losers reach the claim, then release the winner so it commits.
+	time.Sleep(300 * time.Millisecond)
+	close(ex.release)
+
+	if err := <-winner; err != nil {
+		t.Fatalf("approve and execute: %v", err)
+	}
+	wg.Wait()
+
+	if got := atomic.LoadInt32(&ex.effects); got != 1 {
+		t.Fatalf("the effect ran %d times under a concurrent race, want exactly 1", got)
+	}
+
+	var status string
+	if err := db.Pool().QueryRow(ctx, `SELECT status FROM agent_actions WHERE id = $1`, action.ID).Scan(&status); err != nil {
+		t.Fatalf("read action status: %v", err)
+	}
+	if status != agent.ActionExecuted {
+		t.Fatalf("action status = %q, want %q", status, agent.ActionExecuted)
+	}
+	var approvals int
+	if err := db.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM agent_approvals WHERE action_id = $1`, action.ID).Scan(&approvals); err != nil {
+		t.Fatalf("count approvals: %v", err)
+	}
+	if approvals != 1 {
+		t.Fatalf("approvals = %d, want 1: the race must not write a second decision", approvals)
+	}
+}
+
+// TestAgentExecutionConsultsPermissionsAtExecutionTime proves the executor
+// re-derives the decider's permissions from the database rather than trusting a
+// set captured at propose time. The user's role is revoked after the proposal and
+// then re-granted before execution: the effect must be refused while the role is
+// absent and performed once it is back, which is only possible if the permission
+// set is read at execution time.
+func TestAgentExecutionConsultsPermissionsAtExecutionTime(t *testing.T) {
+	f := newAgentFixture(t, "agent-exec-perm", "sales_representative")
+	ctx := context.Background()
+
+	run := f.startRun(t, "Create a task")
+	action := f.proposeCreateTask(t, run, "Permission re-check", "exec-perm-1")
+	decider := agent.Decider{UserID: f.userID, OrganizationID: f.org}
+
+	// Revoke after the proposal. The approval still records the human decision, but
+	// the execution must be refused because the permission is gone now.
+	if _, err := f.db.Pool().Exec(ctx,
+		`DELETE FROM user_roles WHERE user_id = $1 AND organization_id = $2`, f.userID, f.org); err != nil {
+		t.Fatalf("revoke roles: %v", err)
+	}
+	if _, _, err := f.svc.Decide(ctx, decider, action.ID, agent.Decision{
+		Approve: true, ArgumentsHash: action.ArgumentsHash,
+	}); err == nil {
+		t.Fatal("execution succeeded with a revoked permission set")
+	}
+	if n := f.countTasks(t); n != 0 {
+		t.Fatalf("task count = %d, want 0: a revoked permission must block the effect", n)
+	}
+	if got := f.actionStatus(t, action.ID); got == agent.ActionExecuted {
+		t.Fatal("the action is marked executed though the effect was refused")
+	}
+
+	// Restore the role. The action is still approved, so a fresh execution call must
+	// now succeed — the permission set was re-read, not cached from the first attempt.
+	f.grantRole(t, "sales_representative")
+	executed, err := f.svc.ExecuteApprovedAction(ctx, action.ID, decider)
+	if err != nil {
+		t.Fatalf("execute after the role was restored: %v", err)
+	}
+	if executed.Status != agent.ActionExecuted {
+		t.Fatalf("action status = %q, want %q", executed.Status, agent.ActionExecuted)
+	}
+	if n := f.countTasks(t); n != 1 {
+		t.Fatalf("task count = %d, want 1 after the permission was restored", n)
+	}
+}
+
+// TestAgentCompleteRunClosesARunWithNoProposals documents the run-completion path:
+// a run with nothing left to decide can be moved to the terminal completed state.
+//
+// CompleteRun has no HTTP route and no production caller today, so a run with no
+// outstanding proposals stays in waiting_approval unless it is cancelled or its
+// proposals expire. This test pins the behaviour the method does implement, so a
+// future caller cannot be added against an untested contract.
+func TestAgentCompleteRunClosesARunWithNoProposals(t *testing.T) {
+	f := newAgentFixture(t, "agent-complete", "sales_representative")
+	ctx := context.Background()
+
+	run := f.startRun(t, "Complete me")
+	action := f.proposeCreateTask(t, run, "Decided, then complete", "complete-1")
+	decider := agent.Decider{UserID: f.userID, OrganizationID: f.org}
+	if _, _, err := f.svc.Decide(ctx, decider, action.ID, agent.Decision{
+		Approve: true, ArgumentsHash: action.ArgumentsHash,
+	}); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+
+	if err := f.svc.CompleteRun(ctx, f.org, run.ID); err != nil {
+		t.Fatalf("complete run: %v", err)
+	}
+	if got := f.runStatus(t, run.ID); got != agent.RunCompleted {
+		t.Fatalf("run status = %q, want %q", got, agent.RunCompleted)
+	}
+
+	// Completing a run that is already terminal is a not-found, so a retry cannot
+	// silently re-open or double-record it.
+	if err := f.svc.CompleteRun(ctx, f.org, run.ID); err == nil {
+		t.Fatal("completing an already-completed run was accepted")
 	}
 }

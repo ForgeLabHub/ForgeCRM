@@ -300,3 +300,174 @@ func TestReplayOfPendingDeliveryIsRefused(t *testing.T) {
 		t.Fatalf("replay_count = %d after a refused replay, want 0", replayCount)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Worker recovery: a claim abandoned by a crashed sender
+// ---------------------------------------------------------------------------
+
+// TestClaimRecoversDeliveryAbandonedByCrashedWorker is the recovery half of the
+// claim design, and it had no coverage.
+//
+// A worker claims a delivery by moving it to 'delivering' and then dies before it
+// can send, so the row is left claimed and nothing in the send path will ever pick
+// it up again. ClaimDelivery's second eligibility clause — a 'delivering' row whose
+// lock is older than the lease — is the only thing that recovers it. Without that
+// clause the delivery is stranded forever: it is not pending, not failed, and no
+// worker will look at it. The test drives a real claim, then ages the lock and
+// asserts a later claim takes the same row back.
+func TestClaimRecoversDeliveryAbandonedByCrashedWorker(t *testing.T) {
+	sender, _, _, deliveryID := deadLetterFixture(t, 5)
+	db := connectOrSkip(t)
+	ctx := context.Background()
+
+	// A worker claims the delivery, as the send loop does, and then "crashes":
+	// nothing records an outcome, so the row stays 'delivering'.
+	claimed, err := sender.ClaimDelivery(ctx, "crashed-worker", time.Minute)
+	if err != nil {
+		t.Fatalf("first claim: %v", err)
+	}
+	if claimed == nil || claimed.ID != deliveryID {
+		t.Fatalf("first claim took %v, want the fixture delivery %v", claimed, deliveryID)
+	}
+
+	var (
+		status   string
+		lockedBy *string
+	)
+	if err := db.Pool().QueryRow(ctx,
+		`SELECT status, locked_by FROM webhook_deliveries WHERE id = $1`, deliveryID).
+		Scan(&status, &lockedBy); err != nil {
+		t.Fatalf("read after the claim: %v", err)
+	}
+	if status != "delivering" {
+		t.Fatalf("status after the claim = %q, want delivering", status)
+	}
+
+	// While the lease is live, a second worker must not take the row: this is the
+	// exclusivity the claim exists to provide, and it is what stops two workers
+	// POSTing the same delivery.
+	if again, err := sender.ClaimDelivery(ctx, "second-worker", time.Minute); err != nil {
+		t.Fatalf("claim while the lease is live: %v", err)
+	} else if again != nil {
+		t.Fatalf("a live claim was stolen by another worker: %v", again)
+	}
+
+	// The lease expires with no outcome recorded. Age the lock past the lease the
+	// next claim uses, then claim again.
+	if _, err := db.Pool().Exec(ctx,
+		`UPDATE webhook_deliveries SET locked_at = now() - interval '10 minutes' WHERE id = $1`,
+		deliveryID); err != nil {
+		t.Fatalf("age the lock: %v", err)
+	}
+
+	recovered, err := sender.ClaimDelivery(ctx, "recovery-worker", time.Minute)
+	if err != nil {
+		t.Fatalf("claim after the lease expired: %v", err)
+	}
+	if recovered == nil {
+		t.Fatal("the abandoned delivery was never reclaimed; a crashed worker strands it forever")
+	}
+	if recovered.ID != deliveryID {
+		t.Fatalf("reclaimed %v, want the abandoned delivery %v", recovered.ID, deliveryID)
+	}
+	if recovered.Status != "delivering" {
+		t.Fatalf("reclaimed status = %q, want delivering", recovered.Status)
+	}
+	if err := db.Pool().QueryRow(ctx,
+		`SELECT locked_by FROM webhook_deliveries WHERE id = $1`, deliveryID).Scan(&lockedBy); err != nil {
+		t.Fatalf("read locked_by: %v", err)
+	}
+	if lockedBy == nil || *lockedBy != "recovery-worker" {
+		t.Fatalf("locked_by = %v, want recovery-worker: the lease was not transferred", lockedBy)
+	}
+}
+
+// TestReleaseStaleDeliveriesRecoversOnStartup is the other recovery path: the
+// worker calls ReleaseStaleDeliveries at start so an unclean shutdown does not
+// leave rows claimed. It must return only claims older than the cutoff — a row a
+// healthy worker is holding right now must be left alone — and the rows it
+// releases must be immediately claimable.
+func TestReleaseStaleDeliveriesRecoversOnStartup(t *testing.T) {
+	sender, _, _, staleID := deadLetterFixture(t, 5)
+	db := connectOrSkip(t)
+	ctx := context.Background()
+
+	org := insertOrganization(t, db, "release-stale-"+uuid.NewString()[:8])
+	keyring, err := secrets.NewKeyring("test-platform-secret-key-32-bytes")
+	if err != nil {
+		t.Fatalf("keyring: %v", err)
+	}
+	enc, err := keyring.Encrypt([]byte("subscriber-secret"))
+	if err != nil {
+		t.Fatalf("encrypt: %v", err)
+	}
+	var subID uuid.UUID
+	if err := db.Pool().QueryRow(ctx, `
+		INSERT INTO webhook_subscriptions
+			(organization_id, name, target_url, event_types, secret_encrypted, enabled, max_attempts)
+		VALUES ($1, 'sub', 'http://127.0.0.1:1/hook', '{}', $2, true, 5) RETURNING id`,
+		org, enc).Scan(&subID); err != nil {
+		t.Fatalf("insert subscription: %v", err)
+	}
+
+	// A live claim a healthy worker holds now, and a stale claim left by a crash.
+	var liveID uuid.UUID
+	if err := db.Pool().QueryRow(ctx, `
+		INSERT INTO webhook_deliveries
+			(subscription_id, organization_id, event_type, payload, status, locked_at, locked_by)
+		VALUES ($1, $2, 'contact.created', '{"id":"1"}'::jsonb, 'delivering', now(), 'live-worker')
+		RETURNING id`, subID, org).Scan(&liveID); err != nil {
+		t.Fatalf("insert live claim: %v", err)
+	}
+	if _, err := db.Pool().Exec(ctx, `
+		UPDATE webhook_deliveries
+		SET status = 'delivering', locked_at = now() - interval '1 hour', locked_by = 'dead-worker'
+		WHERE id = $1`, staleID); err != nil {
+		t.Fatalf("mark the stale claim: %v", err)
+	}
+
+	n, err := sender.ReleaseStaleDeliveries(ctx, 5*time.Minute)
+	if err != nil {
+		t.Fatalf("release stale: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("released %d deliveries, want 1: only the stale claim may be released", n)
+	}
+
+	var staleStatus string
+	var staleLockedBy *string
+	if err := db.Pool().QueryRow(ctx,
+		`SELECT status, locked_by FROM webhook_deliveries WHERE id = $1`, staleID).
+		Scan(&staleStatus, &staleLockedBy); err != nil {
+		t.Fatalf("read the released row: %v", err)
+	}
+	if staleStatus != "pending" {
+		t.Fatalf("released status = %q, want pending", staleStatus)
+	}
+	if staleLockedBy != nil {
+		t.Fatalf("released locked_by = %v, want NULL", staleLockedBy)
+	}
+
+	// The live claim must be untouched: releasing it would let a second worker
+	// send a delivery that is being sent right now.
+	var liveStatus string
+	var liveLockedBy *string
+	if err := db.Pool().QueryRow(ctx,
+		`SELECT status, locked_by FROM webhook_deliveries WHERE id = $1`, liveID).
+		Scan(&liveStatus, &liveLockedBy); err != nil {
+		t.Fatalf("read the live row: %v", err)
+	}
+	if liveStatus != "delivering" || liveLockedBy == nil || *liveLockedBy != "live-worker" {
+		t.Fatalf("live claim was disturbed: status=%q locked_by=%v", liveStatus, liveLockedBy)
+	}
+
+	// The released row is immediately claimable, which is what makes the recovery
+	// real rather than cosmetic.
+	recovered, err := sender.ClaimDelivery(ctx, "restarted-worker", time.Minute)
+	if err != nil {
+		t.Fatalf("claim after release: %v", err)
+	}
+	if recovered == nil || recovered.ID != staleID {
+		t.Fatalf("claim after release = %v, want the released delivery %v", recovered, staleID)
+	}
+}
