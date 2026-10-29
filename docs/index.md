@@ -1,0 +1,51 @@
+# Документация ForgeCRM
+
+Точка входа в документацию. Читать сверху вниз, если вы впервые в проекте;
+иначе — по таблице.
+
+## Первые 15 минут
+
+| Шаг | Документ |
+| --- | --- |
+| Понять, что это за продукт и чего в нём нет | [README.md](../README.md) |
+| Собрать с нуля | [BUILD.md](../BUILD.md) |
+| Понять устройство | [docs/ARCHITECTURE.md](ARCHITECTURE.md), затем [architecture/system-context.md](architecture/system-context.md) |
+| Запустить и проверить | [development/setup.md](development/setup.md), [verification/matrix.md](verification/matrix.md) |
+| Понять состояние проекта и риски | [PROJECT_AUDIT.md](PROJECT_AUDIT.md), [audit/portability-audit-2026-10-29.md](audit/portability-audit-2026-10-29.md) |
+
+## Карта документации
+
+| Вопрос | Где ответ |
+| --- | --- |
+| Как система устроена и почему так | `ARCHITECTURE.md`, `architecture/`, `adr/` |
+| Как собрать и проверить | `BUILD.md`, `development/` |
+| Как устроены данные и миграции | `database/` |
+| Какие есть API и контракты | `api/`, `docs/api/openapi.json` |
+| Что делает конкретный модуль | `modules/` |
+| Как эксплуатировать и обновлять | `operations/`, `deployment/` |
+| Модель угроз, права, tenant isolation | `security/` |
+| Чем доказано, что это работает | `verification/matrix.md`, CI |
+| Что запланировано и что принято | `ROADMAP.md`, `ACCEPTANCE_CRITERIA.md`, `MASTER_PLAN.md` |
+
+## Правила
+
+1. **Документ не считается правдой, пока его не подтверждает проверка.** Если здесь
+   написано «модуль не меняет данные CRM», это должно ловиться тестом. Матрица
+   [verification/matrix.md](verification/matrix.md) связывает утверждение с
+   командой и заданием CI.
+2. **`docs/api/openapi.json` генерируется**, а не пишется руками (`make openapi`).
+3. **Новый модуль без спецификации по [modules/module-template.md](modules/module-template.md)
+   не считается готовым** — проверяется в CI (`make docs-check`).
+4. **Ссылки проверяются автоматически** — битая относительная ссылка валит сборку.
+5. **Не дублируйте.** Исторические документы (`MASTER_PLAN.md`,
+   `INTELLIGENCE_PLATFORM_PLAN.md`) сохранены как есть; этот индекс объясняет, что
+   из них актуально, а что отражает прошлое состояние.
+
+## Статус документов
+
+| Документ | Состояние |
+| --- | --- |
+| `ARCHITECTURE.md`, `adr/*` | Актуально, поддерживается |
+| `PROJECT_AUDIT.md`, `audit/*` | Снимок на дату, не переписывается задним числом |
+| `MASTER_PLAN.md`, `INTELLIGENCE_PLATFORM_PLAN.md` | Историческое планирование; текущее состояние — в `PROJECT_AUDIT.md` |
+| `ROADMAP.md`, `ACCEPTANCE_CRITERIA.md` | Живые документы |

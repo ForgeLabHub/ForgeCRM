@@ -1,0 +1,238 @@
+name: Portability
+
+# Проверки, которых не было в ci.yml: обновление существующей базы, цикл
+# backup → restore → smoke, полный compose-стек и полнота документации.
+#
+# Разделение намеренное: ci.yml доказывает, что код корректен, а этот workflow —
+# что продукт можно перенести, обновить и восстановить.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  schedule:
+    - cron: "0 4 * * 1" # еженедельно: ловит гниение зависимостей и образов
+
+permissions:
+  contents: read
+
+concurrency:
+  group: portability-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.26.10"
+  NODE_VERSION: "22"
+  FORGECRM_SECRET_KEY: ci-secret-key-not-used-in-production-000000
+  FORGECRM_ENV: development
+
+jobs:
+  upgrade-path:
+    name: Upgrade an existing database
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: forgecrm
+          POSTGRES_PASSWORD: forgecrm
+          POSTGRES_DB: forgecrm_upgrade
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U forgecrm"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      FORGECRM_DATABASE_URL: postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_upgrade?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # нужна история, чтобы взять предыдущий коммит
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend/go.sum
+
+      - name: Set up the previous release
+        id: prev
+        run: |
+          prev="$(git rev-parse HEAD^ 2>/dev/null || echo "")"
+          if [ -z "$prev" ]; then
+            echo "Нет предыдущего коммита — проверять нечего."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "sha=$prev" >> "$GITHUB_OUTPUT"
+            git worktree add /tmp/previous "$prev"
+          fi
+
+      - name: Migrate with the previous version
+        if: steps.prev.outputs.skip == 'false'
+        run: |
+          cd /tmp/previous/backend
+          go build -o /tmp/api-previous ./cmd/forgecrm-api
+          /tmp/api-previous -migrate
+
+      - name: Migrate forward with the current version
+        run: |
+          cd backend
+          go build -o /tmp/api-current ./cmd/forgecrm-api
+          /tmp/api-current -migrate
+          # повторный запуск обязан быть no-op
+          /tmp/api-current -migrate
+
+      - name: Start the current API on the upgraded schema
+        run: |
+          /tmp/api-current &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/health >/dev/null 2>&1; then
+              echo "API отвечает после обновления схемы"; exit 0
+            fi
+            sleep 1
+          done
+          echo "API не поднялся на обновлённой схеме" >&2
+          exit 1
+
+  backup-restore:
+    name: Backup, restore and smoke test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: forgecrm
+          POSTGRES_PASSWORD: forgecrm
+          POSTGRES_DB: forgecrm_source
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U forgecrm"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend/go.sum
+
+      - name: Prepare a populated database
+        env:
+          FORGECRM_DATABASE_URL: postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_source?sslmode=disable
+        run: |
+          cd backend
+          go build -o /tmp/api ./cmd/forgecrm-api
+          /tmp/api -migrate
+          FORGECRM_BOOTSTRAP_PASSWORD='ci-bootstrap-password' \
+            /tmp/api -bootstrap-admin -bootstrap-email ci@example.com
+
+      - name: Back up
+        run: |
+          mkdir -p backups
+          PGPASSWORD=forgecrm pg_dump -h 127.0.0.1 -U forgecrm -Fc forgecrm_source \
+            > backups/forgecrm.dump
+          test -s backups/forgecrm.dump
+          sha256sum backups/forgecrm.dump > backups/forgecrm.dump.sha256
+          sha256sum -c backups/forgecrm.dump.sha256
+
+      - name: Restore into a fresh database
+        run: |
+          PGPASSWORD=forgecrm createdb -h 127.0.0.1 -U forgecrm forgecrm_restored
+          PGPASSWORD=forgecrm pg_restore -h 127.0.0.1 -U forgecrm \
+            --no-owner --no-privileges -d forgecrm_restored backups/forgecrm.dump
+
+      - name: Smoke test the restored instance
+        env:
+          FORGECRM_DATABASE_URL: postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_restored?sslmode=disable
+        run: |
+          /tmp/api -migrate   # должно быть no-op на восстановленной схеме
+          /tmp/api &
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8080/health >/dev/null 2>&1 && break
+            sleep 1
+          done
+          ./scripts/smoke-test.sh http://127.0.0.1:8080
+          echo "e-mail администратора восстановлен из дампа:"
+          PGPASSWORD=forgecrm psql -h 127.0.0.1 -U forgecrm -d forgecrm_restored -tAc \
+            "select email from users where email = 'ci@example.com'"
+          PGPASSWORD=forgecrm psql -h 127.0.0.1 -U forgecrm -d forgecrm_restored -tAc \
+            "select email from users where email = 'ci@example.com'" | grep -q 'ci@example.com'
+
+  compose-smoke:
+    name: Full stack (Compose) smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare the environment
+        run: |
+          cp .env.example .env
+          printf 'FORGECRM_SECRET_KEY=%s\n' "$(openssl rand -base64 48)" >> .env
+
+      - name: Build and start the stack
+        run: docker compose up -d --build
+
+      - name: Apply migrations
+        run: ./scripts/migrate.sh up
+
+      - name: Smoke test
+        run: ./scripts/smoke-test.sh http://localhost:8080
+
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --tail=300
+
+  config-without-secrets:
+    name: Runs with no optional configuration
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: forgecrm
+          POSTGRES_PASSWORD: forgecrm
+          POSTGRES_DB: forgecrm_bare
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U forgecrm"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend/go.sum
+
+      - name: Build without secrets
+        run: cd backend && go build -o /tmp/api ./cmd/forgecrm-api
+
+      - name: Run with only the mandatory variables
+        env:
+          FORGECRM_DATABASE_URL: postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_bare?sslmode=disable
+        run: |
+          /tmp/api -migrate
+          /tmp/api &
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8080/health >/dev/null 2>&1 && exit 0
+            sleep 1
+          done
+          echo "API не стартует без опциональных интеграций" >&2
+          exit 1
+
+      - name: Reject contradictory configuration
+        env:
+          FORGECRM_DATABASE_URL: postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_bare?sslmode=disable
+          FORGECRM_REDIS_URL: redis://127.0.0.1:6379
+          FORGECRM_RATE_LIMIT_STORE: memory
+        run: |
+          # Противоречивая конфигурация должна отвергаться, а не игнорироваться.
+          if /tmp/api 2>/dev/null; then
+            echo "конфигурация принята, хотя не должна была" >&2
+            exit 1
+          fi
+
+  docs:
+    name: Documentation is present and linked
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check documentation
+        run: ./scripts/docs-check.sh
