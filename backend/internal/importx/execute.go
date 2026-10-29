@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -846,23 +847,59 @@ func normaliseForExport(v any) any {
 	}
 }
 
-// CleanupTemp removes the private extraction root, used by tests and by a
-// periodic maintenance sweep.
-func (s *Service) CleanupTemp() error {
+// CleanupTemp removes extraction directories an import left behind, returning how
+// many it removed.
+//
+// A directory is removed only when it is older than minAge. The deferred cleanup
+// on the normal path already removes the directory for the import that produced
+// it; this sweep exists for the import whose worker died before that defer ran.
+// The age bound is what keeps the sweep from deleting a directory a live import is
+// still reading: writing into a directory updates its mtime, so a running import
+// keeps its directory young. It must therefore be larger than the job timeout, and
+// callers pass a value that is.
+//
+// A removal failure is reported, not ignored, so a persistent failure is visible
+// rather than presenting as a disk that keeps filling.
+func (s *Service) CleanupTemp(minAge time.Duration) (int, error) {
 	root := s.cfg.ImportTempDir
 	if root == "" {
 		root = os.TempDir()
 	}
 	entries, err := os.ReadDir(root)
 	if err != nil {
-		return nil
-	}
-	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), "forgecrm-import-") {
-			_ = os.RemoveAll(root + string(os.PathSeparator) + e.Name())
+		// A missing root means there is nothing to sweep, which is the state a fresh
+		// deployment is in and is not an error.
+		if os.IsNotExist(err) {
+			return 0, nil
 		}
+		return 0, err
 	}
-	return nil
+	cutoff := time.Now().Add(-minAge)
+	var removed int
+	var firstErr error
+	for _, e := range entries {
+		if !strings.HasPrefix(e.Name(), "forgecrm-import-") {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if info.ModTime().After(cutoff) {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(root, e.Name())); err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		removed++
+	}
+	return removed, firstErr
 }
 
 // ensure crm is referenced (it is used by writer.go for validation).

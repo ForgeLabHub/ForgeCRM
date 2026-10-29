@@ -10,6 +10,16 @@ once it reaches 1.0.
 
 ### Added
 
+- **Abandoned import extraction directories are now swept.** `CleanupTemp` removed
+  the directory for the import that produced it on the path that returns normally,
+  but a worker that died mid-import left its extraction root behind, and nothing
+  ever reclaimed it — the comment claiming a "periodic maintenance sweep" named one
+  that did not exist, and the function had no callers. A new `maintenance.import_temp`
+  job, enqueued on the same hourly tick as the other maintenance jobs, removes
+  `forgecrm-import-*` directories older than two hours. The age bound is larger than
+  the 30-minute job timeout on purpose: writing into a directory keeps its mtime
+  fresh, so an import still in flight cannot have its files deleted underneath it.
+
 - **Retention now covers the run history that nothing pruned before.** Three tables
   grew without bound on a busy deployment and no policy touched them: finished
   workflow runs, finished agent runs, and processed inbound events. Each is now a

@@ -43,6 +43,11 @@ const (
 	KindOutboxDrain    = "outbox.drain"
 	KindReconcile      = "migration.reconcile"
 	KindRetentionSweep = "maintenance.retention"
+	// KindImportTempSweep removes extraction directories an import left behind
+	// when its worker died before the deferred cleanup ran. Without it those
+	// directories accumulate without bound, because the in-process cleanup only
+	// runs on the path that returns normally.
+	KindImportTempSweep = "maintenance.import_temp"
 	// KindAgentSweep expires approval requests that were never decided, and fails
 	// the runs that were waiting on them. It is the bound that keeps "waiting for
 	// approval" from becoming "waiting forever" (ADR 0005).

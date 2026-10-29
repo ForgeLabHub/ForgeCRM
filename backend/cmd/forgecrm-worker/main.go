@@ -309,6 +309,9 @@ func (r *handlerRegistry) handle(ctx context.Context, queue *jobs.Queue, job *jo
 	case jobs.KindRetentionSweep:
 		return r.retentionSweep(ctx)
 
+	case jobs.KindImportTempSweep:
+		return r.importTempSweep(ctx)
+
 	case jobs.KindAgentSweep:
 		return r.agentSweep(ctx)
 
@@ -393,6 +396,28 @@ func (r *handlerRegistry) retentionSweep(ctx context.Context) error {
 		mode = "previewed"
 	}
 	r.log.Info("retention run complete", "mode", mode, "deleted", deleted)
+	return nil
+}
+
+// importTempSweep removes extraction directories an import abandoned when its
+// worker died before the deferred cleanup ran. It is the periodic counterpart to
+// the per-import cleanup: without it those directories accumulate without bound.
+//
+// The age bound is deliberately larger than the job timeout (30 minutes, see the
+// worker's job context), because a directory younger than that may belong to an
+// import still in flight; writing into the directory keeps its mtime fresh, so a
+// live import cannot be swept.
+func (r *handlerRegistry) importTempSweep(ctx context.Context) error {
+	if r.imports == nil {
+		return nil
+	}
+	removed, err := r.imports.CleanupTemp(2 * time.Hour)
+	if removed > 0 {
+		r.log.Info("removed abandoned import extraction directories", "removed", removed)
+	}
+	if err != nil {
+		return fmt.Errorf("sweep import temp directories: %w", err)
+	}
 	return nil
 }
 
@@ -615,6 +640,15 @@ func runMaintenanceLoop(ctx context.Context, log *slog.Logger, queue *jobs.Queue
 				log.Warn("could not enqueue the agent approval sweep", "error", err)
 			} else if sweep != nil {
 				log.Info("enqueued the agent approval sweep", "job_id", sweep.ID)
+			}
+			// Extraction directories an import abandoned when its worker died are not
+			// covered by the retention registry (they are files, not rows), so the same
+			// tick that enqueues the row sweeps also reclaims them.
+			temp, err := queue.EnqueuePeriodic(ctx, jobs.KindImportTempSweep, map[string]any{})
+			if err != nil {
+				log.Warn("could not enqueue the import temp sweep", "error", err)
+			} else if temp != nil {
+				log.Info("enqueued the import temp sweep", "job_id", temp.ID)
 			}
 		}
 	}

@@ -157,7 +157,13 @@ column; CDC is a documented adapter slot, not implemented this cycle.
 - **Loop prevention**: events carry their origin; a delivery that originated from an
   external system is not re-emitted to that same subscription.
 - **Jobs**: one Postgres table, `FOR UPDATE SKIP LOCKED`, attempt counters, exponential
-  backoff, cancellation, checkpoint column for resumable imports.
+  backoff, cancellation, checkpoint column for resumable imports. An hourly maintenance
+  tick enqueues the periodic sweeps idempotently (`EnqueuePeriodic` takes an advisory lock
+  and inserts only when the kind is not already queued or running): `maintenance.retention`
+  prunes rows past their window, `agent.sweep_expired` closes approval requests nobody
+  decided, and `maintenance.import_temp` reclaims extraction directories an import
+  abandoned when its worker died. Files are not rows, so the last is not part of the
+  retention registry.
 
 ## 7. Integration hub
 
