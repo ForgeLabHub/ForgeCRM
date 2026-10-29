@@ -181,6 +181,12 @@ const (
 	// attributable after the fact without recording what was deleted.
 	ActionRetentionSweep Action = "system.retention_sweep"
 
+	// Document attachments. Uploading and archiving are recorded because a file is
+	// data leaving or entering the deployment, and an operator needs to answer "who
+	// put this here" and "when was it removed".
+	ActionDocumentUploaded Action = "documents.uploaded"
+	ActionDocumentArchived Action = "documents.archived"
+
 	// Agent lifecycle. The agent actions are the write-before-execute record ADR
 	// 0005 requires: `proposed` exists before any effect, `approved` records the
 	// signed human decision, `executed` records the effect, and `rejected` /

@@ -228,6 +228,16 @@ func APIContract() openapi.Contract {
 	c.BodyNames["POST /api/v1/custom-fields"] = "CustomFieldDefinitionInput"
 	c.Responses["POST /api/v1/custom-fields"] = reflect.TypeOf(crm.CustomFieldDefinition{})
 
+	// --- Documents ----------------------------------------------------------
+	// The upload is multipart/form-data, not JSON, so its body is described in the
+	// operation rather than derived from a DTO. The responses are the document shape.
+	c.Responses["GET /api/v1/documents"] = reflect.TypeOf(httpx.ListResponse[documentResponse]{})
+	c.Responses["GET /api/v1/documents/{id}"] = reflect.TypeOf(documentResponse{})
+	c.Responses["POST /api/v1/documents"] = reflect.TypeOf(documentResponse{})
+	c.SuccessStatus["POST /api/v1/documents"] = 201
+	c.BodyDescriptions["POST /api/v1/documents"] = "A multipart/form-data upload. The file part is named file; the optional parts are title and one of account_id, contact_id, deal_id, ticket_id, lead_id or task_id. At most one entity id may be set."
+	c.Responses["GET /api/v1/documents/{id}/url"] = reflect.TypeOf(documentURLResponse{})
+
 	// --- Reports and search -------------------------------------------------
 	c.Responses["GET /api/v1/reports/sales-summary"] = reflect.TypeOf(crm.SalesSummaryReport{})
 	c.Responses["GET /api/v1/reports/support-summary"] = reflect.TypeOf(crm.SupportSummaryReport{})

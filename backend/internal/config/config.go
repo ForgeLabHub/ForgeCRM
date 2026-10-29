@@ -91,6 +91,7 @@ type Config struct {
 	AI        AIConfig
 	OIDC      OIDCConfig
 	Retention RetentionConfig
+	Storage   StorageConfig
 
 	LogLevel     string
 	LogFormat    string
@@ -150,6 +151,47 @@ type RetentionConfig struct {
 	// {"jobs_finished": "720h"}. A key the registry does not know is refused at
 	// startup rather than ignored, so a typo cannot silently do nothing.
 	Windows map[string]time.Duration
+}
+
+// StorageConfig configures the optional S3-compatible object store used for CRM
+// file attachments.
+//
+// The subsystem is opt-in: with no endpoint configured the server starts without
+// object storage and the document routes report that it is unavailable, rather
+// than accepting an upload and failing later. Credentials are read from the
+// environment, never from the database, and are never echoed back in diagnostics.
+type StorageConfig struct {
+	// Enabled turns object storage on. When false every document route refuses with
+	// "not configured" rather than a storage error.
+	Enabled bool
+	// Endpoint is the S3-compatible base URL, for example https://s3.example.com or
+	// http://127.0.0.1:9000 for a local MinIO. It is one provider-agnostic URL, not a
+	// cloud-specific setting.
+	Endpoint string
+	// Region is required by the AWS signing algorithm. MinIO and most S3-compatible
+	// servers accept any value as long as it is consistent.
+	Region string
+	// Bucket holds the objects.
+	Bucket string
+	// AccessKeyID and SecretAccessKey are the credentials. They are read from the
+	// environment so a deployment can inject them from a secret manager, and they are
+	// never written to a log or returned by an API.
+	AccessKeyID     string
+	SecretAccessKey string
+	// UsePathStyle uses path-style addressing (host/bucket/key). MinIO and many
+	// self-hosted gateways require it; AWS prefers virtual-hosted style.
+	UsePathStyle bool
+	// AllowPrivateEndpoint permits an endpoint whose host resolves to a private or
+	// loopback address. It is off by default because an operator-supplied endpoint is
+	// an SSRF target, the same reasoning as the integration guard. A deployment that
+	// runs MinIO on its own network turns it on deliberately.
+	AllowPrivateEndpoint bool
+	// MaxObjectBytes caps the size of a single object.
+	MaxObjectBytes int64
+	// PresignTTL is how long a download link stays valid.
+	PresignTTL time.Duration
+	// Timeout bounds a single storage operation.
+	Timeout time.Duration
 }
 
 // OIDCConfig configures optional corporate SSO.
@@ -325,6 +367,39 @@ func Load() (*Config, error) {
 			return nil, err
 		}
 		c.Retention.Windows = windows
+	}
+
+	c.Storage = StorageConfig{
+		Enabled:              envBool("FORGECRM_STORAGE_ENABLED", false),
+		Endpoint:             env("FORGECRM_STORAGE_ENDPOINT", ""),
+		Region:               env("FORGECRM_STORAGE_REGION", "us-east-1"),
+		Bucket:               env("FORGECRM_STORAGE_BUCKET", ""),
+		AccessKeyID:          env("FORGECRM_STORAGE_ACCESS_KEY_ID", ""),
+		SecretAccessKey:      env("FORGECRM_STORAGE_SECRET_ACCESS_KEY", ""),
+		UsePathStyle:         envBool("FORGECRM_STORAGE_USE_PATH_STYLE", true),
+		AllowPrivateEndpoint: envBool("FORGECRM_STORAGE_ALLOW_PRIVATE_ENDPOINT", false),
+		MaxObjectBytes:       envInt64Or("FORGECRM_STORAGE_MAX_OBJECT_BYTES", 64<<20),
+	}
+	if c.Storage.PresignTTL, err = envDuration("FORGECRM_STORAGE_PRESIGN_TTL", 15*time.Minute); err != nil {
+		return nil, err
+	}
+	if c.Storage.Timeout, err = envDuration("FORGECRM_STORAGE_TIMEOUT", 30*time.Second); err != nil {
+		return nil, err
+	}
+	// An enabled subsystem with a missing setting is a configuration error, not a
+	// silently disabled one: the operator asked for storage and would otherwise find
+	// out when the first upload fails.
+	if c.Storage.Enabled {
+		switch {
+		case c.Storage.Endpoint == "":
+			return nil, fmt.Errorf("FORGECRM_STORAGE_ENDPOINT is required when FORGECRM_STORAGE_ENABLED=true")
+		case c.Storage.Bucket == "":
+			return nil, fmt.Errorf("FORGECRM_STORAGE_BUCKET is required when FORGECRM_STORAGE_ENABLED=true")
+		case c.Storage.AccessKeyID == "" || c.Storage.SecretAccessKey == "":
+			return nil, fmt.Errorf("FORGECRM_STORAGE_ACCESS_KEY_ID and FORGECRM_STORAGE_SECRET_ACCESS_KEY are required when FORGECRM_STORAGE_ENABLED=true")
+		case c.Storage.MaxObjectBytes <= 0:
+			return nil, fmt.Errorf("FORGECRM_STORAGE_MAX_OBJECT_BYTES must be positive")
+		}
 	}
 
 	c.OIDC = OIDCConfig{

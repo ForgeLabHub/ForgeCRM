@@ -10,6 +10,44 @@ once it reaches 1.0.
 
 ### Added
 
+- **S3-compatible file attachments.** Documents are stored through a single
+  provider-agnostic `ObjectStore` interface, implemented for any S3-compatible
+  server (AWS S3, MinIO, Ceph RGW, B2, Wasabi) with the S3 SDK, and for an
+  in-process memory store used by tests and by a deployment that wants to try
+  attachments before wiring a bucket. Metadata lives in the existing `documents`
+  table; the object key is `org/<org>/documents/<doc><ext>`, built server-side from
+  the organization and document ids, so a client filename never reaches the key and
+  a name containing `..` cannot escape its tenant prefix. Migration 0016 adds the
+  `ticket_id`, `lead_id` and `task_id` attachment columns.
+
+  The properties that matter, and the tests that hold them:
+
+  - **A permission is checked on every route.** Upload, read, download, presign and
+    archive each check a `documents.*` permission, and a document attached to an
+    entity additionally requires the permission to read that entity, so a file
+    cannot be used to write into or read out of a record the caller cannot see.
+    `TestStorageUploadToUnreadableEntityIsRefused` and
+    `TestStorageReadIsOrganizationScoped` cover both directions.
+  - **The object and the row are reconciled.** An upload writes the object first and
+    then the row; if the insert fails the object is deleted, so a failed upload
+    leaves nothing behind (`TestStorageInsertFailureRemovesTheObject`). The reverse
+    state — a row whose object is missing, and an object no row references — is
+    repaired by `Reconcile`, which archives the broken row rather than deleting it
+    and removes an orphan only once it is older than a grace period, so it is safe to
+    run while uploads are in flight (`TestStorageReconcileRepairsBothDirections`,
+    `TestStorageReconcileKeepsFreshOrphans`).
+  - **The endpoint is an SSRF target and is guarded as one.** A private or loopback
+    endpoint is refused unless `FORGECRM_STORAGE_ALLOW_PRIVATE_ENDPOINT=true`, and
+    credentials are read from the environment and never logged or returned.
+  - **The S3 path is tested against a real S3 server.** `internal/testsupport`
+    drives the real client — signing, path-style addressing, paginated listing,
+    presigning, 404 translation — through an in-process S3 implementation, because a
+    mock of the interface would skip all of it (`storage_s3_test.go`).
+  - **Off is a state, not an error.** A deployment with no endpoint gets a service
+    that reports itself off; `/system/capabilities` reports `storage: false` and the
+    document routes answer 503 rather than 500, so the UI hides uploads instead of
+    showing a broken screen.
+
 - **Workflow automation engine.** A workflow is a trigger plus an ordered list of
   steps, defined as JSON and stored per organization. Three trigger types are
   supported: an event committed through the outbox, a cron schedule, and a manual

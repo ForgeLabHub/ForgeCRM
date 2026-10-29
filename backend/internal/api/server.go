@@ -39,6 +39,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/ratelimit"
 	"github.com/geff1778/forgecrm/internal/rbac"
 	"github.com/geff1778/forgecrm/internal/secrets"
+	"github.com/geff1778/forgecrm/internal/storage"
 	"github.com/geff1778/forgecrm/internal/workflow"
 )
 
@@ -75,6 +76,9 @@ type Deps struct {
 	// type, so a workflow defined here runs with exactly the same authorization as
 	// one run from the scheduler.
 	Workflows *workflow.Engine
+	// Storage is the optional S3-compatible attachment store. A nil or disabled
+	// service reports itself off; the document routes answer 503 rather than 500.
+	Storage *storage.Service
 	// StartedAt is used by the system info endpoint.
 	StartedAt time.Time
 	Version   string
@@ -317,6 +321,7 @@ func (s *Server) buildRouter() chi.Router {
 			s.mountAIAssist(r)
 			s.mountAgent(r)
 			s.mountWorkflows(r)
+			s.mountDocuments(r)
 			s.mountMCP(r)
 			s.mountNotifications(r)
 		})
@@ -622,6 +627,13 @@ func (s *Server) respondDomainError(w http.ResponseWriter, r *http.Request, err 
 		httpx.WriteError(w, r, mapAuthError(err))
 	case errors.Is(err, ai.ErrDisabled), errors.Is(err, ai.ErrRateLimited):
 		httpx.WriteError(w, r, ai.HTTPErrorFrom(err))
+	case errors.Is(err, storage.ErrNotConfigured):
+		httpx.WriteError(w, r, httpx.ErrDisabled)
+	case errors.Is(err, storage.ErrObjectMissing):
+		// The row exists but the object is gone. Reported as not found rather than as a
+		// server error, because there is no object to serve and the client cannot fix
+		// it by retrying.
+		httpx.WriteError(w, r, httpx.ErrNotFound)
 	default:
 		var apiErr *httpx.APIError
 		if errors.As(err, &apiErr) {

@@ -172,6 +172,7 @@ func run() error {
 		MCP:          services.MCP,
 		Agent:        services.Agent,
 		Workflows:    services.Workflows,
+		Storage:      services.Storage,
 		StartedAt:    time.Now(),
 		Version:      version,
 		BuildCommit:  commit,

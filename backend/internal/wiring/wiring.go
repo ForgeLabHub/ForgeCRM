@@ -29,6 +29,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/outbox"
 	"github.com/geff1778/forgecrm/internal/rbac"
 	"github.com/geff1778/forgecrm/internal/secrets"
+	"github.com/geff1778/forgecrm/internal/storage"
 	"github.com/geff1778/forgecrm/internal/workflow"
 )
 
@@ -55,6 +56,10 @@ type Services struct {
 	// wired with an executor built from Tools, so an approved action runs through
 	// exactly the same permission-checked tool path as a direct call.
 	Agent *agent.Service
+	// Storage is the optional S3-compatible attachment store. It is nil-able: a
+	// deployment without storage still constructs the service, which reports itself
+	// off, so the diagnostics endpoint and the document routes can both ask.
+	Storage *storage.Service
 	// Workflows is the automation engine. It is built from the same crm.Service and
 	// rbac.Service the API uses, so a workflow action is authorized exactly like the
 	// equivalent API call.
@@ -92,7 +97,13 @@ func Build(cfg *config.Config, db *database.DB, keyring *secrets.Keyring, log *s
 		return nil, fmt.Errorf("initialise the agent service: %w", err)
 	}
 
+	storageSvc, err := buildStorage(cfg, db, auditLog, log)
+	if err != nil {
+		return nil, fmt.Errorf("initialise object storage: %w", err)
+	}
+
 	return &Services{
+		Storage:      storageSvc,
 		Audit:        auditLog,
 		Auth:         authn.NewService(db, cfg, keyring, auditLog, rbacSvc),
 		RBAC:         rbacSvc,
