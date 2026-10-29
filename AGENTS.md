@@ -121,6 +121,17 @@ schema change requires a rebuild, not just a restart.
 - **`.env` holds `FORGECRM_SECRET_KEY`** and is gitignored. Never commit it.
 - **`.env` in this workspace already has a generated key** and `FORGECRM_HTTP_PORT`
   may be overridden; check before assuming port 8080.
+- **The GitHub repository moved to `ForgeLabHub/ForgeCRM`** (the old
+  `geff1778/ForgeCRM` redirects). The `origin` remote in this checkout still points
+  at the old name and `GITHUB_TOKEN` is read-only for it, so `git push` fails with
+  `403`. Push with the personal token and the current name:
+  `git remote set-url origin "https://x-access-token:${GITHUB_PERSONAL_ACCESS_TOKEN}@github.com/ForgeLabHub/ForgeCRM.git"`.
+- **The E2E API process is a prebuilt binary at `/tmp/forgecrm-api`** started
+  against `forgecrm_e2e` on `127.0.0.1:8080` (bootstrap owner
+  `e2e-owner@forgecrm.test`). A route added since it was built returns `404`, and a
+  migration added since it started is unapplied — the Simulation Lab page then fails
+  with `relation "simulation_scenarios" does not exist`. Rebuild, apply migrations
+  (`/tmp/forgecrm-api-new --migrate`), and restart it before running Playwright.
 - **The Go toolchain is pinned in three places** and they must move together:
   `go.mod`'s `go` directive, `backend/Dockerfile` and `GO_VERSION` in CI. A
   stdlib CVE is fixed by bumping all three; bumping only one lets a fix pass in
