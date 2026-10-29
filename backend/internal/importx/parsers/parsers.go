@@ -133,8 +133,13 @@ const MaxColumnNameLength = 200
 
 // Parse reads a source file into the common row model.
 func Parse(path string, format Format, opts Options) (*Result, error) {
-	if err := checkEncoding(path); err != nil {
-		return nil, err
+	// XLSX is a zip container of XML parts, so it is binary by construction and
+	// the UTF-8 text check below would reject every workbook. The check exists to
+	// catch a mis-encoded text export; it has nothing to say about a binary format.
+	if format != FormatXLSX {
+		if err := checkEncoding(path); err != nil {
+			return nil, err
+		}
 	}
 	switch format {
 	case FormatCSV:
@@ -583,35 +588,38 @@ func parseXML(path string, opts Options) (*Result, error) {
 	res := &Result{Types: map[string]string{}}
 	columnSet := map[string]bool{}
 
+	// A record is one occurrence of the record element. Its nested elements become
+	// fields, each as a dotted path relative to the record (the same flattening the
+	// JSON parser applies), and its attributes become top-level @attr fields. The
+	// record element is named by the caller, or inferred as the root's first child,
+	// which is the shape an export of a repeated entity takes.
 	var (
-		stack       []string // element name stack
-		rowElement  string   // the element that delimits one record
-		rowDepth    int
-		current     Row
-		recordNum   int64
-		pendingText string
+		stack      []string // element-name stack
+		rowElement string   // the element that delimits one record
+		rowDepth   int      // len(stack) at which a record element sits
+		current    Row      // the record being built, nil outside a record
+		stop       bool     // the row limit was reached
 	)
 
 	commit := func() {
-		if current == nil || len(current) == 0 {
-			current = nil
+		if current == nil {
 			return
 		}
-		recordNum++
-		res.TotalRows++
-		if opts.MaxRows > 0 && int64(len(res.Rows)) >= opts.MaxRows {
-			res.Truncated = true
-			current = nil
-			return
+		if len(current) > 0 {
+			res.TotalRows++
+			for k := range current {
+				columnSet[k] = true
+			}
+			res.Rows = append(res.Rows, current)
+			if opts.MaxRows > 0 && int64(len(res.Rows)) >= opts.MaxRows {
+				res.Truncated = true
+				stop = true
+			}
 		}
-		for k := range current {
-			columnSet[k] = true
-		}
-		res.Rows = append(res.Rows, current)
 		current = nil
 	}
 
-	for {
+	for !stop {
 		tok, err := dec.Token()
 		if errors.Is(err, io.EOF) {
 			break
@@ -621,63 +629,61 @@ func parseXML(path string, opts Options) (*Result, error) {
 		}
 		switch t := tok.(type) {
 		case xml.StartElement:
-			// Attributes become fields named @attr on the record itself.
-			if current != nil && len(stack) == rowDepth {
+			stack = append(stack, t.Name.Local)
+			depth := len(stack)
+
+			if rowElement == "" {
+				// Named by the caller, or inferred as the root's first child.
+				switch {
+				case opts.XMLRowElement != "" && t.Name.Local == opts.XMLRowElement:
+					rowElement, rowDepth = t.Name.Local, depth
+				case opts.XMLRowElement == "" && depth == 2:
+					rowElement, rowDepth = t.Name.Local, depth
+				}
+			}
+			if rowElement == "" {
+				continue
+			}
+
+			switch {
+			case depth == rowDepth && t.Name.Local == rowElement:
+				// A new record begins; the previous one, if any, is done.
+				commit()
+				current = Row{}
 				for _, a := range t.Attr {
 					current["@"+a.Name.Local] = a.Value
 				}
-			}
-			stack = append(stack, t.Name.Local)
-			if rowElement == "" {
-				// The first element that has children becomes the record
-				// element, unless the caller named one explicitly.
-				rowElement = opts.XMLRowElement
-				if rowElement == "" {
-					rowElement = t.Name.Local
+			case depth > rowDepth && current != nil:
+				// An attribute of a nested element belongs to that field's path,
+				// which includes the element itself.
+				field := strings.Join(stack[rowDepth:depth], ".")
+				for _, a := range t.Attr {
+					current["@"+field+"."+a.Name.Local] = a.Value
 				}
-				rowDepth = len(stack)
-				current = Row{}
-				continue
-			}
-			if t.Name.Local == rowElement && len(stack) > rowDepth {
-				// A nested occurrence of the record element starts a new record.
-				commit()
-				rowDepth = len(stack)
-				current = Row{}
 			}
 		case xml.CharData:
-			text := strings.TrimSpace(string(t))
-			if text == "" || current == nil {
+			if current == nil || len(stack) <= rowDepth {
 				continue
 			}
-			pendingText += text
+			text := strings.TrimSpace(string(t))
+			if text == "" {
+				continue
+			}
+			key := strings.Join(stack[rowDepth:], ".")
+			if existing, ok := current[key]; ok {
+				current[key] = fmt.Sprintf("%v %s", existing, text)
+			} else {
+				current[key] = text
+			}
 		case xml.EndElement:
 			if len(stack) == 0 {
 				continue
 			}
 			name := stack[len(stack)-1]
 			stack = stack[:len(stack)-1]
-
-			if current != nil && len(stack) >= rowDepth && name != rowElement {
-				if pendingText != "" {
-					if existing, ok := current[name]; ok {
-						current[name] = fmt.Sprintf("%v %s", existing, pendingText)
-					} else {
-						current[name] = pendingText
-					}
-				}
-			}
-			pendingText = ""
-
-			if current != nil && name == rowElement && len(stack) < rowDepth {
-				commit()
-			} else if current != nil && name == rowElement && len(stack)+1 == rowDepth {
+			if current != nil && name == rowElement && len(stack) == rowDepth-1 {
 				commit()
 			}
-		}
-		if opts.MaxRows > 0 && int64(len(res.Rows)) >= opts.MaxRows {
-			res.Truncated = true
-			break
 		}
 	}
 	commit()
