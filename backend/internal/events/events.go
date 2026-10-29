@@ -413,11 +413,19 @@ func (g *Gateway) ListDeliveries(ctx context.Context, p *rbac.Principal, subID u
 
 // Replay re-arms a delivery so the sender will attempt it again.
 //
-// Three properties are deliberate:
+// The subscription a delivery belongs to is part of what identifies it: the route
+// nests a delivery under its subscription, so the caller names both. The guard is
+// scoped to the organization and the subscription in the same statement that
+// mutates the row, which is what makes an id from another tenant, or a delivery
+// that does not belong to the named subscription, indistinguishable from one that
+// does not exist.
 //
-//  1. It is org-scoped in the same statement that mutates the row, so a caller
-//     cannot re-arm another organization's delivery by guessing an id, and the
-//     affected-row count is what reports a miss.
+// Four properties are deliberate:
+//
+//  1. It is org- and subscription-scoped in the same statement that mutates the
+//     row, so a caller cannot re-arm another organization's delivery by guessing
+//     an id, nor re-arm a delivery under a subscription it does not belong to, and
+//     the affected-row count is what reports a miss.
 //  2. The lifetime attempt history is preserved. `attempts` is the per-window
 //     count the sender compares against max_attempts, so resetting it is what
 //     grants a fresh retry budget; `replay_count` is the lifetime number of
@@ -428,7 +436,12 @@ func (g *Gateway) ListDeliveries(ctx context.Context, p *rbac.Principal, subID u
 //     into the pending state, so two replays of the same delivery cannot create a
 //     second delivery or a second send. A delivery that is already pending is
 //     left as it is rather than being reset a second time.
-func (g *Gateway) Replay(ctx context.Context, p *rbac.Principal, deliveryID uuid.UUID) error {
+//  4. A delivery a worker is actively sending is in flight too. The `delivering`
+//     state means a worker holds the row, so replaying it would grant a second
+//     window while the attempt in progress is still running — the operator's
+//     fresh budget would be consumed by that attempt, and one event could produce
+//     two sends. Both in-flight states are refused, not only `pending`.
+func (g *Gateway) Replay(ctx context.Context, p *rbac.Principal, subID, deliveryID uuid.UUID) error {
 	return g.db.WithTx(ctx, func(ctx context.Context, _ database.Tx) error {
 		const q = `
 			UPDATE webhook_deliveries
@@ -440,16 +453,16 @@ func (g *Gateway) Replay(ctx context.Context, p *rbac.Principal, deliveryID uuid
 			    dead_lettered_at=NULL,
 			    locked_at=NULL,
 			    locked_by=NULL
-			WHERE id = $1 AND organization_id = $2
-			  AND status <> 'pending'
+			WHERE id = $1 AND organization_id = $2 AND subscription_id = $3
+			  AND status NOT IN ('pending', 'delivering')
 			RETURNING replay_count`
 		var replayCount int
-		err := g.db.Q(ctx).QueryRow(ctx, q, deliveryID, p.OrganizationID).Scan(&replayCount)
+		err := g.db.Q(ctx).QueryRow(ctx, q, deliveryID, p.OrganizationID, subID).Scan(&replayCount)
 		if errors.Is(err, pgx.ErrNoRows) {
-			// Either the delivery is not this organization's, or it is already
-			// pending. Both are reported the same way: the caller asked for an
-			// action that cannot be applied, and telling them which would leak
-			// whether an id exists in another organization.
+			// The delivery is not this organization's, does not belong to the named
+			// subscription, or is already in flight. All are reported the same way:
+			// the caller asked for an action that cannot be applied, and telling them
+			// which would leak whether an id exists elsewhere.
 			return httpx.ErrNotFound
 		}
 		if err != nil {
@@ -459,7 +472,7 @@ func (g *Gateway) Replay(ctx context.Context, p *rbac.Principal, deliveryID uuid
 			OrganizationID: &p.OrganizationID, ActorUserID: &p.UserID,
 			Action: string(audit.ActionWebhookReplayed), EntityType: "webhook_delivery",
 			EntityID: deliveryID.String(),
-			Metadata: map[string]any{"replay_count": replayCount},
+			Metadata: map[string]any{"replay_count": replayCount, "subscription_id": subID.String()},
 		})
 	})
 }

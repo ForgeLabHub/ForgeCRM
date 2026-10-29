@@ -93,10 +93,35 @@ reaches the dead state, not one per attempt and not one ever.
 
 ### Replay is idempotent in the safe direction
 
-Replay carries `AND status <> 'pending'`. Replaying a delivery that is already in
-flight is refused rather than reset, so two replays of one delivery cannot hand
-the sender a budget the operator did not intend, and concurrent replays behave the
-same as a single one.
+Replay refuses a delivery that is already in flight. "In flight" covers both
+`pending` (queued, not yet claimed) and `delivering` (claimed by a worker and being
+sent right now), so the guard is `status NOT IN ('pending', 'delivering')`.
+
+The `delivering` half is not optional. A worker that has claimed a delivery holds
+the row in that state while the POST is in progress; replaying it there would grant
+a second window while the first attempt is still running, so the operator's fresh
+budget would be consumed by the attempt already underway and one event could
+produce two sends. A guard of `status <> 'pending'` — the first form of this
+rule — allowed exactly that, because a claimed delivery is not `pending`. The
+mistake is instructive: the guard named one in-flight state when the model has two.
+
+Two replays of one delivery cannot hand the sender a budget the operator did not
+intend, and concurrent replays behave the same as a single one: the guard lives in
+the `UPDATE`'s `WHERE` clause, so the row lock makes the second writer observe the
+new state and affect no rows.
+
+### Replay is scoped by subscription, not only by organization
+
+The route nests a delivery under its subscription
+(`/webhooks/{id}/deliveries/{deliveryId}/replay`), and the OpenAPI document marks
+both path parameters required, so the subscription is part of the delivery's
+identity. The `UPDATE`'s `WHERE` clause therefore filters on `organization_id`
+*and* `subscription_id`, both in the statement that mutates the row. A handler
+that read only `deliveryId` and ignored `{id}` accepted a request whose path named
+a subscription the delivery did not belong to — the same request would then mean
+two different things depending on which half of the path the handler happened to
+read. Refusing it keeps the path honest, and the two predicates together make a
+mismatched id indistinguishable from one that does not exist.
 
 ## Consequences
 
@@ -111,6 +136,10 @@ same as a single one.
   that wants to display "total attempts ever" must read `replay_count` as well.
   This is documented here and in `docs/operations/README.md` so it is not
   rediscovered.
+- **Negative.** The guard now enumerates both in-flight states rather than the one
+  that was obvious. A future state added to `webhook_deliveries.status` must be
+  considered here: if it also means "a worker holds this row", it belongs in the
+  refusal list, and the `CHECK` constraint is the place to look for the full set.
 - **Neutral.** A replay is not a retry in the automatic sense and does not inherit
   the backoff schedule; it is scheduled immediately, because the operator is
   asserting the endpoint is ready.
@@ -120,4 +149,6 @@ same as a single one.
 - `backend/internal/migrations/0008_webhook_delivery_lifecycle.up.sql`
 - `backend/internal/events/delivery.go` — `retryOrFail`, `deadLetter`
 - `backend/internal/events/events.go` — `Replay`
-- `backend/internal/testsupport/webhook_deadletter_test.go` — the evidence
+- `backend/internal/testsupport/webhook_deadletter_test.go` — the state-machine evidence
+- `backend/internal/api/webhook_replay_http_test.go` — the HTTP-level evidence,
+  including the in-flight refusal and the subscription scoping

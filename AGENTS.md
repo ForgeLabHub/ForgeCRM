@@ -137,6 +137,17 @@ schema change requires a rebuild, not just a restart.
   database never kept. When a second path enforces the same invariant as a
   background sweep, both must apply the same reconciliation, or a row the sweep
   no longer matches stays stranded.
+- **A "still in flight" guard must name every in-flight state, not the obvious
+  one.** The webhook replay guard refused only `status = 'pending'`, but a delivery
+  a worker has claimed is `delivering` — so an operator could replay a delivery
+  that was being sent at that moment, granting a second window the in-progress
+  attempt would consume and allowing one event to produce two sends. The route also
+  nests a delivery under its subscription (`/webhooks/{id}/deliveries/{deliveryId}
+  /replay`), and both ids are required path parameters, so the mutating statement
+  filters on `subscription_id` as well as `organization_id`; a handler that reads
+  only one half of the path lets the same request mean two different things. When a
+  status column gains a state, check every guard that enumerates states — the
+  `CHECK` constraint lists the full set.
 - **A webhook subscription's event list must come from the server, never a local
   constant.** The form once hard-coded bare names (`contact.created`) while the
   dispatcher matched namespaced ones (`crm.contact.created`), so a subscription

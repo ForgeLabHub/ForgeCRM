@@ -27,7 +27,7 @@ import (
 
 // deadLetterFixture builds a subscription whose target the SSRF guard refuses, so
 // every attempt fails without real network traffic, plus one pending delivery.
-func deadLetterFixture(t *testing.T, maxAttempts int) (*events.DeliverySender, uuid.UUID, uuid.UUID) {
+func deadLetterFixture(t *testing.T, maxAttempts int) (*events.DeliverySender, uuid.UUID, uuid.UUID, uuid.UUID) {
 	t.Helper()
 	db := connectOrSkip(t)
 	freshSchema(t, db)
@@ -63,7 +63,7 @@ func deadLetterFixture(t *testing.T, maxAttempts int) (*events.DeliverySender, u
 	}
 
 	sender := events.NewDeliverySender(db, audit.New(db), keyring)
-	return sender, org, deliveryID
+	return sender, org, subID, deliveryID
 }
 
 // insertPrincipalUser inserts a real user and returns a principal for it.
@@ -92,7 +92,7 @@ VALUES ($1, 'x', 'Owner', 'active') RETURNING id`,
 // all, so an operator had no durable record that a customer's endpoint had
 // stopped receiving events.
 func TestDeliveryDeadLetterIsAuditedOnce(t *testing.T) {
-	sender, org, deliveryID := deadLetterFixture(t, 2)
+	sender, org, _, deliveryID := deadLetterFixture(t, 2)
 	db := connectOrSkip(t)
 	ctx := context.Background()
 
@@ -165,7 +165,7 @@ func TestDeliveryDeadLetterIsAuditedOnce(t *testing.T) {
 // delivery, is reflected in replay_count, and clears the dead-letter marker, while
 // leaving the operator's ability to see that the endpoint has failed before intact.
 func TestReplayGrantsFreshBudgetAndCountsReplays(t *testing.T) {
-	sender, org, deliveryID := deadLetterFixture(t, 1)
+	sender, org, subID, deliveryID := deadLetterFixture(t, 1)
 	db := connectOrSkip(t)
 	ctx := context.Background()
 
@@ -194,7 +194,7 @@ func TestReplayGrantsFreshBudgetAndCountsReplays(t *testing.T) {
 	// The organization owner replays it.
 	gw := events.NewGateway(db, audit.New(db))
 	principal := insertPrincipalUser(t, db, org)
-	if err := gw.Replay(ctx, principal, deliveryID); err != nil {
+	if err := gw.Replay(ctx, principal, subID, deliveryID); err != nil {
 		t.Fatalf("replay: %v", err)
 	}
 
@@ -239,7 +239,7 @@ func TestReplayGrantsFreshBudgetAndCountsReplays(t *testing.T) {
 // TestReplayIsScopedToTheOrganization proves a caller cannot re-arm another
 // organization's delivery by guessing its id.
 func TestReplayIsScopedToTheOrganization(t *testing.T) {
-	sender, _, deliveryID := deadLetterFixture(t, 1)
+	sender, _, subID, deliveryID := deadLetterFixture(t, 1)
 	db := connectOrSkip(t)
 	ctx := context.Background()
 
@@ -260,7 +260,7 @@ func TestReplayIsScopedToTheOrganization(t *testing.T) {
 	otherOrg := insertOrganization(t, db, "other-org-"+uuid.NewString()[:8])
 	gw := events.NewGateway(db, audit.New(db))
 	other := insertPrincipalUser(t, db, otherOrg)
-	if err := gw.Replay(ctx, other, deliveryID); err == nil {
+	if err := gw.Replay(ctx, other, subID, deliveryID); err == nil {
 		t.Fatal("a foreign organization replayed another organization's delivery")
 	}
 
@@ -280,14 +280,14 @@ func TestReplayIsScopedToTheOrganization(t *testing.T) {
 // hand the sender a budget the operator did not intend and make two concurrent
 // replays of one delivery behave differently from one.
 func TestReplayOfPendingDeliveryIsRefused(t *testing.T) {
-	_, org, deliveryID := deadLetterFixture(t, 5)
+	_, org, subID, deliveryID := deadLetterFixture(t, 5)
 	db := connectOrSkip(t)
 	ctx := context.Background()
 
 	// The fixture row starts pending. A first replay must be refused.
 	gw := events.NewGateway(db, audit.New(db))
 	principal := insertPrincipalUser(t, db, org)
-	if err := gw.Replay(ctx, principal, deliveryID); err == nil {
+	if err := gw.Replay(ctx, principal, subID, deliveryID); err == nil {
 		t.Fatal("a pending delivery was replayed; it must be refused rather than reset")
 	}
 

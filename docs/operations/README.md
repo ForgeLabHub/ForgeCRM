@@ -154,9 +154,15 @@ when the deliveries are replayed.
 resets the per-window attempt count, which grants a fresh retry budget, and increments
 `replay_count` — never reset — so an operator can tell a delivery that has just died from
 one that has already exhausted several budgets. The dead-letter marker is cleared and the
-replay is audited. A delivery that is not this organization's, or that is already pending,
-is reported as not found, so an id from another organization is not distinguishable from
-one that does not exist.
+replay is audited.
+
+A replay is refused when the delivery is already in flight — `pending` (queued) or
+`delivering` (a worker has claimed it and is sending it now). Refusing the `delivering`
+case matters: replaying a delivery mid-send would grant a second window that the
+in-progress attempt consumes, and one event could produce two sends. The refusal is
+reported as not found, as is a delivery that belongs to another organization or to a
+different subscription than the one named in the path, so none of those is
+distinguishable from an id that does not exist.
 
 ## Rate limiting
 

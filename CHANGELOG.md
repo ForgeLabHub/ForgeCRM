@@ -26,6 +26,20 @@ once it reaches 1.0.
   The per-window `attempts` is still reset — that is what grants the fresh retry
   budget — but a new `replay_count`, never reset, records the lifetime number of
   windows, and the frontend shows it next to the attempt count.
+- **A delivery could be replayed while it was being sent.** The replay guard refused
+  only `status = 'pending'`, but a delivery a worker has claimed is `delivering`. An
+  operator could therefore replay a delivery mid-send, granting a second retry window
+  that the attempt already in progress would consume, with the possibility of one
+  event producing two outbound POSTs. The guard now refuses both in-flight states
+  (`status NOT IN ('pending', 'delivering')`), which is what ADR 0004 already claimed
+  to do.
+- **A delivery could be replayed under a subscription it did not belong to.** The
+  replay route nests a delivery under its subscription
+  (`/webhooks/{id}/deliveries/{deliveryId}/replay`) and the OpenAPI document marks
+  both path parameters required, but the handler read only `deliveryId` and ignored
+  `{id}`. The mutating statement now filters on `subscription_id` as well as
+  `organization_id`, so the subscription named in the path is part of what identifies
+  the delivery and a mismatch is refused.
 
 ### Added
 
