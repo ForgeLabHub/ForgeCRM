@@ -225,6 +225,7 @@ test.describe('workspace pages render live data', () => {
     { path: '/integrations', title: 'Integrations' },
     { path: '/webhooks', title: 'Webhooks' },
     { path: '/events', title: 'Events' },
+    { path: '/workflows', title: 'Workflows' },
     { path: '/jobs', title: 'Background jobs' },
     { path: '/ai', title: 'AI & MCP' },
     { path: '/approvals', title: 'Agent approvals' },
@@ -258,6 +259,38 @@ test.describe('webhook subscriptions', () => {
     const dialog = page.getByRole('dialog')
     await expect(dialog.getByText('crm.contact.created', { exact: true })).toBeVisible()
     await expect(dialog.getByText('contact.created', { exact: true })).toHaveCount(0)
+  })
+})
+
+test.describe('workflow automation', () => {
+  test('a workflow can be created and run from the page', async ({ authedPage: page }) => {
+    await page.goto('/workflows')
+    await page.getByRole('button', { name: 'New workflow' }).click()
+
+    const dialog = page.getByRole('dialog')
+    const name = `E2E workflow ${Date.now()}`
+    await dialog.getByLabel('Name').fill(name)
+
+    // The definition is edited as JSON. Replace the prefilled document with a
+    // notify-free action so the run cannot depend on another record existing.
+    const definition = dialog.getByLabel('Definition (JSON)')
+    await definition.fill(
+      JSON.stringify(
+        { steps: [{ id: 't1', type: 'create_task', args: { title: 'Created by the E2E workflow' } }] },
+        null,
+        2,
+      ),
+    )
+    await dialog.getByRole('button', { name: 'Save' }).click()
+
+    // The row appears, which is the page reading the created workflow back from
+    // the API rather than from local state.
+    const row = page.getByRole('row', { name: new RegExp(name) })
+    await expect(row).toBeVisible()
+
+    // Run it, and assert the run is reported as succeeded.
+    await row.getByRole('button', { name: 'Run', exact: true }).click()
+    await expect(page.getByText(/the run succeeded/i)).toBeVisible()
   })
 })
 

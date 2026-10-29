@@ -147,6 +147,41 @@ wrote rather than the one the proxy observed.
 
 ---
 
+## Cycle 9 — Workflow automation engine
+
+| # | Item | Status |
+|---|---|---|
+| 9.1 | Definition document, validation, trigger types (event, schedule, manual) | **VERIFIED** — `internal/workflow`; the definition is JSON with a bounded step count, branch depth and delay; validation is at save time so a workflow that could not execute is rejected by the API |
+| 9.2 | Step actions through `crm.Service` (create_task, update_deal, create_ticket, notify) | **VERIFIED** — every action calls the same service the HTTP API uses, as the workflow's author |
+| 9.3 | Permission enforced at execution time, not authoring time | **VERIFIED** — the engine maps each step type to the permission it requires and resolves the author's permissions from the database on every run. This is required because the engine calls the service directly and bypasses the API middleware that normally checks the coarse permission; without it, `workflows.manage` would imply every action permission. `TestWorkflowPermissionIsRecheckedAtExecutionTime` revokes `tasks.create` and asserts the next run fails and creates nothing |
+| 9.4 | At-least-once delivery, de-duplicated on `(workflow_id, event_id)` | **VERIFIED** — the claim and the run row are one transaction; a duplicate commits nothing. `TestWorkflowEventTriggerIsDeDuplicated` delivers one event three times and asserts one run and one task |
+| 9.5 | Delay without holding a worker | **VERIFIED** — a delay writes a resume instant and the next step index; the worker scheduler resumes from there. `TestWorkflowDelayPausesAndResumes` |
+| 9.6 | Chain depth bound | **VERIFIED** — an event a step causes inherits the run's correlation id and the chain depth is the run count for it; a run at `max_depth` is recorded as `skipped`. `TestWorkflowDepthLimitStopsLoops` |
+| 9.7 | Cross-tenant notification refused | **VERIFIED** — the recipient's active membership is verified before the insert. `TestWorkflowCannotNotifyAcrossOrganizations` |
+| 9.8 | Multi-replica scheduler | **VERIFIED** — the scheduler claims a due workflow by advancing `next_run_at` in the same transaction that selects it |
+| 9.9 | REST API + admin page | **VERIFIED** — `/api/v1/workflows` and `/api/v1/workflow-runs`; the `/workflows` page lists, edits, enables, runs, archives and shows run history with the per-step log |
+| 9.10 | Documentation | **VERIFIED** — `docs/adr/0007-workflow-automation-engine.md`, `docs/architecture/workflows.md` |
+
+### Evidence
+
+| Check | Command | Result |
+|---|---|---|
+| Formatting | `gofmt -l ./internal/ ./cmd/` | clean |
+| Vet | `go vet ./...` | clean |
+| Unit tests | `go test -count=1 ./...` | 15 packages pass |
+| Integration tests | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration -run TestWorkflow ./internal/testsupport/` | 6/6 pass against real PostgreSQL |
+| Full integration suite | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration -count=1 ./internal/testsupport/` | passes |
+| Frontend | `npm run build`, `npm test` | build clean; 48 unit tests pass |
+| API, live | create → list → run → run detail → steps against a running server | `201`, `1 item`, `200 succeeded`, run detail `200`, steps `200`; the created task is present in the database |
+| API, refusals | mutation without CSRF, anonymous read, unknown step type | `403`, `401`, `422` |
+
+A defect was found by the integration test and fixed in this cycle: the event claim
+ran after the run row was created, so every duplicate delivery of the same event
+wrote a second run marked `skipped`, accumulating without bound under retry. See the
+`Fixed` entry in `CHANGELOG.md`.
+
+---
+
 # Master plan phases
 
 The cycles above describe how the platform was built. The phases below describe
