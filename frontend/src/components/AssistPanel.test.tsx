@@ -168,6 +168,24 @@ describe('AssistPanel', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/permission deals.read is required/i)
   })
 
+  it('warns when a provider is configured but not reachable, before a request is spent', async () => {
+    stubFetch({ status: { enabled: true, healthy: false }, assist: insight })
+    renderPanel()
+
+    expect(await screen.findByText(/configured but not reachable/i)).toBeInTheDocument()
+    // The controls stay available: the probe can be stale, so the user is warned,
+    // not blocked.
+    expect(screen.getByRole('button', { name: 'Run' })).toBeEnabled()
+  })
+
+  it('shows no reachability warning when the provider is healthy', async () => {
+    stubFetch({ status: { enabled: true, healthy: true }, assist: insight })
+    renderPanel()
+
+    await screen.findByRole('button', { name: 'Run' })
+    expect(screen.queryByText(/configured but not reachable/i)).not.toBeInTheDocument()
+  })
+
   it('offers a retry only when the server says the failure is retryable', async () => {
     // A provider outage is retryable: the server marks it so, and the panel gives
     // the user the one action that could help.

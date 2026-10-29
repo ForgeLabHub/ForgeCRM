@@ -99,6 +99,12 @@ export function AssistPanel({
     )
   }
 
+  // A provider that is configured but unreachable is worth saying before the user
+  // spends a request on it. The run path reports the same condition if it is hit
+  // anyway (the probe and the call can disagree), but a warning here saves the
+  // round trip and explains the outage rather than only reporting it.
+  const providerDown = status.data?.enabled === true && status.data.healthy === false
+
   const insight = run.data
 
   return (
@@ -118,6 +124,13 @@ export function AssistPanel({
       }
     >
       <div className="stack">
+        {providerDown ? (
+          <Alert tone="warning">
+            The AI provider is configured but not reachable right now, so a request may fail. You
+            can still try; the record itself is unaffected.
+          </Alert>
+        ) : null}
+
         <div className="row" style={{ gap: 'var(--space-2)', flexWrap: 'wrap' }}>
           {KINDS.map((k) => (
             <button

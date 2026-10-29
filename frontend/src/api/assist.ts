@@ -84,12 +84,30 @@ export interface AssistRequest {
   recipient_hint?: string
 }
 
+/**
+ * The AI subsystem's configuration and reachability.
+ *
+ * `enabled` says a provider is configured; `healthy` says the last probe reached
+ * it. The two are distinct because a provider can be configured and down, and the
+ * panel should say so before the user spends a request finding out.
+ */
+export interface AssistStatus {
+  enabled: boolean
+  provider?: string
+  model?: string
+  healthy?: boolean
+  /** Present when the subsystem is disabled or the probe failed. */
+  reason?: string
+  error?: string
+}
+
 export const assistApi = {
   /**
-   * Whether a provider is configured. Delegated to the AI status endpoint so the
-   * panel and the AI page cannot disagree about whether AI is available.
+   * Whether a provider is configured and reachable. Delegated to the AI status
+   * endpoint so the panel and the AI page cannot disagree about whether AI is
+   * available.
    */
-  status: () => api.get<{ enabled: boolean }>('/api/v1/ai/status'),
+  status: () => api.get<AssistStatus>('/api/v1/ai/status'),
 
   /**
    * Produces assistance for one record. The entity type is a query parameter and
