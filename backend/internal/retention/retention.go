@@ -176,6 +176,31 @@ var policies = []Policy{
 		Reason: "an expired session is no longer accepted; it is kept briefly so an " +
 			"operator can answer 'was this session active at time T'",
 	},
+	{
+		Key: "workflow_runs", Table: "workflow_runs", TimeColumn: "finished_at",
+		StatusPredicate: "status IN ('succeeded','failed','skipped')",
+		Default:         90 * 24 * time.Hour, Min: 7 * 24 * time.Hour, BatchSize: 1000,
+		Reason: "a finished run is the automation's execution history; a running or " +
+			"paused run is still in flight and is never swept, and its step records " +
+			"and event claims cascade when the run is removed",
+	},
+	{
+		Key: "agent_runs", Table: "agent_runs", TimeColumn: "finished_at",
+		StatusPredicate: "status IN ('completed','failed','cancelled')",
+		Default:         90 * 24 * time.Hour, Min: 7 * 24 * time.Hour, BatchSize: 1000,
+		Reason: "the human-in-the-loop run log records what an agent proposed and what " +
+			"a human approved; the approval decisions are also in the append-only audit " +
+			"log, so this is the run detail and not the only record of the decision",
+	},
+	{
+		Key: "events_inbox", Table: "events_inbox", TimeColumn: "received_at",
+		StatusPredicate: "status IN ('processed','ignored')",
+		Default:         30 * 24 * time.Hour, Min: 24 * time.Hour, BatchSize: 5000,
+		Reason: "a processed inbound event is a delivery receipt, kept only long enough " +
+			"to answer a duplicate-delivery question; the window must exceed the " +
+			"sender's retry horizon, and a failed event is kept because it may still " +
+			"be reprocessed",
+	},
 
 	// --- Protected: audit and security evidence -----------------------------
 	//

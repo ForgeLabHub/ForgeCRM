@@ -421,7 +421,99 @@ func TestRetentionSweepsExpiredAiInsights(t *testing.T) {
 	}
 }
 
-// --- helpers ---------------------------------------------------------------
+// TestRetentionSweepsRunHistoryAndInboundEvents covers the three policies added
+// for tables that grow without bound: workflow runs, agent runs and the inbound
+// event inbox.
+//
+// Each one is swept by terminal status only. The test inserts an old terminal row
+// and an old in-flight row of the same age, so a policy that ignored status would
+// delete both and the assertion that the in-flight row survives would fail. That
+// is the property that matters: a paused workflow run can still resume and a
+// received event has not been handled yet, so neither may be swept however old.
+func TestRetentionSweepsRunHistoryAndInboundEvents(t *testing.T) {
+	db := connectOrSkip(t)
+	freshSchema(t, db)
+
+	ctx := context.Background()
+	org := retentionOrg(t, db, "retention-run-history")
+	userID := insertUser(t, db, uuid.MustParse(org), "run-history@example.com")
+
+	// A workflow to hang the runs off. created_by is NOT NULL, so it needs a user.
+	var workflowID uuid.UUID
+	if err := db.Pool().QueryRow(ctx, `
+		INSERT INTO workflows (organization_id, name, definition, trigger_type, created_by)
+		VALUES ($1, 'retention fixture', '{}'::jsonb, 'manual', $2) RETURNING id`,
+		org, userID).Scan(&workflowID); err != nil {
+		t.Fatalf("insert workflow: %v", err)
+	}
+
+	old := time.Now().Add(-200 * 24 * time.Hour)
+	if _, err := db.Pool().Exec(ctx, `
+		INSERT INTO workflow_runs (workflow_id, organization_id, trigger_type, status, finished_at)
+		VALUES ($1, $2, 'manual', 'succeeded', $3),
+		       ($1, $2, 'manual', 'paused',    NULL)`,
+		workflowID, org, old); err != nil {
+		t.Fatalf("insert workflow runs: %v", err)
+	}
+
+	if _, err := db.Pool().Exec(ctx, `
+		INSERT INTO agent_runs (organization_id, user_id, goal, status, finished_at)
+		VALUES ($1, $2, 'old finished run', 'completed', $3),
+		       ($1, $2, 'old live run',     'running',   NULL)`,
+		org, userID, old); err != nil {
+		t.Fatalf("insert agent runs: %v", err)
+	}
+
+	if _, err := db.Pool().Exec(ctx, `
+		INSERT INTO events_inbox (organization_id, event_id, event_type, source, payload, status, received_at)
+		VALUES ($1, 'evt-old-processed', 'crm.deal.created', 'test', '{}'::jsonb, 'processed', $2),
+		       ($1, 'evt-old-received',  'crm.deal.created', 'test', '{}'::jsonb, 'received',  $2)`,
+		org, old); err != nil {
+		t.Fatalf("insert events: %v", err)
+	}
+
+	runner := retention.New(db, audit.New(db), nil, retention.Options{Enabled: true, Delete: true})
+	results, err := runner.Run(ctx)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	for _, key := range []string{"workflow_runs", "agent_runs", "events_inbox"} {
+		res := resultFor(results, key)
+		if res.Error != "" {
+			t.Fatalf("%s policy failed: %s", key, res.Error)
+		}
+		if res.Deleted != 1 {
+			t.Errorf("%s deleted %d rows, want exactly the one terminal row", key, res.Deleted)
+		}
+	}
+
+	count := func(table string) int64 {
+		t.Helper()
+		var n int64
+		if err := db.Pool().QueryRow(ctx, "SELECT count(*) FROM "+table).Scan(&n); err != nil {
+			t.Fatalf("count %s: %v", table, err)
+		}
+		return n
+	}
+	if n := count("workflow_runs"); n != 1 {
+		t.Errorf("workflow_runs holds %d rows, want the paused run preserved", n)
+	}
+	if n := count("agent_runs"); n != 1 {
+		t.Errorf("agent_runs holds %d rows, want the running run preserved", n)
+	}
+	if n := count("events_inbox"); n != 1 {
+		t.Errorf("events_inbox holds %d rows, want the received event preserved", n)
+	}
+
+	var status string
+	if err := db.Pool().QueryRow(ctx, `SELECT status FROM workflow_runs`).Scan(&status); err != nil {
+		t.Fatalf("read kept run: %v", err)
+	}
+	if status != "paused" {
+		t.Errorf("kept workflow run is %q, want paused", status)
+	}
+}
 
 func deletedFor(results []retention.Result, key string) int64 {
 	for _, r := range results {

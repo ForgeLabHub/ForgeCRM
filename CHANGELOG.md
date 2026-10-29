@@ -10,6 +10,19 @@ once it reaches 1.0.
 
 ### Added
 
+- **Retention now covers the run history that nothing pruned before.** Three tables
+  grew without bound on a busy deployment and no policy touched them: finished
+  workflow runs, finished agent runs, and processed inbound events. Each is now a
+  configurable policy (`workflow_runs`, `agent_runs`, `events_inbox`) with a
+  90/90/30-day default, and each is swept by *terminal status only* — a `paused`
+  workflow run can still resume, a `running` agent run is still in flight, and a
+  `received` or `failed` event has not been handled yet, so none of them is
+  eligible however old it is. A workflow run's step records and event claims
+  cascade when the run is removed, so there is deliberately no separate policy for
+  them; sweeping them by their own timestamp would delete the history of a run that
+  is still paused. Migration `0017_retention_sweep_indexes` adds the partial
+  indexes that let each sweep find its rows without scanning the table.
+
 - **Workflow template catalog.** `internal/workflow/templates.go` ships six ready
   CRM scenarios — an overdue-deal owner notification, a follow-up task on a stage
   change, an inactivity reminder, a new-ticket acknowledgement, a deal-won
