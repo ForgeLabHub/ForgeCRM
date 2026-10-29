@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -54,6 +55,109 @@ func toDocumentResponse(d storage.Document) documentResponse {
 	}
 }
 
+// uploadParts is the parsed multipart body. The file part is spooled to a
+// temporary file rather than buffered, so a large upload does not sit in memory
+// while the remaining parts are read.
+type uploadParts struct {
+	input    storage.UploadInput
+	spool    *os.File
+	spooled  bool
+	filename string
+}
+
+// parseUploadParts reads every part of the multipart body before the upload is
+// attempted.
+//
+// The parts are read to completion before the file is stored because their order
+// is not defined: a client may send the metadata before or after the file, and the
+// previous code returned as soon as it saw the file part, silently discarding
+// every part that followed it. The frontend sends the file first, so every
+// attachment it uploaded lost its title and its entity reference and landed
+// unattached. Reading the whole body first makes the outcome independent of order.
+//
+// The file is spooled to a temporary file so that a large body is not held in
+// memory; the caller removes it. A body with no file part is refused.
+func (s *Server) parseUploadParts(r *http.Request, maxBytes int64) (*uploadParts, error) {
+	reader, err := r.MultipartReader()
+	if err != nil {
+		return nil, httpx.ValidationError(map[string]string{
+			"file": "the request must be multipart/form-data with a file part"})
+	}
+	out := &uploadParts{}
+	defer func() {
+		if !out.spooled && out.spool != nil {
+			out.spool.Close()
+			os.Remove(out.spool.Name())
+			out.spool = nil
+		}
+	}()
+	for {
+		part, err := reader.NextPart()
+		if err != nil {
+			break
+		}
+		switch part.FormName() {
+		case "file":
+			if out.spool != nil {
+				// Only one file part is accepted; a second is refused rather than
+				// overwriting the first, which would make the stored name and the
+				// bytes disagree.
+				return nil, httpx.ValidationError(map[string]string{
+					"file": "the request must contain exactly one file part"})
+			}
+			f, err := os.CreateTemp("", "forgecrm-upload-*")
+			if err != nil {
+				return nil, fmt.Errorf("spool the upload: %w", err)
+			}
+			out.spool = f
+			out.filename = part.FileName()
+			out.input.Filename = part.FileName()
+			out.input.ContentType = part.Header.Get("Content-Type")
+			// The size is bounded again here: Content-Length can lie, and the limit
+			// must hold for the bytes actually read.
+			written, err := io.Copy(f, io.LimitReader(part, maxBytes+1))
+			if err != nil {
+				return nil, fmt.Errorf("read the uploaded file: %w", err)
+			}
+			if written > maxBytes {
+				return nil, httpx.NewError(413, httpx.CodePayloadTooLarge, fmt.Sprintf(
+					"the upload exceeds the maximum of %d bytes", maxBytes))
+			}
+			out.input.Size = written
+		case "account_id", "contact_id", "deal_id", "ticket_id", "lead_id", "task_id":
+			id, err := uuid.Parse(readPartString(part))
+			if err != nil {
+				return nil, httpx.ValidationError(map[string]string{
+					part.FormName(): "must be a UUID"})
+			}
+			setUploadEntity(&out.input, part.FormName(), id)
+		case "title":
+			out.input.Title = readPartString(part)
+		}
+	}
+	if out.spool == nil {
+		return nil, httpx.ValidationError(map[string]string{
+			"file": "no file part was found in the request"})
+	}
+	if _, err := out.spool.Seek(0, io.SeekStart); err != nil {
+		return nil, fmt.Errorf("rewind the uploaded file: %w", err)
+	}
+	out.spooled = true
+	return out, nil
+}
+
+// close removes the spooled file. It is safe to call on a nil receiver and more
+// than once.
+func (u *uploadParts) close() {
+	if u == nil || u.spool == nil {
+		return
+	}
+	name := u.spool.Name()
+	u.spool.Close()
+	os.Remove(name)
+	u.spool = nil
+}
+
 // handleUploadDocument accepts a multipart upload.
 //
 // The body is streamed: the multipart part is never buffered whole, so a large
@@ -78,45 +182,19 @@ func (s *Server) handleUploadDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
 
-	reader, err := r.MultipartReader()
+	parts, err := s.parseUploadParts(r, maxBytes)
 	if err != nil {
-		httpx.WriteError(w, r, httpx.ValidationError(map[string]string{
-			"file": "the request must be multipart/form-data with a file part"}))
+		httpx.WriteError(w, r, err)
 		return
 	}
+	defer parts.close()
 
-	in := storage.UploadInput{}
-	for {
-		part, err := reader.NextPart()
-		if err != nil {
-			break
-		}
-		switch part.FormName() {
-		case "file":
-			in.Filename = part.FileName()
-			in.ContentType = part.Header.Get("Content-Type")
-			in.Size = r.ContentLength
-			doc, err := s.deps.Storage.Upload(r.Context(), p, in, part)
-			if err != nil {
-				s.respondDomainError(w, r, err)
-				return
-			}
-			httpx.WriteJSONStatus(w, http.StatusCreated, toDocumentResponse(*doc))
-			return
-		case "account_id", "contact_id", "deal_id", "ticket_id", "lead_id", "task_id":
-			id, err := uuid.Parse(readPartString(part))
-			if err != nil {
-				httpx.WriteError(w, r, httpx.ValidationError(map[string]string{
-					part.FormName(): "must be a UUID"}))
-				return
-			}
-			setUploadEntity(&in, part.FormName(), id)
-		case "title":
-			in.Title = readPartString(part)
-		}
+	doc, err := s.deps.Storage.Upload(r.Context(), p, parts.input, parts.spool)
+	if err != nil {
+		s.respondDomainError(w, r, err)
+		return
 	}
-	httpx.WriteError(w, r, httpx.ValidationError(map[string]string{
-		"file": "no file part was found in the request"}))
+	httpx.WriteJSONStatus(w, http.StatusCreated, toDocumentResponse(*doc))
 }
 
 // setUploadEntity assigns the parsed id to the matching field. The mapping is a

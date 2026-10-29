@@ -139,6 +139,17 @@ once it reaches 1.0.
 
 ### Fixed
 
+- **An attachment uploaded through the UI was stored unattached and untitled.** The
+  multipart handler returned as soon as it reached the `file` part, so every part
+  after it was discarded. The frontend appends `file` first and then `title` and
+  the entity id, so a document uploaded from a deal or contact card was written to
+  the store with no link to that record and no title — the request succeeded, the
+  bytes were saved, and the attachment silently belonged to nothing. The handler
+  now reads the whole body before uploading, so the result no longer depends on
+  part order; the file is spooled to a temporary file so a large upload is still
+  not held in memory. `TestUploadPartsKeepsMetadataAfterTheFile` fails against the
+  old handler and passes against this one.
+
 - **The retention sweep could not remove an expired idempotency key.** The delete
   statement selected a column called `id`, but `idempotency_keys` is keyed on
   `(scope, key)` and has no `id` column, so the policy failed with
