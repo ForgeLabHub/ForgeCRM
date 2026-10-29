@@ -90,7 +90,10 @@ test.describe('accounts', () => {
     await expect(dialog).toBeHidden()
 
     await page.reload()
-    await expect(page.getByText('Manufacturing')).toBeVisible()
+    // Assert on the record header, not the bare text: with a provider
+    // configured the assistant also lists the industry among the facts it can
+    // see, so a bare text match is ambiguous.
+    await expect(page.locator('.page-header__meta')).toContainText('Manufacturing')
   })
 
   test('archives an account and it disappears from the list', async ({ authedPage: page }) => {
@@ -216,6 +219,13 @@ test.describe('contextual AI', () => {
   test('the assistant appears on a record and reports when no provider is configured', async ({
     authedPage: page,
   }) => {
+    // This case asserts the no-provider path. When a provider is configured —
+    // as it is in a developer run with a stub — that path cannot be shown, so
+    // the case is skipped rather than made to fail.
+    const status = await page.request.get('/api/v1/ai/status')
+    const { enabled } = (await status.json()) as { enabled: boolean }
+    test.skip(enabled, 'a provider is configured in this environment')
+
     const name = `E2E AI ${RUN_ID}`
     await createAccount(page, name)
 
@@ -229,6 +239,43 @@ test.describe('contextual AI', () => {
     const assistant = page.getByRole('heading', { name: 'Assistant' })
     await expect(assistant).toBeVisible()
     await expect(page.getByText(/No AI provider is configured/i)).toBeVisible()
+  })
+
+  test('the assistant scores its answer against the record, with a reason', async ({
+    authedPage: page,
+  }) => {
+    // The assistant needs a configured provider. CI has none, and a test that
+    // silently passes when the feature is absent would not be a test of it, so
+    // the case is skipped rather than made to pass. The status is read through
+    // the signed-in page's own request context, because the endpoint needs a
+    // session and the bare `request` fixture has none.
+    const status = await page.request.get('/api/v1/ai/status')
+    const { enabled } = (await status.json()) as { enabled: boolean }
+    test.skip(!enabled, 'no AI provider is configured in this environment')
+
+    const name = `E2E AI grounding ${RUN_ID}`
+    await createAccount(page, name)
+
+    await page.goto('/accounts')
+    await page.getByText(name).click()
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(name)
+
+    // Run the assistant from the record's own panel. The panel is the card
+    // whose heading is "Assistant"; the card is a plain section, so the heading
+    // is the anchor.
+    const panel = page
+      .getByRole('heading', { name: 'Assistant' })
+      .locator('xpath=ancestor::section[1]')
+    await panel.getByRole('button', { name: 'Run' }).click()
+
+    // The grounding note must appear, with the level and at least one stated
+    // reason — the point is that the user is not handed a bare number.
+    await expect(panel.getByText(/grounded/i)).toBeVisible({ timeout: 15_000 })
+    await expect(panel.getByText(/judged by the server/i)).toBeVisible()
+
+    // And the answer must still separate CRM facts from model output.
+    await expect(panel.getByText(/from the CRM/i)).toBeVisible()
+    await expect(panel.getByText('model output').first()).toBeVisible()
   })
 })
 
