@@ -408,8 +408,8 @@ func (r *Runner) count(ctx context.Context, p Policy, cutoff time.Time) (int64, 
 // large backlog safe: it commits between batches, so it holds no long lock and
 // produces a bounded amount of WAL.
 func (r *Runner) delete(ctx context.Context, p Policy, cutoff time.Time) (int64, int, error) {
-	q := fmt.Sprintf(`DELETE FROM %s WHERE id IN (
-        SELECT id FROM %s WHERE %s < $1%s LIMIT $2)`,
+	q := fmt.Sprintf(`DELETE FROM %s WHERE ctid IN (
+        SELECT ctid FROM %s WHERE %s < $1%s LIMIT $2)`,
 		p.Table, p.Table, p.TimeColumn, statusClause(p.StatusPredicate))
 
 	var (

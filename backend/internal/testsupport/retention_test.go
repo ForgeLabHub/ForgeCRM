@@ -460,3 +460,53 @@ func countSecurityEvents(t *testing.T, db *database.DB) int64 {
 	}
 	return n
 }
+
+// TestRetentionSweepsAKeylessTable is the regression guard for a table whose
+// primary key is not a single column.
+//
+// idempotency_keys is keyed on (scope, key) and has no id column at all. The
+// delete statement selected "id", so this policy failed with "column id does not
+// exist" on every real run — silently, because the failure is per-policy and the
+// handler only logs it. The window is well past the 24h minimum, so the policy is
+// eligible, and a key inserted long ago must actually be removed while a fresh one
+// is kept.
+func TestRetentionSweepsAKeylessTable(t *testing.T) {
+	db := connectOrSkip(t)
+	freshSchema(t, db)
+
+	ctx := context.Background()
+	if _, err := db.Pool().Exec(ctx, `
+INSERT INTO idempotency_keys (scope, key, created_at)
+VALUES ('test', 'old-key', now() - interval '30 days'),
+       ('test', 'fresh-key', now())`); err != nil {
+		t.Fatalf("insert idempotency keys: %v", err)
+	}
+
+	runner := retention.New(db, audit.New(db), nil, retention.Options{Enabled: true, Delete: true})
+	results, err := runner.Run(ctx)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	res := resultFor(results, "idempotency_keys")
+	if res.Error != "" {
+		t.Fatalf("idempotency_keys policy failed: %s", res.Error)
+	}
+	if res.Deleted != 1 {
+		t.Fatalf("deleted %d idempotency keys, want 1", res.Deleted)
+	}
+
+	var remaining int64
+	if err := db.Pool().QueryRow(ctx, `SELECT count(*) FROM idempotency_keys`).Scan(&remaining); err != nil {
+		t.Fatalf("count keys: %v", err)
+	}
+	if remaining != 1 {
+		t.Fatalf("idempotency_keys holds %d rows, want the fresh key preserved", remaining)
+	}
+	var kept string
+	if err := db.Pool().QueryRow(ctx, `SELECT key FROM idempotency_keys`).Scan(&kept); err != nil {
+		t.Fatalf("read kept key: %v", err)
+	}
+	if kept != "fresh-key" {
+		t.Fatalf("kept key is %q, want fresh-key", kept)
+	}
+}

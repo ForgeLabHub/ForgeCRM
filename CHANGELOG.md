@@ -139,6 +139,17 @@ once it reaches 1.0.
 
 ### Fixed
 
+- **The retention sweep could not remove an expired idempotency key.** The delete
+  statement selected a column called `id`, but `idempotency_keys` is keyed on
+  `(scope, key)` and has no `id` column, so the policy failed with
+  `column "id" does not exist` on every real run. The failure was invisible: it is
+  recorded in that policy's result and the worker only logs it, so the table grew
+  without bound while the sweep reported success for the policies beside it. The
+  delete now selects `ctid`, which is what the statement's own comment said it did
+  and which exists on every swept table regardless of its key.
+  `TestRetentionSweepsAKeylessTable` fails against the old statement and passes
+  against this one.
+
 - **The worker aborted an in-flight job on shutdown instead of draining it.** Each
   job's context derived from the signal context, so SIGTERM cancelled the job in
   hand at the same instant it stopped the poll loops: a job that was mid-write was
