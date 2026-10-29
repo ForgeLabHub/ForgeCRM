@@ -124,20 +124,27 @@ jobs:
           FORGECRM_BOOTSTRAP_PASSWORD='ci-bootstrap-password' \
             /tmp/api -bootstrap-admin -bootstrap-email ci@example.com
 
+      # Клиент pg_dump обязан совпадать по мажорной версии с сервером, иначе
+      # pg_dump отказывается работать ("server version mismatch"). Поэтому
+      # резервное копирование выполняется образом той же версии, что и сервис,
+      # а не бинарником раннера.
       - name: Back up
         run: |
           mkdir -p backups
-          PGPASSWORD=forgecrm pg_dump -h 127.0.0.1 -U forgecrm -Fc forgecrm_source \
-            > backups/forgecrm.dump
+          docker run --rm --network host -e PGPASSWORD=forgecrm postgres:17-alpine \
+            pg_dump -h 127.0.0.1 -U forgecrm -Fc forgecrm_source > backups/forgecrm.dump
           test -s backups/forgecrm.dump
           sha256sum backups/forgecrm.dump > backups/forgecrm.dump.sha256
           sha256sum -c backups/forgecrm.dump.sha256
 
       - name: Restore into a fresh database
         run: |
-          PGPASSWORD=forgecrm createdb -h 127.0.0.1 -U forgecrm forgecrm_restored
-          PGPASSWORD=forgecrm pg_restore -h 127.0.0.1 -U forgecrm \
-            --no-owner --no-privileges -d forgecrm_restored backups/forgecrm.dump
+          docker run --rm --network host -e PGPASSWORD=forgecrm postgres:17-alpine \
+            createdb -h 127.0.0.1 -U forgecrm forgecrm_restored
+          docker run --rm --network host -e PGPASSWORD=forgecrm \
+            -v "$PWD/backups:/backups:ro" postgres:17-alpine \
+            pg_restore -h 127.0.0.1 -U forgecrm --no-owner --no-privileges \
+            -d forgecrm_restored /backups/forgecrm.dump
 
       - name: Smoke test the restored instance
         env:
@@ -151,10 +158,10 @@ jobs:
           done
           ./scripts/smoke-test.sh http://127.0.0.1:8080
           echo "e-mail администратора восстановлен из дампа:"
-          PGPASSWORD=forgecrm psql -h 127.0.0.1 -U forgecrm -d forgecrm_restored -tAc \
-            "select email from users where email = 'ci@example.com'"
-          PGPASSWORD=forgecrm psql -h 127.0.0.1 -U forgecrm -d forgecrm_restored -tAc \
-            "select email from users where email = 'ci@example.com'" | grep -q 'ci@example.com'
+          docker run --rm --network host -e PGPASSWORD=forgecrm postgres:17-alpine \
+            psql -h 127.0.0.1 -U forgecrm -d forgecrm_restored -tAc \
+            "select email from users where email = 'ci@example.com'" | tee /tmp/email
+          grep -q 'ci@example.com' /tmp/email
 
   compose-smoke:
     name: Full stack (Compose) smoke test
