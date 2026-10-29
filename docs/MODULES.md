@@ -1,0 +1,608 @@
+# Module inventory
+
+This is the code-verified catalogue of every logical module in ForgeCRM, backend
+and frontend. It was produced at commit `7a6d67f` by reading the sources, the
+import graph (`go list`), the migrations and the tests — not by trusting the
+existing documents. Where a document and the code disagreed, the code won and the
+disagreement is recorded in the relevant row.
+
+The unit of inventory is the **Go package** (and, for the frontend, the layer).
+A directory with a `go.mod`-level boundary is not automatically a module: a
+package is listed here because it owns behaviour, not because it has a folder.
+
+Two things this document deliberately does not do:
+
+- It does not invent interfaces. Every type and function named below exists in
+  the package named beside it.
+- It does not claim `READY` extraction. See `EXTRACT_READY.md`; nothing is
+  extract-ready until it has been pulled into a clean project and built there.
+
+## How to read a row
+
+| Field | Meaning |
+| --- | --- |
+| **Location** | Real paths. Everything under `backend/internal/<pkg>` unless stated. |
+| **Public API** | Exported types and functions actually present in the package. |
+| **Internal deps** | Other `internal/…` packages it imports (non-test). |
+| **External deps** | Third-party and stdlib-relevant dependencies. |
+| **Fake / test double** | An in-process substitute that ships in the non-test code, or a documented injection point. A `_test.go` helper is listed as "test-only". |
+| **Tests** | Real test files. Unit = no database; integration = `//go:build integration`. |
+| **Extract** | `no` / `almost` / `yes`, consistent with `EXTRACT_READY.md`. |
+| **Cut lines** | What moves with the module and what stays behind. |
+
+---
+
+## Backend — entrypoints (`backend/cmd`)
+
+### cmd/forgecrm-api
+- **Responsibility:** HTTP server process. Builds config, connects the pool, wires
+  services through `internal/wiring`, mounts the router, runs migrations when
+  `-migrate`/`FORGECRM_MIGRATE_ON_START`, bootstraps the platform owner.
+- **Public API:** `main` only.
+- **Internal deps:** `api, audit, authn, config, database, httpx, logging, migrate,
+  rbac, secrets, wiring`.
+- **External deps:** `github.com/google/uuid`.
+- **Fake:** none.
+- **Tests:** none (covered indirectly by `testsupport` integration tests, which
+  build the same `api.New`).
+- **Extract:** `no` — a composition root, not a component.
+- **Cut lines:** stays with the monolith; every extraction produces a *new*
+  entrypoint rather than moving this one.
+
+### cmd/forgecrm-worker
+- **Responsibility:** background process. Drives webhook delivery, workflow runs,
+  retention, the job queue, imports, outbox dispatch and notifications.
+- **Public API:** `main` only.
+- **Internal deps:** `agent, ai, audit, config, crm, database, events, importx,
+  integrations, jobs, logging, notify, outbox, rbac, retention, secrets, workflow`.
+- **External deps:** `github.com/google/uuid`.
+- **Fake:** none.
+- **Tests:** none directly; the components it drives are tested in `testsupport`.
+- **Extract:** `no` — composition root.
+- **Cut lines:** stays; a builder recipe that needs background work generates its
+  own worker entrypoint.
+
+### cmd/openapi-gen
+- **Responsibility:** regenerate `docs/api/openapi.json` from the live router;
+  `-check` fails when the committed spec disagrees with the code.
+- **Public API:** `main` only.
+- **Internal deps:** `api, config, httpx, openapi, ratelimit`.
+- **External deps:** none beyond stdlib.
+- **Fake:** none.
+- **Tests:** covered by `internal/openapi` and `internal/api` contract tests.
+- **Extract:** `no`.
+- **Cut lines:** stays; extraction does not regenerate a spec it does not own.
+
+---
+
+## Backend — domain core
+
+### internal/crm  — the core domain
+- **Responsibility:** entities and rules for contacts, accounts, leads, deals,
+  tasks, tickets, activities, comments, tags, custom fields, pipelines, search,
+  notifications and the read-only reporting/intelligence queries. Tenant-scoped;
+  checks record ownership; writes audit.
+- **Public API (types):** `Service`, `Account`, `Contact`, `Lead`, `Deal`, `Task`,
+  `Ticket`, `Activity`, `Comment`, `Tag`, `CustomFieldDefinition`, `Notification`,
+  `Pipeline`, `PipelineStage`, `SearchResult`, and the `*Input` DTOs
+  (`AccountInput`, `ContactInput`, `DealInput`, `TaskInput`, `TicketInput`,
+  `LeadInput`), plus observation/report types (`SalesSummaryReport`,
+  `PipelineReport`, `SupportSummaryReport`, `RevenueHistory`, `RiskObservationSet`,
+  `BaselineData`, `StageBaseline`, `PeriodConversion`).
+- **Public API (funcs):** `NewService`, `MaxBulkArchiveIDs`; `ErrNotFound`,
+  `ErrConflict`.
+- **Internal deps:** `audit, database, httpx, outbox, rbac`.
+- **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`.
+- **Fake:** none in-process. Tests drive a real PostgreSQL.
+- **Tests:** no `_test.go` in-package; exercised heavily by
+  `internal/testsupport` integration tests and `internal/api` handler tests.
+- **Extract:** `almost` — see `EXTRACT_READY.md`. Nothing imports `crm` back, so
+  the boundary is one-directional, but it imports `httpx` and `outbox`, which are
+  platform concerns that would have to travel or be inverted. The blocker is real
+  but bounded, which is what `almost` means.
+- **Cut lines:** the package moves whole. `database` (pool + `WithTx`) and
+  `rbac` (Principal + permission catalog) travel as declared dependencies;
+  `httpx` and `outbox` are the real friction.
+
+### internal/analytics  — pure computation
+- **Responsibility:** pure, deterministic arithmetic over money, ratios,
+  percentages, funnel/revenue/retention modelling, forecasting methods and risk
+  detection. **No database, no clock, no I/O.**
+- **Public API:** `Money`, `Ratio`, `Unit`, `Comparison`, `Evidence`,
+  `RiskSignal`, `RiskSeverity`, `RiskSignalType`, `RiskThresholds`,
+  `Forecast`, `ForecastMethod`, `ForecastPoint`, `ForecastParams`,
+  `ForecastQuality`, `FunnelParams`, `RetentionParams`, `RevenueParams`,
+  `StageSnapshot`, `Baseline`, `PeriodPoint`, `DealObservation`,
+  `TaskObservation`, `AccountObservation`, `ConversionPeriodObservation`;
+  funcs `NewMoney`, `ParseMoney`, `NewRatioFrom*`, `FloatPercent`,
+  `PercentString`, `RunForecast`, `RunFunnel`, `RunRetention`, `RunRevenue`,
+  `DetectStalledDeals`, `DetectOverdueTasks`, `DetectAccountsWithoutContact`,
+  `DetectAmountSpikes`, `DetectConversionDrops`, `DetectStageConcentration`,
+  `SortSignals`, `SortPeriods`, `DefaultRiskThresholds`, and version consts.
+- **Internal deps:** none.
+- **External deps:** stdlib only (`math/big`, `math`, `sort`, …).
+- **Fake:** not applicable — it is already pure and deterministic.
+- **Tests:** `analytics_test.go` etc. (4 files), no database.
+- **Extract:** `yes` — **zero internal dependencies**, and it was actually
+  extracted, built, tested and run in a clean module. See `EXTRACT_READY.md`
+  (Candidate 1) and `EXTRACTION_TESTING.md`.
+- **Cut lines:** the whole package moves with nothing else. A consumer must
+  supply observations and read back results.
+
+---
+
+## Backend — application services
+
+### internal/importx
+- **Responsibility:** Import Center: format detection, parsing (CSV/XLSX/JSON/
+  NDJSON/archives), mapping, validation, dry-run and execution against the CRM.
+- **Public API:** `Service`, `Job`, `JobPayload`, `CreateRequest`, `Options`,
+  `MappingEntry`, `AnalysisResult`, `ValidationReport`, `ValidationIssue`,
+  `Report`, `RowError`, `FieldList`, `NewService`.
+- **Internal deps:** `audit, config, crm, database, httpx, importx/parsers,
+  importx/safe, jobs, outbox, rbac`. **10 internal deps** — see the 8+ note in
+  `DEPENDENCY_MAP.md`.
+- **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`;
+  sub-package `parsers` adds `github.com/xuri/excelize/v2`, `safe` adds
+  `github.com/ulikunitz/xz`.
+- **Fake:** `safe` operates on local temp dirs (no external service). No in-process
+  fake of the CRM write path.
+- **Tests:** `importx` unit tests (2 files, incl. detection and temp cleanup);
+  integration via `testsupport`.
+- **Extract:** `no` — 10 internal dependencies and a direct write path into `crm`.
+- **Cut lines:** `parsers/` and `safe/` are separable sub-packages; the service
+  itself is not.
+
+### internal/migratex  — external data migration
+- **Responsibility:** move data from an external source (PostgreSQL, SQLite,
+  REST) into ForgeCRM, with reconciliation records.
+- **Public API:** `Service`, `Source`, `SourceKind`, `TableSchema`, `ColumnInfo`,
+  `ConnectionConfig`, `CreateRequest`, `MigrationJob`, `Reconciliation`,
+  `JSONMap`, `NewService`, `NewPostgresSource`, `NewSQLiteSource`,
+  `NewRESTSource`, `Implemented`.
+- **Internal deps:** `audit, database, httpx, integrations, rbac, secrets`.
+- **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`,
+  `modernc.org/sqlite`.
+- **Fake:** `Source` is an interface (a documented seam); a REST source adapter is
+  included.
+- **Tests:** integration via `testsupport`.
+- **Extract:** `no`.
+- **Cut lines:** the `Source` interface is the boundary; sources are pluggable.
+
+### internal/ai  — provider abstraction, contextual assist, MCP, agent tools
+- **Responsibility:** model-provider abstraction (Ollama, OpenAI-compatible),
+  permission-checked + PII-masked context assembly, insight generation with a
+  server-computed grounding score, the MCP JSON-RPC transport, the tool registry
+  and the AI-backed agent executor.
+- **Public API:** `Provider` (interface), `Service`, `OllamaProvider`,
+  `OpenAICompatibleProvider`, `CompletionRequest`, `CompletionResponse`,
+  `AssistRequest`, `Insight`, `Fact`, `Disclosure`, `Draft`, `Confidence`,
+  `ContextBlock`, `EntityType`, `Kind`, `Trust`, `MCPServer`, `ToolRegistry`,
+  `Tool`, `ToolDescriptor`, `AgentExecutor`, `PromptInput`, `Message`,
+  `RPCError`, `Request`, `Response`; funcs `NewService`, `NewMCPServer`,
+  `NewToolRegistry`, `NewAgentExecutor`, `AssembleSystemPrompt`,
+  `DeniedToolNames`, `HTTPErrorFrom`, `RiskTier`; errors `ErrDisabled`,
+  `ErrRateLimited`, `ErrProviderUnavailable`, `ErrUnknownEntity`,
+  `ErrInsightNotCached`.
+- **Internal deps:** `agent, audit, config, crm, database, httpx, logging,
+  ratelimit, rbac`. **9 internal deps.**
+- **External deps:** `github.com/google/uuid`, stdlib `net/http`.
+- **Fake:** `Provider` is an interface with **two real implementations** but **no
+  in-process fake**; tests use `httptest` servers or an unreachable address.
+- **Tests:** 7 unit files (prompt assembly, confidence/grounding, masking, MCP
+  protocol, provider error classification) + integration (`ai_assist_test.go`,
+  `ai_assist_cache_test.go`, `ai_provider_outage_test.go`).
+- **Extract:** `no` — depends on `crm`, `rbac`, `audit`, `database`.
+- **Cut lines:** the `Provider` interface and prompt/confidence logic are the
+  portable part; the service binds to `crm`.
+
+### internal/agent  — human-in-the-loop execution
+- **Responsibility:** the approval state machine (ADR 0005). A proposed
+  destructive action is recorded, approved/denied, then executed through the same
+  permission-checked tool path.
+- **Public API:** `Service`, `Executor` (interface), `ExecutionFunc`, `Config`,
+  `Action`, `Run`, `Proposal`, `Approval`, `Decision`, `Decider`, `RiskTier`;
+  funcs `NewService`, `ArgumentsHash`, `CanonicalArguments`.
+- **Internal deps:** `audit, database, httpx`.
+- **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`.
+- **Fake:** `Executor` is the injection seam.
+- **Tests:** `agent_test.go` (unit) + `testsupport/agent_approvals_test.go`.
+- **Extract:** `almost` — 3 internal deps, an interface seam, and a bounded
+  responsibility.
+- **Cut lines:** moves with `audit`/`database`; the `Executor` is supplied by the
+  host application.
+
+### internal/workflow  — automation engine
+- **Responsibility:** declarative workflows: triggers (event/schedule/manual),
+  steps (condition, branch, foreach, delay, actions), expression evaluation,
+  run/step history, template catalog, JSON import/export.
+- **Public API:** `Engine`, `Store`, `Config`, `Workflow`, `Definition`,
+  `Step`, `Condition`, `Template`, `TemplateRef`, `CreateInput`, `Run`,
+  `RunResult`, `StepRun`, `EvalContext`, `ExportDocument`; funcs `NewEngine`,
+  `NewStore`, `NewEvalContext`, `ParseDefinition`, `ExportWorkflow`,
+  `ImportWorkflow`, `ValidateCatalog`, `ParseCron`, `RegisterKnownEvents`,
+  `Templates`, `TemplateByID`, `InputFromTemplate`; const
+  `DefinitionSchemaVersion`; trigger kinds `TriggerEvent`, `TriggerEventID`,
+  `TriggerManual`, `TriggerSchedule`.
+- **Internal deps:** `audit, crm, database, httpx, logging, outbox, rbac`.
+- **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`.
+- **Fake:** none in-process.
+- **Tests:** `workflow` unit tests (2 files: cron, definition) +
+  `testsupport/workflow_engine_test.go`, `workflow_templates_test.go`.
+- **Extract:** `no` — the engine calls `crm.Service` directly.
+- **Cut lines:** the definition/parse/template layer is separable from the
+  execution engine.
+
+### internal/simulate  — Simulation Lab
+- **Responsibility:** "what if" scenarios against a CRM baseline. **Read-only:**
+  preview and run never write CRM data, never enqueue jobs, never send webhooks.
+- **Public API:** `Service`, `Scenario`, `Run`, `CatalogEntry`, `ParamSpec`,
+  `CreateScenarioInput`, `RunInput`, `PreviewInput`, `PreviewResult`, `Catalog`,
+  `NewService`.
+- **Internal deps:** `analytics, audit, crm, database, rbac`.
+- **External deps:** `github.com/google/uuid`.
+- **Fake:** none; reads through `crm.Service`.
+- **Tests:** `testsupport/simulation_test.go` (integration) + frontend page tests.
+- **Extract:** `no` — reads `crm`.
+- **Cut lines:** `analytics` is the portable core; `simulate` is the persistence +
+  service wrapper.
+
+### internal/forecast
+- **Responsibility:** revenue forecasting from org history; freezes params,
+  history and algorithm version into a run row.
+- **Public API:** `Service`, `Run`, `RunInput`, `CatalogEntry`, `Catalog`,
+  `NewService`.
+- **Internal deps:** `analytics, audit, crm, database, rbac`.
+- **External deps:** `github.com/google/uuid`.
+- **Tests:** `testsupport/intelligence_test.go`.
+- **Extract:** `no`.
+- **Cut lines:** as `simulate`.
+
+### internal/risk
+- **Responsibility:** scan the CRM for explainable risk conditions; keep a live
+  signal per (org, type) with cited evidence; manage thresholds.
+- **Public API:** `Service`, `Signal`, `ListFilter`, `ScanResult`, `Thresholds`,
+  `NewService`.
+- **Internal deps:** `analytics, audit, crm, database, rbac`.
+- **External deps:** `github.com/google/uuid`.
+- **Tests:** `testsupport/intelligence_test.go`.
+- **Extract:** `no`.
+- **Cut lines:** as `simulate`.
+
+### internal/integrations  — adapter lifecycle + SSRF guard
+- **Responsibility:** external integration adapters (REST, webhook-out, SMTP
+  probe, database descriptor) and the outbound SSRF guard.
+- **Public API:** `Hub`, `Adapter` (interface), `GuardedClient`, `Integration`,
+  `Run`, `Schema`, `Table`, `Column`, `Record`, `ReadRequest`, `WriteResult`,
+  `Status`, `CreateRequest`; funcs `NewHub`, `NewGuardedClient`,
+  `ValidateOutboundURL`, `IsBlockedIP`; `ErrWriteNotSupported`.
+- **Internal deps:** `audit, database, httpx, rbac, secrets`.
+- **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`.
+- **Fake:** `Adapter` is the seam; `webhookOutAdapter`/`restAdapter` are real
+  implementations.
+- **Tests:** `integrations` unit tests (SSRF, URL validation) + integration.
+- **Extract:** `almost` — the SSRF guard + `Adapter` contract are portable.
+- **Cut lines:** the guard and the `Adapter` interface move; the persistence does
+  not.
+
+### internal/events  — inbound events + webhook delivery
+- **Responsibility:** accept inbound events, verify signatures/timestamps, and
+  deliver outbound webhooks with retry budget, dead-letter and replay.
+- **Public API:** `Gateway`, `Dispatcher`, `DeliverySender`, `Poster` (interface),
+  `Subscription`, `Delivery`, `InboundEvent`, `CreateSubscriptionRequest`;
+  funcs `NewGateway`, `NewDispatcher`, `NewDeliverySender`,
+  `NewDeliverySenderWithPoster`, `NewPlainPoster`, `SignInboundForTest`,
+  `CorrelationIDFrom`; consts `MaxInboundPayloadBytes`, `TimestampTolerance`.
+- **Internal deps:** `audit, database, httpx, integrations, logging, outbox,
+  rbac, secrets`. **8 internal deps.**
+- **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`.
+- **Fake:** `Poster` is the documented transport seam; `NewPlainPoster` is a
+  test-only unguarded poster.
+- **Tests:** `testsupport/webhook_sink_test.go`, `webhook_deadletter_test.go`.
+- **Extract:** `no` — 8 internal deps.
+- **Cut lines:** the `Poster` interface is the boundary.
+
+### internal/notify  — email + Telegram
+- **Responsibility:** SMTP email and Telegram delivery; link codes; command
+  handling.
+- **Public API:** `EmailService`, `TelegramService`, `Message`, `LinkRequest`,
+  `Update`; funcs `NewEmailService`, `NewTelegramService`; vars `ErrDisabled`,
+  `ErrTelegramDisabled`, `AllowedCommands`; const `LinkCodeTTL`.
+- **Internal deps:** `audit, config, database, httpx, rbac, secrets`.
+- **External deps:** `github.com/google/uuid`, stdlib `net/smtp`.
+- **Fake:** `Enabled()` tolerates nil; when disabled it is a no-op. **No realistic
+  fake transport.**
+- **Tests:** none in-package (no `_test.go`). This is a gap.
+- **Extract:** `no`.
+- **Cut lines:** would need a `Mailer` interface to be extractable.
+
+### internal/authn  — authentication
+- **Responsibility:** passwords (Argon2), sessions, TOTP MFA, recovery codes,
+  login attempts and lockout, OIDC config surface.
+- **Public API:** `Service`, `LoginRequest`, `LoginResult`, `Session`, `User`;
+  funcs `NewService`, `ValidatePassword`, `CorrelationContext`; consts
+  `MFATicketTTL`, `MinPasswordLength`, `ResetTokenTTL`, `StepUpWindow`.
+- **Internal deps:** `audit, config, database, logging, rbac, secrets`.
+- **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`,
+  `github.com/pquerna/otp`, `.../totp`.
+- **Fake:** none.
+- **Tests:** `authn_test.go` (password policy) + `testsupport/concurrency_test.go`.
+- **Extract:** `no` — binds to 6 platform packages (`rbac`, `secrets`, `database`,
+  `config`, `audit`, `logging`); extraction is not sensible until those move first.
+- **Cut lines:** moves with `rbac`, `secrets`, `database`.
+
+---
+
+## Backend — platform / infrastructure
+
+### internal/rbac  — permission catalog
+- **Responsibility:** the permission catalog and `Principal` with `Has`/`HasAll`/
+  `HasAny`/`Require`. Must stay in sync with migration 0004.
+- **Public API:** `Permission`, `Principal`, `Role`, `Service`; funcs
+  `NewService`, `NewPrincipal`, `All`, `Known`; `ErrForbidden`.
+- **Internal deps:** `database`.
+- **External deps:** `github.com/google/uuid`.
+- **Fake:** `NewPrincipal` builds a principal from an explicit permission set —
+  usable as a fake principal in tests.
+- **Tests:** `rbac_test.go` + `testsupport` (seed/catalog match).
+- **Extract:** `almost` — 1 internal dep (`database`).
+- **Cut lines:** moves with `database`.
+
+### internal/audit
+- **Responsibility:** append-only action trail (`audit_log`, DB-trigger enforced)
+  and the security-event stream (`security_events`).
+- **Public API:** `Logger`, `Entry`, `Action`, `SecurityEvent`; funcs `New`,
+  `StrPtr`, `UUIDPtr`.
+- **Internal deps:** `database, logging`.
+- **External deps:** `github.com/google/uuid`.
+- **Fake:** none (writes to the DB). Uses the ambient transaction.
+- **Tests:** none in-package. Integration via `testsupport`.
+- **Extract:** `almost` — 2 internal deps, small surface.
+- **Cut lines:** moves with `database` and `logging`.
+
+### internal/database
+- **Responsibility:** connection pool, `WithTx`, `TxFromContext`, error
+  classification (`IsNoRows`, `IsUniqueViolation`, …), `Querier`.
+- **Public API:** `DB`, `Tx`, `Querier` (interface), `Connect`, `ConnectWithPool`,
+  `WithTx`, `TxFromContext`, `Is*` helpers, `DefaultMaxConns`, `MaxAllowedConns`.
+- **Internal deps:** none.
+- **External deps:** `github.com/jackc/pgx/v5`, `.../pgconn`, `.../pgxpool`.
+- **Fake:** `Querier` is an interface (seam). No in-memory DB.
+- **Tests:** `database_test.go`.
+- **Extract:** `no` — it is the shared substrate; everything sits on it.
+- **Cut lines:** it is the common infrastructure component.
+
+### internal/httpx  — HTTP primitives
+- **Responsibility:** RFC 9457 problem responses, list/pagination/sort, request
+  ID + access-log + recovery + security-header middleware, trusted-proxy client
+  IP resolution, the rate-limit middleware.
+- **Public API:** `APIError`, `ErrorCode`, `ListResponse`, `Pagination`,
+  `SortSpec`, `RateLimitOptions`, `SubjectFunc`, `TrustedProxies`; funcs
+  `WriteError`, `WriteJSON`, `WriteJSONList`, `WriteJSONStatus`, `DecodeJSON`,
+  `ParsePagination`, `ParseSort`, `NewError`, `NewListResponse`, `PathParam`,
+  `RequestID`, `ClientIP`, `ClientIPFrom`, `TrustedProxiesFrom`, and the
+  middleware constructors.
+- **Internal deps:** `logging, ratelimit`.
+- **External deps:** `github.com/go-chi/chi/v5`, `github.com/google/uuid`.
+- **Fake:** `SubjectFunc` injects the rate-limit subject.
+- **Tests:** 4 unit files.
+- **Extract:** `almost` — small and cohesive, but it *is* the shared HTTP
+  substrate, so extraction is rarely desirable.
+- **Cut lines:** moves with `logging` and `ratelimit`.
+
+### internal/ratelimit  — pluggable limiter
+- **Responsibility:** fixed-window limiting with a `Store` abstraction.
+  `MemoryStore` (single process, swept, bounded) and `RedisStore` (atomic Lua,
+  multi-replica), plus fail-open/fail-closed policy.
+- **Public API:** `Store` (interface), `Limiter`, `Policy`, `Decision`, `FailMode`,
+  `MemoryStore`, `RedisStore`, `RedisOptions`; funcs `New`, `NewMemoryStore`,
+  `NewRedisStore`; `ErrUnavailable`.
+- **Internal deps:** none.
+- **External deps:** `github.com/redis/go-redis/v9`.
+- **Fake:** `MemoryStore` is a real, usable in-process implementation — the
+  strongest existing "fake" in the codebase. No explicit `NoopStore`.
+- **Tests:** `ratelimit_test.go` (memory, policies) + `redis_integration_test.go`.
+- **Extract:** `yes` — **zero internal deps**; Redis is optional. The memory path
+  was extracted, built and unit-tested in a clean module (the Redis path compiled
+  but was not exercised there). See `EXTRACT_READY.md` (Candidate 2).
+- **Cut lines:** the whole package moves; Redis is a build-time dependency of the
+  file that constructs `RedisStore` only.
+
+### internal/retention  — data lifecycle
+- **Responsibility:** per-table retention windows, dry-run, batched delete,
+  protected tables, status predicates, expiry-driven policies.
+- **Public API:** `Runner`, `Policy`, `Options`, `Result`; funcs `New`,
+  `Policies`, `ValidateWindows`; `ErrDisabled`.
+- **Internal deps:** `audit, database`.
+- **External deps:** none beyond stdlib.
+- **Fake:** `DryRun` is the default posture; `Runner` is nil-safe.
+- **Tests:** `retention_test.go` + `testsupport/retention_test.go`.
+- **Extract:** `almost` — 2 internal deps, self-contained logic.
+- **Cut lines:** moves with `audit`/`database`.
+
+### internal/storage  — S3-compatible object store
+- **Responsibility:** attachments: upload/download, metadata, entity binding,
+  tenant/rights checks, size/type limits, safe object keys, orphan reconciliation.
+- **Public API:** `Service`, `ObjectStore` (interface), `Memory`, `S3`, `Config`,
+  `S3Config`, `Document`, `ObjectInfo`, `ObjectMeta`, `UploadInput`,
+  `ReconcileReport`; funcs `New`, `NewMemory`, `NewS3`; `ErrNotConfigured`,
+  `ErrObjectMissing`.
+- **Internal deps:** `audit, database, httpx, integrations, rbac`.
+- **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`,
+  `github.com/minio/minio-go/v7`, `.../pkg/credentials`.
+- **Fake:** `Memory` (`NewMemory`) is a **real in-process `ObjectStore`** — a
+  genuine fake for the S3 adapter.
+- **Tests:** `storage_test.go` (key/extension/entity rules) +
+  `testsupport/storage_s3_test.go`, `storage_test.go` (gofakes3-backed).
+- **Extract:** `almost` — `ObjectStore` + `Memory` + `S3` are portable; the
+  `Service` binds to `crm`-adjacent `rbac`/`audit`.
+- **Cut lines:** the `ObjectStore` interface, `Memory`, `S3` move cleanly; the
+  `Service` needs `rbac`/`audit`.
+
+### internal/jobs
+- **Responsibility:** the background job queue: enqueue, claim (`SKIP LOCKED`),
+  retry, dead-letter.
+- **Public API:** `Queue`, `Job`, `EnqueueRequest`, `NewQueue`, `ErrNotRetryable`.
+- **Internal deps:** `database`.
+- **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`.
+- **Fake:** none.
+- **Tests:** none in-package.
+- **Extract:** `almost` — 1 internal dep.
+- **Cut lines:** moves with `database`.
+
+### internal/outbox  — transactional outbox
+- **Responsibility:** write events in the same transaction as the change; the
+  worker drains them.
+- **Public API:** `Store`, `Envelope`, `Event`, `NewStore`, `EventTypes`.
+- **Internal deps:** `database, logging`.
+- **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`.
+- **Fake:** none.
+- **Tests:** `outbox_test.go` (event vocabulary).
+- **Extract:** `almost` — 2 internal deps.
+- **Cut lines:** moves with `database`/`logging`.
+
+### internal/secrets
+- **Responsibility:** Argon2 password hashing, token hashing, HMAC signing,
+  integration-secret encryption (keyring).
+- **Public API:** `Keyring`, `Argon2Params`; funcs `HashPassword`,
+  `HashPasswordWithParams`, `VerifyPassword`, `HashToken`, `SignPayload`,
+  `VerifySignature`, `RandomToken`, `RandomNumericCode`, `ConstantTimeEqual`,
+  `DefaultArgon2Params`, `NewKeyring`, `IsSensitiveKey`; `ErrInvalidHash`,
+  `ErrPasswordMismatch`.
+- **Internal deps:** none.
+- **External deps:** `golang.org/x/crypto/argon2`.
+- **Fake:** not applicable (pure crypto).
+- **Tests:** none in-package; exercised via `authn`.
+- **Extract:** `almost` — **zero internal deps**.
+- **Cut lines:** the whole package moves.
+
+### internal/config
+- **Responsibility:** environment parsing and validation for every subsystem.
+- **Public API:** `Config`, `AIConfig`, `EmailConfig`, `OIDCConfig`,
+  `RetentionConfig`, `StorageConfig`, `TelegramConfig`, `Load`.
+- **Internal deps:** `database, httpx, retention`.
+- **External deps:** none beyond stdlib.
+- **Fake:** not applicable.
+- **Tests:** `config_test.go`.
+- **Extract:** `no` — it names every subsystem's config, so it moves only with the
+  whole app.
+- **Cut lines:** a recipe generates its own trimmed config.
+
+### internal/logging
+- **Responsibility:** structured `slog` setup and redaction of sensitive keys;
+  request-scoped actor/org/correlation.
+- **Public API:** `New`, `Redact`, `IsSensitiveKey`, `WithActor`,
+  `WithCorrelationID`, `WithOrganization`, `Actor`, `CorrelationID`,
+  `Organization`.
+- **Internal deps:** none.
+- **External deps:** stdlib `log/slog`.
+- **Fake:** not applicable.
+- **Tests:** none in-package.
+- **Extract:** `almost` — **zero internal deps**.
+- **Cut lines:** moves alone.
+
+### internal/migrate / internal/migrations
+- **Responsibility:** embedded SQL migrations and the migrate runner (`Up`/`Down`)
+  over `golang-migrate`; `migrations.FS` is the embedded FS.
+- **Public API:** `migrate.Up`, `migrate.Down`, `migrations.FS`.
+- **Internal deps:** `migrate -> migrations`.
+- **External deps:** `github.com/golang-migrate/migrate/v4` (+ postgres, iofs).
+- **Fake:** not applicable.
+- **Tests:** none in-package; applied in CI and integration.
+- **Extract:** `no` — schema is application-wide.
+- **Cut lines:** stays with the monolith.
+
+### internal/openapi  — spec generation
+- **Responsibility:** build `docs/api/openapi.json` from the live router and the
+  `api.APIContract` table.
+- **Public API:** `Build`, `Report`, `Routes`, `Route`, `Contract`, `Info`,
+  `Server`, `Group`, `QueryParam`, `PathParamSchema`, `Permissions`, `PrefixAPI`,
+  `TagFor`, `DefaultDescription`, `Anonymous`, `SessionOnly`.
+- **Internal deps:** none (it is imported *by* `api` and `openapi-gen`).
+- **External deps:** `github.com/go-chi/chi/v5`, `github.com/google/uuid`.
+- **Fake:** not applicable.
+- **Tests:** `openapi_test.go` (drift, access declarations).
+- **Extract:** `no` — it describes this application's routes.
+- **Cut lines:** a recipe gets its own generator or none.
+
+### internal/wiring  — composition root
+- **Responsibility:** the single place the dependency graph is assembled; returns
+  a `Services` struct.
+- **Public API:** `Build`, `Services`.
+- **Internal deps:** 22 packages.
+- **Tests:** none; exercised by every integration test.
+- **Extract:** `no` — it is the opposite of a module.
+- **Cut lines:** a recipe replaces it.
+
+### internal/archtest  — dependency rules
+- **Responsibility:** test-only enforcement of the layering rules (no package
+  imports `api`; production does not import `testsupport`; core does not import
+  composition/HTTP; every internal package is reachable from a command).
+- **Public API:** test functions only.
+- **Internal deps:** none.
+- **Tests:** 5 tests, all reading the real graph via `go list`.
+- **Extract:** `almost` (as a reusable governance tool).
+- **Cut lines:** portable as a template; the module path is hard-coded.
+
+### internal/testsupport  — test harness
+- **Responsibility:** integration-test scaffolding: opens a scratch database,
+  drops/rebuilds `public`, applies migrations.
+- **Public API:** test helpers only.
+- **Internal deps:** many (it composes the app).
+- **Tests:** 15 integration files (`//go:build integration`).
+- **Extract:** `no` — never ships in a binary.
+
+---
+
+## Frontend (`frontend/src`)
+
+| Module | Responsibility | Key files | Depends on | Tests | Extract |
+| --- | --- | --- | --- | --- | --- |
+| **API clients** | one module per backend area over a shared `client.ts` | `api/client.ts`, `api/{auth,crm,imports,integrations,workflows,simulation,intelligence,ai,assist,documents,notifications,agent,admin}.ts` | backend OpenAPI shapes; `types/api.ts` | `api/client.test.ts` | `almost` (the client core is generic) |
+| **Types** | hand-written response/request types | `types/api.ts` | — | typechecked | `almost` |
+| **Auth hook** | session, permission gate | `hooks/useAuth.tsx`, `components/RequirePermission.tsx` | `api/auth.ts` | `RequirePermission.test.tsx` | `no` |
+| **Search hook** | debounced global search | `hooks/useGlobalSearch.ts` | `api/*` | `GlobalSearch.test.tsx` | `almost` |
+| **UI kit** | shared primitives (Card, Alert, Table, …) | `components/ui.tsx` | — | `ui.test.ts` | `almost` |
+| **Shell/nav** | app frame and routing chrome | `components/AppShell.tsx`, `pages/ErrorPages.tsx` | auth | via E2E | `no` |
+| **ResourceList / BulkArchive** | generic list + bulk actions | `components/ResourceList.tsx`, `BulkArchiveButton.tsx` | `api/crm.ts` | `.test.tsx` (2) | `almost` |
+| **CRM pages** | accounts/contacts/leads/deals/tasks/tickets | `pages/{Accounts,Account,Contacts,Leads,Deals,Tasks,Tickets}Page.tsx` | `api/crm.ts` | E2E | `no` |
+| **AssistPanel** | contextual AI surface | `components/AssistPanel.tsx`, `api/assist.ts` | `api/assist.ts` | `AssistPanel.test.tsx` | `almost` |
+| **Workflow editor** | step editor + validation | `components/WorkflowEditor.tsx`, `pages/WorkflowsPage.tsx`, `api/workflows.ts` | `api/workflows.ts` | `WorkflowEditor.test.tsx` | `almost` |
+| **Simulation page** | Simulation Lab UI | `pages/SimulationPage.tsx`, `api/simulation.ts` | `api/simulation.ts` | `SimulationPage.test.tsx` | `almost` |
+| **Intelligence pages** | forecast + risk UI | `pages/{Forecast,Risk}Page.tsx`, `api/intelligence.ts` | `api/intelligence.ts` | `.test.tsx` (2) | `almost` |
+| **AI/MCP page** | provider status, tool catalogue | `pages/AiPage.tsx`, `api/ai.ts` | `api/ai.ts` | E2E | `almost` |
+| **Import pages** | Import Center UI | `pages/{ImportCenter,ImportDetail}Page.tsx`, `api/imports.ts` | `api/imports.ts` | E2E | `no` |
+| **Integrations/Webhooks/Events/Jobs pages** | admin surfaces | `pages/{Integrations,Webhooks,Events,Jobs,Migrations}Page.tsx` + matching api clients | their api clients | E2E | `no` |
+| **Admin pages** | audit, users, roles, orgs, teams, security, diagnostics, email, telegram | `pages/admin/*.tsx`, `api/admin.ts` | `api/admin.ts` | `SecurityPage.test.tsx` | `no` |
+| **Attachments** | document upload/download | `components/AttachmentPanel.tsx`, `api/documents.ts` | `api/documents.ts` | `AttachmentPanel.test.tsx` | `almost` |
+
+**Frontend totals:** 76 `.ts`/`.tsx` files; 13 unit test files (97 tests); E2E in
+`frontend/e2e/platform.spec.ts` (43 passing, 1 conditionally skipped).
+
+---
+
+## Summary
+
+- **Backend packages inventoried:** 33 (`internal/*`), plus 3 commands.
+- **Frontend layers inventoried:** 16.
+- **Cycles:** none (verified by `go list` + DFS; see `DEPENDENCY_MAP.md`).
+- **Packages with ≥8 internal deps:** `api` (26), `wiring` (22), `importx` (10),
+  `ai` (9), `events` (8); `cmd/forgecrm-worker` (17) and `cmd/forgecrm-api` (11)
+  are composition roots, not modules.
+- **Real in-process fakes that exist today:** `storage.Memory` (`NewMemory`),
+  `ratelimit.MemoryStore`. Documented injection seams without a shipped fake:
+  `ai.Provider`, `events.Poster`, `integrations.Adapter`, `migratex.Source`,
+  `agent.Executor`, `database.Querier`, `storage.ObjectStore`, `ratelimit.Store`.
+- **Extract status:** two modules are `yes` — `analytics` and `ratelimit` — because
+  they were actually extracted, built, tested and run in a clean module (evidence
+  in `EXTRACT_READY.md`). Everything else is `almost` or `no`; the statuses here
+  match `EXTRACT_READY.md` exactly.
+- **Gaps found:** the packages with **no `_test.go` at all** are `audit`, `crm`,
+  `events`, `forecast`, `jobs`, `logging`, `migrate`, `migratex`, `migrations`,
+  `notify`, `risk`, `secrets`, `simulate`, `wiring`. Of these, `crm`, `events`,
+  `forecast`, `risk` and `simulate` have integration coverage through
+  `internal/testsupport`; `audit`, `jobs`, `logging`, `notify`, `secrets` and
+  `wiring` are covered only indirectly. `ai` has two real `Provider`
+  implementations but no in-process fake; there is no `NoopStore` in `ratelimit`
+  and no `AllowAll` authorizer anywhere (authorization is enforced inline in `api`
+  middleware plus `crm` ownership checks).

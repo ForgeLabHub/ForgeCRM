@@ -26,6 +26,10 @@
 | Модель угроз, права, tenant isolation | `security/` |
 | Чем доказано, что это работает | `verification/matrix.md`, CI |
 | Что запланировано и что принято | `ROADMAP.md`, `ACCEPTANCE_CRITERIA.md`, `MASTER_PLAN.md` |
+| Какие модули извлекаемы и на каком основании | [MODULES.md](MODULES.md), [EXTRACT_READY.md](EXTRACT_READY.md), [EXTRACTION_TESTING.md](EXTRACTION_TESTING.md) |
+| Граф зависимостей и его проблемы | [DEPENDENCY_MAP.md](DEPENDENCY_MAP.md) |
+| Что значит «модуль готов» | [ORG_DOD.md](ORG_DOD.md) |
+| Как настроить demo / dev / hackathon / production | [CONFIG_PROFILES.md](CONFIG_PROFILES.md) |
 
 ## Правила
 

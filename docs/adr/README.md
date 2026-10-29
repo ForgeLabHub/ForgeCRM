@@ -13,6 +13,10 @@
 | [0006](0006-prompt-architecture-and-local-inference.md) | Архитектура промптов и локальный вывод | что подаётся модели и почему |
 | [0007](0007-workflow-automation-engine.md) | Движок автоматизации | почему декларативные шаги, а не код |
 | [0008](0008-mysql-mariadb-datastore-blockers.md) | Отказ от MySQL/MariaDB | границы поддерживаемых СУБД |
+| [0009](0009-security-resilience-modules.md) | Безопасность как набор блоков | границы извлечения security/resilience |
+| [0010](0010-authorization-policy-engine.md) | Authorization Policy Engine (план) | контракт авторизации, BOLA/IDOR |
+| [0011](0011-rate-limiter.md) | Pluggable rate limiter (план) | Memory/Redis/Noop, fail modes |
+| [0012](0012-audit-verifier.md) | Audit writer + hash-chain verifier (план) | tamper-evidence аудита |
 
 ## Шаблон нового ADR
 
