@@ -10,6 +10,40 @@ once it reaches 1.0.
 
 ### Added
 
+- **Workflow template catalog.** `internal/workflow/templates.go` ships six ready
+  CRM scenarios — an overdue-deal owner notification, a follow-up task on a stage
+  change, an inactivity reminder, a new-ticket acknowledgement, a deal-won
+  onboarding task, and a ticket priority triage — each built from
+  a trigger and steps the engine already runs. The catalog is registered against
+  `outbox.EventTypes()` at startup, so a template whose trigger is not in the
+  platform's vocabulary fails construction rather than shipping enabled and silent.
+  `POST /api/v1/workflow-templates/{id}/create` builds and validates the
+  definition server-side, so a client never supplies it.
+
+- **Workflow import and export.** A workflow is a portable document with a format
+  name and a version. Import checks both before applying anything, so a document
+  from another version is refused with a reason rather than partially applied.
+
+- **A structured workflow editor.** `WorkflowEditor` reads and writes the same
+  `{steps: [...]}` JSON the engine parses; the raw-JSON view is that document
+  serialised, so there is no second definition format and an edit made in either
+  view is what is saved. Step types and condition operators come from lists that
+  mirror the engine, so the form cannot offer a step that does not exist. Structural
+  rules the parser enforces are checked before save and shown per error; the server
+  remains the authority.
+
+- **`find_deals` and `foreach` workflow steps**, with bound date filters
+  (`expected_close_before`, `updated_before`, `no_activity_since`) on `ListDeals`.
+  Every new step type carries an entry in the engine's permission map, so a
+  workflow cannot use a step to exceed its author's rights.
+
+- **Attachments in the CRM.** `AttachmentPanel` lists, uploads and archives the
+  files bound to an account, contact, deal or ticket, and renders only when the
+  server reports storage on. `GET /api/v1/system/capabilities` now reports `storage`
+  and `max_upload_bytes`, so a deployment with no object store shows nothing rather
+  than an upload that would answer 503. The task screen gains the contextual-AI
+  panel the other entity screens already had.
+
 - **S3-compatible file attachments.** Documents are stored through a single
   provider-agnostic `ObjectStore` interface, implemented for any S3-compatible
   server (AWS S3, MinIO, Ceph RGW, B2, Wasabi) with the S3 SDK, and for an
@@ -104,6 +138,12 @@ once it reaches 1.0.
   that pauses on a delay returns `202` with the run id.
 
 ### Fixed
+
+- **`expected_close_date` failed to scan.** The column is a PostgreSQL `date` and
+  was read into a `*string`, which pgx cannot encode in binary format, so any deal
+  that had a close date failed to load from `ListDeals`, `GetDeal` and the workflow
+  deal sweep. The column is cast to text, which is the ISO date the API already
+  promised.
 
 - **A redelivered event left an orphan run per delivery.** The event claim ran after
   the run row was created, so every duplicate delivery of the same event wrote a

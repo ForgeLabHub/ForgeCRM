@@ -41,7 +41,7 @@ and compiles but is not yet covered by passing tests.
 | 2.8 | MySQL/MariaDB adapter | **IN_PROGRESS** — interface + config validation only |
 | 2.9 | MSSQL / Oracle adapters | **NOT_STARTED** |
 | 2.10 | CDC adapter | **NOT_STARTED** |
-| 2.11 | S3-compatible artefact storage | **NOT_STARTED** — local private dir used instead |
+| 2.11 | S3-compatible artefact storage | **VERIFIED** — `internal/storage`; a provider-agnostic `ObjectStore` with an S3 implementation (AWS, MinIO, Ceph, B2, Wasabi) and a memory store for tests. Metadata in the `documents` table (migration `0016`), server-built object keys, per-route permission checks, an SSRF guard on the endpoint, and an object/row reconciler. The `AttachmentPanel` in the CRM exposes upload, download and archive; `GET /api/v1/system/capabilities` reports `storage` and `max_upload_bytes`. Covered by `internal/testsupport/storage_test.go`, `storage_s3_test.go` and `internal/storage/storage_test.go` |
 
 ## Cycle 3 — Communications
 
@@ -59,7 +59,7 @@ and compiles but is not yet covered by passing tests.
 | 4.1 | Diagnostics API + admin pages (logs, audit, jobs, events, metrics) | **VERIFIED** |
 | 4.2 | Metrics endpoint (protected context) | **VERIFIED** |
 | 4.3 | Backup / restore scripts + verification | **VERIFIED** |
-| 4.4 | Retention & rotation policy enforcement | **IN_PROGRESS** |
+| 4.4 | Retention & rotation policy enforcement | **VERIFIED** — `internal/retention`; an opt-in registry of per-table windows, dry-run by default, batched deletes, append-only audit protection, per-policy counts and one audit entry per real run. Covered by 11 integration tests in `internal/testsupport/retention_test.go` |
 
 ## Cycle 5 — AI & MCP
 
@@ -71,7 +71,7 @@ and compiles but is not yet covered by passing tests.
 | 5.3a | MCP **protocol** transport (JSON-RPC 2.0, `initialize`, `tools/list`, `tools/call`) | **VERIFIED** — `POST /api/v1/mcp` speaks JSON-RPC 2.0: `initialize` with protocol-version negotiation, `ping`, `tools/list` in the protocol shape (`inputSchema`), `tools/call`, notifications answered with an empty 202, and the JSON-RPC error codes for parse, invalid-request, method-not-found and invalid-params. `GET /api/v1/mcp/tools` and `POST /api/v1/mcp/call` remain as the admin UI's own shape. Verified by `internal/ai/mcp_protocol_test.go` (transport) and `internal/api/mcp_integration_test.go` (session, permission, confirmation and tenant scope over the real HTTP stack). See `docs/mcp/` |
 | 5.4 | Prompt-injection hardening + unauthorized-access tests | **VERIFIED** |
 | 5.4a | Human-in-the-loop agent execution: durable approval requests, risk tiers, payload-hash binding, second-factor step-up for `destructive` actions, approve/reject UI | **VERIFIED** — `internal/agent` (approval lifecycle), migrations `0009`–`0011`, `POST /api/v1/agent/actions/{id}/decide`, `POST /api/v1/auth/step-up`, and the `/approvals` screen. A lapsed step-up window is refused with `403`; a decision whose arguments hash does not match the stored one is refused. Covered by `internal/api/agent_http_test.go` (integration) and `internal/agent/agent_test.go` (unit). See `docs/adr/0005-hitl-agent-execution-model.md` |
-| 5.5 | Contextual AI in entity cards, calibrated confidence, graceful failure, human handoff | **NOT_STARTED** — Phase 3 |
+| 5.5 | Contextual AI in entity cards, calibrated confidence, graceful failure, human handoff | **VERIFIED** — `internal/ai/assist.go` assembles a permission-checked context per entity (account, contact, deal, ticket, task), masks personal data, and returns CRM facts, model inference and recommendations in separate fields so a suggestion is never presented as a recorded fact. The `AssistPanel` is on the account, contact, deal, ticket and task screens. Integration tests in `internal/testsupport/ai_assist_test.go` cover cross-organization refusal and masking |
 
 > Correction: an earlier revision of this file marked "MCP tool server" as
 > `VERIFIED`. The tool *logic* was verified — 8 tools that reuse `crm.Service` and
@@ -179,6 +179,36 @@ A defect was found by the integration test and fixed in this cycle: the event cl
 ran after the run row was created, so every duplicate delivery of the same event
 wrote a second run marked `skipped`, accumulating without bound under retry. See the
 `Fixed` entry in `CHANGELOG.md`.
+
+---
+
+## Cycle 10 — Workflow templates and a structured definition editor
+
+| # | Item | Status |
+|---|---|---|
+| 10.1 | Template catalog of ready CRM scenarios | **VERIFIED** — `internal/workflow/templates.go` registers six scenarios (overdue-deal owner notification, follow-up task on stage change, inactivity reminder, new-ticket acknowledgement, deal-won onboarding task, ticket priority triage). Each names a trigger and steps the engine already runs; construction fails if a template's event is not in `outbox.EventTypes()`, so a template cannot be created, enabled and then never fire |
+| 10.2 | Create a workflow from a template | **VERIFIED** — `POST /api/v1/workflow-templates/{id}/create`; the definition is built and validated server-side, so the client never supplies it. Covered by `TestEveryCatalogTemplateCanBeCreatedAndRun` and `TestTemplateCreateFromAPI` |
+| 10.3 | Import and export a workflow as a portable document | **VERIFIED** — `internal/workflow/export.go`; the export document carries a format name and version and import checks both first, so a document from another version is refused with a reason rather than partially applied. `TestExportImportRoundTripsThroughTheStore` |
+| 10.4 | Definition validation, exposed to the editor | **VERIFIED** — the parser's structural rules (non-empty steps, unique ids, a condition with an operator, no delay inside a foreach) are checked before save and surfaced per error; the server remains the authority and its message is shown verbatim |
+| 10.5 | New step actions the templates need | **VERIFIED** — `find_deals` and `foreach` steps added to `internal/workflow/engine.go`, with bound date filters (`expected_close_before`, `updated_before`, `no_activity_since`) on `ListDeals`. Every new step type has an entry in the permission map, so a workflow cannot use it to exceed the author's rights. `TestWorkflowFindDealsAndForeachCreatesOneTaskPerDeal` |
+| 10.6 | Structured editor and template picker UI | **VERIFIED** — `frontend/src/components/WorkflowEditor.tsx` reads and writes the same JSON document the engine parses (the raw view is the same document serialised), so there is no second format. The `WorkflowsPage` gains the template picker, import/export dialogs and the runs history. `WorkflowEditor.test.tsx` (11 tests) |
+
+### Evidence
+
+| Check | Command | Result |
+|---|---|---|
+| Formatting | `gofmt -l ./cmd ./internal` | clean |
+| Vet | `go vet ./...` | clean |
+| Unit tests | `go test -count=1 ./...` | all packages pass |
+| Integration tests | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration -count=1 ./...` | passes against real PostgreSQL |
+| OpenAPI currency | `go run ./cmd/openapi-gen -check` | spec current |
+| Frontend | `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` | typecheck clean, lint 0 errors, 69 tests pass, build succeeds |
+
+A latent defect was found and fixed in this cycle: `expected_close_date` is a
+PostgreSQL `date` and was scanned into a `*string`, which pgx cannot encode in
+binary format. Any deal that had a close date failed to load from `ListDeals`,
+`GetDeal` and the workflow sweep. The column is now cast to text, which is the ISO
+date the API already promised.
 
 ---
 

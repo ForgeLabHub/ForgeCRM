@@ -19,7 +19,7 @@ Verified (see [docs/PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md) for evidence):
 
 | Area | State |
 | --- | --- |
-| Go API, migrations, PostgreSQL schema | Working, 11 migrations applied |
+| Go API, migrations, PostgreSQL schema | Working, 16 migrations applied |
 | Authentication, sessions, CSRF, TOTP | Working |
 | RBAC: 83 permissions, 28 role records | Working, enforcement verified |
 | Audit log and security events | Working |
@@ -28,9 +28,11 @@ Verified (see [docs/PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md) for evidence):
 | Background jobs and transactional outbox | Working |
 | Web interface: sign-in, CRM, Import Center, administration | Working, verified in a browser |
 | Docker Compose deployment | Verified end to end |
-| AI & MCP | Provider abstraction (Ollama, OpenAI-compatible), MCP JSON-RPC transport, AI & MCP admin page |
+| AI & MCP | Provider abstraction (Ollama, OpenAI-compatible), MCP JSON-RPC transport, contextual AI on account, contact, deal, ticket and task records, AI & MCP admin page |
 | Agent approvals (human-in-the-loop) | Working, second-factor step-up for destructive actions |
-| Workflow automation (event, schedule, manual triggers) | Working, verified against PostgreSQL |
+| Workflow automation (event, schedule, manual triggers) | Working, verified against PostgreSQL; template catalog, import/export and a structured editor |
+| File attachments (S3-compatible) | Working; provider-agnostic object store, metadata in PostgreSQL, per-route permissions |
+| Retention & rotation | Working; opt-in per-table windows, dry-run, batched, audit-protected |
 
 The web interface covers sign-in with second factor, the CRM workspace, the Import
 Center including the mapping wizard, integrations, events and webhooks, background

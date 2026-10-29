@@ -271,8 +271,10 @@ test.describe('workflow automation', () => {
     const name = `E2E workflow ${Date.now()}`
     await dialog.locator('#workflow-name').fill(name)
 
-    // The definition is edited as JSON. Replace the prefilled document with a
-    // notify-free action so the run cannot depend on another record existing.
+    // The editor opens in the structured view. Switch to the JSON view, which is
+    // the same document serialised, and replace it with a notify-free action so
+    // the run cannot depend on another record existing.
+    await dialog.getByRole('button', { name: 'Edit as JSON' }).click()
     const definition = dialog.locator('#workflow-definition')
     await definition.fill(
       JSON.stringify(
@@ -291,6 +293,44 @@ test.describe('workflow automation', () => {
     // Run it, and assert the run is reported as succeeded.
     await row.getByRole('button', { name: 'Run', exact: true }).click()
     await expect(page.getByText(/the run succeeded/i)).toBeVisible()
+  })
+})
+
+test.describe('workflow templates', () => {
+  test('a workflow can be created from a catalog template', async ({ authedPage: page }) => {
+    await page.goto('/workflows')
+    await page.getByRole('button', { name: 'From a template' }).click()
+
+    const picker = page.getByRole('dialog')
+    // The catalog is served by the API, so a template is present only if the
+    // server registered it. Its trigger names an event the engine actually emits.
+    const template = picker.getByRole('button', { name: /Notify the owner about an overdue deal/ })
+    await expect(template).toBeVisible()
+    await template.click()
+    await picker.getByRole('button', { name: 'Create' }).click()
+
+    // Creating from a template returns a real workflow, which the page reads back.
+    await expect(page.getByText(/Created .* from a template/i)).toBeVisible()
+  })
+
+  test('a workflow can be exported and its document re-imported', async ({ authedPage: page }) => {
+    await page.goto('/workflows')
+
+    // Create one to export.
+    await page.getByRole('button', { name: 'New workflow' }).click()
+    const dialog = page.getByRole('dialog')
+    const name = `E2E export ${Date.now()}`
+    await dialog.locator('#workflow-name').fill(name)
+    await dialog.getByRole('button', { name: 'Save' }).click()
+
+    const row = page.getByRole('row', { name: new RegExp(name) })
+    await expect(row).toBeVisible()
+
+    // Export downloads the server's canonical document.
+    const download = page.waitForEvent('download')
+    await row.getByRole('button', { name: 'Export' }).click()
+    const file = await download
+    expect(file.suggestedFilename()).toContain('.json')
   })
 })
 

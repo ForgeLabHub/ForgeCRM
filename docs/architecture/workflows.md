@@ -26,6 +26,8 @@ For the reasoning behind the design, see
 | `create_ticket` | Creates a support ticket | `tickets.create` |
 | `update_deal` | Moves a deal to a stage | `deals.change_stage` |
 | `notify` | Notifies a member of the same organization | `notifications.read` |
+| `find_deals` | Selects deals by pipeline, stage and bound date filters | `deals.read` |
+| `foreach` | Runs a nested step list once per item in a list | — |
 | `delay` | Pauses the run and resumes it later | — |
 
 A step's arguments can reference data from the event that triggered the run with
@@ -78,9 +80,42 @@ a delay of at most 30 days.
 | `GET` | `/api/v1/workflows/{id}/runs` | `workflows.read` |
 | `GET` | `/api/v1/workflow-runs/{id}` | `workflows.read` |
 | `GET` | `/api/v1/workflow-runs/{id}/steps` | `workflows.read` |
+| `GET` | `/api/v1/workflow-templates` | `workflows.read` |
+| `GET` | `/api/v1/workflow-templates/{id}` | `workflows.read` |
+| `POST` | `/api/v1/workflow-templates/{id}/create` | `workflows.manage` |
+| `GET` | `/api/v1/workflows/{id}/export` | `workflows.read` |
+| `POST` | `/api/v1/workflows/import` | `workflows.manage` |
 
 A manual run returns `200` with the run result, or `202` with the run id when the
 run paused on a delay.
+
+## Templates
+
+A template is a named definition the server builds and validates, so a client never
+supplies one. The catalog is registered against `outbox.EventTypes()` at startup: a
+template whose trigger is not in that vocabulary fails construction, which is what
+stops a scenario shipping that would be created, enabled and then never fire. The
+catalog ships six CRM scenarios — notify the owner about an overdue deal, create a
+follow-up task when a deal changes stage, remind the owner about a deal with no
+recent activity, acknowledge a new ticket, start onboarding when a deal is won, and
+triage a new ticket by priority.
+
+## Import and export
+
+A workflow exports as a portable document carrying a format name and a version.
+Import checks both before applying anything, so a document from another version is
+refused with a reason rather than partially applied. The exported definition is the
+same `{steps: [...]}` the engine parses; there is no second format.
+
+## The editor
+
+The `/workflows` page offers a structured editor over that same document — the
+raw-JSON view is the document serialised, so an edit made in either view is what is
+saved. Step types and condition operators are drawn from lists that mirror the
+engine, so the form cannot offer a step that does not exist. The structural rules the
+parser enforces (a non-empty step list, unique ids, a condition with an operator, no
+delay inside a `foreach`) are checked before save and shown per error; the server
+remains the authority and its message is shown verbatim.
 
 ## Data model
 
@@ -107,7 +142,6 @@ Integration tests run the real engine against a real PostgreSQL schema
 
 ## Not implemented
 
-- A visual workflow editor. The API and the JSON document are the contract.
 - Rollback of a partially completed run. A run reports which steps succeeded so an
   operator can act; it does not claim to undo a write.
 - A separate scheduling service. Claim-by-update makes several replicas safe, which
