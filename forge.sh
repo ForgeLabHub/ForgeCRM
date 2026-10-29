@@ -13,10 +13,16 @@
 set -uo pipefail
 
 NAME="ForgeCRM"
-PORT="8080"
-FRONTEND_PORT="5173"
-URL="http://localhost:8080/healthz"
-FRONTEND_URL="http://localhost:5173"
+FILE_VERSION="1.1.0"
+
+# Значения по умолчанию. Реальные берутся так: аргумент окружения > .env > это.
+PORT_DEFAULT="8080"
+FRONTEND_PORT_DEFAULT="5173"
+URL_TEMPLATE="http://localhost:@PORT@/healthz"
+FRONTEND_URL_TEMPLATE="http://localhost:@PORT@"
+
+QUIET=0
+JSON=0
 PYTHON="${PYTHON:-python3}"
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -37,15 +43,18 @@ case "$PYTHON" in
     ;;
 esac
 
-if [ -t 1 ]; then
-  C_R=$'\033[31m'; C_G=$'\033[32m'; C_Y=$'\033[33m'; C_B=$'\033[36m'; C_0=$'\033[0m'
+# Цвет отключается флагом --no-color и переменной NO_COLOR (стандарт no-color.org),
+# а также автоматически при выводе в файл или в pipe.
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+  C_R=$'\033[31m'; C_G=$'\033[32m'; C_Y=$'\033[33m'; C_B=$'\033[36m'; C_D=$'\033[2m'; C_0=$'\033[0m'
 else
-  C_R=''; C_G=''; C_Y=''; C_B=''; C_0=''
+  C_R=''; C_G=''; C_Y=''; C_B=''; C_D=''; C_0=''
 fi
-ok()   { printf '  %sok%s    %s\n'   "$C_G" "$C_0" "$1"; }
+ok()   { [ "$QUIET" -eq 1 ] && return 0; printf '  %sok%s    %s\n'   "$C_G" "$C_0" "$1"; }
 warn() { printf '  %swarn%s  %s\n'   "$C_Y" "$C_0" "$1"; }
 bad()  { printf '  %sfail%s  %s\n'   "$C_R" "$C_0" "$1"; }
-say()  { printf '\n%s%s%s\n' "$C_B" "$1" "$C_0"; }
+say()  { [ "$QUIET" -eq 1 ] && return 0; printf '\n%s%s%s\n' "$C_B" "$1" "$C_0"; }
+note() { [ "$QUIET" -eq 1 ] && return 0; printf '  %s%s%s\n' "$C_D" "$1" "$C_0"; }
 die()  { bad "$1"; exit 1; }
 
 has() { command -v "$1" >/dev/null 2>&1; }
@@ -53,6 +62,15 @@ has() { command -v "$1" >/dev/null 2>&1; }
 # Порт занят? /dev/tcp есть в bash и не требует утилит.
 port_busy() {
   (exec 3<>"/dev/tcp/127.0.0.1/$1") >/dev/null 2>&1
+}
+
+# Порт в doctor: занятый порт — проблема только если его держит не наш процесс.
+doctor_port() {
+  [ -z "${PORT:-}" ] && return 0
+  if port_busy "$PORT"; then
+    if alive app; then ok "порт $PORT слушает наш процесс (pid $(pid_of app))"
+    else warn "порт $PORT занят другим процессом"; fi
+  else ok "порт $PORT свободен"; fi
 }
 
 http_ok() {
@@ -132,8 +150,333 @@ require_tools() { return 0; }
 
 run_make() { # использует Makefile, если он есть
   has make || die "make не найден"
-  make "$@"
+  if [ "$HERMETIC" -eq 1 ]; then
+    # Тесты и линт не должны зависеть от боевого .env: иначе `forge.sh test`
+    # ведёт себя иначе, чем CI, и проверки «без ключа» перестают проверять.
+    ( for _k in $ENV_FROM_FILE; do unset "$_k"; done; make "$@" )
+  else
+    make "$@"
+  fi
 }
+
+unset_env_from_file() { for _k in $ENV_FROM_FILE; do unset "$_k"; done; }
+
+# --- .env --------------------------------------------------------------------
+# Файл читается собственным парсером, а НЕ через `source`: source выполнил бы
+# произвольный код из файла, а .env приходит из репозитория и от коллег.
+#
+# Поддерживается: комментарии `#`, пустые строки, префикс `export`,
+# одинарные и двойные кавычки, CRLF, пробелы вокруг `=`, инлайн-комментарий
+# после значения (`KEY=value # пояснение`).
+# Не поддерживается (сознательно): многострочные значения и подстановки вида
+# `${OTHER}` — это уже язык, а не конфигурация.
+#
+# Приоритет: переменная, уже заданная в окружении, НЕ перетирается файлом,
+# поэтому `PORT=9000 ./forge.sh start` работает независимо от .env.
+
+ENV_FILE="${FORGE_ENV_FILE:-$ROOT/.env}"
+ENV_LOADED=0
+ENV_SKIPPED=0
+ENV_LIST=()   # элементы: "имя<TAB>состояние<TAB>значение"
+ENV_FROM_FILE=""  # имена, реально загруженные из .env (нужны для герметичных тестов)
+HERMETIC=0
+# Имена, которые нельзя принимать из файла: они управляют работой самого shell.
+ENV_BLOCKED="PATH IFS PS1 PS2 PS4 HOME SHELL PWD OLDPWD LD_PRELOAD LD_LIBRARY_PATH BASH_ENV CDPATH"
+
+is_secret_name() {
+  case "$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]')" in
+    # длительности, размеры и адреса секретами не считаем: маскировать число
+    # минут или имя хоста — только путать
+    *_MINUTES|*_SECONDS|*_HOURS|*_DAYS|*_TTL|*_SIZE|*_COUNT|*_LIMIT|*_PORT|*_URL|*_URI|*_HOST) return 1 ;;
+    *SECRET*|*PASSWORD*|*PASSWD*|*TOKEN*|*CREDENTIAL*|*PRIVATE*|*API_KEY*|*APIKEY*|*ADMIN_CODE*|*DSN*) return 0 ;;
+  esac
+  return 1
+}
+
+is_placeholder() { # значение-заглушка из примера?
+  # tr/lowercase не понижает регистр кириллицы в C-локали, поэтому варианты
+  # написания перечислены явно — проверка не зависит от локали машины.
+  case "$1" in
+    ''|'<'*|todo*|TODO*|Todo*) return 0 ;;
+    change-me*|change_me*|changeme*|Change-Me*|CHANGE-ME*|CHANGE_ME*|CHANGEME*|example*|Example*|EXAMPLE*|your-*|your_*|YOUR-*|YOUR_*|xxx*|XXX*|placeholder*|Placeholder*|PLACEHOLDER*|admin123|demo123) return 0 ;;
+    замени*|Замени*|ЗАМЕНИ*|сгенерируй*|Сгенерируй*|СГЕНЕРИРУЙ*|поменяй*|Поменяй*|ПОМЕНЯЙ*|измени*|Измени*|ИЗМЕНИ*|впиши*|Впиши*|ВПИШИ*|укажи*|Укажи*|УКАЖИ*|пароль*|Пароль*|ПАРОЛЬ*|секрет*|Секрет*|СЕКРЕТ*) return 0 ;;
+  esac
+  return 1
+}
+
+mask_value() { # mask_value <имя> <значение>
+  local name="$1" value="$2"
+  [ -z "$value" ] && { printf '(пусто)'; return 0; }
+  if is_secret_name "$name"; then
+    if [ "${#value}" -le 6 ]; then
+      printf '****'
+    else
+      printf '%s…%s (%s симв.)' "${value:0:2}" "${value: -2}" "${#value}"
+    fi
+    return 0
+  fi
+  # Пароль внутри строки подключения: postgres://user:pass@host -> user:***@host
+  case "$value" in
+    *://*:*@*) printf '%s' "$value" | sed -E 's#(://[^:/@]+:)[^@]*@#\1***@#'; return 0 ;;
+  esac
+  printf '%s' "$value"
+}
+
+# printf %-28s считает байты, а кириллица в UTF-8 занимает по два — поэтому
+# колонки выравниваем вручную, по числу символов.
+pad_to() { # pad_to <строка> <ширина>
+  local str="$1" width="$2" n="${#1}"
+  printf '%s' "$str"
+  while [ "$n" -lt "$width" ]; do printf ' '; n=$((n + 1)); done
+}
+
+trim_spaces() {
+  local s="$1"
+  s="${s#"${s%%[! ]*}"}"
+  s="${s%"${s##*[! ]}"}"
+  printf '%s' "$s"
+}
+
+rand_secret() { LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom 2>/dev/null | head -c "${1:-32}"; }
+
+load_env() { # load_env [файл]
+  local file="${1:-$ENV_FILE}"
+  ENV_FILE="$file"
+  ENV_LOADED=0
+  ENV_SKIPPED=0
+  ENV_LIST=()
+  ENV_FROM_FILE=""
+  [ -f "$file" ] || return 0
+  local line key value state rest
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$'\r'}"
+    line="$(trim_spaces "$line")"
+    case "$line" in ''|\#*) continue ;; esac
+    case "$line" in export[[:space:]]*) line="$(trim_spaces "${line#export}")" ;; esac
+    case "$line" in *=*) ;; *) continue ;; esac
+    key="$(trim_spaces "${line%%=*}")"
+    value="$(trim_spaces "${line#*=}")"
+    case "$key" in
+      ''|*[!A-Za-z0-9_]*|[0-9]*) ENV_LIST+=("$key"$'\t'"invalid"$'\t'"$value"); continue ;;
+    esac
+    case " $ENV_BLOCKED " in
+      *" $key "*)
+        ENV_LIST+=("$key"$'\t'"ignored"$'\t'"$value")
+        ENV_SKIPPED=$((ENV_SKIPPED + 1))
+        continue ;;
+    esac
+    case "$value" in
+      \"*) value="${value#\"}"; value="${value%%\"*}" ;;
+      \'*) value="${value#\'}"; value="${value%%\'*}" ;;
+      *)   case "$value" in *' #'*) value="$(trim_spaces "${value%% #*}")" ;; esac ;;
+    esac
+    if [ -n "${!key+set}" ]; then
+      state="env"
+      ENV_SKIPPED=$((ENV_SKIPPED + 1))
+    else
+      export "$key=$value"
+      state="loaded"
+      ENV_FROM_FILE="$ENV_FROM_FILE $key"
+      ENV_LOADED=$((ENV_LOADED + 1))
+    fi
+    ENV_LIST+=("$key"$'\t'"$state"$'\t'"$value")
+  done < "$file"
+  return 0
+}
+
+_env_show() {
+  if [ ! -f "$ENV_FILE" ]; then
+    warn "файла $ENV_FILE нет"
+    note "создать из примера: ./forge.sh env init"
+    return 1
+  fi
+  say "Переменные: $ENV_FILE"
+  printf '  %s%s %s %s%s\n' "$C_D" "$(pad_to "ИМЯ" 28)" "$(pad_to "ИСТОЧНИК" 11)" "ЗНАЧЕНИЕ" "$C_0"
+  local entry key state value rest
+  for entry in ${ENV_LIST[@]+"${ENV_LIST[@]}"}; do
+    key="${entry%%$'\t'*}"
+    rest="${entry#*$'\t'}"
+    state="${rest%%$'\t'*}"
+    value="${rest#*$'\t'}"
+    case "$state" in
+      loaded)  state="файл" ;;
+      env)     state="окружение" ;;
+      ignored) state="игнор" ;;
+      invalid) state="ошибка" ;;
+    esac
+    printf '  %s %s %s\n' "$(pad_to "$key" 28)" "$(pad_to "$state" 11)" "$(mask_value "$key" "$value")"
+  done
+  note "всего: ${#ENV_LIST[@]} · загружено $ENV_LOADED · не перетёрто (уже в окружении) $ENV_SKIPPED"
+}
+
+_env_keys() { # имена переменных из файла, по одному в строке
+  [ -f "$1" ] || return 0
+  grep -E '^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*=' "$1" 2>/dev/null \
+    | sed -E 's/^[[:space:]]*(export[[:space:]]+)?//; s/=.*//' | sort -u
+}
+
+_env_check() {
+  [ -f "$ENV_FILE" ] || { bad "$ENV_FILE нет — ./forge.sh env init"; return 1; }
+  local example="" c fails=0
+  for c in .env.example env.example .env.sample; do [ -f "$c" ] && { example="$c"; break; }; done
+  say "Сверка $ENV_FILE"
+  if [ -n "$example" ]; then
+    local missing extra
+    missing="$(comm -23 <(_env_keys "$example") <(_env_keys "$ENV_FILE") 2>/dev/null)"
+    extra="$(comm -13 <(_env_keys "$example") <(_env_keys "$ENV_FILE") 2>/dev/null)"
+    if [ -z "$missing" ]; then
+      ok "все переменные из $example на месте"
+    else
+      warn "нет в .env (возьмутся значения по умолчанию): $(printf '%s ' $missing)"
+    fi
+    [ -n "$extra" ] && note "только в .env: $(printf '%s ' $extra)"
+  fi
+  local entry key state value rest placeholders=""
+  for entry in ${ENV_LIST[@]+"${ENV_LIST[@]}"}; do
+    key="${entry%%$'\t'*}"
+    rest="${entry#*$'\t'}"
+    state="${rest%%$'\t'*}"
+    value="${rest#*$'\t'}"
+    case "$state" in ignored|invalid) continue ;; esac
+    is_secret_name "$key" || continue
+    if [ -z "$value" ]; then
+      bad "$key пуст"
+      fails=$((fails + 1))
+    elif is_placeholder "$value"; then
+      placeholders="$placeholders $key"
+    fi
+  done
+  if [ -n "$placeholders" ]; then
+    bad "остались значения из примера:$placeholders"
+    fails=$((fails + 1))
+  fi
+  if [ -f .gitignore ] && ! grep -qxF '.env' .gitignore 2>/dev/null; then
+    warn ".env не указан в .gitignore"
+  fi
+  if [ "$fails" -eq 0 ]; then ok "конфигурация готова к запуску"; return 0; fi
+  bad "замечаний: $fails"
+  return 1
+}
+
+_env_init() {
+  local force=0 a c example=""
+  for a in "$@"; do [ "$a" = "--force" ] && force=1; done
+  if [ -f "$ENV_FILE" ] && [ "$force" -eq 0 ]; then
+    bad "$ENV_FILE уже существует"
+    note "перезаписать: ./forge.sh env init --force (прежний файл останется в .env.bak)"
+    return 1
+  fi
+  for c in .env.example env.example .env.sample; do [ -f "$c" ] && { example="$c"; break; }; done
+  [ -z "$example" ] && { bad "нет .env.example — нечего копировать"; return 1; }
+  if [ -f "$ENV_FILE" ]; then
+    cp "$ENV_FILE" "$ENV_FILE.bak" && ok "прежний файл сохранён: $(basename "$ENV_FILE").bak"
+  fi
+  cp "$example" "$ENV_FILE" || { bad "не удалось создать $ENV_FILE"; return 1; }
+  chmod 600 "$ENV_FILE" 2>/dev/null
+  ok "создан из $example"
+  # Пустые и примерные значения секретов заменяются случайными: файл сразу
+  # рабочий, а не «поменяйте change-me на что-нибудь».
+  local tmp line key value bare changed=""
+  tmp="$(mktemp)"
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in ''|\#*) printf '%s\n' "$line" >> "$tmp"; continue ;; esac
+    case "$line" in
+      export[[:space:]]*[A-Za-z_]*=*|[A-Za-z_]*=*) ;;
+      *) printf '%s\n' "$line" >> "$tmp"; continue ;;
+    esac
+    key="${line%%=*}"
+    key="${key#export }"
+    key="$(trim_spaces "$key")"
+    value="${line#*=}"
+    bare="$value"
+    bare="${bare%\"}"; bare="${bare#\"}"
+    bare="${bare%\'}"; bare="${bare#\'}"
+    if is_secret_name "$key" && is_placeholder "$bare"; then
+      value="$(rand_secret 32)"
+      changed="$changed $key"
+    fi
+    printf '%s=%s\n' "$key" "$value" >> "$tmp"
+  done < "$ENV_FILE"
+  mv "$tmp" "$ENV_FILE"
+  chmod 600 "$ENV_FILE" 2>/dev/null
+  if [ -n "$changed" ]; then ok "сгенерированы случайные значения:$changed"; else
+    warn "секретных значений для генерации не нашлось — проверьте файл вручную"
+  fi
+  load_env "$ENV_FILE"
+  note "дальше: ./forge.sh env check && ./forge.sh doctor"
+}
+
+_env_set() {
+  case "${1:-}" in *=*) ;; *) bad "формат: ./forge.sh env set KEY=VALUE"; return 2 ;; esac
+  local key="${1%%=*}" value="${1#*=}" tmp line found=0
+  case "$key" in ''|*[!A-Za-z0-9_]*|[0-9]*) bad "недопустимое имя переменной: $key"; return 2 ;; esac
+  [ -f "$ENV_FILE" ] || { : > "$ENV_FILE"; }
+  chmod 600 "$ENV_FILE" 2>/dev/null
+  tmp="$(mktemp)"
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      "$key="*) printf '%s=%s\n' "$key" "$value" >> "$tmp"; found=1 ;;
+      *) printf '%s\n' "$line" >> "$tmp" ;;
+    esac
+  done < "$ENV_FILE"
+  [ "$found" -eq 0 ] && printf '%s=%s\n' "$key" "$value" >> "$tmp"
+  cp "$ENV_FILE" "$ENV_FILE.bak" 2>/dev/null
+  mv "$tmp" "$ENV_FILE"
+  chmod 600 "$ENV_FILE" 2>/dev/null
+  ok "записано: $key=$(mask_value "$key" "$value")"
+  note "применить: ./forge.sh restart"
+}
+
+_env_edit() {
+  [ -f "$ENV_FILE" ] || { warn "файла нет — создаю из примера"; _env_init || return 1; }
+  local ed="${EDITOR:-${VISUAL:-}}" c
+  if [ -z "$ed" ]; then
+    for c in nano vim vi; do has "$c" && { ed="$c"; break; }; done
+  fi
+  [ -z "$ed" ] && { bad "редактор не найден — задайте EDITOR"; return 1; }
+  "$ed" "$ENV_FILE"
+  ok "сохранено"
+  note "проверить: ./forge.sh env check · применить: ./forge.sh restart"
+}
+
+cmd_env() {
+  case "${1:-show}" in
+    show|list)      _env_show ;;
+    path)           echo "$ENV_FILE" ;;
+    init)           shift; _env_init "$@" ;;
+    set)            shift; _env_set "$@" ;;
+    check|validate) _env_check ;;
+    edit)           _env_edit ;;
+    reload)         load_env; ok "перечитано: загружено $ENV_LOADED, пропущено $ENV_SKIPPED" ;;
+    *)              echo "env show | init [--force] | set KEY=VALUE | check | edit | path | reload" ;;
+  esac
+}
+
+cmd_completion() {
+  case "${1:-bash}" in
+    bash)
+      cat <<'COMP'
+# Дополнение для bash: eval "$(./forge.sh completion bash)"
+_forge() {
+  local cur="${COMP_WORDS[COMP_CWORD]}"
+  local cmds="status start stop restart logs open doctor install test lint build verify docker db env admin clean version help menu completion"
+  if [ "$COMP_CWORD" -eq 1 ]; then
+    COMPREPLY=( $(compgen -W "$cmds" -- "$cur") )
+  fi
+}
+complete -F _forge forge.sh ./forge.sh
+COMP
+      ;;
+    zsh)
+      cat <<'COMP'
+# Дополнение для zsh: ./forge.sh completion zsh > ~/.zfunc/_forge
+_arguments '1:command:(status start stop restart logs open doctor install test lint build verify docker db env admin clean version help menu completion)'
+COMP
+      ;;
+    *) echo "bash | zsh" ;;
+  esac
+}
+
 
 cmd_help() {
   cat <<EOF
@@ -167,8 +510,31 @@ ${C_B}${NAME}${C_0} — управление проектом
   clean [--hard]      убрать артефакты и логи (--hard: ещё .venv и кэши)
   version             версия скрипта и проекта
   menu                интерактивное меню
+  completion [bash]   скрипт автодополнения
 
-Переменные: PYTHON=python3.12, PORT=9000 ./forge.sh start
+Конфигурация (.env)
+  env                 показать переменные (секреты маскируются)
+  env init [--force]  создать .env из .env.example, сгенерировать секреты
+  env set KEY=VALUE   записать/обновить переменную
+  env check           сверить .env с примером и найти заглушки
+  env edit            открыть .env в редакторе
+  env path            путь к используемому файлу
+  env reload          перечитать файл
+
+Флаги
+  -q, --quiet         только предупреждения и ошибки
+      --no-color      без цвета (то же даёт NO_COLOR=1)
+      --json          машинный вывод для status
+  -h, --help          эта справка
+  -V, --version       версия
+
+Переменные окружения
+  PYTHON=python3.12   интерпретатор вместо python3
+  PORT=9000           переопределить порт (приоритет выше .env)
+  FORGE_ENV_FILE=...  другой файл конфигурации
+
+Файл .env читается сам, без source: комментарии, кавычки, export, CRLF.
+Значение, уже заданное в окружении, файлом не перетирается.
 EOF
 }
 
@@ -178,12 +544,16 @@ cmd_doctor() {
   if has go;   then ok "go: $(go version 2>/dev/null | awk '{print $3}')"; else bad "go не найден (нужен для backend)"; fi
   if has node; then ok "node: $(node -v 2>/dev/null)"; else warn "node не найден (нужен для frontend)"; fi
   if has docker && docker compose version >/dev/null 2>&1; then ok "docker compose доступен"; else warn "docker compose недоступен (БД в контейнере)"; fi
-  if port_busy "$PORT"; then warn "порт $PORT занят"; else ok "порт $PORT свободен"; fi
+  doctor_port
   [ -f frontend/node_modules/.package-lock.json ] && ok "frontend: зависимости установлены" || warn "frontend: npm ci не выполнялся"
   # Проекты без конфигурации (репозиторий артефактов) не должны получать
   # предупреждение о .env: ориентир — наличие .env.example в репозитории.
   if [ -f .env.example ]; then
-    if [ -f .env ]; then ok ".env на месте"; else warn ".env нет (см. .env.example)"; fi
+    if [ -f "$ENV_FILE" ]; then
+      ok "$(basename "$ENV_FILE"): загружено $ENV_LOADED переменных (не перетёрто: $ENV_SKIPPED)"
+    else
+      warn "$(basename "$ENV_FILE") нет — ./forge.sh env init"
+    fi
   fi
   if [ -d .git ] && [ -f .env ]; then
     if git ls-files --error-unmatch .env >/dev/null 2>&1; then
@@ -195,7 +565,18 @@ cmd_doctor() {
   if has make; then ok "make: $(make --version 2>/dev/null | head -1)"; else warn "make не найден — часть команд недоступна"; fi
 }
 
+_status_json() {
+  local api=false web=false
+  if [ -n "${PORT:-}" ] && port_busy "$PORT"; then api=true; fi
+  if [ -n "${FRONTEND_PORT:-}" ] && port_busy "$FRONTEND_PORT"; then web=true; fi
+  local port_json="null"
+  [ -n "${PORT:-}" ] && port_json="$PORT"
+  printf '{"name":"%s","port":%s,"url":"%s","api_running":%s,"web_running":%s}\n' \
+    "$NAME" "$port_json" "${URL:-}" "$api" "$web"
+}
+
 cmd_status() {
+  if [ "$JSON" -eq 1 ]; then _status_json; return 0; fi
   say "$NAME"
   local running=0
   if port_busy "$PORT"; then ok "API: порт $PORT слушается"; running=1
@@ -226,7 +607,7 @@ cmd_start() {
   for a in "$@"; do [ "$a" = "--fg" ] && fg=1; done
   if [ "$fg" -eq 1 ]; then run_foreground; return $?; fi
   require_tools || die "не хватает инструментов — установите их или используйте docker"
-  start_services || die "запуск не удался (смотрите .run/*.log)"
+  start_services "$@" || die "запуск не удался (смотрите .run/*.log)"
   cmd_status
   open_url "$URL"
 }
@@ -266,7 +647,8 @@ cmd_version() {
   echo "$NAME"
   [ -f VERSION ] && echo "версия проекта: $(cat VERSION)"
   if [ -d .git ]; then echo "коммит: $(git rev-parse --short HEAD 2>/dev/null) ($(git branch --show-current 2>/dev/null))"; fi
-  echo "скрипт: forge.sh v1.0"
+  echo "конфигурация: $ENV_FILE ($([ -f "$ENV_FILE" ] && echo "${#ENV_LIST[@]} переменных" || echo "файла нет"))"
+  echo "скрипт: forge.sh v$FILE_VERSION"
 }
 
 cmd_menu() {
@@ -397,10 +779,35 @@ clean_extra() {
 
 
 main() {
-  local cmd="${1:-menu}"
-  [ $# -gt 0 ] && shift
+  local cmd="" a
+  while [ $# -gt 0 ]; do
+    a="$1"
+    case "$a" in
+      -h|--help)    cmd=help; shift; break ;;
+      -V|--version) cmd=version; shift; break ;;
+      -q|--quiet)   QUIET=1; shift ;;
+      --no-color)   C_R=''; C_G=''; C_Y=''; C_B=''; C_D=''; C_0=''; shift ;;
+      --json)       JSON=1; shift ;;
+      --)           shift; break ;;
+      -*)           bad "неизвестный флаг: $a"; note "справка: ./forge.sh help"; exit 2 ;;
+      *)            cmd="$a"; shift; break ;;
+    esac
+  done
+  [ -z "$cmd" ] && cmd="menu"
+
+  load_env   # .env влияет на порт, адреса и на все команды ниже
+
+  # Порт и адреса: аргумент окружения важнее .env, .env важнее встроенного.
+  case "$cmd" in test|lint|verify|build|checksums) HERMETIC=1 ;; esac
+
+  PORT="${PORT:-$PORT_DEFAULT}"
+  FRONTEND_PORT="${FRONTEND_PORT:-$FRONTEND_PORT_DEFAULT}"
+  URL="${URL:-${URL_TEMPLATE//@PORT@/$PORT}}"
+  FRONTEND_URL="${FRONTEND_URL:-${FRONTEND_URL_TEMPLATE//@PORT@/$FRONTEND_PORT}}"
+  export PORT URL
+
   case "$cmd" in
-    help|-h|--help) cmd_help ;;
+    help)           cmd_help ;;
     menu)           cmd_menu ;;
     status|ps)      cmd_status ;;
     start|up)       cmd_start "$@" ;;
@@ -416,10 +823,12 @@ main() {
     verify)         cmd_verify ;;
     docker)         cmd_docker "$@" ;;
     db)             cmd_db "$@" ;;
+    env|config)     cmd_env "$@" ;;
+    completion)     cmd_completion "$@" ;;
     admin)          cmd_admin 2>/dev/null || warn "команда admin не поддерживается" ;;
     clean)          cmd_clean "$@" ;;
-    version|-v)     cmd_version ;;
-    *) warn "неизвестная команда: $cmd"; cmd_help; exit 2 ;;
+    version)        cmd_version ;;
+    *) bad "неизвестная команда: $cmd"; note "справка: ./forge.sh help"; exit 2 ;;
   esac
 }
 
