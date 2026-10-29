@@ -49,3 +49,7 @@
 | `PROJECT_AUDIT.md`, `audit/*` | Снимок на дату, не переписывается задним числом |
 | `MASTER_PLAN.md`, `INTELLIGENCE_PLATFORM_PLAN.md` | Историческое планирование; текущее состояние — в `PROJECT_AUDIT.md` |
 | `ROADMAP.md`, `ACCEPTANCE_CRITERIA.md` | Живые документы |
+
+## Управление проектом
+
+- `forge.sh` / `forge.bat` — запуск, остановка, логи, тесты, база и контейнеры одной командой; см. раздел в README.

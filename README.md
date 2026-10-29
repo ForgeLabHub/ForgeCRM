@@ -191,3 +191,62 @@ Stated explicitly so nobody assumes more than the project provides:
 No license file is present yet. The distribution model is an owner decision; see
 [CONTRIBUTING.md](CONTRIBUTING.md). Until a license is chosen, the default applies and
 the code is not licensed for redistribution.
+
+## Управление проектом: `forge.sh` и `forge.bat`
+
+Один скрипт на Unix-подобные системы (`forge.sh`) и один на Windows
+(`forge.bat`). Интерфейс одинаковый: те же команды, та же логика, одна
+реализация на каждой платформе — без bash-скриптов внутри Windows.
+
+```bash
+./forge.sh              # интерактивное меню
+./forge.sh doctor       # проверить окружение, ничего не меняя
+./forge.sh install      # поставить зависимости
+./forge.sh start        # запустить в фоне, дождаться готовности, открыть браузер
+./forge.sh status       # что запущено и отвечает ли порт
+./forge.sh logs api -f  # логи в реальном времени
+./forge.sh test         # тесты
+./forge.sh stop         # остановить
+```
+
+```bat
+forge.bat
+forge.bat start
+forge.bat status
+```
+
+### Что умеет
+
+| Команда | Действие |
+| --- | --- |
+| `status` | состояние по портам и HTTP, а не «на глаз» |
+| `start [--fg]` | фон (PID-файлы в `.run/`) или передний план |
+| `stop` | останавливает дерево процессов целиком, порт освобождается |
+| `restart`, `logs [имя] [-f]`, `open` | обычные операции |
+| `doctor` | инструменты, версии, `.env`, `.env` в git, занятость порта |
+| `install`, `test`, `lint`, `build`, `verify` | через `make`, если он есть |
+| `migrate` | применить миграции |
+
+| `db migrate\|backup\|restore` | база: миграции, копия, восстановление |
+| `docker up\|down\|logs\|reset` | контейнеры (`down` данные не удаляет) |
+| `clean [--hard]` | артефакты и логи; `--hard` ещё `.venv` и `node_modules` |
+
+### Правила, заложенные в скрипт
+
+- **Ничего не меняет без команды.** `doctor` и `status` только читают.
+- **Данные не удаляются.** `stop` и `docker down` сохраняют базу; удаление —
+  только `--hard` или явное подтверждение в `docker reset`.
+- **Предполётная проверка.** Если нет `go`/python или занят порт — скрипт
+  говорит об этом сразу, а не через две минуты таймаута.
+- **Не висит после падения.** Если процесс умер, запуск прекращается и
+  показывает последние строки лога.
+- **Venv главнее системы.** Если есть `.venv`, им пользуются `make`, `pytest`
+  и uvicorn — чтобы `install` и `test` не расходились.
+
+Текущий способ запуска без скрипта: `cd backend && go run ./cmd/forgecrm-api` — адрес `http://localhost:8080/healthz`.
+
+### Запуск в этом проекте
+
+```bash
+./forge.sh install && ./forge.sh start
+```
