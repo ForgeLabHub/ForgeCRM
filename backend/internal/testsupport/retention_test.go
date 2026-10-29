@@ -602,3 +602,107 @@ VALUES ('test', 'old-key', now() - interval '30 days'),
 		t.Fatalf("kept key is %q, want fresh-key", kept)
 	}
 }
+
+// TestRetentionSweepsIntelligenceHistory covers the three policies added for the
+// tables the Forecasting & Risk Lab and the Simulation Lab write. Each grows with
+// use and none was pruned before.
+//
+// The status-bearing policy is the one that can go wrong: risk_signals keeps a
+// live signal (open or acknowledged) as a current condition, so only a terminal
+// signal may be swept. The test inserts an old terminal signal and an old live one
+// of the same age, so a policy that ignored status would delete both and the
+// assertion that the live signal survives would fail. The two run tables have no
+// status — every stored run is finished when written — so they are swept purely by
+// age, and a fresh run of each must be kept.
+func TestRetentionSweepsIntelligenceHistory(t *testing.T) {
+	db := connectOrSkip(t)
+	freshSchema(t, db)
+
+	ctx := context.Background()
+	org := retentionOrg(t, db, "retention-intelligence")
+	old := time.Now().Add(-400 * 24 * time.Hour)
+
+	if _, err := db.Pool().Exec(ctx, `
+INSERT INTO simulation_runs (organization_id, kind, algorithm_version, created_at)
+VALUES ($1, 'funnel', 'simulate-v1', $2),
+       ($1, 'funnel', 'simulate-v1', now())`, org, old); err != nil {
+		t.Fatalf("insert simulation runs: %v", err)
+	}
+
+	if _, err := db.Pool().Exec(ctx, `
+INSERT INTO forecast_runs (organization_id, method, algorithm_version, horizon, created_at)
+VALUES ($1, 'mean', 'forecast-v1', 3, $2),
+       ($1, 'mean', 'forecast-v1', 3, now())`, org, old); err != nil {
+		t.Fatalf("insert forecast runs: %v", err)
+	}
+
+	// rule/entity columns are NOT NULL, and the live-signal unique index needs the
+	// two live rows to differ in rule so both may exist.
+	if _, err := db.Pool().Exec(ctx, `
+INSERT INTO risk_signals
+    (organization_id, type, severity, rule, algorithm_version, entity_type, entity_id,
+     rationale, status, status_changed_at)
+VALUES
+    ($1, 'stalled_deal', 'warn', 'stalled_deal', 'risk-v1', 'deal', 'd-old-resolved',
+     'resolved long ago', 'resolved', $2),
+    ($1, 'stalled_deal', 'warn', 'stalled_deal', 'risk-v1', 'deal', 'd-old-open',
+     'still open', 'open', $2),
+    ($1, 'overdue_task', 'warn', 'overdue_task', 'risk-v1', 'task', 't-old-ack',
+     'acknowledged long ago', 'acknowledged', $2)`,
+		org, old); err != nil {
+		t.Fatalf("insert risk signals: %v", err)
+	}
+
+	runner := retention.New(db, audit.New(db), nil, retention.Options{Enabled: true, Delete: true})
+	results, err := runner.Run(ctx)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	for _, key := range []string{"simulation_runs", "forecast_runs", "risk_signals"} {
+		res := resultFor(results, key)
+		if res.Error != "" {
+			t.Fatalf("%s policy failed: %s", key, res.Error)
+		}
+		if res.Deleted != 1 {
+			t.Errorf("%s deleted %d rows, want exactly the one eligible row", key, res.Deleted)
+		}
+	}
+
+	count := func(table string) int64 {
+		t.Helper()
+		var n int64
+		if err := db.Pool().QueryRow(ctx, "SELECT count(*) FROM "+table).Scan(&n); err != nil {
+			t.Fatalf("count %s: %v", table, err)
+		}
+		return n
+	}
+	if n := count("simulation_runs"); n != 1 {
+		t.Errorf("simulation_runs holds %d rows, want the fresh run preserved", n)
+	}
+	if n := count("forecast_runs"); n != 1 {
+		t.Errorf("forecast_runs holds %d rows, want the fresh run preserved", n)
+	}
+	if n := count("risk_signals"); n != 2 {
+		t.Errorf("risk_signals holds %d rows, want the live signals preserved", n)
+	}
+
+	// The kept signals must be exactly the live ones, so a policy that swept by age
+	// alone (ignoring status) is caught even if the count happened to match.
+	rows, err := db.Pool().Query(ctx, `SELECT status FROM risk_signals ORDER BY status`)
+	if err != nil {
+		t.Fatalf("read kept signals: %v", err)
+	}
+	defer rows.Close()
+	var kept []string
+	for rows.Next() {
+		var s string
+		if err := rows.Scan(&s); err != nil {
+			t.Fatalf("scan status: %v", err)
+		}
+		kept = append(kept, s)
+	}
+	if len(kept) != 2 || kept[0] != "acknowledged" || kept[1] != "open" {
+		t.Errorf("kept signal statuses = %v, want [acknowledged open]", kept)
+	}
+}

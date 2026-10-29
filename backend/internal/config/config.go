@@ -18,6 +18,7 @@ import (
 
 	"github.com/geff1778/forgecrm/internal/database"
 	"github.com/geff1778/forgecrm/internal/httpx"
+	"github.com/geff1778/forgecrm/internal/retention"
 )
 
 // Config is the fully resolved runtime configuration.
@@ -372,6 +373,12 @@ func Load() (*Config, error) {
 		windows, err := parseRetentionWindows(raw)
 		if err != nil {
 			return nil, err
+		}
+		// A key the registry does not know is refused here, where the operator can
+		// still see the error, rather than ignored so a typo silently keeps the
+		// default window.
+		if err := retention.ValidateWindows(windows); err != nil {
+			return nil, fmt.Errorf("FORGECRM_RETENTION_WINDOWS: %w", err)
 		}
 		c.Retention.Windows = windows
 	}

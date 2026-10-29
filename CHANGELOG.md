@@ -10,6 +10,29 @@ once it reaches 1.0.
 
 ### Added
 
+- **Retention now covers the intelligence history.** The Simulation and
+  Forecasting & Risk Labs write tables that grow with use and no policy pruned
+  them: `simulation_runs`, `forecast_runs` and `risk_signals`. Each is now a
+  configurable policy with a 180-day default. The two run tables have no status —
+  every stored run is finished when written — so they are swept by age; a
+  `risk_signals` row is swept only when it is terminal (`resolved` or
+  `dismissed`), because an `open` or `acknowledged` signal is a current condition,
+  not history, and a condition that still holds is re-detected by the next scan.
+  The `risk_signals_terminal_idx` index that migration `0020_forecasting_risk`
+  created for exactly this sweep is now used by it. Nothing is swept unless
+  retention is enabled, and a dry run still previews.
+
+### Fixed
+
+- **A mistyped retention window was accepted and silently ignored.** The
+  `RetentionConfig` documentation promised that a policy key the registry does not
+  know is refused at startup, but nothing enforced it: `parseRetentionWindows`
+  accepted any key, the runner looked it up, missed, and used the default window.
+  An operator who set `simulation_run=720h` instead of `simulation_runs=720h`
+  would believe they had shortened a window that was never changed. `Load` now
+  calls `retention.ValidateWindows`, which refuses an unknown key with a message
+  naming it and listing the known keys.
+
 - **The Forecasting & Risk Lab.** Two explainable intelligence surfaces built on
   the same pure-core pattern as the Simulation Lab. The maths lives in
   `internal/analytics` (`forecast-v1`): mean, moving-average and trend methods

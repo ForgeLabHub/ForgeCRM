@@ -188,3 +188,39 @@ func TestRetentionWindowMustBePositive(t *testing.T) {
 		t.Fatal("a zero window was accepted; it would mean delete everything")
 	}
 }
+
+// TestRetentionWindowWithAnUnknownPolicyIsRejected pins the promise the
+// RetentionConfig comment makes: a key the registry does not know is refused at
+// startup. Without this check a typo such as "simulation_run" (missing the s)
+// would be accepted, the default window would be used instead of the operator's,
+// and the mistake would surface only when data they meant to prune remained.
+func TestRetentionWindowWithAnUnknownPolicyIsRejected(t *testing.T) {
+	baseEnv(t)
+	t.Setenv("FORGECRM_RETENTION_WINDOWS", "simulation_run=720h")
+
+	err := func() error {
+		_, err := Load()
+		return err
+	}()
+	if err == nil {
+		t.Fatal("a window for an unknown policy was accepted; the typo would silently keep the default")
+	}
+	if !strings.Contains(err.Error(), "unknown retention policy") {
+		t.Fatalf("the error does not name the problem: %v", err)
+	}
+}
+
+// TestRetentionWindowForANewPolicyIsAccepted confirms the keys the registry
+// gained are usable, so the check above does not reject the real policies.
+func TestRetentionWindowForANewPolicyIsAccepted(t *testing.T) {
+	baseEnv(t)
+	t.Setenv("FORGECRM_RETENTION_WINDOWS", "forecast_runs=48h,risk_signals=48h,simulation_runs=48h")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if got := cfg.Retention.Windows["forecast_runs"]; got.Hours() != 48 {
+		t.Fatalf("forecast_runs window = %v, want 48h", got)
+	}
+}

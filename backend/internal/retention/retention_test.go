@@ -1,6 +1,7 @@
 package retention
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -127,5 +128,31 @@ func TestStatusClauseOnlyAppendsWhenPresent(t *testing.T) {
 	}
 	if got := statusClause("status = 'delivered'"); got != " AND status = 'delivered'" {
 		t.Errorf("predicate produced %q", got)
+	}
+}
+
+// TestValidateWindowsRejectsUnknownKeys guards the startup check. A key not in
+// the registry is refused rather than ignored, because an ignored key silently
+// uses the default window and an operator who meant to shorten one would not
+// find out.
+func TestValidateWindowsRejectsUnknownKeys(t *testing.T) {
+	if err := ValidateWindows(nil); err != nil {
+		t.Fatalf("nil windows rejected: %v", err)
+	}
+	// Every registry key is accepted.
+	all := map[string]time.Duration{}
+	for _, p := range Policies() {
+		all[p.Key] = 24 * time.Hour
+	}
+	if err := ValidateWindows(all); err != nil {
+		t.Fatalf("a window for every known policy was rejected: %v", err)
+	}
+	// An unknown key is refused, and the message names it.
+	err := ValidateWindows(map[string]time.Duration{"not_a_policy": time.Hour})
+	if err == nil {
+		t.Fatal("an unknown policy key was accepted")
+	}
+	if !strings.Contains(err.Error(), "not_a_policy") {
+		t.Fatalf("the error does not name the unknown key: %v", err)
 	}
 }

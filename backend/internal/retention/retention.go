@@ -35,6 +35,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/geff1778/forgecrm/internal/audit"
@@ -202,6 +203,37 @@ var policies = []Policy{
 			"be reprocessed",
 	},
 
+	// --- Intelligence history: stored analysis, not CRM data -----------------
+	//
+	// These tables hold the platform's own saved computations. Each row is
+	// reproducible from its frozen parameters and algorithm version, so removing an
+	// old one loses no fact about the CRM. They are given a longer default than the
+	// operational logs because a saved scenario or projection is meant to be
+	// revisited.
+	{
+		Key: "simulation_runs", Table: "simulation_runs", TimeColumn: "created_at",
+		Default: 180 * 24 * time.Hour, Min: 7 * 24 * time.Hour, BatchSize: 1000,
+		Reason: "a stored simulation run is a saved what-if with its frozen baseline, " +
+			"reproducible from its parameters; a run a user still wants is their own " +
+			"record, so the default window is generous rather than tight",
+	},
+	{
+		Key: "forecast_runs", Table: "forecast_runs", TimeColumn: "created_at",
+		Default: 180 * 24 * time.Hour, Min: 7 * 24 * time.Hour, BatchSize: 1000,
+		Reason: "a stored forecast run keeps a projection and the history it was " +
+			"computed from; it can be recomputed from the parameters and the " +
+			"algorithm version, so an old run is disposable",
+	},
+	{
+		Key: "risk_signals", Table: "risk_signals", TimeColumn: "status_changed_at",
+		StatusPredicate: "status IN ('resolved','dismissed')",
+		Default:         180 * 24 * time.Hour, Min: 7 * 24 * time.Hour, BatchSize: 1000,
+		Reason: "a resolved or dismissed signal is a closed finding; a live signal " +
+			"(open or acknowledged) is a current condition and is never swept. The " +
+			"status_changed_at index restricted to terminal rows exists for this " +
+			"sweep, and a condition that still holds is re-detected by the next scan",
+	},
+
 	// --- Protected: audit and security evidence -----------------------------
 	//
 	// These are listed so their window is visible and configurable, but they run
@@ -234,6 +266,39 @@ func Policies() []Policy {
 	out := make([]Policy, len(policies))
 	copy(out, policies)
 	return out
+}
+
+// ValidateWindows refuses a window override whose key is not in the registry.
+//
+// A mistyped key would otherwise be accepted and silently do nothing: the operator
+// believes they shortened a window, the default is used instead, and the mistake
+// surfaces only when data they meant to prune is still there — or when data they
+// meant to keep is gone. This is checked at startup, where the operator can still
+// see the error.
+func ValidateWindows(windows map[string]time.Duration) error {
+	if len(windows) == 0 {
+		return nil
+	}
+	known := make(map[string]bool, len(policies))
+	for _, p := range policies {
+		known[p.Key] = true
+	}
+	for key := range windows {
+		if !known[key] {
+			return fmt.Errorf("unknown retention policy %q; known keys are %s",
+				key, strings.Join(knownKeys(), ", "))
+		}
+	}
+	return nil
+}
+
+// knownKeys returns the registry's keys in declaration order.
+func knownKeys() []string {
+	keys := make([]string, len(policies))
+	for i, p := range policies {
+		keys[i] = p.Key
+	}
+	return keys
 }
 
 // Result is the outcome for one policy in one run.
