@@ -127,6 +127,13 @@ const (
 	// different people.
 	PermAgentRead Permission = "agent.read"
 	PermAgentRun  Permission = "agent.run"
+
+	// Workflow automation. Authoring a workflow (manage) and setting one running
+	// (run) are separate rights: a workflow acts as its author, so the right to
+	// create one is not the right to execute whatever it does on demand.
+	PermWorkflowsRead   Permission = "workflows.read"
+	PermWorkflowsManage Permission = "workflows.manage"
+	PermWorkflowsRun    Permission = "workflows.run"
 )
 
 // All returns every permission in the catalog, sorted.
@@ -170,6 +177,7 @@ var catalog = map[Permission]struct{}{
 	PermAIRead: {}, PermAIToolsExecute: {}, PermAIConfigure: {},
 	PermApprovalsRead: {}, PermApprovalsDecide: {}, PermSystemSettings: {},
 	PermAgentRead: {}, PermAgentRun: {},
+	PermWorkflowsRead: {}, PermWorkflowsManage: {}, PermWorkflowsRun: {},
 }
 
 // Known reports whether p is part of the catalog.

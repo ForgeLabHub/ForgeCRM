@@ -171,6 +171,7 @@ func run() error {
 		Tools:        services.Tools,
 		MCP:          services.MCP,
 		Agent:        services.Agent,
+		Workflows:    services.Workflows,
 		StartedAt:    time.Now(),
 		Version:      version,
 		BuildCommit:  commit,

@@ -39,6 +39,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/ratelimit"
 	"github.com/geff1778/forgecrm/internal/rbac"
 	"github.com/geff1778/forgecrm/internal/secrets"
+	"github.com/geff1778/forgecrm/internal/workflow"
 )
 
 // Deps are the services the API needs.
@@ -69,6 +70,11 @@ type Deps struct {
 	// Agent is the human-in-the-loop execution state machine (ADR 0005). It is the
 	// only path by which an approval-gated tool can run.
 	Agent *agent.Service
+
+	// Workflows is the automation engine. The API and the worker share one engine
+	// type, so a workflow defined here runs with exactly the same authorization as
+	// one run from the scheduler.
+	Workflows *workflow.Engine
 	// StartedAt is used by the system info endpoint.
 	StartedAt time.Time
 	Version   string
@@ -309,6 +315,7 @@ func (s *Server) buildRouter() chi.Router {
 			s.mountJobs(r)
 			s.mountAI(r)
 			s.mountAgent(r)
+			s.mountWorkflows(r)
 			s.mountMCP(r)
 			s.mountNotifications(r)
 		})

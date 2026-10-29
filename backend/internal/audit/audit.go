@@ -190,6 +190,17 @@ const (
 	ActionAgentActionExpired  Action = "agent.action_expired"
 	ActionAgentActionExecuted Action = "agent.action_executed"
 	ActionAgentActionFailed   Action = "agent.action_failed"
+
+	// Workflow automation lifecycle. created, updated, enabled and archived are
+	// authored actions; run.* are written by the engine when a run reaches a
+	// terminal state, so the trail shows what automation did as well as what people
+	// did.
+	ActionWorkflowCreated  Action = "workflows.created"
+	ActionWorkflowUpdated  Action = "workflows.updated"
+	ActionWorkflowEnabled  Action = "workflows.enabled"
+	ActionWorkflowArchived Action = "workflows.archived"
+	ActionWorkflowRunOK    Action = "workflow.run.succeeded"
+	ActionWorkflowRunFail  Action = "workflow.run.failed"
 )
 
 func marshalJSONOrNil(v any) ([]byte, error) {

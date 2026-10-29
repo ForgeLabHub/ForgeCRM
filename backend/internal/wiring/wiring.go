@@ -29,6 +29,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/outbox"
 	"github.com/geff1778/forgecrm/internal/rbac"
 	"github.com/geff1778/forgecrm/internal/secrets"
+	"github.com/geff1778/forgecrm/internal/workflow"
 )
 
 // Services bundles the constructed dependencies.
@@ -54,6 +55,10 @@ type Services struct {
 	// wired with an executor built from Tools, so an approved action runs through
 	// exactly the same permission-checked tool path as a direct call.
 	Agent *agent.Service
+	// Workflows is the automation engine. It is built from the same crm.Service and
+	// rbac.Service the API uses, so a workflow action is authorized exactly like the
+	// equivalent API call.
+	Workflows *workflow.Engine
 }
 
 // Build constructs every service from the given configuration and database.
@@ -105,5 +110,13 @@ func Build(cfg *config.Config, db *database.DB, keyring *secrets.Keyring, log *s
 		Tools:        tools,
 		MCP:          ai.NewMCPServer(tools),
 		Agent:        agentSvc,
+		Workflows: workflow.NewEngine(workflow.Config{
+			DB:     db,
+			CRM:    crmSvc,
+			RBAC:   rbacSvc,
+			Audit:  auditLog,
+			Outbox: outbox.NewStore(db),
+			Log:    log,
+		}),
 	}, nil
 }

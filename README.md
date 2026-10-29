@@ -30,6 +30,7 @@ Verified (see [docs/PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md) for evidence):
 | Docker Compose deployment | Verified end to end |
 | AI & MCP | Provider abstraction (Ollama, OpenAI-compatible), MCP JSON-RPC transport, AI & MCP admin page |
 | Agent approvals (human-in-the-loop) | Working, second-factor step-up for destructive actions |
+| Workflow automation (event, schedule, manual triggers) | Working, verified against PostgreSQL |
 
 The web interface covers sign-in with second factor, the CRM workspace, the Import
 Center including the mapping wizard, integrations, events and webhooks, background
@@ -77,6 +78,7 @@ host environment first.
 
 - [Project audit](docs/PROJECT_AUDIT.md) - verified state, findings, risks
 - [Architecture](docs/ARCHITECTURE.md) - module boundaries and data flow
+- [Workflow automation](docs/architecture/workflows.md) - triggers, steps, execution model
 - [Roadmap](docs/ROADMAP.md) - staged plan
 - [Acceptance criteria](docs/ACCEPTANCE_CRITERIA.md) - definition of done
 - [Frontend development](docs/development/frontend.md) - stack, layout, checks

@@ -8,7 +8,70 @@ once it reaches 1.0.
 
 ## [Unreleased]
 
+### Added
+
+- **Workflow automation engine.** A workflow is a trigger plus an ordered list of
+  steps, defined as JSON and stored per organization. Three trigger types are
+  supported: an event committed through the outbox, a cron schedule, and a manual
+  run. Step types are `condition`, `branch`, `create_task`, `update_deal`,
+  `create_ticket`, `notify` and `delay`. Every action goes through the same
+  `crm.Service` the HTTP API uses, so a workflow can never do anything its author
+  could not do. See `docs/architecture/workflows.md` and
+  `docs/adr/0007-workflow-automation-engine.md`.
+
+  The design decisions that matter, and the tests that hold them:
+
+  - **A workflow acts as its author, with permissions resolved at execution time,
+    not authoring time.** If the author is blocked, removed from the organization,
+    or has a role revoked, the workflow loses that authority on its next run rather
+    than carrying a stale permission set. The engine enforces the coarse permission
+    itself (`tasks.create`, `deals.change_stage`, …) because it calls the service
+    directly: the API's middleware and the MCP tool registry both check it on their
+    own paths, and without the engine's own check a user holding only
+    `workflows.manage` could author a workflow to perform an action their role
+    forbids. `TestWorkflowPermissionIsRecheckedAtExecutionTime` revokes the
+    permission and asserts the next run fails without creating anything.
+  - **Event-triggered runs are de-duplicated on `(workflow_id, event_id)`.** The
+    outbox delivers at least once, so the same event can reach the engine twice. The
+    claim is a primary-key insert, and the run row is created in the same
+    transaction; a duplicate delivery commits nothing at all, so the history stays
+    one run per event rather than one per delivery.
+    `TestWorkflowEventTriggerIsDeDuplicated` delivers one event three times and
+    asserts one run and one task.
+  - **A delay does not block a worker.** A `delay` step writes a resume instant and
+    returns; the worker's scheduler resumes the run from the recorded step index.
+    `TestWorkflowDelayPausesAndResumes` asserts nothing runs before the instant and
+    the run completes after it.
+  - **A chain that a workflow causes is bounded.** Events emitted by a step inherit
+    the run's correlation id, and the chain depth is the number of runs already
+    recorded for it. A run at the workflow's `max_depth` is recorded as `skipped`
+    rather than executed, which stops two workflows that watch each other from
+    running forever. `TestWorkflowDepthLimitStopsLoops` drives a chained event and
+    asserts it is skipped.
+
+  - **A notification can only address a member of the same organization.** The
+    recipient's active membership is verified before the insert, so a guessed user
+    id cannot write into another tenant's feed.
+    `TestWorkflowCannotNotifyAcrossOrganizations` asserts the run fails and nothing
+    is written.
+
+  The scheduler claims each due workflow by advancing its `next_run_at` inside the
+  same transaction, so several worker replicas can run the loop without
+  double-firing.
+
+- **`/api/v1/workflows` and `/api/v1/workflow-runs`.** List, create, read, update,
+  enable, archive and run workflows, and read a run with its per-step outcome log.
+  Reading is gated by `workflows.read`, authoring by `workflows.manage`, running by
+  `workflows.run`. A manual run is synchronous and returns the run result; a run
+  that pauses on a delay returns `202` with the run id.
+
 ### Fixed
+
+- **A redelivered event left an orphan run per delivery.** The event claim ran after
+  the run row was created, so every duplicate delivery of the same event wrote a
+  second `workflow_runs` row and marked it `skipped`. Under an outbox that retries,
+  this accumulated without bound and made "one run per event" false. The claim and
+  the run creation are now one transaction, and a duplicate commits nothing.
 
 - **A dead webhook delivery left no durable record.** When a subscriber's endpoint
   kept failing, the delivery was marked `dead` and nothing else happened: no audit

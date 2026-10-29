@@ -35,6 +35,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/outbox"
 	"github.com/geff1778/forgecrm/internal/rbac"
 	"github.com/geff1778/forgecrm/internal/secrets"
+	"github.com/geff1778/forgecrm/internal/workflow"
 )
 
 var version = "0.1.0-dev"
@@ -111,6 +112,20 @@ func run() error {
 	}
 	registry.agent = agentSvc
 
+	// The workflow automation engine runs committed events through the
+	// organization's event-triggered workflows. It is built from the same
+	// crm.Service the API uses, so a workflow action is authorized exactly like the
+	// equivalent API call.
+	wfEngine := workflow.NewEngine(workflow.Config{
+		DB:     db,
+		CRM:    crmSvc,
+		RBAC:   rbac.NewService(db),
+		Audit:  auditLog,
+		Outbox: outboxStore,
+		Log:    log,
+	})
+	registry.workflows = wfEngine
+
 	workerID := hostnameOrRandom()
 
 	// The outbox drain runs alongside the job workers: it is what turns committed
@@ -119,7 +134,7 @@ func run() error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		runOutboxLoop(ctx, log, outboxStore, dispatcher, workerID+"-outbox", cfg.WorkerPollEvery)
+		runOutboxLoop(ctx, log, outboxStore, dispatcher, wfEngine, workerID+"-outbox", cfg.WorkerPollEvery)
 	}()
 
 	// Stale job recovery: a worker that died mid-job would otherwise leave the row
@@ -146,6 +161,15 @@ func run() error {
 	go func() {
 		defer wg.Done()
 		runDeliveryLoop(ctx, log, registry.sender, cfg.WorkerPollEvery)
+	}()
+
+	// Workflow scheduler: fires due schedule-triggered workflows and resumes
+	// paused runs whose delay has elapsed. Both use claim-based selection, so
+	// several worker replicas can run this without double-firing.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		runWorkflowSchedulerLoop(ctx, log, wfEngine, cfg.WorkerPollEvery)
 	}()
 
 	concurrency := cfg.WorkerConcurrency
@@ -180,6 +204,7 @@ type handlerRegistry struct {
 	hub        *integrations.Hub
 	crm        *crm.Service
 	agent      *agent.Service
+	workflows  *workflow.Engine
 }
 
 // handle dispatches one job. An unknown kind is a hard failure rather than a
@@ -352,7 +377,7 @@ func workerLoop(ctx context.Context, log *slog.Logger, queue *jobs.Queue,
 }
 
 func runOutboxLoop(ctx context.Context, log *slog.Logger, store *outbox.Store,
-	dispatcher *events.Dispatcher, workerID string, poll time.Duration) {
+	dispatcher *events.Dispatcher, wf *workflow.Engine, workerID string, poll time.Duration) {
 
 	if poll <= 0 {
 		poll = 2 * time.Second
@@ -387,9 +412,48 @@ func runOutboxLoop(ctx context.Context, log *slog.Logger, store *outbox.Store,
 					_ = store.MarkFailed(ctx, ev.ID, err)
 					continue
 				}
+				// Run event-triggered workflows. De-duplication inside the engine makes a
+				// redelivery of this event safe.
+				if wf != nil {
+					wf.HandleEvent(ctx, ev)
+				}
 				if err := store.MarkPublished(ctx, ev.ID); err != nil {
 					log.Warn("could not mark an event published", "event_id", ev.ID, "error", err)
 				}
+			}
+		}
+	}
+}
+
+// runWorkflowSchedulerLoop fires due schedule-triggered workflows and resumes
+// paused runs. Both selections claim their row before acting, so a second replica
+// running the same loop skips what the first took rather than double-firing.
+func runWorkflowSchedulerLoop(ctx context.Context, log *slog.Logger, engine *workflow.Engine, poll time.Duration) {
+	if poll <= 0 {
+		poll = 2 * time.Second
+	}
+	ticker := time.NewTicker(poll)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			due, err := engine.Store().DueScheduledWorkflows(ctx, 50)
+			if err != nil {
+				log.Warn("could not claim due workflows", "error", err)
+			}
+			for i := range due {
+				if _, err := engine.RunScheduled(ctx, due[i]); err != nil {
+					log.Warn("scheduled workflow run failed to start", "workflow_id", due[i].ID, "error", err)
+				}
+			}
+
+			resumed, err := engine.ResumeDue(ctx, 50)
+			if err != nil {
+				log.Warn("could not resume paused workflow runs", "error", err)
+			} else if resumed > 0 {
+				log.Info("resumed paused workflow runs", "count", resumed)
 			}
 		}
 	}
