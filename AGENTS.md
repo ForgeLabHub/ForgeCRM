@@ -15,7 +15,10 @@ external integration required for the core to work.
   - `internal/rbac` — permission catalog; must stay in sync with migration 0004
 - `docs/` — audit, architecture, roadmap, acceptance criteria, deployment, operations
 - `scripts/` — check-env, setup, migrate, backup, restore, smoke-test
-- `frontend/` — **empty**; the API is the only interface today
+- `frontend/` — React 19 + TypeScript + Vite web interface (pages, api clients, tests)
+- `docs/index.md` — **start here**; maps every question to the document that answers it
+- `docs/verification/matrix.md` — claim -> command -> CI job; edit it when behaviour changes
+- `BUILD.md` — pinned versions and build levels A-E
 
 ## Build and test
 

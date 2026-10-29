@@ -21,7 +21,7 @@ Verified (see [docs/PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md) for evidence):
 | --- | --- |
 | Go API, migrations, PostgreSQL schema | Working, 16 migrations applied |
 | Authentication, sessions, CSRF, TOTP | Working |
-| RBAC: 83 permissions, 28 role records | Working, enforcement verified |
+| RBAC: 87 permissions in the catalog, 14 system roles | Working, enforcement verified |
 | Audit log and security events | Working |
 | CRM entities (contacts, accounts, deals, tasks, tickets, ...) | Working |
 | Import Center: CSV, TSV, JSON, JSONL, XLSX, XML, archives | Working |
@@ -44,7 +44,7 @@ teams, email, Telegram, audit, security and diagnostics.
 Requires Docker with the Compose plugin.
 
 ```bash
-git clone https://github.com/geff1778/ForgeCRM.git
+git clone https://github.com/ForgeLabHub/ForgeCRM.git
 cd ForgeCRM
 
 cp .env.example .env
@@ -76,9 +76,36 @@ FORGECRM_SMOKE_EMAIL=you@example.com FORGECRM_SMOKE_PASSWORD='<your password>' \
 Or run `./scripts/setup.sh you@example.com`, which performs these steps and checks the
 host environment first.
 
+## Commands
+
+Everything below has a stable entry point; nothing requires remembering the
+underlying tool invocation.
+
+| Command | What it does |
+| --- | --- |
+| `make doctor` | check tools, pinned versions and services; changes nothing |
+| `make build` | build API, worker and frontend artefacts |
+| `make test` | unit tests, no database required |
+| `make test-integration` | tests against a real PostgreSQL |
+| `make test-e2e` | Playwright against a real API and database |
+| `make openapi-check` | fail when the API specification drifts from the code |
+| `make compose-up` / `make compose-down` | start / stop the stack (data is kept) |
+| `make smoke-test` | verify a running instance |
+| `make verify` | lint, tests, OpenAPI and documentation checks locally |
+| `make docs-check` | documentation completeness, links and module specs |
+
+The full matrix of what each check proves, and which CI job runs it, is
+[docs/verification/matrix.md](docs/verification/matrix.md).
+
 ## Documentation
 
+Start at [docs/index.md](docs/index.md) - it maps every question to the document
+that answers it.
+
+- [Build from a clean machine](BUILD.md) - pinned versions, build levels A-E
 - [Project audit](docs/PROJECT_AUDIT.md) - verified state, findings, risks
+- [Portability audit](docs/audit/portability-audit-2026-10-29.md) - gaps found and closed
+- [Verification matrix](docs/verification/matrix.md) - claim -> command -> CI job
 - [Architecture](docs/ARCHITECTURE.md) - module boundaries and data flow
 - [Workflow automation](docs/architecture/workflows.md) - triggers, steps, execution model
 - [Roadmap](docs/ROADMAP.md) - staged plan
@@ -141,6 +168,23 @@ cd frontend
 npm ci
 npm run typecheck && npm run lint && npm run test && npm run build
 ```
+
+## Known limitations
+
+Stated explicitly so nobody assumes more than the project provides:
+
+- **PostgreSQL 17 is the only supported database.** MySQL/MariaDB are not supported
+  (see [ADR 0008](docs/adr/0008-mysql-mariadb-datastore-blockers.md)).
+- **No license file yet.** Until one is chosen the default applies and the code is
+  not licensed for redistribution - an owner decision, tracked in
+  [CONTRIBUTING.md](CONTRIBUTING.md).
+- **No horizontal scaling without Redis**: the in-memory rate limiter is per process
+  (see [ADR 0003](docs/adr/0003-multi-replica-safety-detour.md)).
+- **Schema migrations do not roll back automatically**; the recovery path is a
+  verified backup ([docs/database/backup-restore.md](docs/database/backup-restore.md)).
+- **No distributed tracing**: `request_id` covers the request, not the async path.
+- **AI output is not guaranteed**; approvals and audit are the compensating controls.
+- **No load tests and no numeric SLOs** are claimed.
 
 ## License
 
