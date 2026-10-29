@@ -208,6 +208,18 @@ schema change requires a rebuild, not just a restart.
   of runs already recorded for it. `run_depth` is therefore derived, not passed in
   a payload. Two workflows that watch each other stop at `max_depth`.
 
+- **A service that `internal/wiring` builds is not in the API until `main.go`
+  copies it into `api.Deps`.** The two lists are maintained by hand and nothing at
+  startup compares them, so a service added to `wiring.Services` but forgotten in
+  the `api.New(&api.Deps{...})` literal leaves its handlers dereferencing nil. The
+  recovery middleware turns the panic into an opaque 500, so the fault looks like
+  a broken endpoint rather than a wiring mistake — the Forecast/Risk omission
+  surfaced only in the E2E run against the real binary.
+  `cmd/forgecrm-api/deps_wiring_test.go` now parses both declarations and fails
+  when a wired service is never copied, so the mistake is a unit-test failure.
+  The intelligence routes also mount behind `requireService`, which answers 503
+  naming the subsystem when its service is nil rather than panicking.
+
 ## Conventions
 
 - `gofmt` clean, `go vet` clean, no new dependency where the standard library works.
