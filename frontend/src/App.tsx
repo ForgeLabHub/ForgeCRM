@@ -18,6 +18,8 @@ import { WebhooksPage } from './pages/WebhooksPage'
 import { EventsPage } from './pages/EventsPage'
 import { WorkflowsPage } from './pages/WorkflowsPage'
 import { SimulationPage } from './pages/SimulationPage'
+import { ForecastPage } from './pages/ForecastPage'
+import { RiskPage } from './pages/RiskPage'
 import { JobsPage } from './pages/JobsPage'
 import { AiPage } from './pages/AiPage'
 import { ApprovalsPage } from './pages/ApprovalsPage'
@@ -208,6 +210,22 @@ export function App() {
           element={
             <RequirePermission permission="simulation.read">
               <SimulationPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="forecast"
+          element={
+            <RequirePermission permission="forecast.read">
+              <ForecastPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="risk"
+          element={
+            <RequirePermission permission="risk.read">
+              <RiskPage />
             </RequirePermission>
           }
         />
