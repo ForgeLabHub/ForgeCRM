@@ -112,3 +112,79 @@ func TestRedisStoreWithURLIsAccepted(t *testing.T) {
 		t.Fatalf("store is %q, want redis", cfg.RateLimitStore)
 	}
 }
+
+// Retention is the setting most able to destroy data, so its defaults are pinned
+// here: off unless asked for, previewing unless deletion is explicitly allowed,
+// and refusing a malformed window rather than silently ignoring it.
+
+func TestRetentionIsOffByDefault(t *testing.T) {
+	baseEnv(t)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.Retention.Enabled {
+		t.Fatal("retention is enabled by default; it must be opt-in")
+	}
+	if !cfg.Retention.DryRun {
+		t.Fatal("retention is not a dry run by default; enabling it must not delete data")
+	}
+	if cfg.Retention.AllowAudit {
+		t.Fatal("the audit trail is swept by default; it must be opt-in")
+	}
+}
+
+func TestRetentionWindowsParse(t *testing.T) {
+	baseEnv(t)
+	t.Setenv("FORGECRM_RETENTION_ENABLED", "true")
+	t.Setenv("FORGECRM_RETENTION_WINDOWS", "jobs_finished=720h, app_logs=168h")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if got := cfg.Retention.Windows["jobs_finished"]; got.Hours() != 720 {
+		t.Fatalf("jobs_finished window = %v, want 720h", got)
+	}
+	if got := cfg.Retention.Windows["app_logs"]; got.Hours() != 168 {
+		t.Fatalf("app_logs window = %v, want 168h", got)
+	}
+}
+
+func TestRetentionWindowWithoutADurationIsRejected(t *testing.T) {
+	baseEnv(t)
+	t.Setenv("FORGECRM_RETENTION_WINDOWS", "jobs_finished")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("a window with no duration was accepted")
+	} else if !strings.Contains(err.Error(), "FORGECRM_RETENTION_WINDOWS") {
+		t.Fatalf("the error does not name the setting: %v", err)
+	}
+}
+
+func TestRetentionWindowWithAnInvalidDurationIsRejected(t *testing.T) {
+	baseEnv(t)
+	t.Setenv("FORGECRM_RETENTION_WINDOWS", "jobs_finished=soon")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("an invalid duration was accepted")
+	}
+}
+
+func TestRetentionWindowDuplicatedIsRejected(t *testing.T) {
+	baseEnv(t)
+	t.Setenv("FORGECRM_RETENTION_WINDOWS", "app_logs=24h,app_logs=48h")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("a duplicated window key was accepted; the second would silently win")
+	}
+}
+
+func TestRetentionWindowMustBePositive(t *testing.T) {
+	baseEnv(t)
+	t.Setenv("FORGECRM_RETENTION_WINDOWS", "app_logs=0h")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("a zero window was accepted; it would mean delete everything")
+	}
+}

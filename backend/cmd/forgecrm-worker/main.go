@@ -34,6 +34,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/notify"
 	"github.com/geff1778/forgecrm/internal/outbox"
 	"github.com/geff1778/forgecrm/internal/rbac"
+	"github.com/geff1778/forgecrm/internal/retention"
 	"github.com/geff1778/forgecrm/internal/secrets"
 	"github.com/geff1778/forgecrm/internal/workflow"
 )
@@ -87,6 +88,12 @@ func run() error {
 		return fmt.Errorf("initialise the import service: %w", err)
 	}
 
+	retentionRunner := retention.New(db, auditLog, log, retention.Options{
+		Enabled:    cfg.Retention.Enabled,
+		Delete:     cfg.Retention.Enabled && !cfg.Retention.DryRun,
+		AllowAudit: cfg.Retention.AllowAudit,
+		Windows:    cfg.Retention.Windows,
+	})
 	registry := &handlerRegistry{
 		db:         db,
 		log:        log,
@@ -98,6 +105,16 @@ func run() error {
 		telegram:   telegramSvc,
 		hub:        hub,
 		crm:        crmSvc,
+		retention:  retentionRunner,
+	}
+	if cfg.Retention.Enabled {
+		mode := "delete"
+		if cfg.Retention.DryRun {
+			mode = "dry-run (nothing will be removed)"
+		}
+		log.Info("retention sweeps enabled", "mode", mode, "allow_audit", cfg.Retention.AllowAudit)
+	} else {
+		log.Info("retention sweeps are disabled; no records will be pruned")
 	}
 
 	// The agent runtime needs an executor to run approved actions. The worker builds
@@ -205,6 +222,7 @@ type handlerRegistry struct {
 	crm        *crm.Service
 	agent      *agent.Service
 	workflows  *workflow.Engine
+	retention  *retention.Runner
 }
 
 // handle dispatches one job. An unknown kind is a hard failure rather than a
@@ -306,24 +324,41 @@ func (r *handlerRegistry) agentSweep(ctx context.Context) error {
 	return nil
 }
 
-// retentionSweep prunes records past their retention window.
+// retentionSweep prunes records past their retention window. The policy lives in
+// internal/retention, which owns the per-table window, the dry-run posture and the
+// protected-table list; this handler only invokes it. A disabled runner is a no-op
+// and says so, so the scheduled job is harmless on a deployment that has not
+// opted in.
 func (r *handlerRegistry) retentionSweep(ctx context.Context) error {
-	// Failed deliveries and finished jobs are pruned; audit and security records
-	// are never deleted by an automatic sweep.
-	stmts := []string{
-		`DELETE FROM webhook_deliveries WHERE status = 'delivered' AND delivered_at < now() - interval '30 days'`,
-		// A dead delivery is terminal: it will never be retried, so it is retained
-		// only long enough for an operator to inspect it.
-		`DELETE FROM webhook_deliveries WHERE status = 'dead' AND next_attempt_at < now() - interval '30 days'`,
-		`DELETE FROM jobs WHERE status IN ('succeeded','cancelled') AND finished_at < now() - interval '30 days'`,
-		`DELETE FROM ai_tasks WHERE finished_at < now() - interval '90 days'`,
-		`DELETE FROM app_logs WHERE created_at < now() - interval '14 days'`,
+	if r.retention == nil || !r.retention.Enabled() {
+		return nil
 	}
-	for _, s := range stmts {
-		if _, err := r.db.Pool().Exec(ctx, s); err != nil {
-			r.log.Warn("retention sweep statement failed", "error", err)
+
+	results, err := r.retention.Run(ctx)
+	if err != nil {
+		return err
+	}
+
+	var deleted int64
+	for _, res := range results {
+		deleted += res.Deleted
+		switch {
+		case res.Error != "":
+			r.log.Warn("retention policy failed", "policy", res.Key, "error", res.Error)
+		case res.Skipped != "":
+			r.log.Debug("retention policy skipped", "policy", res.Key, "reason", res.Skipped)
+		default:
+			r.log.Info("retention policy applied",
+				"policy", res.Key, "candidates", res.Candidates,
+				"deleted", res.Deleted, "batches", res.Batches)
 		}
 	}
+
+	mode := "swept"
+	if r.retention.DryRun() {
+		mode = "previewed"
+	}
+	r.log.Info("retention run complete", "mode", mode, "deleted", deleted)
 	return nil
 }
 

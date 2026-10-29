@@ -86,10 +86,11 @@ type Config struct {
 	// are run as a separate step.
 	RunMigrationsOnStart bool
 
-	Email    EmailConfig
-	Telegram TelegramConfig
-	AI       AIConfig
-	OIDC     OIDCConfig
+	Email     EmailConfig
+	Telegram  TelegramConfig
+	AI        AIConfig
+	OIDC      OIDCConfig
+	Retention RetentionConfig
 
 	LogLevel     string
 	LogFormat    string
@@ -127,6 +128,28 @@ type AIConfig struct {
 	Model          string
 	Timeout        time.Duration
 	MaxRequestsMin int
+}
+
+// RetentionConfig configures the data-retention sweeps.
+//
+// Retention is opt-in and previews before it deletes: a deployment that sets
+// nothing keeps every row. Two switches are separate on purpose — Enabled starts
+// measuring, and AllowAudit is the second, deliberate step for evidence tables.
+// DryRun defaults to true, so enabling retention does not by itself delete data.
+type RetentionConfig struct {
+	// Enabled turns the sweep on. When false the runner is constructed but refuses
+	// to run, and the worker logs that retention is off.
+	Enabled bool
+	// DryRun measures without deleting.
+	DryRun bool
+	// AllowAudit permits the protected audit and security tables to be swept. It is
+	// separate from Enabled because removing the record of who did what is a
+	// different decision from removing a finished job.
+	AllowAudit bool
+	// Windows overrides the default window for a policy key, for example
+	// {"jobs_finished": "720h"}. A key the registry does not know is refused at
+	// startup rather than ignored, so a typo cannot silently do nothing.
+	Windows map[string]time.Duration
 }
 
 // OIDCConfig configures optional corporate SSO.
@@ -290,6 +313,20 @@ func Load() (*Config, error) {
 		c.AI.Enabled = false
 	}
 
+	c.Retention = RetentionConfig{
+		Enabled:    envBool("FORGECRM_RETENTION_ENABLED", false),
+		DryRun:     envBool("FORGECRM_RETENTION_DRY_RUN", true),
+		AllowAudit: envBool("FORGECRM_RETENTION_ALLOW_AUDIT", false),
+		Windows:    map[string]time.Duration{},
+	}
+	if raw := env("FORGECRM_RETENTION_WINDOWS", ""); raw != "" {
+		windows, err := parseRetentionWindows(raw)
+		if err != nil {
+			return nil, err
+		}
+		c.Retention.Windows = windows
+	}
+
 	c.OIDC = OIDCConfig{
 		Enabled:      envBool("FORGECRM_OIDC_ENABLED", false),
 		Issuer:       env("FORGECRM_OIDC_ISSUER", ""),
@@ -323,6 +360,41 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	return c, nil
+}
+
+// parseRetentionWindows reads the retention window overrides.
+//
+// The value is a comma-separated list of key=duration pairs, for example
+// "jobs_finished=720h,app_logs=168h". A malformed pair or a duplicate key is an
+// error rather than a silent skip: an operator who mistypes a window must find out
+// at startup, not discover months later that nothing was swept — or worse, that a
+// default they meant to override was used instead.
+func parseRetentionWindows(raw string) (map[string]time.Duration, error) {
+	out := map[string]time.Duration{}
+	for _, pair := range strings.Split(raw, ",") {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			continue
+		}
+		key, value, ok := strings.Cut(pair, "=")
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if !ok || key == "" || value == "" {
+			return nil, fmt.Errorf("FORGECRM_RETENTION_WINDOWS: %q is not a key=duration pair", pair)
+		}
+		if _, dup := out[key]; dup {
+			return nil, fmt.Errorf("FORGECRM_RETENTION_WINDOWS: %q is given twice", key)
+		}
+		d, err := time.ParseDuration(value)
+		if err != nil {
+			return nil, fmt.Errorf("FORGECRM_RETENTION_WINDOWS: %q has an invalid duration: %w", key, err)
+		}
+		if d <= 0 {
+			return nil, fmt.Errorf("FORGECRM_RETENTION_WINDOWS: %q must be positive, got %s", key, d)
+		}
+		out[key] = d
+	}
+	return out, nil
 }
 
 func envDuration(key string, def time.Duration) (time.Duration, error) {

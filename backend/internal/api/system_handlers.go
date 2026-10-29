@@ -154,6 +154,8 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		deadDeliveries    int64
 		deadLetteredEver  int64
 		pendingDeliveries int64
+		retentionRuns     int64
+		retentionDeleted  int64
 	)
 	ctx := r.Context()
 	_ = s.deps.DB.Q(ctx).QueryRow(ctx, `SELECT count(*) FROM audit_log`).Scan(&auditCount)
@@ -186,6 +188,17 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		string(audit.ActionWebhookDeadLettered)).Scan(&deadLetteredEver)
 	_ = s.deps.DB.Q(ctx).QueryRow(ctx,
 		`SELECT count(*) FROM webhook_deliveries WHERE status IN ('pending','failed','delivering')`).Scan(&pendingDeliveries)
+	// Retention observability. The counters are read from the audit trail rather than
+	// a per-process variable, so they survive a restart and are shared by every
+	// replica. retention_runs_total only rises (one entry per sweep that removed
+	// rows), which is what makes it usable as a counter; the deleted total answers
+	// "how much has the policy actually removed".
+	_ = s.deps.DB.Q(ctx).QueryRow(ctx,
+		`SELECT count(*) FROM audit_log WHERE action = $1`,
+		string(audit.ActionRetentionSweep)).Scan(&retentionRuns)
+	_ = s.deps.DB.Q(ctx).QueryRow(ctx,
+		`SELECT COALESCE(sum((metadata->>'deleted')::bigint), 0) FROM audit_log WHERE action = $1`,
+		string(audit.ActionRetentionSweep)).Scan(&retentionDeleted)
 	httpx.WriteJSON(w, map[string]any{
 		"uptime_seconds":     int64(time.Since(s.deps.StartedAt).Seconds()),
 		"jobs_by_status":     stats,
@@ -198,10 +211,13 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		"webhook_deliveries_dead":                deadDeliveries,
 		"webhook_deliveries_dead_lettered_total": deadLetteredEver,
 		"webhook_deliveries_pending_total":       pendingDeliveries,
+		"retention_runs_total":                   retentionRuns,
+		"retention_deleted_total":                retentionDeleted,
 		"subsystems": map[string]bool{
-			"email":    s.deps.Email.Enabled(),
-			"telegram": s.deps.Telegram.Enabled(),
-			"ai":       s.deps.AI.Enabled(),
+			"email":     s.deps.Email.Enabled(),
+			"telegram":  s.deps.Telegram.Enabled(),
+			"ai":        s.deps.AI.Enabled(),
+			"retention": s.deps.Config.Retention.Enabled,
 		},
 	})
 }

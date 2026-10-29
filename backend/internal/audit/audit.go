@@ -176,6 +176,11 @@ const (
 	ActionTelegramLinked       Action = "notifications.telegram_linked"
 	ActionTelegramUnlinked     Action = "notifications.telegram_unlinked"
 
+	// ActionRetentionSweep records one retention run that removed rows. It is
+	// written by the system actor and names the count per policy, so a deletion is
+	// attributable after the fact without recording what was deleted.
+	ActionRetentionSweep Action = "system.retention_sweep"
+
 	// Agent lifecycle. The agent actions are the write-before-execute record ADR
 	// 0005 requires: `proposed` exists before any effect, `approved` records the
 	// signed human decision, `executed` records the effect, and `rejected` /

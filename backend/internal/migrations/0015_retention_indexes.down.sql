@@ -1,0 +1,10 @@
+DROP INDEX IF EXISTS webhook_deliveries_delivered_at_idx;
+DROP INDEX IF EXISTS webhook_deliveries_dead_at_idx;
+DROP INDEX IF EXISTS jobs_finished_at_idx;
+DROP INDEX IF EXISTS ai_tasks_finished_at_idx;
+DROP INDEX IF EXISTS integration_runs_finished_at_idx;
+DROP INDEX IF EXISTS import_jobs_finished_at_idx;
+DROP INDEX IF EXISTS export_jobs_finished_at_idx;
+DROP INDEX IF EXISTS notifications_sweep_idx;
+DROP INDEX IF EXISTS outbox_events_published_at_idx;
+DROP INDEX IF EXISTS sessions_expires_at_idx;
