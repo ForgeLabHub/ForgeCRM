@@ -160,7 +160,11 @@ func (s *Service) readPeriod(ctx context.Context, orgID uuid.UUID, currency stri
 			COALESCE(sum(amount) FILTER (WHERE status = 'won'), 0)::text,
 			COALESCE(sum(amount) FILTER (WHERE status = 'lost'), 0)::text,
 			COALESCE(sum(amount) FILTER (WHERE status = 'open'), 0)::text,
-			COALESCE(avg(amount), 0)::text
+			-- avg() over numeric(18,2) returns a higher scale (for example
+			-- 500.0000000000000000), which the exact money parser refuses rather
+			-- than truncating. Round to the money scale where the value is produced,
+			-- so the reader hands the parser a value it can hold exactly.
+			COALESCE(round(avg(amount), 2), 0)::text
 		FROM deals
 		WHERE organization_id = $1 AND archived_at IS NULL AND currency = $2
 		  AND ($3::timestamptz IS NULL OR created_at >= $3)
