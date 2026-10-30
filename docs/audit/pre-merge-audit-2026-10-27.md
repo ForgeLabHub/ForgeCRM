@@ -1,169 +1,175 @@
-# Pre-merge technical audit — webhook lifecycle, worker recovery, HITL approvals, migrations
+# Пред-мерджевый технический аудит — жизненный цикл вебхуков, восстановление воркера, согласования HITL, миграции
 
-- **Date:** 2026-10-27
-- **Auditor:** engineering agent
-- **Scope:** `feat/webhook-lifecycle-and-hitl` @ `36cc5fe` (PR #10)
-- **Goal:** verify correctness before merge. This audit adds **no product features**; it
-  verifies the existing mechanisms and closes the coverage gaps it found.
+- **Дата:** 2026-10-27
+- **Аудитор:** инженерный агент
+- **Область:** `feat/webhook-lifecycle-and-hitl` @ `36cc5fe` (PR #10)
+- **Цель:** проверить корректность перед мёрджем. Этот аудит **не добавляет
+  продуктовых функций**; он проверяет существующие механизмы и закрывает найденные
+  пробелы покрытия.
 
-## 1. Starting state (verified, not assumed)
+## 1. Начальное состояние (проверено, не предположено)
 
-| Fact | Evidence |
+| Факт | Доказательство |
 |---|---|
-| Local HEAD | `36cc5fe77282b19f041ff29f4254e280f27f9fc1` |
-| Branch | `feat/webhook-lifecycle-and-hitl` |
-| Base | `main` @ `27caac01fe72b45c12663bc355afcf9ed09e2ede` |
+| Локальный HEAD | `36cc5fe77282b19f041ff29f4254e280f27f9fc1` |
+| Ветка | `feat/webhook-lifecycle-and-hitl` |
+| База | `main` @ `27caac01fe72b45c12663bc355afcf9ed09e2ede` |
 | PR #10 | `open`, `mergeable: true`, `mergeable_state: clean` (GitHub API) |
-| CI on HEAD | 12/12 check runs `success` (Backend, Frontend, Security, E2E, Docker, Docs) |
-| Working tree | clean |
+| CI на HEAD | 12/12 проверок `success` (Backend, Frontend, Security, E2E, Docker, Docs) |
+| Рабочее дерево | чистое |
 
-The `gh` CLI is unauthenticated in this environment; PR and CI state were read
-through the GitHub REST API with `GITHUB_TOKEN` instead. **CI was re-confirmed on
-`36cc5fe`, not assumed from a previous run.**
+CLI `gh` в этом окружении неаутентифицирован; состояние PR и CI читалось через
+GitHub REST API с `GITHUB_TOKEN`. **CI был переподтверждён на `36cc5fe`, а не
+предположен из предыдущего прогона.**
 
-### Baseline test results (this machine, not CI)
+### Базовые результаты тестов (эта машина, не CI)
 
-The environment had to be rebuilt (Go 1.26.10 and PostgreSQL 17 were re-installed;
-see §5). Against a real PostgreSQL 17.11:
+Окружение пришлось пересобрать (Go 1.26.10 и PostgreSQL 17 были переустановлены; см.
+§5). Против реального PostgreSQL 17.11:
 
-| Suite | Command | Result |
+| Набор | Команда | Результат |
 |---|---|---|
-| Unit (race) | `go test -race -count=1 ./...` | **14/14 packages pass** |
-| Integration | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration -count=1 -p 1 ./...` | **16/16 packages pass** |
-| Build | `go build ./...` | pass |
-| Vet | `go vet -tags=integration ./...` | pass |
+| Модульные (race) | `go test -race -count=1 ./...` | **14/14 пакетов проходят** |
+| Интеграционные | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration -count=1 -p 1 ./...` | **16/16 пакетов проходят** |
+| Сборка | `go build ./...` | проходит |
+| Vet | `go vet -tags=integration ./...` | проходит |
 
-## 2. Findings
+## 2. Находки
 
-Findings are separated into **defects** (would be fixed), **coverage gaps** (a real
-mechanism with no test — fixed here), and **observations** (no change required).
+Находки разделены на **дефекты** (были бы исправлены), **пробелы покрытия** (реальный
+механизм без теста — исправлены здесь) и **наблюдения** (изменений не требуется).
 
-### 2.1 Defects
+### 2.1 Дефекты
 
-**None found.** The four areas audited are correct as written. In particular the
-two defects fixed earlier on this branch (D1 replay scoping, D2 in-flight guard)
-are present and correct in the code under audit, and are covered by
+**Не найдено.** Четыре проверенные области корректны как написаны. В частности, два
+дефекта, исправленных ранее на этой ветке (D1 ограничение повтора, D2 защита «в
+полёте»), присутствуют и корректны в коде под аудитом и покрыты
 `internal/api/webhook_replay_http_test.go`.
 
-### 2.2 Coverage gaps (fixed in this audit)
+### 2.2 Пробелы покрытия (исправлены в этом аудите)
 
-Two production mechanisms were correct but had **no test exercising them**. A
-mechanism with no test is a mechanism that can silently regress, which is exactly
-the failure mode the rest of this branch guards against, so both gaps were closed.
+Два производственных механизма были корректны, но **не имели теста, их упражняющего**.
+Механизм без теста — это механизм, который может молча регрессировать, что и есть
+именно тот режим отказа, от которого защищает остальная часть этой ветки, поэтому оба
+пробела были закрыты.
 
-**G1 — Stuck-`delivering` recovery (webhook lifecycle / worker recovery).**
-`ClaimDelivery` has a second eligibility clause — a `delivering` row whose
-`locked_at` is older than the lease — and `ReleaseStaleDeliveries` resets such rows
-at worker start. Together these are the *only* way a delivery abandoned by a
-crashed worker is recovered: such a row is neither `pending` nor `failed`, so
-nothing else in the send path will ever look at it. **No test drove a claim to
-`delivering` and then asserted recovery.** Added:
+**G1 — Восстановление застрявшего `delivering` (жизненный цикл вебхуков /
+восстановление воркера).** У `ClaimDelivery` есть второе условие годности — строка
+`delivering`, чей `locked_at` старше аренды, — а `ReleaseStaleDeliveries` сбрасывает
+такие строки при старте воркера. Вместе это *единственный* способ, которым доставка,
+брошенная упавшим воркером, восстанавливается: такая строка ни `pending`, ни
+`failed`, поэтому ничто другое в пути отправки никогда на неё не посмотрит. **Ни один
+тест не доводил заявку до `delivering` и затем не утверждал восстановление.**
+Добавлено:
 
-- `TestClaimRecoversDeliveryAbandonedByCrashedWorker` — a claim held with a live
-  lease is not stolen; once the lease ages out, the next claim takes the same row
-  and transfers `locked_by`.
-- `TestReleaseStaleDeliveriesRecoversOnStartup` — only claims older than the cutoff
-  are released (a live claim is left untouched); the released row becomes
-  immediately claimable.
+- `TestClaimRecoversDeliveryAbandonedByCrashedWorker` — заявка, удерживаемая живой
+  арендой, не отбирается; когда аренда устаревает, следующая заявка берёт ту же строку
+  и передаёт `locked_by`.
+- `TestReleaseStaleDeliveriesRecoversOnStartup` — освобождаются только заявки старше
+  порога (живая заявка не трогается); освобождённая строка становится немедленно
+  забираемой.
 
-**G2 — Exactly-once execution under concurrency (HITL approvals).**
-ADR 0005 §7 claims the `approved → executed` transition "admits exactly one
-effect", and calls the guarantee "a claim about concurrent transactions". The
-existing tests called `ExecuteApprovedAction` only *sequentially*, which exercises
-the already-`executed` idempotent-replay path, not the race for the claim. Added:
+**G2 — Exactly-once исполнение при параллелизме (согласования HITL).**
+ADR 0005 §7 утверждает, что переход `approved → executed` «допускает ровно один
+эффект», и называет гарантию «утверждением о параллельных транзакциях». Существующие
+тесты вызывали `ExecuteApprovedAction` только *последовательно*, что упражняет
+идемпотентный путь повтора уже-`executed`, а не гонку за заявку. Добавлено:
 
-- `TestAgentConcurrentExecutionIsExactlyOnce` — a deliberately constructed race
-  (§3) that holds the winner inside its execution transaction while eight losers
-  race the claim; the effect must run exactly once.
-- `TestAgentExecutionConsultsPermissionsAtExecutionTime` — revoke → refused,
-  re-grant → executed, proving the permission set is read at execution time and not
-  cached from proposal time (the "no stale authority" rule, previously only tested
-  in the revoke direction).
-- `TestAgentCompleteRunClosesARunWithNoProposals` — documents the completion
-  contract of a method that currently has no caller (see 2.3).
+- `TestAgentConcurrentExecutionIsExactlyOnce` — намеренно сконструированная гонка (§3),
+  которая удерживает победителя внутри его транзакции исполнения, пока восемь
+  проигравших гоняются за заявку; эффект должен выполниться ровно один раз.
+- `TestAgentExecutionConsultsPermissionsAtExecutionTime` — отозвать → отказ, вернуть →
+  исполнено, доказывая, что набор прав читается на момент исполнения, а не кэшируется
+  с момента предложения (правило «нет устаревших полномочий», ранее проверенное только
+  в направлении отзыва).
+- `TestAgentCompleteRunClosesARunWithNoProposals` — документирует контракт завершения
+  метода, у которого сейчас нет вызывающего (см. 2.3).
 
-### 2.3 Observations (no change)
+### 2.3 Наблюдения (без изменений)
 
-**O1 — `CompleteRun` is dead code.** `agent.Service.CompleteRun` has no HTTP route,
-no production caller, and (before this audit) no test. A run with no outstanding
-proposals therefore stays in `waiting_approval` until it is cancelled or its
-proposals expire and it is failed. This is **not a safety defect**: every path that
-*needs* to end a run does so (cancel, expiry, budget), and no path leaves a run
-hung. It is a **completeness gap** — there is no way to mark a run completed
-successfully. Documented here and pinned with a test so a future caller cannot be
-added against an untested contract; implementing the completion path is a feature,
-out of scope for a pre-merge audit.
+**O1 — `CompleteRun` — мёртвый код.** У `agent.Service.CompleteRun` нет HTTP-маршрута,
+нет производственного вызывающего и (до этого аудита) нет теста. Прогон без
+незавершённых предложений поэтому остаётся в `waiting_approval`, пока не будет
+отменён, или пока его предложения не истекут и он не будет провален. Это **не дефект
+безопасности**: каждый путь, которому *нужно* завершить прогон, делает это (отмена,
+истечение, бюджет), и ни один путь не оставляет прогон зависшим. Это **пробел
+полноты** — нет способа отметить прогон успешно завершённым. Задокументировано здесь и
+закреплено тестом, чтобы будущий вызывающий не был добавлен против непроверенного
+контракта; реализация пути завершения — это функция, вне области пред-мерджевого
+аудита.
 
-**O2 — Dead-letter guard is defense-in-depth.** Mutation testing (§3) showed that
-removing *either* the `FOR UPDATE` lock on the execution load *or* the
-`status = 'approved'` guard on the claim leaves exactly-once intact — only removing
-both breaks it. The two are redundant, which is a reasonable belt-and-braces
-choice, not a defect. Recorded so a future reader does not "simplify" one away
-believing the other is absent.
+**O2 — Защита dead-letter — это эшелонированная оборона.** Мутационное тестирование
+(§3) показало, что удаление *либо* блокировки `FOR UPDATE` при загрузке исполнения,
+*либо* защиты `status = 'approved'` на заявке оставляет exactly-once нетронутым —
+ломает только удаление обоих. Эти двое избыточны, что является разумным выбором
+«ремень и подтяжки», а не дефектом. Записано, чтобы будущий читатель не «упростил» ни
+одну из них, полагая, что другой нет.
 
-**O3 — `retryOrFail`/`deadLetter` use the attempt count read at claim time.**
-`SendDelivery` loads `attempts` when it sends and passes `attempts+1` to
-`retryOrFail`. This is correct under the claim model (a row is claimed exclusively,
-so only one worker mutates it) but would be wrong if a future change allowed two
-workers to hold one row. No change; noted for the same reason as O2.
+**O3 — `retryOrFail`/`deadLetter` используют счётчик попыток, прочитанный при
+заявке.** `SendDelivery` загружает `attempts`, когда отправляет, и передаёт `attempts+1`
+в `retryOrFail`. Это корректно в модели заявки (строка заявляется эксклюзивно, поэтому
+только один воркер её мутирует), но было бы неверно, если бы будущее изменение
+позволило двум воркерам держать одну строку. Без изменений; отмечено по той же причине,
+что и O2.
 
-## 3. How the coverage gaps were proven, not just written
+## 3. Как пробелы покрытия были доказаны, а не просто написаны
 
-A test that passes against the broken code proves nothing. Each new test was
-**mutation-proofed** against the real PostgreSQL schema:
+Тест, который проходит против сломанного кода, ничего не доказывает. Каждый новый тест
+был **защищён от мутаций** против реальной схемы PostgreSQL:
 
-| Test | Mutation applied | Result |
+| Тест | Применённая мутация | Результат |
 |---|---|---|
-| `TestClaimRecoversDeliveryAbandonedByCrashedWorker` | remove the `status = 'delivering' AND locked_at < …` clause from `ClaimDelivery` | **FAIL** — "the abandoned delivery was never reclaimed" |
-| `TestReleaseStaleDeliveriesRecoversOnStartup` | drop the `locked_at < now() - …` cutoff from `ReleaseStaleDeliveries` | **FAIL** — "released 2 deliveries, want 1" |
-| `TestAgentConcurrentExecutionIsExactlyOnce` | remove the `FOR UPDATE` lock **and** the `status = 'approved'` claim guard | **FAIL** — "the effect ran 9 times … want exactly 1" (deterministic across runs) |
+| `TestClaimRecoversDeliveryAbandonedByCrashedWorker` | удалить условие `status = 'delivering' AND locked_at < …` из `ClaimDelivery` | **FAIL** — «брошенная доставка так и не была возвращена» |
+| `TestReleaseStaleDeliveriesRecoversOnStartup` | убрать порог `locked_at < now() - …` из `ReleaseStaleDeliveries` | **FAIL** — «освобождено 2 доставки, нужно 1» |
+| `TestAgentConcurrentExecutionIsExactlyOnce` | удалить блокировку `FOR UPDATE` **и** защиту заявки `status = 'approved'` | **FAIL** — «эффект выполнился 9 раз … нужно ровно 1» (детерминированно между прогонами) |
 
-The first version of the concurrency test passed under the mutation; that
-falsified it, and it was rewritten to hold the winner's transaction open with a
-blocking executor so the losers genuinely race the claim. This is recorded because
-it is the reason the test is structured the way it is.
+Первая версия теста на параллелизм проходила под мутацией; это её опровергло, и она
+была переписана, чтобы удерживать транзакцию победителя открытой блокирующим
+исполнителем, дабы проигравшие действительно гонялись за заявку. Это записано, потому
+что именно поэтому тест структурирован так, как структурирован.
 
-## 4. Migration review (0007–0011)
+## 4. Обзор миграций (0007–0011)
 
-Migrations were read in full, forward and down. All are consistent with the code:
+Миграции прочитаны полностью, вперёд и вниз. Все согласуются с кодом:
 
-- **0007** makes deliveries claimable (`locked_at`/`locked_by`), de-duplicates
-  existing rows before adding `webhook_deliveries_sub_event_uniq`, and widens the
-  claim index to `pending, failed, delivering`. The dedup `DELETE` runs before the
-  unique index, so an existing deployment cannot fail to migrate.
-- **0008** adds `dead_lettered_at` and `replay_count`, backfills `dead_lettered_at`
-  for pre-existing `dead` rows, and indexes dead rows partially. Down drops both
-  columns; it deliberately restores no data (the prior schema had nowhere to keep
-  it), which is the honest rollback.
-- **0009** creates `agent_runs`/`agent_actions`/`agent_approvals` with the state
-  sets and `CHECK` constraints matching the Go constants; `idempotency_key` is
-  `UNIQUE`; the queue/expiry indexes are partial on `status = 'proposed'`.
-- **0010** seeds `agent.read`/`agent.run` and the `approvals.read`/`approvals.decide`
-  grants. Down removes only the agent permissions and leaves the `approvals.*`
-  grants, which 0004 owns — a strict subset, which is what a down migration should be.
-- **0011** adds nullable `sessions.step_up_at`; absence means "no recent second
-  factor", the safe default.
+- **0007** делает доставки забираемыми (`locked_at`/`locked_by`), дедуплицирует
+  существующие строки до добавления `webhook_deliveries_sub_event_uniq` и расширяет
+  индекс заявки до `pending, failed, delivering`. Дедуплицирующий `DELETE` идёт до
+  уникального индекса, поэтому существующее развёртывание не может не мигрировать.
+- **0008** добавляет `dead_lettered_at` и `replay_count`, бэкфиллит `dead_lettered_at`
+  для ранее существовавших строк `dead` и частично индексирует строки dead. Down
+  удаляет оба столбца; он намеренно не восстанавливает данные (в прежней схеме их
+  негде было держать), что и есть честный откат.
+- **0009** создаёт `agent_runs`/`agent_actions`/`agent_approvals` с наборами
+  состояний и ограничениями `CHECK`, совпадающими с константами Go; `idempotency_key`
+  — `UNIQUE`; индексы очереди/истечения частичные по `status = 'proposed'`.
+- **0010** засевает `agent.read`/`agent.run` и гранты `approvals.read`/`approvals.decide`.
+  Down удаляет только разрешения агента и оставляет гранты `approvals.*`, которыми
+  владеет 0004 — строгое подмножество, чем и должна быть down-миграция.
+- **0011** добавляет nullable `sessions.step_up_at`; отсутствие означает «нет недавнего
+  второго фактора», безопасное умолчание.
 
-The rollback path is exercised by `TestWebhookDispatchMigrationRollsBack`
-(down → assert objects gone → up → assert objects back) and by the down scripts
-being written in dependency order.
+Путь отката упражняется `TestWebhookDispatchMigrationRollsBack` (down → утвердить
+исчезновение объектов → up → утвердить возврат объектов) и тем, что down-скрипты
+написаны в порядке зависимостей.
 
-## 5. Environment note
+## 5. Примечание об окружении
 
-The sandbox had been reset before this audit: Go and PostgreSQL were absent. Both
-were re-installed to the versions the project pins (Go `1.26.10` per `go.mod` and
-CI `GO_VERSION`; PostgreSQL 17) and the `forgecrm_test` database provisioned, so
-the baseline and all new tests run against a real database rather than mocks.
+Песочница была сброшена перед этим аудитом: Go и PostgreSQL отсутствовали. Оба были
+переустановлены до версий, которые закрепляет проект (Go `1.26.10` по `go.mod` и
+`GO_VERSION` в CI; PostgreSQL 17), и база `forgecrm_test` была создана, поэтому базовая
+линия и все новые тесты идут против реальной базы, а не моков.
 
-## 6. Status
+## 6. Статус
 
-| Area | Status | Evidence |
+| Область | Статус | Доказательство |
 |---|---|---|
-| Webhook lifecycle (replay, retry budget, dead-letter) | **VERIFIED** | existing HTTP + service tests pass; ADR 0004 matches code |
-| Worker recovery (lease reclaim, stale release) | **VERIFIED** | 2 new mutation-proofed integration tests |
-| HITL approvals (signature, TOCTOU, step-up, expiry) | **VERIFIED** | existing tests pass; 3 new tests incl. a real claim race |
-| Database migrations 0007–0011 | **VERIFIED** | read forward+down; rollback exercised by an existing test |
+| Жизненный цикл вебхуков (повтор, бюджет повторов, dead-letter) | **VERIFIED** | существующие HTTP + тесты сервиса проходят; ADR 0004 соответствует коду |
+| Восстановление воркера (возврат аренды, освобождение устаревших) | **VERIFIED** | 2 новых интеграционных теста, защищённых от мутаций |
+| Согласования HITL (подпись, TOCTOU, step-up, истечение) | **VERIFIED** | существующие тесты проходят; 3 новых теста, включая реальную гонку заявки |
+| Миграции базы 0007–0011 | **VERIFIED** | прочитаны вперёд+вниз; откат упражнён существующим тестом |
 
-**Merge recommendation:** the audited areas are correct and now covered. The only
-open item is **O1 (`CompleteRun` unreachable)** — a completeness gap, not a defect,
-which should be tracked as follow-up work rather than blocking this merge.
+**Рекомендация к мёрджу:** проверенные области корректны и теперь покрыты.
+Единственный открытый пункт — **O1 (`CompleteRun` недостижим)** — пробел полноты, а не
+дефект, который следует отслеживать как последующую работу, а не блокировать этим
+мёрдж.
