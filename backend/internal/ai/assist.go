@@ -1118,6 +1118,82 @@ func (s *Service) Assist(ctx context.Context, p *rbac.Principal, req AssistReque
 		return nil, err
 	}
 
+	return s.finishInsight(ctx, p, req, hash, b, resp), nil
+}
+
+// AssistStream is Assist with incremental output.
+//
+// It shares every check with Assist — the caller's entity permission, the cache,
+// the rate cap, the ai_tasks record and the audit entry — and differs only in how
+// the reply is delivered: onDelta is called with the model's raw text as it
+// arrives, and the returned Insight is the same one Assist would return. A client
+// that wants the parsed structure reads the returned Insight; one that wants to
+// show the reply forming consumes the deltas.
+//
+// The cache is consulted before the provider is called, exactly as in Assist. A
+// cached answer is delivered as a single delta, so a streaming client does not
+// have to special-case it.
+func (s *Service) AssistStream(ctx context.Context, p *rbac.Principal, req AssistRequest, onDelta DeltaFunc) (*Insight, error) {
+	if !req.Kind.Valid() {
+		return nil, httpx.ValidationError(map[string]string{"kind": "unsupported assistance kind"})
+	}
+	if req.Kind == KindAsk && strings.TrimSpace(req.Question) == "" {
+		return nil, httpx.ValidationError(map[string]string{"question": "a question is required for this kind"})
+	}
+	if len(req.Question) > askQuestionMaxLen {
+		return nil, httpx.ValidationError(map[string]string{
+			"question": fmt.Sprintf("the question must be at most %d characters", askQuestionMaxLen)})
+	}
+	if !s.Enabled() {
+		return nil, ErrDisabled
+	}
+
+	b, err := s.Assemble(ctx, p, req)
+	if err != nil {
+		return nil, err
+	}
+	hash := contextHash(req, b, s.ModelName())
+
+	if !req.Refresh {
+		if cached, err := s.loadCachedInsight(ctx, p.OrganizationID, req, hash); err == nil && cached != nil {
+			// Emit the cached analysis as one delta. A client showing the reply
+			// forming sees the whole answer at once, which is honest: it was not
+			// produced incrementally.
+			if cached.Analysis != "" {
+				if err := onDelta(cached.Analysis); err != nil {
+					return nil, err
+				}
+			}
+			return &Insight{
+				Kind: req.Kind, EntityType: req.EntityType, EntityID: req.EntityID.String(),
+				Cached: true, Provider: cached.Provider, Model: cached.Model,
+				Facts: b.Facts, Analysis: cached.Analysis, Recommendations: cached.Recs,
+				Draft: cached.Draft, Disclosures: b.Disclosures,
+				Confidence:  computeConfidence(cached.Analysis, cached.Recs, b.Facts, b.Disclosures),
+				GeneratedAt: cached.CreatedAt,
+			}, nil
+		}
+	}
+
+	system := s.buildSystemPrompt(req.Kind, b, req.Question, req.RecipientHint)
+	resp, err := s.Stream(ctx, principal{p: p}, CompletionRequest{
+		System:      system,
+		Messages:    []Message{{Role: "user", Content: userTurn(req)}},
+		MaxTokens:   1024,
+		Temperature: 0.2,
+		Kind:        string(req.Kind),
+	}, onDelta)
+	if err != nil {
+		return nil, err
+	}
+	return s.finishInsight(ctx, p, req, hash, b, resp), nil
+}
+
+// finishInsight parses a completed reply, caches it, audits it and assembles the
+// Insight. It is the shared tail of Assist and AssistStream, so the two cannot
+// drift in how they record or cache a result.
+func (s *Service) finishInsight(ctx context.Context, p *rbac.Principal, req AssistRequest,
+	hash string, b *contextBundle, resp *CompletionResponse) *Insight {
 	out, parseDisclosures := parseModelOutput(resp.Content)
 	disclosures := append(append([]Disclosure{}, b.Disclosures...), parseDisclosures...)
 
@@ -1138,7 +1214,7 @@ func (s *Service) Assist(ctx context.Context, p *rbac.Principal, req AssistReque
 		Draft: out.Draft, Disclosures: disclosures,
 		Confidence:  computeConfidence(out.Analysis, out.Recommendations, b.Facts, disclosures),
 		GeneratedAt: s.now(),
-	}, nil
+	}
 }
 
 // userTurn is the user message. The record data is in the system prompt's context

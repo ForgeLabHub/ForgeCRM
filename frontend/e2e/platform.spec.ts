@@ -277,6 +277,28 @@ test.describe('contextual AI', () => {
     await expect(panel.getByText(/from the CRM/i)).toBeVisible()
     await expect(panel.getByText('model output').first()).toBeVisible()
   })
+
+  test('the streaming route answers with an event stream, not JSON', async ({
+    authedPage: page,
+  }) => {
+    // The streaming route is the transport the assistant panel uses. A proxy that
+    // buffered it would break the panel, so the route must announce itself as an
+    // event stream and, when no provider is configured, deliver the refusal as an
+    // `error` event rather than an HTTP status — the status line is committed
+    // before the handler knows the provider is missing.
+    const status = await page.request.get('/api/v1/ai/status')
+    const { enabled } = (await status.json()) as { enabled: boolean }
+    test.skip(enabled, 'a provider is configured; this case asserts the disabled stream')
+
+    const res = await page.request.post('/api/v1/ai/stream/chat', {
+      data: { prompt: 'hello' },
+    })
+    expect(res.status()).toBe(200)
+    expect(res.headers()['content-type']).toContain('text/event-stream')
+    const body = await res.text()
+    expect(body).toContain('event: error')
+    expect(body).toContain('disabled')
+  })
 })
 
 test.describe('workspace pages render live data', () => {

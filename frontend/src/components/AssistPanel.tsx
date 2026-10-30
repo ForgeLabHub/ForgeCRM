@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { assistApi } from '../api/assist'
 import type {
@@ -76,6 +76,71 @@ export function AssistPanel({
       }),
   })
 
+  // Streaming state. The stream is used for the same request as `run`; `run` stays
+  // for the "ask again" path and as the fallback when the stream cannot be read.
+  // The deltas are kept only while a request is in flight: once the final insight
+  // arrives, the structured view replaces the raw text so the user never reads the
+  // half-formed JSON the model emits before it is parsed.
+  const [streaming, setStreaming] = useState(false)
+  const [streamText, setStreamText] = useState('')
+  const [streamError, setStreamError] = useState<unknown>(null)
+  const [streamInsight, setStreamInsight] = useState<AssistInsight | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
+
+  // A stream that is left open when the panel unmounts keeps a provider call and a
+  // database write alive for a record the user has navigated away from.
+  useEffect(() => {
+    return () => abortRef.current?.abort()
+  }, [])
+
+  const startStream = (refresh = false) => {
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+    setStreaming(true)
+    setStreamText('')
+    setStreamError(null)
+    setStreamInsight(null)
+    let gotDone = false
+    void assistApi
+      .stream(
+        entityType,
+        entityId,
+        {
+          kind,
+          question: kind === 'ask' ? question : undefined,
+          recipient_hint: kind === 'draft' && recipientHint ? recipientHint : undefined,
+          refresh,
+        },
+        (text) => setStreamText((prev) => prev + text),
+        (insight) => {
+          gotDone = true
+          setStreamInsight(insight)
+        },
+        controller.signal,
+      )
+      .then(() => {
+        // A stream that ends without a `done` event means an intermediary swallowed
+        // the body (a proxy that buffered it, a deployment without the streaming
+        // route). Falling back to the buffered request keeps the feature working
+        // rather than showing the user a blank panel and calling it success.
+        if (!gotDone && !controller.signal.aborted) {
+          run.mutate(refresh)
+        }
+      })
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === 'AbortError') return
+        setStreamError(err)
+      })
+      .finally(() => setStreaming(false))
+  }
+
+  const stopStream = () => {
+    abortRef.current?.abort()
+    abortRef.current = null
+    setStreaming(false)
+  }
+
   if (!can('ai.read')) {
     return null
   }
@@ -105,7 +170,9 @@ export function AssistPanel({
   // round trip and explains the outage rather than only reporting it.
   const providerDown = status.data?.enabled === true && status.data.healthy === false
 
-  const insight = run.data
+  // The streamed insight, once it arrives, is the current answer; the buffered
+  // `run` result is used only by the fallback path.
+  const insight = streamInsight ?? run.data
 
   return (
     <Card
@@ -115,8 +182,8 @@ export function AssistPanel({
           <button
             type="button"
             className="btn btn--ghost btn--sm"
-            onClick={() => run.mutate(true)}
-            disabled={run.isPending}
+            onClick={() => startStream(true)}
+            disabled={streaming}
           >
             Ask again
           </button>
@@ -179,11 +246,18 @@ export function AssistPanel({
           <button
             type="button"
             className="btn btn--primary btn--sm"
-            onClick={() => run.mutate(false)}
-            disabled={run.isPending || (kind === 'ask' && question.trim() === '')}
+            onClick={() => startStream(false)}
+            disabled={streaming || (kind === 'ask' && question.trim() === '')}
           >
-            {run.isPending ? 'Asking…' : 'Run'}
+            {streaming ? 'Asking…' : 'Run'}
           </button>
+          {streaming ? (
+            // A stream can run for many seconds; without a way to stop it the user
+            // is stuck watching a provider they may not want to wait for.
+            <button type="button" className="btn btn--secondary btn--sm" onClick={stopStream}>
+              Stop
+            </button>
+          ) : null}
           {insight ? (
             <span className="text-muted text-sm">
               {insight.cached ? 'From cache · ' : ''}
@@ -193,6 +267,41 @@ export function AssistPanel({
             </span>
           ) : null}
         </div>
+
+        {streamError ? (
+          <Alert tone="error">
+            <div className="stack">
+              <span>{errorMessage(streamError)}</span>
+              {isRetryable(streamError) ? (
+                <div>
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--sm"
+                    onClick={() => startStream(false)}
+                    disabled={streaming}
+                  >
+                    {streaming ? 'Trying…' : 'Try again'}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </Alert>
+        ) : null}
+
+        {/* While the reply is forming, the raw text is shown as the model's own
+            output, clearly labelled. It is replaced by the structured view once the
+            final insight arrives, so a user never mistakes a half-written JSON
+            fragment for a CRM value. */}
+        {streaming ? (
+          <section>
+            <h3 className="text-sm">
+              Reply <Badge tone="neutral">model output, in progress</Badge>
+            </h3>
+            <p className="text-muted text-sm" style={{ whiteSpace: 'pre-wrap' }}>
+              {streamText || 'Waiting for the model…'}
+            </p>
+          </section>
+        ) : null}
 
         {run.isError ? (
           <Alert tone="error">
@@ -218,9 +327,10 @@ export function AssistPanel({
           </Alert>
         ) : null}
 
-        {insight ? <InsightView insight={insight} /> : null}
+        {streamInsight ? <InsightView insight={streamInsight} /> : null}
+        {!streamInsight && insight ? <InsightView insight={insight} /> : null}
 
-        {!insight && context.data ? <ContextPreview context={context.data} /> : null}
+        {!insight && !streamInsight && context.data ? <ContextPreview context={context.data} /> : null}
       </div>
     </Card>
   )

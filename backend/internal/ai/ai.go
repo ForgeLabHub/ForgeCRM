@@ -227,6 +227,13 @@ type principalLike interface {
 
 func (s *Service) startTask(ctx context.Context, p principalLike, req CompletionRequest) uuid.UUID {
 	id := uuid.New()
+	// A service built without a database (a test, or a deployment that runs the
+	// completion path without the log table) records nothing and returns the id it
+	// would have used. Reaching for the pool unconditionally would panic here, which
+	// would make an optional subsystem a hard dependency.
+	if s.db == nil {
+		return id
+	}
 	summary := summarisePrompt(req)
 	var (
 		orgID  *uuid.UUID
@@ -267,6 +274,9 @@ func (s *Service) logger() *slog.Logger {
 
 func (s *Service) finishTask(ctx context.Context, id uuid.UUID, status string,
 	inTokens, outTokens int, latencyMS int64, cause error) {
+	if s.db == nil {
+		return
+	}
 	var errText *string
 	if cause != nil {
 		t := cause.Error()

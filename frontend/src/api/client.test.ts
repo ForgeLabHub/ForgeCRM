@@ -318,3 +318,88 @@ describe('file downloads', () => {
     expect(filenameFromDisposition('inline')).toBeUndefined()
   })
 })
+
+describe('server-sent event streams', () => {
+  /** Builds a client whose fetch returns a streaming response. */
+  function clientWithStream(body: string, status = 200) {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(body, { status, headers: { 'Content-Type': 'text/event-stream' } }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    return { client: new ApiClient(), fetchMock }
+  }
+
+  it('delivers each event as it arrives, in order', async () => {
+    const { client } = clientWithStream(
+      'event: delta\ndata: {"text":"a"}\n\n' +
+        'event: delta\ndata: {"text":"b"}\n\n' +
+        'event: done\ndata: {"model":"m"}\n\n',
+    )
+    const seen: { event: string; data: unknown }[] = []
+    await client.stream('/api/v1/ai/stream/chat', { prompt: 'hi' }, (e) => seen.push(e))
+
+    expect(seen.map((e) => e.event)).toEqual(['delta', 'delta', 'done'])
+    expect(seen[0].data).toEqual({ text: 'a' })
+    expect(seen[2].data).toEqual({ model: 'm' })
+  })
+
+  it('sends the CSRF header and the request body', async () => {
+    csrfTokenStore.set('token-123')
+    const { client, fetchMock } = clientWithStream('event: done\ndata: {}\n\n')
+    await client.stream('/api/v1/ai/stream/chat', { prompt: 'hello' }, () => {})
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit
+    const headers = init.headers as Record<string, string>
+    expect(headers['X-CSRF-Token']).toBe('token-123')
+    expect(headers['Accept']).toBe('text/event-stream')
+    expect(init.body).toBe(JSON.stringify({ prompt: 'hello' }))
+  })
+
+  it('turns a streamed error event into an ApiError', async () => {
+    const { client } = clientWithStream(
+      'event: error\ndata: {"code":"unavailable","message":"The AI provider could not be reached.","retryable":true}\n\n',
+    )
+    await expect(client.stream('/api/v1/ai/stream/chat', {}, () => {})).rejects.toMatchObject({
+      code: 'unavailable',
+      retryable: true,
+    })
+  })
+
+  it('raises a non-2xx response as an ApiError before reading the stream', async () => {
+    const { client } = clientWithStream(
+      JSON.stringify({ error: { code: 'rate_limited', message: 'too many requests' } }),
+      429,
+    )
+    await expect(client.stream('/api/v1/ai/stream/chat', {}, () => {})).rejects.toMatchObject({
+      code: 'rate_limited',
+      status: 429,
+    })
+  })
+
+  it('handles a frame split across two chunks', async () => {
+    // A real stream arrives in arbitrary TCP-sized pieces; a frame that straddles
+    // two reads must still be parsed whole.
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('event: delta\ndata: {"te'))
+        controller.enqueue(encoder.encode('xt":"split"}\n\nevent: done\ndata: {}\n\n'))
+        controller.close()
+      },
+    })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(stream, { status: 200 })))
+    const client = new ApiClient()
+    const seen: { event: string; data: unknown }[] = []
+    await client.stream('/api/v1/ai/stream/chat', {}, (e) => seen.push(e))
+
+    expect(seen).toHaveLength(2)
+    expect(seen[0]).toEqual({ event: 'delta', data: { text: 'split' } })
+  })
+
+  it('ignores keep-alive comment lines', async () => {
+    const { client } = clientWithStream(': keep-alive\n\nevent: done\ndata: {"model":"m"}\n\n')
+    const seen: string[] = []
+    await client.stream('/api/v1/ai/stream/chat', {}, (e) => seen.push(e.event))
+    expect(seen).toEqual(['done'])
+  })
+})

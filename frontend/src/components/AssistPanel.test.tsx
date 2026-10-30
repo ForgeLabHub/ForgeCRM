@@ -13,7 +13,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AssistPanel } from './AssistPanel'
 import { AuthProvider } from '../hooks/useAuth'
 
-/** Builds a fetch stub that answers the panel's calls. */
+/**
+ * Builds a fetch stub that answers the panel's calls.
+ *
+ * The streaming route answers with a real server-sent-event body derived from the
+ * same insight the buffered route would return, so the tests drive the actual
+ * streaming path rather than a stub of it. `streamMode` lets a test force the
+ * fallback: `empty` sends no events, which is what a proxy that swallows the body
+ * produces, and the panel must then fall back to the buffered request.
+ */
 function stubFetch(handlers: {
   status?: unknown
   context?: unknown
@@ -21,6 +29,8 @@ function stubFetch(handlers: {
   assistStatus?: number
   /** When set, the error envelope carries this retryable flag. */
   assistRetryable?: boolean
+  /** 'events' (default) streams the insight; 'empty' streams nothing. */
+  streamMode?: 'events' | 'empty'
 }) {
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input.toString()
@@ -29,6 +39,28 @@ function stubFetch(handlers: {
     }
     if (url.includes('/context')) {
       return Promise.resolve(json(handlers.context ?? { facts: [], disclosures: [], available: true }))
+    }
+    if (url.includes('/api/v1/ai/stream/assist/')) {
+      if (handlers.assistStatus && handlers.assistStatus >= 400) {
+        return Promise.resolve(
+          json(
+            {
+              retryable: handlers.assistRetryable ?? false,
+              error: { code: 'forbidden', message: 'permission deals.read is required' },
+            },
+            handlers.assistStatus,
+          ),
+        )
+      }
+      if (handlers.streamMode === 'empty') {
+        return Promise.resolve(sse(''))
+      }
+      const body = handlers.assist ?? {}
+      const analysis = typeof body === 'object' && body !== null ? (body as { analysis?: string }).analysis : ''
+      let out = ''
+      if (analysis) out += sseFrame('delta', { text: analysis })
+      out += sseFrame('done', body)
+      return Promise.resolve(sse(out))
     }
     if (url.includes('/api/v1/ai/assist/')) {
       if (handlers.assistStatus && handlers.assistStatus >= 400) {
@@ -58,6 +90,19 @@ function stubFetch(handlers: {
   })
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
+}
+
+/** One server-sent-event frame, in the exact shape the server writes. */
+function sseFrame(event: string, data: unknown): string {
+  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
+}
+
+/** A streaming Response whose body is the given event frames. */
+function sse(body: string): Response {
+  return new Response(body, {
+    status: 200,
+    headers: { 'Content-Type': 'text/event-stream' },
+  })
 }
 
 function json(body: unknown, status = 200): Response {
@@ -240,5 +285,47 @@ describe('AssistPanel', () => {
 
     expect(await screen.findByText(/Weakly grounded/i)).toBeInTheDocument()
     expect(screen.getByText(/do not appear in the record/i)).toBeInTheDocument()
+  })
+
+  it('streams the reply and replaces the raw text with the structured insight', async () => {
+    stubFetch({ assist: insight })
+    renderPanel()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Run' }))
+
+    // The final structured view is what the user is left with: the facts block,
+    // the analysis and the recommendations, each labelled. The transient raw-text
+    // section must be gone once the stream closes.
+    expect(await screen.findByText(/What the assistant was told/i)).toBeInTheDocument()
+    expect(screen.getByText(/1000.00 USD/)).toBeInTheDocument()
+    expect(screen.queryByText(/model output, in progress/i)).not.toBeInTheDocument()
+  })
+
+  it('falls back to the buffered request when the stream delivers nothing', async () => {
+    // A proxy that swallows the stream body ends the stream with no `done` event.
+    // The panel must not treat that as success with an empty answer; it falls back
+    // to the buffered route, which is served by the same service.
+    const fetchMock = stubFetch({ assist: insight, streamMode: 'empty' })
+    renderPanel()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Run' }))
+
+    expect(await screen.findByText(/The deal has stalled for two weeks/)).toBeInTheDocument()
+    const urls = fetchMock.mock.calls.map((c) => String(c[0]))
+    expect(urls.some((u) => u.includes('/api/v1/ai/stream/assist/'))).toBe(true)
+    expect(urls.some((u) => /\/api\/v1\/ai\/assist\/[^/]*\?/.test(u) || u.includes('/api/v1/ai/assist/'))).toBe(
+      true,
+    )
+  })
+
+  it('surfaces a streamed error as a retryable failure with a retry button', async () => {
+    stubFetch({ assist: insight, assistStatus: 429, assistRetryable: true })
+    renderPanel()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Run' }))
+
+    // The stream route answered 429 before opening; the panel shows the message and,
+    // because the server marked it retryable, a retry button.
+    expect(await screen.findByText(/Try again/i)).toBeInTheDocument()
   })
 })

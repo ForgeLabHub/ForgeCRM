@@ -6726,6 +6726,339 @@
         }
       }
     },
+    "/api/v1/ai/stream/assist/{id}": {
+      "post": {
+        "operationId": "postAiStreamAssistById",
+        "tags": [
+          "ai-and-mcp"
+        ],
+        "summary": "Perform an action on an assist",
+        "description": "Requires the `ai.tools.execute` permission.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "entity_type",
+            "in": "query",
+            "required": true,
+            "description": "The kind of record the identifier names.",
+            "schema": {
+              "enum": [
+                "account",
+                "contact",
+                "deal",
+                "ticket",
+                "task"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiStreamAssistRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A server-sent event stream. Each `delta` event carries `{\"text\": ...}` with the model's raw text as it arrives; the final `done` event carries the whole Insight, with the CRM facts, the model's analysis and recommendations kept in separate fields, exactly as the buffered route returns them. An `error` event carries `{code, message, retryable}` and ends the stream.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed: bad JSON, an unknown field, or a missing required parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session, or the session has expired. Sign in again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but the caller lacks the required permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such resource, or none visible to the caller's organization.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request conflicts with current state, such as a duplicate external identifier.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A field failed validation. `error.details` names each field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests. Retry after the interval in `Retry-After`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected failure. The detail is deliberately generic; the cause is in the server log.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/stream/chat": {
+      "post": {
+        "operationId": "postAiStreamChat",
+        "tags": [
+          "ai-and-mcp"
+        ],
+        "summary": "Create a chat",
+        "description": "Requires the `ai.tools.execute` permission.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiStreamChatRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "A server-sent event stream. Each `delta` event carries `{\"text\": ...}` with a piece of the reply as it arrives; the final `done` event carries the model name and token usage. An `error` event carries `{code, message, retryable}` and ends the stream, because the status line is already committed once the stream is open.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed: bad JSON, an unknown field, or a missing required parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session, or the session has expired. Sign in again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated, but the caller lacks the required permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such resource, or none visible to the caller's organization.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request conflicts with current state, such as a duplicate external identifier.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A field failed validation. `error.details` names each field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests. Retry after the interval in `Retry-After`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected failure. The detail is deliberately generic; the cause is in the server log.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/ai/tasks": {
       "get": {
         "operationId": "getAiTasks",
@@ -34751,6 +35084,43 @@
           "input_tokens",
           "model",
           "output_tokens"
+        ],
+        "type": "object"
+      },
+      "AiStreamAssistRequest": {
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          },
+          "recipient_hint": {
+            "type": "string"
+          },
+          "refresh": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "AiStreamChatRequest": {
+        "properties": {
+          "max_tokens": {
+            "type": "integer"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "system": {
+            "type": "string"
+          },
+          "temperature": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "prompt"
         ],
         "type": "object"
       },

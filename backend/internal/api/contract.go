@@ -340,6 +340,27 @@ func APIContract() openapi.Contract {
 	c.QueryParams["POST /api/v1/ai/assist/{id}"] = []openapi.QueryParam{entityTypeParam}
 	c.QueryParams["GET /api/v1/ai/assist/{id}/context"] = []openapi.QueryParam{entityTypeParam}
 
+	// Streaming AI. These routes answer with server-sent events, not JSON, so the
+	// request bodies are declared here but the success response is a stream.
+	c.RequestBodies["POST /api/v1/ai/stream/chat"] = reflect.TypeOf(aiStreamChatRequest{})
+	c.RequiredBody["AiStreamChatRequest"] = []string{"prompt"}
+	c.RequestBodies["POST /api/v1/ai/stream/assist/{id}"] = reflect.TypeOf(aiStreamAssistRequest{})
+	c.QueryParams["POST /api/v1/ai/stream/assist/{id}"] = []openapi.QueryParam{entityTypeParam}
+	c.StreamingSuccess["POST /api/v1/ai/stream/chat"] = openapi.StreamingResponse{
+		MediaTypes: []string{"text/event-stream"},
+		Description: "A server-sent event stream. Each `delta` event carries `{\"text\": ...}` with a piece " +
+			"of the reply as it arrives; the final `done` event carries the model name and token usage. " +
+			"An `error` event carries `{code, message, retryable}` and ends the stream, because the status " +
+			"line is already committed once the stream is open.",
+	}
+	c.StreamingSuccess["POST /api/v1/ai/stream/assist/{id}"] = openapi.StreamingResponse{
+		MediaTypes: []string{"text/event-stream"},
+		Description: "A server-sent event stream. Each `delta` event carries `{\"text\": ...}` with the " +
+			"model's raw text as it arrives; the final `done` event carries the whole Insight, with the CRM " +
+			"facts, the model's analysis and recommendations kept in separate fields, exactly as the buffered " +
+			"route returns them. An `error` event carries `{code, message, retryable}` and ends the stream.",
+	}
+
 	// The protocol endpoint. `id` is echoed back unchanged and may be a string or a
 	// number, so the schema describes it as either; omit it to send a notification,
 	// which receives an empty 202 and no body.

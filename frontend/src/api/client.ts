@@ -322,6 +322,106 @@ export class ApiClient {
     return this.request<T>(path, { method: 'POST', body, skipCSRF: options.skipCSRF })
   }
 
+  /**
+   * Posts a request and consumes a server-sent-event stream.
+   *
+   * EventSource cannot be used here: it only issues GET requests and cannot send
+   * the CSRF header, and both are required. The stream is read with fetch and a
+   * reader, and each `event:`/`data:` frame is handed to the caller as it arrives.
+   *
+   * The `error` event the server sends once the stream is open is turned into an
+   * ApiError, so a caller handles a streamed failure the same way it handles a
+   * buffered one. A non-2xx response before the stream opens is a normal error
+   * envelope and is raised as an ApiError too.
+   */
+  async stream(
+    path: string,
+    body: unknown,
+    onEvent: (event: { event: string; data: unknown }) => void,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const headers: Record<string, string> = {
+      Accept: 'text/event-stream',
+      'Content-Type': 'application/json',
+    }
+    const token = csrfTokenStore.get()
+    if (token) headers['X-CSRF-Token'] = token
+
+    let response: Response
+    try {
+      response = await fetch(`${this.baseUrl}${path}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        credentials: 'same-origin',
+        signal,
+      })
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') throw error
+      throw new NetworkError('Could not reach the server.', error)
+    }
+
+    if (response.status === 401) {
+      csrfTokenStore.clear()
+      this.onUnauthorized?.()
+    }
+
+    if (!response.ok) {
+      const text = await response.text()
+      let envelope: ApiErrorEnvelope | undefined
+      try {
+        envelope = JSON.parse(text) as ApiErrorEnvelope
+      } catch {
+        envelope = undefined
+      }
+      const errBody: ApiErrorBody = envelope?.error ?? {
+        code: 'internal_error',
+        message: envelope?.detail ?? `Request failed (HTTP ${response.status}).`,
+      }
+      throw new ApiError(
+        response.status,
+        errBody,
+        envelope?.request_id ?? response.headers.get('X-Request-ID') ?? undefined,
+        envelope?.retryable ?? false,
+      )
+    }
+    if (!response.body) {
+      throw new NetworkError('The server returned an empty stream.')
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    try {
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        // Frames are separated by a blank line. A trailing partial frame stays in
+        // the buffer until the rest of it arrives.
+        let sep: number
+        while ((sep = buffer.indexOf('\n\n')) !== -1) {
+          const frame = buffer.slice(0, sep)
+          buffer = buffer.slice(sep + 2)
+          const parsed = parseSSEFrame(frame)
+          if (!parsed) continue
+          if (parsed.event === 'error') {
+            throw streamEventError(parsed.data)
+          }
+          onEvent(parsed)
+        }
+      }
+      // A final frame without a trailing blank line still counts.
+      const parsed = parseSSEFrame(buffer)
+      if (parsed) {
+        if (parsed.event === 'error') throw streamEventError(parsed.data)
+        onEvent(parsed)
+      }
+    } finally {
+      reader.releaseLock()
+    }
+  }
+
   put<T>(path: string, body?: unknown): Promise<T> {
     return this.request<T>(path, { method: 'PUT', body })
   }
@@ -351,6 +451,56 @@ export function errorMessage(error: unknown): string {
 export function fieldErrors(error: unknown): Record<string, string> {
   if (error instanceof ApiError) return error.details
   return {}
+}
+
+/**
+ * Parses one server-sent-event frame into an event name and its decoded data.
+ *
+ * Only the `event` and `data` fields are read: the stream never sends `id` or
+ * `retry`, and a `:` comment line is ignored, which is the standard way a
+ * keep-alive comment is written. Multiple `data:` lines are joined with a newline
+ * as the event-stream format requires, though this server always sends one.
+ */
+function parseSSEFrame(frame: string): { event: string; data: unknown } | null {
+  let event = 'message'
+  const dataLines: string[] = []
+  for (const rawLine of frame.split('\n')) {
+    const line = rawLine.replace(/\r$/, '')
+    if (line === '' || line.startsWith(':')) continue
+    if (line.startsWith('event:')) {
+      event = line.slice('event:'.length).trim()
+    } else if (line.startsWith('data:')) {
+      dataLines.push(line.slice('data:'.length).replace(/^ /, ''))
+    }
+  }
+  if (dataLines.length === 0) return null
+  const raw = dataLines.join('\n')
+  let data: unknown = raw
+  try {
+    data = JSON.parse(raw)
+  } catch {
+    // Leave it as text: the caller can still show something, and the alternative
+    // is dropping the event entirely.
+  }
+  return { event, data }
+}
+
+/**
+ * Turns the payload of a streamed `error` event into an ApiError, so a caller
+ * handles a failure that arrived mid-stream exactly like one that arrived as an
+ * HTTP status.
+ */
+function streamEventError(data: unknown): ApiError {
+  const body = (data ?? {}) as Partial<ApiErrorBody> & { retryable?: boolean }
+  return new ApiError(
+    200,
+    {
+      code: (body.code as ErrorCode) ?? 'internal_error',
+      message: body.message ?? 'The request failed.',
+    },
+    undefined,
+    body.retryable ?? false,
+  )
 }
 
 /**

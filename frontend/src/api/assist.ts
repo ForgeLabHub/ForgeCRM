@@ -127,4 +127,37 @@ export const assistApi = {
     api.get<AssistContext>(
       `/api/v1/ai/assist/${entityId}/context?entity_type=${encodeURIComponent(entityType)}`,
     ),
+
+  /**
+   * Produces assistance for one record, delivering the model's reply as it arrives.
+   *
+   * `onDelta` is called with each piece of raw text; `onDone` is called once with
+   * the fully parsed insight, which is the same object `run` returns. A client that
+   * wants the reply forming uses the deltas; one that wants the structured result
+   * uses the final insight. The returned promise resolves when the stream ends and
+   * rejects on a failure, which — because the stream is already open by then —
+   * arrives as an `error` event turned into an ApiError.
+   */
+  stream: async (
+    entityType: AssistEntityType,
+    entityId: string,
+    body: AssistRequest,
+    onDelta: (text: string) => void,
+    onDone: (insight: AssistInsight) => void,
+    signal?: AbortSignal,
+  ): Promise<void> => {
+    await api.stream(
+      `/api/v1/ai/stream/assist/${entityId}?entity_type=${encodeURIComponent(entityType)}`,
+      body,
+      ({ event, data }) => {
+        if (event === 'delta') {
+          const text = (data as { text?: string })?.text
+          if (text) onDelta(text)
+        } else if (event === 'done') {
+          onDone(data as AssistInsight)
+        }
+      },
+      signal,
+    )
+  },
 }
