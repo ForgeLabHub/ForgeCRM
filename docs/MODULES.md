@@ -730,11 +730,11 @@ Two things this document deliberately does not do:
 | **Import pages** | Import Center UI | `pages/{ImportCenter,ImportDetail}Page.tsx`, `api/imports.ts` | `api/imports.ts` | E2E | `no` |
 | **Integrations/Webhooks/Events/Jobs pages** | admin surfaces | `pages/{Integrations,Webhooks,Events,Jobs,Migrations}Page.tsx` + matching api clients | their api clients | E2E | `no` |
 | **Notifications page** | the inbox for workflow notifications | `pages/NotificationsPage.tsx` | `api/crm.ts` | `NotificationsPage.test.tsx` | `almost` |
-| **Admin pages** | audit, users, roles, orgs, teams, security, diagnostics, email, telegram | `pages/admin/*.tsx`, `api/admin.ts` | `api/admin.ts` | `SecurityPage.test.tsx` | `no` |
+| **Admin pages** | audit, users, roles, orgs, teams, security, diagnostics (+ platform settings), email, telegram | `pages/admin/*.tsx`, `api/admin.ts` | `api/admin.ts` | `SecurityPage.test.tsx`, `DiagnosticsPage.test.tsx` | `no` |
 | **Attachments** | document upload/download | `components/AttachmentPanel.tsx`, `api/documents.ts` | `api/documents.ts` | `AttachmentPanel.test.tsx` | `almost` |
 
-**Frontend totals:** 82 `.ts`/`.tsx` files; 16 unit test files (112 tests); E2E in
-`frontend/e2e/platform.spec.ts` (46 passing, 1 conditionally skipped).
+**Frontend totals:** 83 `.ts`/`.tsx` files; 17 unit test files (115 tests); E2E in
+`frontend/e2e/platform.spec.ts` (47 passing, 1 conditionally skipped).
 
 ---
 

@@ -76,8 +76,11 @@ export const diagnosticsApi = {
   settings: () => api.get<{ items: Record<string, { value: unknown; updated_at: string }> }>(
     '/api/v1/admin/settings',
   ),
+  // The setting to write is a query parameter and only the value is the body,
+  // matching the route: a request that puts the key in the body is rejected as a
+  // missing key.
   updateSetting: (key: string, value: unknown) =>
-    api.put(`/api/v1/admin/settings`, { key, value }),
+    api.put(`/api/v1/admin/settings?key=${encodeURIComponent(key)}`, { value }),
 }
 
 export const systemApi = {

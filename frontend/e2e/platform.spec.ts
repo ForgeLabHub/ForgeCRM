@@ -631,6 +631,44 @@ test.describe('notifications', () => {
   })
 })
 
+test.describe('platform settings', () => {
+  test('a setting saved on the diagnostics page persists and is returned by the API', async ({
+    authedPage: page,
+  }) => {
+    const key = `e2e.setting_${RUN_ID}`
+    await page.goto('/admin/diagnostics')
+
+    // The store starts empty in a scratch database, so the page offers no Edit
+    // control until a key exists. Seed one through the API the client itself
+    // calls, exercising the documented query-parameter contract.
+    const me = await page.request.get('/api/v1/auth/me')
+    const { csrf_token } = (await me.json()) as { csrf_token: string }
+    const write = await page.request.put(
+      `/api/v1/admin/settings?key=${encodeURIComponent(key)}`,
+      { headers: { 'X-CSRF-Token': csrf_token }, data: { value: 'before' } },
+    )
+    expect(write.status()).toBe(200)
+
+    await page.reload()
+
+    // Edit the value through the page and confirm it reaches the server.
+    const row = page.locator('.dl-row', { hasText: key })
+    await expect(row).toBeVisible({ timeout: 15_000 })
+    await row.getByRole('button', { name: 'Edit' }).click()
+    const input = page.getByLabel(`Value for ${key}`)
+    await input.fill('after')
+    await page.getByRole('button', { name: 'Save' }).click()
+
+    await expect
+      .poll(async () => {
+        const res = await page.request.get('/api/v1/admin/settings')
+        const body = (await res.json()) as { items: Record<string, { value: unknown }> }
+        return body.items[key]?.value
+      })
+      .toBe('after')
+  })
+})
+
 test.describe('health endpoints', () => {
   test('the API reports healthy and ready', async ({ request }) => {
     expect((await request.get('/health')).status()).toBe(200)

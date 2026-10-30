@@ -688,6 +688,9 @@ tbody tr:last-child td { border-bottom: none; }
 .dl dt { color: var(--color-text-muted); }
 .dl dd { margin: 0; }
 
+/* A row that participates in the .dl grid without adding a box of its own. */
+.dl-row { display: contents; }
+
 .sr-only {
   position: absolute;
   width: 1px;

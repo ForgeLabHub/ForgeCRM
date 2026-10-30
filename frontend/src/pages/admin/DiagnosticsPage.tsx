@@ -1,7 +1,9 @@
-import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { diagnosticsApi, systemApi } from '../../api/admin'
 import { errorMessage } from '../../api/client'
-import { Alert, Badge, Card, ErrorState, PageHeader, TableSkeleton } from '../../components/ui'
+import { useAuth } from '../../hooks/useAuth'
+import { Alert, Badge, Card, ErrorState, PageHeader, TableSkeleton, Timestamp } from '../../components/ui'
 
 /** Renders a duration in seconds as a short human-readable string. */
 function formatDuration(seconds: number): string {
@@ -132,6 +134,8 @@ export function DiagnosticsPage() {
           description="Counters and gauges collected since the process started."
         />
 
+        <SettingsCard />
+
         <JsonCard
           title="Diagnostics"
           query={diagnostics}
@@ -176,6 +180,126 @@ function JsonCard({
             {JSON.stringify(query.data ?? {}, null, 2)}
           </pre>
         </>
+      )}
+    </Card>
+  )
+}
+
+/**
+ * Platform settings.
+ *
+ * `app_settings` is a key/value store the server writes to and reads from. The
+ * endpoints existed with no consumer, and the client sent the key in the body
+ * while the route requires it as a query parameter, so a save could never
+ * succeed. Editing is offered only to a caller holding `system.settings`; a
+ * reader without it still sees the current values.
+ */
+function SettingsCard() {
+  const { can } = useAuth()
+  const canEdit = can('system.settings')
+  const queryClient = useQueryClient()
+  const [error, setError] = useState<string | null>(null)
+  const [editing, setEditing] = useState<string | null>(null)
+  const [draft, setDraft] = useState('')
+
+  const settings = useQuery({
+    queryKey: ['admin', 'settings'],
+    queryFn: diagnosticsApi.settings,
+  })
+
+  const save = useMutation({
+    mutationFn: (args: { key: string; value: unknown }) =>
+      diagnosticsApi.updateSetting(args.key, args.value),
+    onSuccess: () => {
+      setError(null)
+      setEditing(null)
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
+    },
+    onError: (err) => setError(errorMessage(err)),
+  })
+
+  const items = settings.data?.items ?? {}
+
+  function beginEdit(key: string, value: unknown) {
+    setError(null)
+    setEditing(key)
+    setDraft(typeof value === 'string' ? value : JSON.stringify(value))
+  }
+
+  function commit(key: string) {
+    // The value is a JSON document. A bare word is stored as a string; anything
+    // that parses as JSON is stored as that value.
+    let value: unknown = draft
+    try {
+      value = JSON.parse(draft)
+    } catch {
+      value = draft
+    }
+    save.mutate({ key, value })
+  }
+
+  return (
+    <Card title="Platform settings">
+      {error ? <Alert tone="error">{error}</Alert> : null}
+      {settings.isError ? (
+        <ErrorState message={errorMessage(settings.error)} onRetry={() => settings.refetch()} />
+      ) : settings.isLoading ? (
+        <TableSkeleton rows={3} columns={2} />
+      ) : Object.keys(items).length === 0 ? (
+        <p className="text-muted text-sm">
+          No platform settings have been written yet.
+          {canEdit ? ' Saving one creates it.' : ''}
+        </p>
+      ) : (
+        <dl className="dl">
+          {Object.entries(items).map(([key, entry]) => (
+            <div key={key} className="dl-row">
+              <dt className="mono">{key}</dt>
+              <dd>
+                {editing === key ? (
+                  <div className="row" style={{ gap: 'var(--space-2)' }}>
+                    <input
+                      aria-label={`Value for ${key}`}
+                      value={draft}
+                      onChange={(event) => setDraft(event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn--primary btn--sm"
+                      disabled={save.isPending}
+                      onClick={() => commit(key)}
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--sm"
+                      onClick={() => setEditing(null)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <span className="row" style={{ gap: 'var(--space-2)' }}>
+                    <span className="mono truncate">{JSON.stringify(entry.value)}</span>
+                    <span className="text-subtle text-sm">
+                      <Timestamp value={entry.updated_at} />
+                    </span>
+                    {canEdit ? (
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--sm"
+                        onClick={() => beginEdit(key, entry.value)}
+                      >
+                        Edit
+                      </button>
+                    ) : null}
+                  </span>
+                )}
+              </dd>
+            </div>
+          ))}
+        </dl>
       )}
     </Card>
   )

@@ -8,6 +8,20 @@ once it reaches 1.0.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The platform-settings write could never succeed.** The route reads the
+  setting key from the `key` query parameter and the value from the body, but the
+  interface's client sent `key` inside the body — so every save was rejected as a
+  missing key, and nothing rendered the store at all. The client now sends the key
+  as a query parameter, and the Diagnostics page gained a Platform settings card
+  that lists the stored keys and values and, for a caller holding
+  `system.settings`, edits one in place. `DiagnosticsPage.test.tsx` pins the
+  query-parameter contract and the permission gate; `internal/api/settings_test.go`
+  holds the route to the same contract against PostgreSQL and checks the
+  permission and the credential-key refusal; an E2E edits a setting on the page and
+  reads the new value back through the API.
+
 ### Added
 
 - **Notifications have an inbox.** The workflow `notify` action writes a
@@ -36,7 +50,10 @@ once it reaches 1.0.
   record's own update — the value lives on the record, so it is the record's
   permission (`accounts.update` and friends) that gates the write, not a new one.
   A user holding `custom_fields.manage` also gets the inline form to define a
-  field. It is wired into the account, contact, deal and lead detail views.
+  field. It is wired into the account, contact and deal detail views. Leads have
+  no detail view — they are created and edited in a dialog — so the lead entity
+  type is accepted by the API but has no panel yet; adding one needs a lead detail
+  view first.
   `CustomFieldsPanel.test.tsx` covers value rendering, the merged-map write, the
   read-only view and definition parsing; `internal/api/custom_fields_test.go`
   adds round-trip, cross-tenant and permission tests against PostgreSQL, and an
