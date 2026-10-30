@@ -1,0 +1,35 @@
+# Docker Compose profile for blitz.cloud Free tier deployment.
+
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: backend/Dockerfile
+    entrypoint: ["/usr/local/bin/forgecrm-api"]
+    ports:
+      - "${PORT:-8080}:${PORT:-8080}"
+    environment:
+      - FORGECRM_ENV=production
+      - FORGECRM_HTTP_ADDR=0.0.0.0:${PORT:-8080}
+      - FORGECRM_BASE_URL=${FORGECRM_BASE_URL}
+      - FORGECRM_SECRET_KEY=${FORGECRM_SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      - FORGECRM_DATABASE_MAX_CONNS=6
+      - FORGECRM_MIGRATE_ON_START=true
+      - FORGECRM_RATE_LIMIT_STORE=memory
+      - FORGECRM_STATIC_DIR=/app/public
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: backend/Dockerfile
+    entrypoint: ["/usr/local/bin/forgecrm-worker"]
+    environment:
+      - FORGECRM_ENV=production
+      - FORGECRM_SECRET_KEY=${FORGECRM_SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      - FORGECRM_DATABASE_MAX_CONNS=4
+      - FORGECRM_WORKER_CONCURRENCY=2
+      - FORGECRM_WORKER_POLL=3s

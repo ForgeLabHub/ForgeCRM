@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -191,4 +192,16 @@ func IsCheckViolation(err error) bool {
 		return pgErr.Code == "23514"
 	}
 	return false
+}
+
+// RedactDSN removes sensitive password information from a PostgreSQL DSN.
+func RedactDSN(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return "<invalid DSN>"
+	}
+	return parsed.Redacted()
 }

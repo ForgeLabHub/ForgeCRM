@@ -6,6 +6,8 @@
 package api
 
 import (
+	"path/filepath"
+	"os"
 	"context"
 	"encoding/json"
 	"errors"
@@ -298,6 +300,29 @@ func (s *Server) buildRouter() chi.Router {
 	// container as unhealthy, which turns a traffic spike into an outage.
 	r.Get("/health", s.handleHealth)
 	r.Get("/ready", s.handleReady)
+
+	// Serve static files and SPA fallback if static directory exists
+	staticDir := os.Getenv("FORGECRM_STATIC_DIR")
+	if staticDir == "" {
+		staticDir = "public"
+	}
+	if info, err := os.Stat(staticDir); err == nil && info.IsDir() {
+		fileServer := http.FileServer(http.Dir(staticDir))
+		r.NotFound(func(w http.ResponseWriter, req *http.Request) {
+			path := filepath.Clean(req.URL.Path)
+			if strings.HasPrefix(path, "/api/") {
+				http.Error(w, `{"error":{"code":"not_found","message":"resource not found"}}`, http.StatusNotFound)
+				return
+			}
+			fpath := filepath.Join(staticDir, path)
+			if finfo, err := os.Stat(fpath); err == nil && !finfo.IsDir() {
+				fileServer.ServeHTTP(w, req)
+				return
+			}
+			http.ServeFile(w, req, filepath.Join(staticDir, "index.html"))
+		})
+	}
+
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// The rate limiter covers the API subtree only. Health probes above are

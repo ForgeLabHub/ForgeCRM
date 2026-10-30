@@ -224,3 +224,21 @@ func TestRetentionWindowForANewPolicyIsAccepted(t *testing.T) {
 		t.Fatalf("forecast_runs window = %v, want 48h", got)
 	}
 }
+
+func TestDatabaseURLFallbackAndPort(t *testing.T) {
+	t.Setenv("FORGECRM_DATABASE_URL", "")
+	t.Setenv("DATABASE_URL", "postgres://dbuser:pass@dbhost:5432/fallbackdb")
+	t.Setenv("PORT", "9090")
+	t.Setenv("FORGECRM_SECRET_KEY", "devsecretkey1234567890123456789012")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.DatabaseURL != "postgres://dbuser:pass@dbhost:5432/fallbackdb" {
+		t.Errorf("expected DatabaseURL fallback to DATABASE_URL, got %q", cfg.DatabaseURL)
+	}
+	if cfg.HTTPAddr != "0.0.0.0:9090" {
+		t.Errorf("expected HTTPAddr to be 0.0.0.0:9090, got %q", cfg.HTTPAddr)
+	}
+}
