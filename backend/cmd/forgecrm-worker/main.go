@@ -36,6 +36,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/rbac"
 	"github.com/geff1778/forgecrm/internal/retention"
 	"github.com/geff1778/forgecrm/internal/secrets"
+	"github.com/geff1778/forgecrm/internal/tracectx"
 	"github.com/geff1778/forgecrm/internal/workflow"
 )
 
@@ -465,6 +466,10 @@ func workerLoop(loopCtx, jobCtx context.Context, log *slog.Logger, queue *jobs.Q
 		// cancelled once the grace period has elapsed, and the 30-minute cap is the
 		// ordinary bound on a single job.
 		runCtx, cancel := context.WithTimeout(jobCtx, 30*time.Minute)
+		// A job has no inbound request to inherit a trace from, so it is seeded from
+		// its own durable id: the trace id is stable across retries of the same job,
+		// and every outbound call the job makes joins that one trace.
+		runCtx = tracectx.WithTrace(runCtx, tracectx.FromSeed("job:"+job.ID.String()))
 		err = handle(runCtx, queue, job)
 		cancel()
 
@@ -515,7 +520,16 @@ func runOutboxLoop(ctx context.Context, log *slog.Logger, store *outbox.Store,
 				continue
 			}
 			for _, ev := range events {
-				if _, err := dispatcher.Dispatch(ctx, ev); err != nil {
+				// The event carries the correlation id of the request that produced it, so a
+				// trace seeded from it joins the originating request to the dispatch, the
+				// delivery it causes and any workflow run it triggers. A redelivery of the
+				// same event resolves to the same trace id, so retries are one operation.
+				seed := ev.CorrelationID
+				if seed == "" {
+					seed = "event:" + ev.ID.String()
+				}
+				evCtx := tracectx.WithTrace(ctx, tracectx.FromSeed(seed))
+				if _, err := dispatcher.Dispatch(evCtx, ev); err != nil {
 					log.Warn("could not dispatch an event", "event_id", ev.ID, "error", err)
 					_ = store.MarkFailed(ctx, ev.ID, err)
 					continue
@@ -523,7 +537,7 @@ func runOutboxLoop(ctx context.Context, log *slog.Logger, store *outbox.Store,
 				// Run event-triggered workflows. De-duplication inside the engine makes a
 				// redelivery of this event safe.
 				if wf != nil {
-					wf.HandleEvent(ctx, ev)
+					wf.HandleEvent(evCtx, ev)
 				}
 				if err := store.MarkPublished(ctx, ev.ID); err != nil {
 					log.Warn("could not mark an event published", "event_id", ev.ID, "error", err)
@@ -552,7 +566,10 @@ func runWorkflowSchedulerLoop(ctx context.Context, log *slog.Logger, engine *wor
 				log.Warn("could not claim due workflows", "error", err)
 			}
 			for i := range due {
-				if _, err := engine.RunScheduled(ctx, due[i]); err != nil {
+				// A scheduled run has no request behind it; seeding from the workflow id
+				// gives every firing of one workflow a shared, followable trace id.
+				runCtx := tracectx.WithTrace(ctx, tracectx.FromSeed("workflow:"+due[i].ID.String()))
+				if _, err := engine.RunScheduled(runCtx, due[i]); err != nil {
 					log.Warn("scheduled workflow run failed to start", "workflow_id", due[i].ID, "error", err)
 				}
 			}

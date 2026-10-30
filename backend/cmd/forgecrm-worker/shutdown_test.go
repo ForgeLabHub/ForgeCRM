@@ -19,6 +19,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/database"
 	"github.com/geff1778/forgecrm/internal/jobs"
 	"github.com/geff1778/forgecrm/internal/migrate"
+	"github.com/geff1778/forgecrm/internal/tracectx"
 )
 
 // connectOrSkip returns a pool for the test database, or skips when unset so the
@@ -118,6 +119,48 @@ func TestWorkerDrainsInFlightJobOnShutdown(t *testing.T) {
 	}
 	if got.Status != jobs.StatusSucceeded {
 		t.Fatalf("job status = %q, want %q (the job was abandoned mid-run)", got.Status, jobs.StatusSucceeded)
+	}
+}
+
+// TestWorkerJobCarriesASeededTrace proves a background job runs under a trace
+// that is a stable function of the job id, so the job's logs and any outbound call
+// it makes are joinable to the same trace on every retry.
+func TestWorkerJobCarriesASeededTrace(t *testing.T) {
+	db := connectOrSkip(t)
+	freshSchema(t, db)
+
+	ctx := context.Background()
+	queue := jobs.NewQueue(db, slog.Default())
+
+	job, err := queue.Enqueue(ctx, jobs.EnqueueRequest{Kind: "test.trace"})
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+
+	got := make(chan string, 1)
+	handler := func(runCtx context.Context, _ *jobs.Queue, j *jobs.Job) error {
+		got <- tracectx.TraceID(runCtx)
+		return nil
+	}
+
+	loopCtx, loopCancel := context.WithCancel(context.Background())
+	defer loopCancel()
+	jobCtx, jobCancel := context.WithCancel(context.Background())
+	defer jobCancel()
+
+	go workerLoop(loopCtx, jobCtx, slog.Default(), queue, handler, "test-worker", 25*time.Millisecond)
+
+	select {
+	case id := <-got:
+		want := tracectx.FromSeed("job:" + job.ID.String()).TraceID
+		if id == "" {
+			t.Fatal("the job ran with no trace on its context")
+		}
+		if id != want {
+			t.Errorf("job trace id = %q, want %q (seeded from the job id)", id, want)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the worker never ran the job")
 	}
 }
 
