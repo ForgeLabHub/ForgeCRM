@@ -1,222 +1,224 @@
-# Organisation Definition of Done for ForgeCRM modules
+# Организационное определение готовности модулей ForgeCRM
 
-This is the organisation-wide bar a module must clear before anyone may call it
-"done", and a higher bar before anyone may call it "extract-ready". It exists
-because the two failure modes this project has already hit are:
+Это общеорганизационная планка, которую модуль должен преодолеть, прежде чем
+кто-либо сможет назвать его «готовым», и более высокая планка — прежде чем кто-либо
+сможет назвать его «готовым к выделению». Она существует, потому что два режима
+отказа, которые проект уже задел, таковы:
 
-1. A subsystem that looks finished in the UI and delivers nothing — the webhook
-   vocabulary that accepted names the dispatcher never matched.
-2. A "module" that is only modular inside the monolith — the code sits in its own
-   folder but cannot be built without half the repository.
+1. Подсистема, которая выглядит законченной в UI и не даёт ничего — словарь вебхуков,
+   принимавший имена, которые диспетчер никогда не сопоставлял.
+2. «Модуль», который модулен только внутри монолита — код лежит в своей папке, но не
+   собирается без половины репозитория.
 
-Both passed review. Both were caught later, expensively. This document makes the
-checklist explicit so "done" is a set of commands that were run, not an opinion.
+Оба прошли ревью. Оба были пойманы позже, дорого. Этот документ делает чек-лист
+явным, чтобы «готово» было набором запущенных команд, а не мнением.
 
-**A green CI on the whole monolith does not satisfy this document.** A monolith
-build proves the packages compile together. It does not prove any one of them can
-stand alone.
-
----
-
-## Part A — Required for every module
-
-Every module, extract-ready or not, must satisfy all of the following.
-
-### A1. Responsibility is defined
-
-- One sentence naming what the module does.
-- A second sentence naming what it deliberately does **not** do.
-- Recorded in `docs/modules/<name>.md` using the 11-section template
-  (`docs/modules/module-template.md`), which `make docs-check` enforces.
-
-### A2. Public contract is documented
-
-- Every exported type and function is either part of the supported contract or
-  explicitly marked internal-by-convention.
-- The contract is written down, not inferred from the source.
-- If the module exposes HTTP, its routes appear in `docs/api/openapi.json` and are
-  generated from the router — never hand-edited.
-- The module declares its access level for each route (a permission, session-only,
-  or anonymous) so `internal/openapi` can enforce it.
-
-### A3. Dependencies are enumerated
-
-- Internal dependencies (other `internal/…` packages) are listed.
-- External dependencies (PostgreSQL, Redis, S3, SMTP, an AI provider, an outbound
-  HTTP target) are listed.
-- The list is compared against `go list -f '{{join .Imports "\n"}}' ./internal/<pkg>`,
-  not written from memory.
-
-### A4. No import cycles
-
-- `internal/archtest` passes. It reads the real graph via `go list` and fails on a
-  package importing `api`, on production importing `testsupport`, and on the core
-  importing composition or HTTP.
-- If a cycle is found, it is recorded as a blocker, not refactored silently.
-
-### A5. No unaccounted global state
-
-- The module takes its dependencies by construction (a `New…` that returns a
-  configured value), or reads them from `context.Context` when the value is
-  request-scoped (the ambient transaction).
-- No package-level mutable variable carries wiring or configuration.
-- `Enabled()`-style probes tolerate a nil receiver, so an unconfigured subsystem
-  reports "off" instead of panicking the caller.
-
-### A6. Unit tests
-
-- `go test ./internal/<pkg>/...` passes with no database and no network.
-- Tests exercise real code paths. A mock is used only where a real dependency
-  cannot run in a unit test, and its use is justified in the test.
-- A test that would pass when the feature is deleted is not a test.
-
-### A7. At least one integration test
-
-- An integration test exercises the module against its real external dependency
-  (PostgreSQL, Redis, an HTTP sink, S3), gated by `//go:build integration` and a
-  URL environment variable so the default run stays green.
-- The test asserts persisted state by reading it back, not by trusting a returned
-  struct — a rollback leaves the caller holding a struct describing a write the
-  database never kept.
-
-### A8. Fake adapters where they are needed
-
-- Every external dependency the module talks to is reached through an interface or
-  a constructor parameter, so a fake can be substituted.
-- The fake models realistic behaviour — success, failure, timeout, unavailable —
-  and is deterministic. A fake that returns success for everything is not
-  acceptable: it cannot fail a test.
-- The fake is documented as such. Where the module already ships a real
-  in-process implementation (for example `storage.Memory`), that counts and is
-  named.
-
-### A9. `MODULE.md` exists
-
-- `docs/modules/<name>.md` contains all 11 sections the template names.
-- `make docs-check` passes for it.
-
-### A10. Configuration needs no real secrets
-
-- The module starts with documented defaults.
-- Any secret it needs is read from the environment and never committed.
-- A missing optional secret leaves the module reporting itself off, not failing
-  startup.
-
-### A11. Static checks pass
-
-- `gofmt -l` prints nothing for the module.
-- `go vet ./...` is clean.
-- Frontend modules: `npm run typecheck`, `npm run lint`, `npm test` pass.
-
-### A12. Documentation matches the code
-
-- `make docs-check` passes: required documents exist, relative links resolve, the
-  schema counts in `docs/database/schema.md` match the migrations, and every
-  command cited in `docs/verification/matrix.md` exists.
-
-### A13. The check ran on a specific SHA
-
-- The evidence records the commit SHA the checks were run against.
-- "It passed yesterday" is not evidence.
-
-### A14. No TODO/FIXME in new code
-
-- New code contains no `TODO`, `FIXME`, `XXX` or placeholder comment. A known gap
-  is a tracked issue and a line in the module's "Limitations" section, not a
-  comment in the source.
-
-### A15. Licence and provenance
-
-- Any new third-party dependency has a compatible licence (see "Licence policy").
-- No code is copied from elsewhere without a recorded licence and origin.
-- ForgeCRM's own licence is MIT (see `LICENSE`); a module extracted from it
-  inherits that licence unless the owner decides otherwise, which must be an
-  explicit decision recorded in an ADR.
-
-### A16. No secrets
-
-- `gitleaks` reports nothing for the change.
-- No `.env`, key, token or password is committed.
-- A secret that may have been exposed is rotated; deleting the file is not
-  remediation.
-
-### A17. CI is current
-
-- The change is green on the CI run for its own SHA.
-- A skipped or queued job is reported as such, never as "passed".
+**Зелёный CI на всём монолите не удовлетворяет этому документу.** Сборка монолита
+доказывает, что пакеты компилируются вместе. Она не доказывает, что любой из них
+может стоять отдельно.
 
 ---
 
-## Part B — Additional requirements for "extract-ready"
+## Часть A — Требуется для каждого модуля
 
-A module may be called **extract-ready** only when, in addition to Part A:
+Каждый модуль, готовый к выделению или нет, должен удовлетворять всему ниже.
 
-### B1. It builds in isolation
+### A1. Ответственность определена
 
-- Copied into a clean module (a throwaway `go.mod`, no ForgeCRM `replace`
-  directives beyond declared internal dependencies), `go build ./...` succeeds.
-- The command and its output are recorded in `docs/EXTRACT_READY.md`.
+- Одно предложение, называющее, что модуль делает.
+- Второе предложение, называющее, что он намеренно **не** делает.
+- Записано в `docs/modules/<name>.md` по шаблону из 11 разделов
+  (`docs/modules/module-template.md`), что обеспечивает `make docs-check`.
 
-### B2. Its own tests run in isolation
+### A2. Публичный контракт документирован
 
-- `go test ./...` in the clean module passes.
-- If the module ships no tests of its own, it is `ALMOST`, not `READY` — a test
-  that only runs inside the monolith is not evidence of a standalone module.
+- Каждый экспортируемый тип и функция либо часть поддерживаемого контракта, либо
+  явно помечены как внутренние по соглашению.
+- Контракт записан, а не выведен из исходников.
+- Если модуль выставляет HTTP, его маршруты появляются в `docs/api/openapi.json` и
+  генерируются из роутера — никогда не правятся руками.
+- Модуль объявляет свой уровень доступа для каждого маршрута (разрешение, только
+  сессия или анонимный), чтобы `internal/openapi` мог это обеспечить.
 
-### B3. A standalone smoke executes
+### A3. Зависимости перечислены
 
-- A minimal `cmd/smoke` (or an equivalent integration test) uses only the module's
-  public API and produces observable output in the clean project.
-- No ForgeCRM Compose stack is required.
+- Внутренние зависимости (другие пакеты `internal/…`) перечислены.
+- Внешние зависимости (PostgreSQL, Redis, S3, SMTP, провайдер ИИ, исходящая цель
+  HTTP) перечислены.
+- Список сверяется с `go list -f '{{join .Imports "\n"}}' ./internal/<pkg>`, а не
+  пишется по памяти.
 
-### B4. Hidden dependencies are surfaced
+### A4. Нет циклов импорта
 
-- The extraction records every package that had to travel or be stubbed. A
-  dependency discovered during extraction is a finding, not an inconvenience.
+- `internal/archtest` проходит. Он читает реальный граф через `go list` и падает на
+  пакете, импортирующем `api`, на production, импортирующем `testsupport`, и на
+  ядре, импортирующем композицию или HTTP.
+- Если цикл найден, он фиксируется как блокер, а не рефакторится молча.
 
-### B5. The extract-test is automated
+### A5. Нет неучтённого глобального состояния
 
-- The extraction is a script (`scripts/extract-test/…`) so it can run in CI, not a
-  one-off manual session.
-- A CI job (`extract-test`) runs it for every module claiming `READY`.
+- Модуль получает зависимости через построение (`New…`, возвращающий
+  сконфигурированное значение) или читает их из `context.Context`, когда значение
+  имеет область запроса (окружающая транзакция).
+- Ни одна изменяемая переменная уровня пакета не несёт связывание или конфигурацию.
+- Пробы вида `Enabled()` терпят nil-получатель, чтобы ненастроенная подсистема
+  сообщала «off», а не паниковала у вызывающего.
 
-### B6. The status is honest
+### A6. Модульные тесты
 
-- `READY` requires B1–B5 all performed and recorded, with the SHA.
-- A module whose boundary is clear but whose test/build has not been run in
-  isolation is `ALMOST` with a blocker list.
-- Nothing is promoted to `READY` because it "should" work.
+- `go test ./internal/<pkg>/...` проходит без базы данных и без сети.
+- Тесты упражняют реальные пути кода. Мок используется только там, где реальная
+  зависимость не может работать в модульном тесте, и его использование обосновано в
+  тесте.
+- Тест, который прошёл бы при удалении функции, — не тест.
+
+### A7. Минимум один интеграционный тест
+
+- Интеграционный тест упражняет модуль против его реальной внешней зависимости
+  (PostgreSQL, Redis, HTTP-сток, S3), ограничен тегом `//go:build integration` и
+  переменной окружения с URL, чтобы прогон по умолчанию оставался зелёным.
+- Тест утверждает сохранённое состояние, читая его обратно, а не доверяя
+  возвращённой структуре — откат оставляет вызывающего со структурой, описывающей
+  запись, которую база не сохранила.
+
+### A8. Фейковые адаптеры там, где нужны
+
+- Каждая внешняя зависимость, с которой модуль говорит, достижима через интерфейс
+  или параметр конструктора, чтобы можно было подставить фейк.
+- Фейк моделирует реалистичное поведение — успех, сбой, тайм-аут, недоступность — и
+  детерминирован. Фейк, возвращающий успех для всего, недопустим: он не может
+  провалить тест.
+- Фейк документирован как таковой. Там, где модуль уже поставляет реальную
+  реализацию в процессе (например, `storage.Memory`), это считается и называется.
+
+### A9. `MODULE.md` существует
+
+- `docs/modules/<name>.md` содержит все 11 разделов, которые называет шаблон.
+- `make docs-check` для него проходит.
+
+### A10. Конфигурация не требует реальных секретов
+
+- Модуль стартует с документированными умолчаниями.
+- Любой нужный ему секрет читается из окружения и никогда не коммитится.
+- Отсутствующий опциональный секрет оставляет модуль сообщающим о себе «off», а не
+  проваливающим старт.
+
+### A11. Статические проверки проходят
+
+- `gofmt -l` для модуля ничего не выводит.
+- `go vet ./...` чист.
+- Модули фронтенда: `npm run typecheck`, `npm run lint`, `npm test` проходят.
+
+### A12. Документация соответствует коду
+
+- `make docs-check` проходит: обязательные документы существуют, относительные ссылки
+  разрешаются, счётчики схемы в `docs/database/schema.md` совпадают с миграциями, и
+  каждая команда, упомянутая в `docs/verification/matrix.md`, существует.
+
+### A13. Проверка запускалась на конкретном SHA
+
+- Доказательство записывает SHA коммита, против которого запускались проверки.
+- «Вчера прошло» — не доказательство.
+
+### A14. Нет TODO/FIXME в новом коде
+
+- Новый код не содержит `TODO`, `FIXME`, `XXX` или комментарий-заглушку. Известный
+  пробел — это отслеживаемый issue и строка в разделе «Ограничения» модуля, а не
+  комментарий в исходниках.
+
+### A15. Лицензия и происхождение
+
+- Любая новая сторонняя зависимость имеет совместимую лицензию (см. «Политика
+  лицензий»).
+- Никакой код не копируется откуда-либо без записанной лицензии и происхождения.
+- Собственная лицензия ForgeCRM — MIT (см. `LICENSE`); модуль, выделенный из неё,
+  наследует эту лицензию, если владелец не решит иначе, что должно быть явным
+  решением, записанным в ADR.
+
+### A16. Нет секретов
+
+- `gitleaks` ничего не сообщает по изменению.
+- Никакой `.env`, ключ, токен или пароль не коммитится.
+- Секрет, который мог быть раскрыт, ротируется; удаление файла — не исправление.
+
+### A17. CI актуален
+
+- Изменение зелёное в прогоне CI для собственного SHA.
+- Пропущенное или в очереди задание сообщается как таковое, никогда как «прошло».
 
 ---
 
-## Licence policy
+## Часть B — Дополнительные требования для «готовности к выделению»
 
-ForgeCRM is MIT. A new dependency is acceptable when its licence is permissive
-(MIT, BSD-2/3-Clause, Apache-2.0, ISC) or a compatible weak copyleft used as a
-library. Copyleft that would force ForgeCRM's own distribution terms (strong
-GPL/AGPL) is not acceptable without an explicit owner decision recorded in an ADR.
-Every new dependency records its name, version, licence, activity and reason in
-the commit that adds it.
+Модуль можно назвать **готовым к выделению**, только когда, в дополнение к части A:
 
-## Evidence table
+### B1. Он собирается изолированно
 
-Every module's `MODULE.md` ends with this table, filled in with real commands and
-real results for the recorded SHA:
+- Скопированный в чистый модуль (одноразовый `go.mod`, без `replace`-директив
+  ForgeCRM, кроме объявленных внутренних зависимостей), `go build ./...` успешен.
+- Команда и её вывод записаны в `docs/EXTRACT_READY.md`.
 
-| Check | Command | Result |
+### B2. Его собственные тесты идут изолированно
+
+- `go test ./...` в чистом модуле проходит.
+- Если модуль не поставляет собственных тестов, он `ALMOST`, а не `READY` — тест,
+  который работает только внутри монолита, не является доказательством
+  самостоятельного модуля.
+
+### B3. Выполняется автономный smoke
+
+- Минимальный `cmd/smoke` (или эквивалентный интеграционный тест) использует только
+  публичный API модуля и даёт наблюдаемый вывод в чистом проекте.
+- Стек ForgeCRM в Compose не требуется.
+
+### B4. Скрытые зависимости вскрываются
+
+- Выделение записывает каждый пакет, который пришлось перенести или заглушить.
+  Зависимость, обнаруженная при выделении, — это находка, а не неудобство.
+
+### B5. Extract-тест автоматизирован
+
+- Выделение — это скрипт (`scripts/extract-test/…`), чтобы его можно было запускать в
+  CI, а не разовая ручная сессия.
+- Задание CI (`extract-test`) запускает его для каждого модуля, заявляющего `READY`.
+
+### B6. Статус честный
+
+- `READY` требует, чтобы B1–B5 были все выполнены и записаны, с SHA.
+- Модуль, чья граница ясна, но чьи тест/сборка не запускались изолированно, — это
+  `ALMOST` со списком блокеров.
+- Ничто не повышается до `READY` потому, что «должно» работать.
+
+---
+
+## Политика лицензий
+
+ForgeCRM — MIT. Новая зависимость допустима, когда её лицензия разрешительная
+(MIT, BSD-2/3-Clause, Apache-2.0, ISC) или совместимый слабый копилефт,
+используемый как библиотека. Копилефт, который заставил бы ForgeCRM принять свои
+условия распространения (сильный GPL/AGPL), недопустим без явного решения владельца,
+записанного в ADR. Каждая новая зависимость записывает имя, версию, лицензию,
+активность и причину в коммите, который её добавляет.
+
+## Таблица доказательств
+
+`MODULE.md` каждого модуля заканчивается этой таблицей, заполненной реальными
+командами и реальными результатами для записанного SHA:
+
+| Проверка | Команда | Результат |
 | --- | --- | --- |
-| Formatting | `gofmt -l ./internal/<pkg>` | |
+| Форматирование | `gofmt -l ./internal/<pkg>` | |
 | Vet | `go vet ./...` | |
-| Unit tests | `go test -count=1 ./internal/<pkg>/...` | |
-| Integration tests | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration …` | |
+| Модульные тесты | `go test -count=1 ./internal/<pkg>/...` | |
+| Интеграционные тесты | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration …` | |
 | Extract build | `cd /tmp/extract-<pkg> && go build ./...` | |
 | Extract tests | `cd /tmp/extract-<pkg> && go test ./...` | |
 | Extract smoke | `cd /tmp/extract-<pkg> && go run ./cmd/smoke` | |
-| Secrets scan | `gitleaks detect` | |
-| Docs | `make docs-check` | |
+| Сканирование секретов | `gitleaks detect` | |
+| Документация | `make docs-check` | |
 
-## Revision trigger
+## Триггер пересмотра
 
-This document is revisited when a module is the first to be extracted, when a new
-external dependency class is introduced, or when a Definition of Done gap causes a
-defect to reach `main`.
+К этому документу возвращаются, когда модуль первым выделяется, когда вводится новый
+класс внешних зависимостей или когда пробел в определении готовности позволяет
+дефекту дойти до `main`.

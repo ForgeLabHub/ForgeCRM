@@ -1,160 +1,176 @@
-# ForgeCRM — Acceptance Criteria
+# ForgeCRM — Критерии приёмки
 
-Criteria are written so each one can be checked by a command or an observable result.
-A module is `VERIFIED` only when every criterion below has recorded evidence.
+Критерии написаны так, что каждый можно проверить командой или наблюдаемым
+результатом. Модуль считается `VERIFIED` только когда по каждому критерию ниже
+зафиксировано доказательство.
 
-## A. Platform foundation
+## A. Фундамент платформы
 
-- **A1** `docker compose up` (or `make dev`) brings up API, worker, frontend, PostgreSQL
-  and nginx; `/health` returns `200`.
-- **A2** `/ready` returns `200` only when the database is reachable; returns `503`
-  otherwise.
-- **A3** Migrations run automatically on API start and are idempotent (running twice is a
-  no-op).
-- **A4** `GET /api/v1/system/info` and `/capabilities` expose versions and enabled
-  subsystems and contain **no** secret values.
-- **A5** Graceful shutdown: `SIGTERM` finishes in-flight requests and stops the worker
-  without dropping a claimed job.
+- **A1** `docker compose up` (или `make dev`) поднимает API, воркер, фронтенд,
+  PostgreSQL и nginx; `/health` возвращает `200`.
+- **A2** `/ready` возвращает `200`, только когда база данных доступна; иначе
+  возвращает `503`.
+- **A3** Миграции выполняются автоматически при старте API и идемпотентны
+  (повторный запуск — no-op).
+- **A4** `GET /api/v1/system/info` и `/capabilities` показывают версии и включённые
+  подсистемы и **не содержат** значений секретов.
+- **A5** Плавное завершение: `SIGTERM` завершает текущие запросы и останавливает
+  воркер, не теряя заявленное задание.
 
-## B. Authentication
+## B. Аутентификация
 
-- **B1** Passwords are stored as Argon2id hashes with a unique salt; the plaintext never
-  appears in the database or logs.
-- **B2** Login sets an opaque session cookie; only a hash of the token is stored
-  server-side.
-- **B3** A new session token is issued after successful login (session-fixation defence).
-- **B4** Repeated failed logins lock the account for a configured window; the lockout is
-  audited.
-- **B5** TOTP MFA is enforced as a second factor when enabled; recovery codes work once
-  each.
-- **B6** The bootstrap command creates the first platform owner with an operator-supplied
-  or randomly generated password; no default password exists in the codebase.
-- **B7** `GET /api/v1/auth/sessions` lists active sessions; `DELETE .../sessions/{id}`
-  revokes one and the revoked token immediately stops working.
-- **B8** Password reset tokens are single-use, hashed at rest and expire.
+- **B1** Пароли хранятся как хеши Argon2id с уникальной солью; открытый текст никогда
+  не появляется в базе или логах.
+- **B2** Вход устанавливает непрозрачную cookie сессии; на сервере хранится только
+  хеш токена.
+- **B3** После успешного входа выдаётся новый токен сессии (защита от фиксации
+  сессии).
+- **B4** Повторные неудачные входы блокируют аккаунт на настроенное окно; блокировка
+  аудируется.
+- **B5** TOTP MFA обеспечивается как второй фактор, когда включена; коды
+  восстановления работают по одному разу.
+- **B6** Команда bootstrap создаёт первого владельца платформы с паролем от
+  оператора или случайно сгенерированным; пароля по умолчанию в коде нет.
+- **B7** `GET /api/v1/auth/sessions` перечисляет активные сессии;
+  `DELETE .../sessions/{id}` отзывает одну, и отозванный токен немедленно перестаёт
+  работать.
+- **B8** Токены сброса пароля одноразовые, хешированы в хранилище и истекают.
 
-## C. Authorization
+## C. Авторизация
 
-- **C1** All 14 default roles exist as permission sets, not hard-coded branches.
-- **C2** A request without the required permission returns `403` and is audited.
-- **C3** A user cannot read or mutate another organization's records even with a valid,
-  guessed UUID (`404`/`403`, never `200` with data).
-- **C4** Role and permission changes are audited with actor, target and diff.
-- **C5** Blocking a user immediately invalidates their sessions.
-- **C6** Privilege-escalation tests pass: a `readonly_auditor` cannot perform writes, a
-  `support_agent` cannot approve discounts, a user cannot grant themselves a role.
-- **C7** Background jobs re-check permissions at execution time rather than trusting a
-  stale token.
+- **C1** Все 14 ролей по умолчанию существуют как наборы разрешений, а не как
+  зашитые ветвления.
+- **C2** Запрос без требуемого разрешения возвращает `403` и аудируется.
+- **C3** Пользователь не может читать или изменять записи другой организации даже с
+  валидным угаданным UUID (`404`/`403`, никогда `200` с данными).
+- **C4** Изменения роли и разрешений аудируются с действующим лицом, целью и диффом.
+- **C5** Блокировка пользователя немедленно аннулирует его сессии.
+- **C6** Тесты на повышение привилегий проходят: `readonly_auditor` не может писать,
+  `support_agent` не может одобрять скидки, пользователь не может выдать себе роль.
+- **C7** Фоновые задания перепроверяют права на момент исполнения, а не доверяют
+  устаревшему токену.
 
 ## D. CRM
 
-- **D1** Full CRUD for accounts, contacts, leads, deals, pipelines/stages, tasks,
-  activities, tickets, tags, comments and custom fields, all via `/api/v1`.
-- **D2** Collections support pagination, sorting, filtering and text search with enforced
-  maximum page size.
-- **D3** Referential integrity is enforced by foreign keys; deleting a referenced record
-  is rejected or cascades by explicit rule.
-- **D4** Archiving preserves history and excludes the record from default listings.
-- **D5** Deal stage changes append to `deal_stage_history`.
-- **D6** Every mutation writes an audit entry with actor, entity, action and timestamp.
-- **D7** Bulk operations verify permissions per record and report per-record outcomes.
+- **D1** Полный CRUD для аккаунтов, контактов, лидов, сделок, воронок/стадий, задач,
+  активностей, обращений, тегов, комментариев и кастомных полей, всё через `/api/v1`.
+- **D2** Коллекции поддерживают пагинацию, сортировку, фильтрацию и текстовый поиск
+  с обеспеченным максимальным размером страницы.
+- **D3** Ссылочная целостность обеспечивается внешними ключами; удаление
+  ссылаемой записи отклоняется или каскадируется по явному правилу.
+- **D4** Архивирование сохраняет историю и исключает запись из списков по умолчанию.
+- **D5** Смена стадии сделки дописывается в `deal_stage_history`.
+- **D6** Каждая мутация пишет запись аудита с действующим лицом, сущностью, действием
+  и временем.
+- **D7** Массовые операции проверяют права по каждой записи и сообщают результат по
+  каждой.
 
-## E. Import Center
+## E. Центр импорта
 
-- **E1** CSV, TSV, JSON array, JSONL/NDJSON, XLSX and XML files parse into a common row
-  model.
-- **E2** ZIP, TAR, TAR.GZ, TAR.BZ2, TAR.XZ, GZIP, BZIP2 and XZ archives are read without
-  extracting to an attacker-controlled path.
-- **E3** Path traversal (`../`, absolute paths), symlink escape, oversized entries, too
-  many entries, excessive nesting and zip bombs are all rejected with a clear error.
-- **E4** A corrupt/truncated archive fails gracefully; the failure is reported and the
-  temp directory is removed.
-- **E5** Preview returns inferred columns, sample rows and detected types.
-- **E6** Mapping maps source columns to CRM fields with type conversion; invalid
-  conversions are reported per row.
-- **E7** Dry-run performs validation and reporting without writing business data.
-- **E8** Execute runs as a background job, processes in batches, and is resumable from a
-  checkpoint after interruption.
-- **E9** Duplicate handling is configurable (skip / update / create) and keyed on a
-  chosen natural key or `(external_source, external_id)`.
-- **E10** The report contains total/imported/skipped/failed counts and a per-row error
-  list; errors are retrievable via `/api/v1/imports/{id}/errors`.
-- **E11** Re-running a completed import is safe and does not duplicate data.
-- **E12** The original file's SHA-256, the processing config and the final report are
-  persisted; the raw file is stored in a private directory, not a web-served one.
-- **E13** Cancellation works before the commit point; behaviour after it is documented.
+- **E1** Файлы CSV, TSV, JSON-массив, JSONL/NDJSON, XLSX и XML разбираются в общую
+  модель строки.
+- **E2** Архивы ZIP, TAR, TAR.GZ, TAR.BZ2, TAR.XZ, GZIP, BZIP2 и XZ читаются без
+  распаковки в путь, контролируемый атакующим.
+- **E3** Обход пути (`../`, абсолютные пути), побег через символическую ссылку,
+  слишком большие записи, слишком много записей, чрезмерная вложенность и zip-бомбы
+  — всё отклоняется с понятной ошибкой.
+- **E4** Повреждённый/усечённый архив падает корректно; сбой сообщается, а временный
+  каталог удаляется.
+- **E5** Предпросмотр возвращает выведенные столбцы, примеры строк и определённые
+  типы.
+- **E6** Сопоставление отображает исходные столбцы на поля CRM с преобразованием
+  типов; неверные преобразования сообщаются по строкам.
+- **E7** Пробный прогон выполняет валидацию и отчётность без записи бизнес-данных.
+- **E8** Исполнение идёт фоновым заданием, обрабатывает пакетами и возобновляемо с
+  контрольной точки после прерывания.
+- **E9** Обработка дубликатов настраивается (пропустить / обновить / создать) и
+  опирается на выбранный естественный ключ или `(external_source, external_id)`.
+- **E10** Отчёт содержит счётчики всего/импортировано/пропущено/ошибок и список
+  ошибок по строкам; ошибки доступны через `/api/v1/imports/{id}/errors`.
+- **E11** Повторный запуск завершённого импорта безопасен и не дублирует данные.
+- **E12** SHA-256 исходного файла, конфигурация обработки и итоговый отчёт
+  сохраняются; сырой файл хранится в приватном каталоге, а не в обслуживаемом вебом.
+- **E13** Отмена работает до точки коммита; поведение после неё документировано.
 
-## F. Migration
+## F. Миграция
 
-- **F1** PostgreSQL, SQLite and REST sources can be connected and schema-discovered.
-- **F2** Connection parameters are stored encrypted or via secret reference; the password
-  never appears in the `integrations` table or in logs.
-- **F3** Source access is read-only by default.
-- **F4** Data is read in bounded batches; row-count reconciliation is reported.
-- **F5** Incremental sync advances a watermark and does not re-import unchanged rows.
-- **F6** Divergence between source and target is reported, not silently ignored.
+- **F1** Источники PostgreSQL, SQLite и REST можно подключить и определить их схему.
+- **F2** Параметры подключения хранятся зашифрованными или через ссылку на секрет;
+  пароль никогда не появляется в таблице `integrations` или в логах.
+- **F3** Доступ к источнику по умолчанию только для чтения.
+- **F4** Данные читаются ограниченными пакетами; сверка числа строк сообщается.
+- **F5** Инкрементальная синхронизация продвигает водяной знак и не переимпортирует
+  неизменившиеся строки.
+- **F6** Расхождение между источником и целью сообщается, а не молча игнорируется.
 
-## G. Events, webhooks, integrations
+## G. События, вебхуки, интеграции
 
-- **G1** Inbound webhooks verify an HMAC signature, a timestamp window and an idempotency
-  key; replays are rejected.
-- **G2** Outbound deliveries are HMAC-signed, retried with exponential backoff, and
-  recorded in delivery history with response status.
-- **G3** Failed deliveries appear in a dead-letter view and can be manually replayed.
-- **G4** Domain writes that emit events do so through the outbox in one transaction.
-- **G5** The SSRF guard rejects loopback, private, link-local and cloud-metadata
-  destinations, including after redirects.
-- **G6** Integration config changes are audited; secrets are masked in every response.
-- **G7** An integration without valid credentials is `disabled` and the rest of the
-  platform keeps working.
+- **G1** Входящие вебхуки проверяют подпись HMAC, окно времени и ключ
+  идемпотентности; повторы отклоняются.
+- **G2** Исходящие доставки подписаны HMAC, повторяются с экспоненциальной задержкой
+  и записываются в историю доставок со статусом ответа.
+- **G3** Неудачные доставки появляются в представлении dead-letter и могут быть
+  повторены вручную.
+- **G4** Доменные записи, порождающие события, делают это через outbox в одной
+  транзакции.
+- **G5** Защита SSRF отклоняет loopback, приватные, link-local и облачные метаданные
+  как назначения, в том числе после перенаправлений.
+- **G6** Изменения конфигурации интеграций аудируются; секреты маскируются в каждом
+  ответе.
+- **G7** Интеграция без валидных учётных данных находится в `disabled`, а остальная
+  платформа продолжает работать.
 
-## H. Notifications
+## H. Уведомления
 
-- **H1** SMTP configuration is validated; a connection test and a real send test are
-  distinct operations.
-- **H2** Sends are queued, retried with backoff, and logged with outcome.
-- **H3** A successful send is only reported when the SMTP server accepted the message.
-- **H4** Telegram operations require a linked, permissioned CRM user; unlinking revokes
-  access. With no bot token the bot stays disabled and the platform is unaffected.
+- **H1** Конфигурация SMTP валидируется; проверка соединения и проверка реальной
+  отправки — разные операции.
+- **H2** Отправки ставятся в очередь, повторяются с задержкой и логируются с
+  результатом.
+- **H3** Успешная отправка сообщается только когда SMTP-сервер принял сообщение.
+- **H4** Операции Telegram требуют связанного пользователя CRM с правами; отвязка
+  отзывает доступ. Без токена бота бот остаётся выключенным, и платформа не
+  затронута.
 
-## I. AI & MCP
+## I. ИИ и MCP
 
-- **I1** The AI provider is selected by configuration; no provider key means `disabled`,
-  not an error.
-- **I2** AI requests have timeouts and request caps; operations are recorded with metadata
-  and audit entries.
-- **I3** MCP tools call the same domain services and enforce the same permissions as the
-  REST API.
-- **I4** No tool exposes raw SQL, shell, filesystem or unbounded export.
-- **I5** Instructions embedded in untrusted documents or imported rows do not change tool
-  authorization.
-- **I6** Unauthorized MCP tool calls are denied and audited.
-- **I7** A standard MCP client can connect: the server answers the `initialize`
-  handshake with a `protocolVersion`, publishes the tools with `inputSchema`, and
-  answers `tools/list` and `tools/call`. A message without an `id` is treated as a
-  notification and receives an empty `202`. Enforced by
-  `internal/ai/mcp_protocol_test.go` and `internal/api/mcp_integration_test.go`.
-- **I8** A tool that changes stored data is refused unless the call carries
-  `confirm: true`, and the requirement is published in the tool's schema so a
-  client can see it before calling.
+- **I1** Провайдер ИИ выбирается конфигурацией; отсутствие ключа провайдера означает
+  `disabled`, а не ошибку.
+- **I2** Запросы ИИ имеют тайм-ауты и ограничения; операции записываются с метаданными
+  и записями аудита.
+- **I3** Инструменты MCP вызывают те же доменные сервисы и обеспечивают те же права,
+  что и REST API.
+- **I4** Ни один инструмент не выставляет сырой SQL, shell, файловую систему или
+  неограниченный экспорт.
+- **I5** Инструкции, встроенные в недоверенные документы или импортированные строки,
+  не меняют авторизацию инструментов.
+- **I6** Неавторизованные вызовы инструментов MCP отклоняются и аудируются.
+- **I7** Стандартный MCP-клиент может подключиться: сервер отвечает на рукопожатие
+  `initialize` с `protocolVersion`, публикует инструменты с `inputSchema` и отвечает
+  на `tools/list` и `tools/call`. Сообщение без `id` трактуется как уведомление и
+  получает пустой `202`. Обеспечено `internal/ai/mcp_protocol_test.go` и
+  `internal/api/mcp_integration_test.go`.
+- **I8** Инструмент, меняющий сохранённые данные, отклоняется, если вызов не несёт
+  `confirm: true`, и требование публикуется в схеме инструмента, чтобы клиент видел
+  его до вызова.
 
-## J. Operations
+## J. Эксплуатация
 
-- **J1** Logs are structured with levels and correlation IDs; passwords, tokens and keys
-  are redacted.
-- **J2** The audit log is append-only and filterable by time, actor, organization,
-  component and correlation ID.
-- **J3** `/metrics` is exposed only in a protected context.
-- **J4** Backup and restore scripts work against a real database and the restored data is
-  verified.
-- **J5** Optional subsystems failing (SMTP, Telegram, AI, an integration) do not stop the
-  API or worker.
+- **J1** Логи структурны, с уровнями и идентификаторами корреляции; пароли, токены и
+  ключи скрываются.
+- **J2** Журнал аудита «только добавление» и фильтруется по времени, действующему
+  лицу, организации, компоненту и идентификатору корреляции.
+- **J3** `/metrics` выставляется только в защищённом контексте.
+- **J4** Скрипты резервного копирования и восстановления работают на реальной базе, и
+  восстановленные данные проверены.
+- **J5** Сбой опциональных подсистем (SMTP, Telegram, ИИ, интеграция) не останавливает
+  API или воркер.
 
-## K. Quality gates
+## K. Ворота качества
 
-- **K1** `gofmt` clean, `go vet` clean, `go build ./...` succeeds.
-- **K2** Unit + integration + API + security tests pass against a real PostgreSQL.
-- **K3** Frontend: lint, typecheck, tests and production build succeed.
-- **K4** Docker images build.
-- **K5** CI does not disable or skip tests to appear green.
-- **K6** Required documentation files exist.
+- **K1** `gofmt` чист, `go vet` чист, `go build ./...` успешен.
+- **K2** Модульные + интеграционные + API + тесты безопасности проходят на реальном
+  PostgreSQL.
+- **K3** Фронтенд: линт, проверка типов, тесты и production-сборка успешны.
+- **K4** Docker-образы собираются.
+- **K5** CI не отключает и не пропускает тесты, чтобы выглядеть зелёным.
+- **K6** Обязательные файлы документации существуют.
