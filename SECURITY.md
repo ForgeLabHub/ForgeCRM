@@ -1,74 +1,77 @@
-# Security Policy
+# Политика безопасности
 
-## Reporting a vulnerability
+## Сообщение об уязвимости
 
-Report suspected vulnerabilities privately. Do not open a public issue.
+Сообщайте о предполагаемых уязвимостях приватно. Не открывайте публичный issue.
 
-Use GitHub's private vulnerability reporting on the repository
-(Security -> Report a vulnerability), or contact the maintainers directly.
+Используйте приватную отчётность об уязвимостях GitHub на репозитории
+(Security -> Report a vulnerability) или свяжитесь с сопровождающими напрямую.
 
-Include:
+Укажите:
 
-- what the issue is and where it is,
-- how to reproduce it,
-- the impact you believe it has,
-- any suggested fix.
+- что это за проблема и где она находится,
+- как её воспроизвести,
+- какое влияние, по вашему мнению, она оказывает,
+- любое предлагаемое исправление.
 
-You will receive an acknowledgement. Please allow time for a fix before disclosing
-publicly.
+Вы получите подтверждение. Пожалуйста, дайте время на исправление, прежде чем раскрывать
+публично.
 
-## Supported versions
+## Поддерживаемые версии
 
-The project is pre-1.0 and under active development. Only the current `main` branch is
-supported. There are no backports.
+Проект до 1.0 и в активной разработке. Поддерживается только текущая ветка `main`.
+Обратных портов нет.
 
-## Security model
+## Модель безопасности
 
-**Authentication.** Passwords are hashed with Argon2id. Sessions use a server-side
-record referenced by an opaque cookie, marked `HttpOnly` and `SameSite`, and `Secure`
-in production. Mutating requests require a CSRF token. TOTP second factors are
-supported. Repeated failed logins are rate limited and lock the account.
+**Аутентификация.** Пароли хешируются Argon2id. Сессии используют серверную запись,
+на которую ссылается непрозрачный cookie, помеченный `HttpOnly` и `SameSite`, а в
+production — `Secure`. Мутирующие запросы требуют токен CSRF. Вторые факторы TOTP
+поддерживаются. Повторные неудачные входы ограничиваются по частоте и блокируют аккаунт.
 
-**Authorisation.** Every request is checked on the server against a permission catalog.
-Roles are named permission sets, not hard-coded checks. Data access is scoped to the
-caller's organization. Hiding a control in a user interface is not a security boundary.
+**Авторизация.** Каждый запрос проверяется на сервере против каталога разрешений. Роли —
+это именованные наборы разрешений, а не зашитые проверки. Доступ к данным ограничен
+организацией вызывающего. Скрытие элемента управления в интерфейсе не является границей
+безопасности.
 
-**Tenant isolation.** Every query that reads or writes tenant data filters by
-`organization_id`. A record identifier from another organization returns 404, not 403,
-so the API does not confirm that the record exists.
+**Изоляция тенантов.** Каждый запрос, читающий или пишущий данные тенанта, фильтрует по
+`organization_id`. Идентификатор записи из другой организации возвращает 404, а не 403,
+поэтому API не подтверждает, что запись существует.
 
-**Secrets.** Integration credentials are encrypted at rest with the key from
-`FORGECRM_SECRET_KEY`. That key is never logged or returned by an API. Losing it makes
-stored integration credentials unrecoverable.
+**Секреты.** Учётные данные интеграций шифруются в состоянии покоя ключом из
+`FORGECRM_SECRET_KEY`. Этот ключ никогда не логируется и не возвращается API. Его потеря
+делает сохранённые учётные данные интеграций невосстановимыми.
 
-**Untrusted input.** Uploaded archives are hostile input. Extraction enforces entry
-count, total size, nesting depth and compression-ratio limits, rejects absolute and
-escaping paths, refuses symlinks, and runs in a private directory that is never served
-over HTTP. See `backend/internal/importx/safe`.
+**Недоверенный ввод.** Загруженные архивы — враждебный ввод. Распаковка обеспечивает
+лимиты числа записей, общего размера, глубины вложенности и коэффициента сжатия,
+отклоняет абсолютные пути и пути выхода, отказывает символическим ссылкам и работает в
+приватном каталоге, который никогда не обслуживается по HTTP. См.
+`backend/internal/importx/safe`.
 
-**Outbound requests.** Integration endpoints are checked before connecting. Loopback,
-link-local, private and cloud metadata addresses are refused to prevent SSRF.
+**Исходящие запросы.** Эндпоинты интеграций проверяются перед подключением. Loopback,
+link-local, приватные адреса и адреса облачных метаданных отклоняются для предотвращения
+SSRF.
 
-## Known limitations
+## Известные ограничения
 
-These are real and should be considered when deploying:
+Они реальны и должны учитываться при развёртывании:
 
-- **No license file.** The distribution model is undecided.
-- **The administration panel does not exist yet.** The API is the interface.
-- **Rate limiting is in-process.** With multiple API replicas, limits apply per
-  replica rather than globally.
-- **No external security audit has been performed.** Automated analysis and targeted
-  tests have run; a professional review has not.
-- **OIDC is implemented but untested against a real identity provider** in this
-  environment.
+- **Нет файла лицензии.** Модель распространения не определена.
+- **Панели администрирования пока не существует.** Интерфейс — это API.
+- **Ограничение частоты в процессе.** При нескольких репликах API лимиты применяются на
+  реплику, а не глобально.
+- **Внешний аудит безопасности не проводился.** Автоматический анализ и точечные тесты
+  запускались; профессионального ревью не было.
+- **OIDC реализован, но не тестировался против реального провайдера идентичности** в этом
+  окружении.
 
-## Hardening checklist for production
+## Чек-лист укрепления для production
 
-- [ ] Set `FORGECRM_ENV=production`; development mode returns reset tokens in responses.
-- [ ] Set `FORGECRM_COOKIE_SECURE=true` and serve over HTTPS.
-- [ ] Set `FORGECRM_BASE_URL` to the public HTTPS URL.
-- [ ] Set a unique, strong `FORGECRM_SECRET_KEY` and store it in a secret manager.
-- [ ] Set `FORGECRM_METRICS_TOKEN` before exposing `/metrics`.
-- [ ] Put the database on a private network and do not publish its port.
-- [ ] Terminate TLS at the reverse proxy; do not expose the API port directly.
-- [ ] Take and test a backup before serving real data.
+- [ ] Задайте `FORGECRM_ENV=production`; режим разработки возвращает токены сброса в ответах.
+- [ ] Задайте `FORGECRM_COOKIE_SECURE=true` и обслуживайте по HTTPS.
+- [ ] Задайте `FORGECRM_BASE_URL` публичным HTTPS-URL.
+- [ ] Задайте уникальный, стойкий `FORGECRM_SECRET_KEY` и храните его в менеджере секретов.
+- [ ] Задайте `FORGECRM_METRICS_TOKEN` до выставления `/metrics`.
+- [ ] Поместите базу данных в приватную сеть и не публикуйте её порт.
+- [ ] Завершайте TLS на обратном прокси; не выставляйте порт API напрямую.
+- [ ] Снимите и протестируйте резервную копию до обслуживания реальных данных.

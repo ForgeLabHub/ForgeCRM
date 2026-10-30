@@ -1,56 +1,57 @@
-# Constructor harness
+# Набор конструктора
 
-Proves that a recipe generates a project someone can actually use: it builds,
-its tests pass, and its demo runs and reports success.
+Доказывает, что рецепт генерирует проект, которым кто-то действительно может
+пользоваться: он собирается, его тесты проходят, а его демо запускается и сообщает об
+успехе.
 
-## Why it exists
+## Зачем он существует
 
-The extraction harness (`scripts/extract-test`) proves a single package *can*
-stand alone. That is a property, not a usable artifact. The constructor
-(`internal/constructor`, `cmd/forgecrm`) turns a recipe — a manifest naming a set
-of proven modules — into a project on disk. This harness checks the result rather
-than the promise: it scaffolds every recipe, then builds, tests and runs what came
-out.
+Набор выделения (`scripts/extract-test`) доказывает, что один пакет *может* стоять
+отдельно. Это свойство, а не годный к использованию артефакт. Конструктор
+(`internal/constructor`, `cmd/forgecrm`) превращает рецепт — манифест, называющий набор
+доказанных модулей, — в проект на диске. Этот набор проверяет результат, а не обещание:
+он создаёт каждый рецепт, затем собирает, тестирует и запускает то, что вышло.
 
-A recipe only belongs in the catalog once this passes. A recipe that generates a
-project which does not build is a claim nobody tested, which is what the
-extraction work exists to avoid.
+Рецепт принадлежит каталогу только после того, как это проходит. Рецепт, генерирующий
+проект, который не собирается, — это утверждение, которое никто не проверял, — именно
+этого и существует избегать работа по выделению.
 
-## What it checks
+## Что он проверяет
 
-For each recipe:
+Для каждого рецепта:
 
-1. `forgecrm scaffold <recipe> --output <dir>` succeeds.
-2. The generated tree imports no ForgeCRM package. The generator checks this too;
-   checking again here means a regression in the check cannot hide behind it.
-3. `go build ./...` succeeds in the generated project.
-4. `go test ./...` succeeds in the generated project.
-5. The demo runs, reports success, and prints the same output twice — so a
-   non-deterministic demo is caught.
+1. `forgecrm scaffold <recipe> --output <dir>` успешен.
+2. Сгенерированное дерево не импортирует ни одного пакета ForgeCRM. Генератор тоже это
+   проверяет; повторная проверка здесь означает, что регрессия в проверке не может
+   спрятаться за ней.
+3. `go build ./...` успешен в сгенерированном проекте.
+4. `go test ./...` успешен в сгенерированном проекте.
+5. Демо запускается, сообщает об успехе и печатает один и тот же вывод дважды — поэтому
+   недетерминированное демо ловится.
 
-## Running it
+## Запуск
 
 ```bash
-# every recipe
+# каждый рецепт
 scripts/constructor-test/run.sh
 
-# one recipe
+# один рецепт
 scripts/constructor-test/run.sh analytics-demo
 
-# keep a generated project for inspection
+# сохранить сгенерированный проект для осмотра
 CONSTRUCTOR_TEST_KEEP=1 scripts/constructor-test/run.sh
 ```
 
-The generated projects are written to
-`${TMPDIR:-/tmp}/forgecrm-constructor-test/<recipe>` and removed afterwards unless
-`CONSTRUCTOR_TEST_KEEP=1` is set.
+Сгенерированные проекты пишутся в
+`${TMPDIR:-/tmp}/forgecrm-constructor-test/<recipe>` и удаляются после этого, если не
+задано `CONSTRUCTOR_TEST_KEEP=1`.
 
-The recipe list is read from `forgecrm recipes --json`, so this script never keeps
-a second, hand-maintained list that could drift from the recipes.
+Список рецептов читается из `forgecrm recipes --json`, поэтому этот скрипт никогда не
+держит второй, поддерживаемый руками список, который мог бы разойтись с рецептами.
 
-## Adding a recipe
+## Добавление рецепта
 
-1. Add it under `internal/constructor/recipes/<name>/`.
-2. Run `scripts/constructor-test/run.sh <name>`; it must scaffold, build, test and
-   run.
-3. Only then is it part of the catalog. See `docs/CONSTRUCTOR.md`.
+1. Добавьте его под `internal/constructor/recipes/<name>/`.
+2. Запустите `scripts/constructor-test/run.sh <name>`; он должен создаться, собраться,
+   протестироваться и запуститься.
+3. Только тогда он часть каталога. См. `docs/CONSTRUCTOR.md`.

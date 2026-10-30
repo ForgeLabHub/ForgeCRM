@@ -1,42 +1,41 @@
-# Code of Conduct
+# Кодекс поведения
 
-## Our pledge
+## Наше обещание
 
-We want participation in ForgeCRM to be a harassment-free experience for everyone,
-regardless of age, body size, disability, ethnicity, gender identity or expression,
-level of experience, nationality, personal appearance, race, religion or sexual
-identity and orientation.
+Мы хотим, чтобы участие в ForgeCRM было свободным от притеснений для каждого,
+независимо от возраста, телосложения, инвалидности, этнической принадлежности, гендерной
+идентичности или самовыражения, уровня опыта, национальности, внешности, расы, религии
+или сексуальной идентичности и ориентации.
 
-## Expected behaviour
+## Ожидаемое поведение
 
-- Be direct about technical problems and generous about the people who wrote the code.
-- Critique the work, not the person. Explain the reasoning behind a disagreement.
-- Assume competence. Ask what someone was trying to achieve before concluding they
-  were careless.
-- Accept that being wrong about a design decision is normal and not a failure.
-- Respect a maintainer's decision to decline a change, and ask for the reasoning if it
-  is not clear.
+- Быть прямым в отношении технических проблем и щедрым к людям, написавшим код.
+- Критиковать работу, а не человека. Объяснять обоснование несогласия.
+- Предполагать компетентность. Спросить, чего кто-то пытался достичь, прежде чем
+  заключить, что он был небрежен.
+- Принимать, что ошибиться в проектном решении — это нормально и не провал.
+- Уважать решение сопровождающего отклонить изменение и спрашивать об обосновании, если
+  оно неясно.
 
-## Unacceptable behaviour
+## Неприемлемое поведение
 
-- Harassment, insults, or personal attacks.
-- Sexualised language or imagery, or unwelcome sexual attention.
-- Publishing someone's private information without permission.
-- Sustained disruption of discussion, or bad-faith argument.
-- Dismissing a report of a problem rather than looking into it.
+- Притеснения, оскорбления или личные нападки.
+- Сексуализированный язык или изображения, или нежелательное сексуальное внимание.
+- Публикация чьей-либо личной информации без разрешения.
+- Продолжительное нарушение хода обсуждения или недобросовестная аргументация.
+- Отклонение сообщения о проблеме вместо её разбирательства.
 
-## Scope
+## Область применения
 
-This applies in project spaces (issues, pull requests, discussions) and when an
-individual is representing the project in public.
+Это применяется в пространствах проекта (issues, pull requests, discussions) и когда
+человек представляет проект публично.
 
-## Enforcement
+## Обеспечение
 
-Report unacceptable behaviour to the maintainers. Reports are reviewed and handled
-confidentially. Maintainers may remove comments, close contributions, or ban
-individuals, and will explain the decision to the person concerned.
+Сообщайте о неприемлемом поведении сопровождающим. Сообщения рассматриваются и
+обрабатываются конфиденциально. Сопровождающие могут удалять комментарии, закрывать
+вклад или банить людей и объяснят решение затронутому лицу.
 
-## Attribution
+## Атрибуция
 
-Adapted from the [Contributor Covenant](https://www.contributor-covenant.org),
-version 2.1.
+Адаптировано из [Contributor Covenant](https://www.contributor-covenant.org), версия 2.1.

@@ -1,89 +1,87 @@
-# ForgeCRM — repository notes for agents
+# ForgeCRM — заметки о репозитории для агентов
 
-Self-hosted CRM platform. Go backend + PostgreSQL, modular monolith, no AI or
-external integration required for the core to work.
+Самостоятельно размещаемая CRM-платформа. Бэкенд на Go + PostgreSQL, модульный монолит,
+для работы ядра не нужны ни ИИ, ни внешние интеграции.
 
-## Layout
+## Структура
 
-- `backend/` — Go module `github.com/geff1778/forgecrm`
-  - `cmd/forgecrm-api`, `cmd/forgecrm-worker` — the two entrypoints
-  - `internal/api` — HTTP handlers and routing, one file per area
-  - `internal/importx` — Import Center: parsers, format detection, execution
-  - `internal/importx/safe` — untrusted-archive extraction
-  - `internal/integrations` — adapter lifecycle and the SSRF guard
-  - `internal/migrations` — embedded SQL, numbered `NNNN_name.{up,down}.sql`
-  - `internal/rbac` — permission catalog; must stay in sync with migration 0004
-- `docs/` — audit, architecture, roadmap, acceptance criteria, deployment, operations
+- `backend/` — модуль Go `github.com/geff1778/forgecrm`
+  - `cmd/forgecrm-api`, `cmd/forgecrm-worker` — две точки входа
+  - `internal/api` — HTTP-обработчики и маршрутизация, по файлу на область
+  - `internal/importx` — Центр импорта: парсеры, определение формата, исполнение
+  - `internal/importx/safe` — распаковка недоверенных архивов
+  - `internal/integrations` — жизненный цикл адаптера и защита SSRF
+  - `internal/migrations` — встроенный SQL, пронумерованный `NNNN_name.{up,down}.sql`
+  - `internal/rbac` — каталог разрешений; должен оставаться в шаге с миграцией 0004
+- `docs/` — аудит, архитектура, дорожная карта, критерии приёмки, развёртывание, эксплуатация
 - `scripts/` — check-env, setup, migrate, backup, restore, smoke-test
-- `frontend/` — React 19 + TypeScript + Vite web interface (pages, api clients, tests)
-- `docs/index.md` — **start here**; maps every question to the document that answers it
-- `docs/verification/matrix.md` — claim -> command -> CI job; edit it when behaviour changes
-- `BUILD.md` — pinned versions and build levels A-E
+- `frontend/` — веб-интерфейс на React 19 + TypeScript + Vite (страницы, клиенты api, тесты)
+- `docs/index.md` — **начните здесь**; сопоставляет каждый вопрос документу, который отвечает
+- `docs/verification/matrix.md` — утверждение -> команда -> задание CI; правьте при изменении поведения
+- `BUILD.md` — закреплённые версии и уровни сборки A-E
 
-## Build and test
+## Сборка и тестирование
 
 ```bash
 cd backend
 export PATH=$PATH:/usr/local/go/bin
-export GOTOOLCHAIN=local            # the sandbox toolchain is pinned
+export GOTOOLCHAIN=local            # toolchain песочницы закреплён
 
 go build ./...
 go vet ./...
-gofmt -l ./cmd ./internal           # must print nothing
+gofmt -l ./cmd ./internal           # должен ничего не печатать
 go test -race -count=1 ./...
 
-# The API specification is generated from the live router, never hand-edited.
-go run ./cmd/openapi-gen            # regenerate docs/api/openapi.json
-go run ./cmd/openapi-gen -check     # what CI runs; fails when the two disagree
+# Спецификация API генерируется из живого роутера, никогда не правится руками.
+go run ./cmd/openapi-gen            # перегенерировать docs/api/openapi.json
+go run ./cmd/openapi-gen -check     # что запускает CI; падает, когда они расходятся
 ```
 
-**Never edit `docs/api/openapi.json` by hand.** It is generated from the router and
-from the route registrations, and CI fails if it disagrees with them. A route
-change means running the generator and committing the result.
+**Никогда не правьте `docs/api/openapi.json` руками.** Он генерируется из роутера и
+регистраций маршрутов, и CI падает, если он с ними расходится. Изменение маршрута означает
+запуск генератора и коммит результата.
 
-Request and response schemas are derived from the types the handlers actually use,
-so the document cannot describe a shape no code accepts:
+Схемы запроса и ответа выводятся из типов, которые обработчики действительно используют,
+поэтому документ не может описывать форму, которую не принимает ни один код:
 
-- The contract table lives in `internal/api/contract.go` (`APIContract`). It names
-  the real DTO for each route. It cannot live in `internal/openapi`, because the
-  request DTOs are unexported types in package `api` and only that package can name
-  them — a re-declared copy would describe a different type.
-- Field names, types, nullability and the required set of a **response** come from
-  the struct and its tags. Only a **request**'s required set is declared, next to
-  the validation it mirrors, because presence is a fact about validation and cannot
-  be read off the type.
-- A type used as both a request and a response gets a distinct `...Input` component
-  for the request direction (`DealInput`), so its request `required` set cannot
-  contradict its response one. Two types sharing a bare name (`importx.Job`,
-  `jobs.Job`) are disambiguated with `Contract.TypeNames`.
-- A validation rule that is conditional — "at least one of these", "one of a fixed
-  set" — cannot be expressed as a required list. It goes in the request body
-  description, and `internal/api/contract_test.go` fails if a rule the validator
-  enforces is neither declared required nor recorded as conditional.
+- Таблица контракта живёт в `internal/api/contract.go` (`APIContract`). Она называет
+  реальный DTO для каждого маршрута. Она не может жить в `internal/openapi`, потому что
+  DTO запроса — это неэкспортируемые типы в пакете `api`, и только этот пакет может их
+  назвать — переобъявленная копия описала бы другой тип.
+- Имена полей, типы, nullability и обязательный набор **ответа** берутся из структуры и её
+  тегов. Только обязательный набор **запроса** объявляется, рядом с валидацией, которую он
+  отражает, потому что присутствие — факт о валидации и не читается с типа.
+- Тип, используемый и как запрос, и как ответ, получает отдельный компонент `...Input` для
+  направления запроса (`DealInput`), поэтому его обязательный набор запроса не может
+  противоречить ответному. Два типа, делящих голое имя (`importx.Job`, `jobs.Job`),
+  различаются через `Contract.TypeNames`.
+- Правило валидации, которое условно — «хотя бы одно из этих», «одно из фиксированного
+  набора», — не выражается обязательным списком. Оно идёт в описание тела запроса, и
+  `internal/api/contract_test.go` падает, если правило, которое обеспечивает валидатор, не
+  объявлено обязательным и не записано как условное.
 
-Adding a request body or response to a route means adding a row to the table in
-`internal/api/contract.go`. A route with no row is left unspecified rather than
-guessed, and `TestNoRouteIsInvented` / `TestNoOrphanComponents` keep the two
-directions honest.
+Добавление тела запроса или ответа к маршруту означает добавление строки в таблицу в
+`internal/api/contract.go`. Маршрут без строки оставлен неописанным, а не угадан, и
+`TestNoRouteIsInvented` / `TestNoOrphanComponents` держат оба направления честными.
 
-A route must declare its access level in one of three ways, or generation fails:
-a permission via `s.perm(rbac.PermX)` in its registration, an entry in
-`openapi.Anonymous` (no session at all), or an entry in `openapi.SessionOnly`
-(session, no permission). `Anonymous` is a closed list of six; adding to it means
-adding an unauthenticated endpoint, which needs a reason.
+Маршрут должен объявить свой уровень доступа одним из трёх способов, иначе генерация
+падает: разрешение через `s.perm(rbac.PermX)` в его регистрации, запись в
+`openapi.Anonymous` (вообще без сессии) или запись в `openapi.SessionOnly` (сессия, без
+разрешения). `Anonymous` — закрытый список из шести; добавление в него означает добавление
+неаутентифицированного эндпоинта, что требует причины.
 
-Integration tests need a real database and a build tag. They skip themselves when
-the URL is unset, so the default test run stays green:
+Интеграционные тесты нуждаются в реальной базе и теге сборки. Они пропускают себя, когда
+URL не задан, поэтому прогон тестов по умолчанию остаётся зелёным:
 
 ```bash
 FORGECRM_TEST_DATABASE_URL='postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_test?sslmode=disable' \
   go test -tags=integration -count=1 ./...
 ```
 
-`internal/testsupport` drops and rebuilds the `public` schema on every test, so it
-must only ever point at a scratch database.
+`internal/testsupport` удаляет и пересобирает схему `public` на каждом тесте, поэтому он
+должен указывать только на черновую базу.
 
-The frontend is a separate npm project:
+Фронтенд — отдельный npm-проект:
 
 ```bash
 cd frontend
@@ -94,7 +92,7 @@ npm run test        # vitest run
 npm run build       # tsc -b && vite build
 ```
 
-## Running locally
+## Локальный запуск
 
 ```bash
 cd backend
@@ -107,202 +105,200 @@ FORGECRM_ENV=development FORGECRM_HTTP_PORT=8080 \
   /tmp/forgecrm-api &
 ```
 
-Full stack: `docker compose up -d --build`. The image embeds migrations, so a
-schema change requires a rebuild, not just a restart.
+Полный стек: `docker compose up -d --build`. Образ встраивает миграции, поэтому изменение
+схемы требует пересборки, а не просто перезапуска.
 
-## Things that will bite you
+## Что вас укусит
 
-- **Migrations are embedded in the binary.** A new migration does nothing until
-  the image or binary is rebuilt.
-- **Never edit an applied migration.** Add a new numbered pair.
-- **The permission catalog and migration 0004 must agree.** `webhooks.manage` was
-  in the catalog but not seeded for a long time, which silently blocked every
-  non-owner role. `TestSeedDataMatchesThePermissionCatalog` now catches this.
-- **The API and worker are separate processes.** An import that stays `queued`
-  means no worker is running.
-- **Integration tests are gated by both a build tag and an env var.**
-- **`.env` holds `FORGECRM_SECRET_KEY`** and is gitignored. Never commit it.
-- **`.env` in this workspace already has a generated key** and `FORGECRM_HTTP_PORT`
-  may be overridden; check before assuming port 8080.
-- **The GitHub repository moved to `ForgeLabHub/ForgeCRM`** (the old
-  `geff1778/ForgeCRM` redirects). The `origin` remote in this checkout still points
-  at the old name and `GITHUB_TOKEN` is read-only for it, so `git push` fails with
-  `403`. Push with the personal token and the current name:
+- **Миграции встроены в бинарник.** Новая миграция ничего не делает, пока образ или
+  бинарник не пересобран.
+- **Никогда не правьте применённую миграцию.** Добавьте новую пронумерованную пару.
+- **Каталог разрешений и миграция 0004 должны согласовываться.** `webhooks.manage` был в
+  каталоге, но долго не засевался, что молча блокировало каждую роль не-владельца.
+  `TestSeedDataMatchesThePermissionCatalog` теперь это ловит.
+- **API и воркер — отдельные процессы.** Импорт, остающийся `queued`, означает, что воркер
+  не запущен.
+- **Интеграционные тесты гейтятся и тегом сборки, и переменной окружения.**
+- **`.env` держит `FORGECRM_SECRET_KEY`** и в gitignore. Никогда его не коммитьте.
+- **`.env` в этом рабочем пространстве уже имеет сгенерированный ключ**, и
+  `FORGECRM_HTTP_PORT` может быть переопределён; проверьте перед тем, как предполагать
+  порт 8080.
+- **Репозиторий GitHub переехал в `ForgeLabHub/ForgeCRM`** (старый `geff1778/ForgeCRM`
+  перенаправляет). Удалённый `origin` в этой копии всё ещё указывает на старое имя, и
+  `GITHUB_TOKEN` для него только для чтения, поэтому `git push` падает с `403`. Пушьте
+  личным токеном и текущим именем:
   `git remote set-url origin "https://x-access-token:${GITHUB_PERSONAL_ACCESS_TOKEN}@github.com/ForgeLabHub/ForgeCRM.git"`.
-- **The E2E API process is a prebuilt binary at `/tmp/forgecrm-api`** started
-  against `forgecrm_e2e` on `127.0.0.1:8080` (bootstrap owner
-  `e2e-owner@forgecrm.test`). A route added since it was built returns `404`, and a
-  migration added since it started is unapplied — the Simulation Lab page then fails
-  with `relation "simulation_scenarios" does not exist`. Rebuild, apply migrations
-  (`/tmp/forgecrm-api-new --migrate`), and restart it before running Playwright.
-- **The Go toolchain is pinned in three places** and they must move together:
-  `go.mod`'s `go` directive, `backend/Dockerfile` and `GO_VERSION` in CI. A
-  stdlib CVE is fixed by bumping all three; bumping only one lets a fix pass in
-  one place and be missing in another.
-- **`database.WithTx` rolls back on *any* error a closure returns.** A closure
-  that needs both to write and to report a failure cannot do so by returning the
-  error: the write is discarded. Record the outcome in a variable, return `nil`
-  to commit, and return the error *after* the transaction. The expired-approval
-  transition was broken this way — it updated `agent_actions.status` to `expired`
-  and then returned `ErrExpired` from inside the transaction, so the caller saw
-  the right error while the row stayed `proposed` and the deadline was never
-  enforced. Assert persisted state by reading the table, not the returned struct;
-  a rollback leaves the caller holding a struct that describes a write the
-  database never kept. When a second path enforces the same invariant as a
-  background sweep, both must apply the same reconciliation, or a row the sweep
-  no longer matches stays stranded.
-- **A "still in flight" guard must name every in-flight state, not the obvious
-  one.** The webhook replay guard refused only `status = 'pending'`, but a delivery
-  a worker has claimed is `delivering` — so an operator could replay a delivery
-  that was being sent at that moment, granting a second window the in-progress
-  attempt would consume and allowing one event to produce two sends. The route also
-  nests a delivery under its subscription (`/webhooks/{id}/deliveries/{deliveryId}
-  /replay`), and both ids are required path parameters, so the mutating statement
-  filters on `subscription_id` as well as `organization_id`; a handler that reads
-  only one half of the path lets the same request mean two different things. When a
-  status column gains a state, check every guard that enumerates states — the
-  `CHECK` constraint lists the full set.
-- **A webhook subscription's event list must come from the server, never a local
-  constant.** The form once hard-coded bare names (`contact.created`) while the
-  dispatcher matched namespaced ones (`crm.contact.created`), so a subscription
-  created in the UI was accepted and enabled and then delivered nothing — a failure
-  that looks like a network fault and is invisible in the UI. The vocabulary is
-  `outbox.EventTypes()`, published as `event_types` on `/api/v1/system/capabilities`;
-  the picker reads it. `TestWebhookEventVocabularyMatchesTheDispatcher` fails if the
-  two ever diverge.
-- **The audit log is append-only**, so a user who has acted can never be deleted
-  — the FK cascade is blocked by a trigger. Disable the account instead
-  (`status` must be one of `invited`, `active`, `suspended`, `blocked`).
-- **Frontend response types are hand-written** in `src/types/api.ts`. Check a
-  changed handler's real JSON before editing them; several fields were guessed
-  wrong the first time (audit ids are integers, not UUIDs).
-- **The frontend is served same-origin by Nginx.** Do not add a CORS
-  configuration or move the session token into `localStorage`; the cookie plus
-  CSRF double-submit depends on same-origin.
-- **A capability flag must name the condition it tests, not the feature a reader
-  hopes for.** `capabilities.oidc` once reported that settings were present while
-  no sign-in flow existed, so clients offered SSO that could not work. It is now
-  `oidc_configured`, and the tool endpoint is `tool_api` because it speaks
-  `tools/list` and `tools/call` but is not a full MCP server.
-  `capabilities_test.go` fails if either misleading name returns. `Enabled()` on
-  the optional services tolerates a nil receiver, so a subsystem left unconstructed
-  reports "off" rather than panicking the diagnostics endpoint.
+- **Процесс API для E2E — предсобранный бинарник в `/tmp/forgecrm-api`**, запущенный против
+  `forgecrm_e2e` на `127.0.0.1:8080` (владелец bootstrap `e2e-owner@forgecrm.test`).
+  Маршрут, добавленный после его сборки, возвращает `404`, а миграция, добавленная после
+  его старта, не применена — страница Simulation Lab тогда падает с
+  `relation "simulation_scenarios" does not exist`. Пересоберите, примените миграции
+  (`/tmp/forgecrm-api-new --migrate`) и перезапустите его до запуска Playwright.
+- **Toolchain Go закреплён в трёх местах**, и они должны двигаться вместе: директива `go` в
+  `go.mod`, `backend/Dockerfile` и `GO_VERSION` в CI. CVE stdlib исправляется подъёмом всех
+  трёх; подъём только одного позволяет исправлению пройти в одном месте и отсутствовать в
+  другом.
+- **`database.WithTx` откатывается при *любой* ошибке, которую возвращает замыкание.**
+  Замыкание, которому нужно и записать, и сообщить о сбое, не может сделать это, вернув
+  ошибку: запись отбрасывается. Запишите результат в переменную, верните `nil`, чтобы
+  закоммитить, и верните ошибку *после* транзакции. Переход истёкшего согласования был
+  сломан именно так — он обновлял `agent_actions.status` до `expired` и затем возвращал
+  `ErrExpired` изнутри транзакции, поэтому вызывающий видел правильную ошибку, тогда как
+  строка оставалась `proposed`, а дедлайн никогда не обеспечивался. Утверждайте
+  сохранённое состояние, читая таблицу, а не возвращённую структуру; откат оставляет
+  вызывающего с структурой, описывающей запись, которую база никогда не сохраняла. Когда
+  второй путь обеспечивает тот же инвариант, что фоновый обход, оба должны применять одну
+  и ту же сверку, иначе строка, которой обход больше не соответствует, останется брошенной.
+- **Защита «всё ещё в полёте» должна называть каждое состояние в полёте, а не очевидное.**
+  Защита повтора вебхука отклоняла только `status = 'pending'`, но забранная воркером
+  доставка — это `delivering`, — поэтому оператор мог повторить доставку, которая
+  отправлялась в тот момент, дав второе окно, которое потребит идущая попытка, и позволяя
+  одному событию произвести две отправки. Маршрут также вкладывает доставку в её подписку
+  (`/webhooks/{id}/deliveries/{deliveryId}/replay`), и оба id — обязательные параметры
+  пути, поэтому мутирующее выражение фильтрует по `subscription_id`, а также
+  `organization_id`; обработчик, читающий только половину пути, позволяет одному запросу
+  означать две разные вещи. Когда столбец статуса получает состояние, проверьте каждую
+  защиту, перечисляющую состояния — ограничение `CHECK` перечисляет полный набор.
+- **Список событий подписки на вебхуки должен приходить с сервера, никогда из локальной
+  константы.** Форма однажды зашила голые имена (`contact.created`), тогда как диспетчер
+  сопоставлял имена с пространством имён (`crm.contact.created`), поэтому подписка,
+  созданная в UI, принималась и включалась, а затем не доставляла ничего — сбой, который
+  выглядит как сетевая неисправность и невидим в UI. Словарь — `outbox.EventTypes()`,
+  публикуемый как `event_types` на `/api/v1/system/capabilities`; выбор читает его.
+  `TestWebhookEventVocabularyMatchesTheDispatcher` падает, если эти двое когда-либо
+  разойдутся.
+- **Журнал аудита «только добавление»**, поэтому пользователь, который действовал, никогда
+  не может быть удалён — каскад FK блокируется триггером. Вместо этого отключите аккаунт
+  (`status` должен быть одним из `invited`, `active`, `suspended`, `blocked`).
+- **Типы ответов фронтенда написаны руками** в `src/types/api.ts`. Проверяйте реальный JSON
+  изменённого обработчика перед их правкой; несколько полей были угаданы неверно с первого
+  раза (id аудита — целые числа, а не UUID).
+- **Фронтенд обслуживается в том же источнике через Nginx.** Не добавляйте конфигурацию
+  CORS и не переносите токен сессии в `localStorage`; cookie плюс двойная отправка CSRF
+  зависят от одного источника.
+- **Флаг возможности должен называть условие, которое он проверяет, а не функцию, на
+  которую надеется читатель.** `capabilities.oidc` однажды сообщал, что настройки
+  присутствуют, тогда как потока входа не существовало, поэтому клиенты предлагали SSO,
+  который не мог работать. Теперь это `oidc_configured`, а эндпоинт инструментов —
+  `tool_api`, потому что он говорит на `tools/list` и `tools/call`, но не является полным
+  MCP-сервером. `capabilities_test.go` падает, если любое вводящее в заблуждение имя
+  вернётся. `Enabled()` у опциональных сервисов терпит nil-получатель, поэтому подсистема,
+  оставленная непостроенной, сообщает «off», а не паникует эндпоинт диагностики.
 
-- **The workflow engine calls `crm.Service` directly, so it enforces the coarse
-  permission itself.** The API enforces permissions in middleware and the MCP
-  registry enforces them in its tool layer; the service layer checks tenant scope
-  and record ownership but not the coarse "may you do this at all" permission.
-  The engine bypasses both, so it maps each step type to a `rbac.Permission` and
-  checks it against the author's freshly resolved principal before running the
-  step. A new step type without an entry in that map is a privilege-escalation
-  bug: a user holding only `workflows.manage` could perform an action their role
-  forbids. Add the permission with the step type.
-- **A workflow acts as its author, resolved at execution time.** Not captured at
-  authoring time: a blocked author, a removed membership or a revoked role stops
-  the next run. If you cache the principal on the workflow row, you break this.
-- **Event-triggered runs are de-duplicated by a database constraint, not a flag.**
-  `workflow_run_events` has a primary key on `(workflow_id, event_id)` and the run
-  row is created in the same transaction as the claim. Do not split them: creating
-  the run first and marking a duplicate `skipped` leaves one orphan run per
-  redelivery, which is unbounded under the outbox's retries. This was a real bug
-  and `TestWorkflowEventTriggerIsDeDuplicated` is the guard.
-- **A chain a workflow causes is bounded by correlation, not by a timer.** A step's
-  emitted event inherits the run's correlation id, and the chain depth is the count
-  of runs already recorded for it. `run_depth` is therefore derived, not passed in
-  a payload. Two workflows that watch each other stop at `max_depth`.
+- **Движок workflow вызывает `crm.Service` напрямую, поэтому он обеспечивает грубое
+  разрешение сам.** API обеспечивает разрешения в middleware, а реестр MCP обеспечивает их
+  в своём слое инструментов; слой сервиса проверяет область тенанта и владение записью, но
+  не грубое разрешение «можешь ли ты делать это вообще». Движок обходит оба, поэтому он
+  сопоставляет каждый тип шага с `rbac.Permission` и проверяет его против заново
+  определённого принципала автора до запуска шага. Новый тип шага без записи в этой map —
+  это баг эскалации привилегий: пользователь, держащий только `workflows.manage`, мог бы
+  выполнить действие, запрещённое его ролью. Добавляйте разрешение вместе с типом шага.
+- **Workflow действует как свой автор, определяемый на момент исполнения.** Не
+  захватываемый на момент авторинга: заблокированный автор, удалённое участие или отозванная
+  роль останавливают следующий прогон. Если вы кэшируете принципала на строке workflow, вы
+  это ломаете.
+- **Прогоны по событию дедуплицируются ограничением базы, а не флагом.**
+  `workflow_run_events` имеет первичный ключ по `(workflow_id, event_id)`, и строка прогона
+  создаётся в той же транзакции, что и заявка. Не разделяйте их: создание прогона первым и
+  пометка дубликата `skipped` оставляет один осиротевший прогон на повторную доставку, что
+  безгранично при повторах outbox. Это был реальный баг, и
+  `TestWorkflowEventTriggerIsDeDuplicated` — страж.
+- **Цепочка, вызванная workflow, ограничена корреляцией, а не таймером.** Событие,
+  порождённое шагом, наследует correlation id прогона, а глубина цепочки — число уже
+  записанных для него прогонов. Поэтому `run_depth` выводится, а не передаётся в payload.
+  Два workflow, следящих друг за другом, останавливаются на `max_depth`.
 
-- **A service that `internal/wiring` builds is not in the API until `main.go`
-  copies it into `api.Deps`.** The two lists are maintained by hand and nothing at
-  startup compares them, so a service added to `wiring.Services` but forgotten in
-  the `api.New(&api.Deps{...})` literal leaves its handlers dereferencing nil. The
-  recovery middleware turns the panic into an opaque 500, so the fault looks like
-  a broken endpoint rather than a wiring mistake — the Forecast/Risk omission
-  surfaced only in the E2E run against the real binary.
-  `cmd/forgecrm-api/deps_wiring_test.go` now parses both declarations and fails
-  when a wired service is never copied, so the mistake is a unit-test failure.
-  The intelligence routes also mount behind `requireService`, which answers 503
-  naming the subsystem when its service is nil rather than panicking.
+- **Сервис, который строит `internal/wiring`, не находится в API, пока `main.go` не
+  скопирует его в `api.Deps`.** Оба списка поддерживаются вручную, и ничто при старте их не
+  сравнивает, поэтому сервис, добавленный в `wiring.Services`, но забытый в литерале
+  `api.New(&api.Deps{...})`, оставляет свои обработчики разыменовывающими nil. Middleware
+  восстановления превращает панику в непрозрачный 500, поэтому сбой выглядит как сломанный
+  эндпоинт, а не как ошибка связывания — пропуск Forecast/Risk вскрылся только в прогоне
+  E2E против реального бинарника. `cmd/forgecrm-api/deps_wiring_test.go` теперь разбирает
+  оба объявления и падает, когда связанный сервис никогда не скопирован, поэтому ошибка
+  становится сбоем модульного теста. Маршруты интеллекта также монтируются за
+  `requireService`, который отвечает 503, называя подсистему, когда её сервис nil, а не
+  паникует.
 
-## Module extraction
+## Выделение модулей
 
-The monolith is being carved into modules that can be lifted out on their own.
-An "extraction-ready" claim is **testable, not documentary**:
+Монолит вырезается на модули, которые можно поднять отдельно. Утверждение
+«готов к выделению» **проверяемо, а не документально**:
 
-- `scripts/extract-test/<module>/setup.sh` copies the module's own `.go` files
-  into a clean Go module, builds it, runs its tests and runs a `cmd/smoke`
-  program there. Only the package's own files are copied, so a hidden dependency
-  shows up as a compile error.
-- A module is listed in `scripts/extract-test/modules.txt` **only when its
-  extraction actually passes**. Listing one that does not extract makes the
-  harness lie, which is worse than not listing it.
-- `scripts/extract-test/run.sh` runs every listed module; CI has an `extraction`
-  job for it.
-- `TestExtractionBoundaryHolds` in `internal/archtest` enforces the same boundary
-  cheaply on every `go test ./...`. It keys on the **full path relative to
-  `internal/`**, not the first segment, and fails when a pinned module is absent
-  from the graph — otherwise a nested module's case silently matches nothing and
-  the test passes while checking nothing. The archtest and the harness are
-  independent, so neither a stale check nor a skipped CI job can hide a violation.
+- `scripts/extract-test/<module>/setup.sh` копирует собственные `.go` файлы модуля в чистый
+  модуль Go, собирает его, прогоняет его тесты и запускает программу `cmd/smoke` там.
+  Копируются только собственные файлы пакета, поэтому скрытая зависимость всплывает как
+  ошибка компиляции.
+- Модуль перечисляется в `scripts/extract-test/modules.txt` **только когда его выделение
+  действительно проходит**. Перечисление того, который не выделяется, заставляет набор
+  лгать, что хуже, чем не перечислять его.
+- `scripts/extract-test/run.sh` запускает каждый перечисленный модуль; в CI есть задание
+  `extraction` для него.
+- `TestExtractionBoundaryHolds` в `internal/archtest` обеспечивает ту же границу дёшево на
+  каждом `go test ./...`. Он ключуется на **полном пути относительно `internal/`**, а не на
+  первом сегменте, и падает, когда закреплённого модуля нет в графе — иначе случай
+  вложенного модуля молча не совпадает ни с чем, и тест проходит, ничего не проверяя.
+  Archtest и набор независимы, поэтому ни устаревшая проверка, ни пропущенное задание CI не
+  могут скрыть нарушение.
 
-Thirty-three modules are proven today: `netguard`, `analytics`, `ratelimit`,
-`objectstore`, `secrets`, `logging`, `httpx`, the two `importx` leaves
-`importx/safe` (untrusted-archive extraction) and `importx/parsers` (tabular
-source parsing), and `database`, `rbac`, `audit`, `outbox`, `retention`, `agent`,
-`jobs`, `crm`, `storage`, `integrations`, `config`, `workflow`, `events`,
-`migratex`, `simulate`, `forecast`, `risk`, `notify`, `ai`, `importx`,
-`migrations`, `migrate`, `authn` and `constructor` (each
-with its proven dependencies: `database`, and where needed `logging`, `audit`,
-`httpx`, `outbox`, `objectstore`, `netguard`, `ratelimit`, `rbac`, `secrets`,
-`analytics`, `crm`, `agent`, `config`, `retention`, `integrations`, `jobs` and the
-two `importx` leaves). `docs/MODULES.md` and `docs/EXTRACT_READY.md` record the
-status and must match the harness.
+Сегодня доказаны тридцать три модуля: `netguard`, `analytics`, `ratelimit`,
+`objectstore`, `secrets`, `logging`, `httpx`, два листа `importx` —
+`importx/safe` (распаковка недоверенных архивов) и `importx/parsers` (разбор табличных
+источников), — и `database`, `rbac`, `audit`, `outbox`, `retention`, `agent`, `jobs`,
+`crm`, `storage`, `integrations`, `config`, `workflow`, `events`, `migratex`, `simulate`,
+`forecast`, `risk`, `notify`, `ai`, `importx`, `migrations`, `migrate`, `authn` и
+`constructor` (каждый со своими доказанными зависимостями: `database`, а где нужно
+`logging`, `audit`, `httpx`, `outbox`, `objectstore`, `netguard`, `ratelimit`, `rbac`,
+`secrets`, `analytics`, `crm`, `agent`, `config`, `retention`, `integrations`, `jobs` и
+два листа `importx`). `docs/MODULES.md` и `docs/EXTRACT_READY.md` записывают статус и
+должны совпадать с набором.
 
-Writing a module's first tests is itself a bug-finding step: the `parsers`
-extraction is what surfaced that XLSX was rejected by the UTF-8 check applied to
-every format, and that the XML parser emitted a record's attributes and nested
-elements as separate rows. When you extract a package with no tests, expect to
-find something.
+Написание первых тестов модуля само является шагом поиска багов: выделение `parsers` — это
+то, что вскрыло, что XLSX отклонялся проверкой UTF-8, применённой ко всем форматам, и что
+XML-парсер выдавал атрибуты и вложенные элементы записи как отдельные строки. Когда вы
+выделяете пакет без тестов, ожидайте что-то найти.
 
-## The constructor
+## Конструктор
 
-The extraction harness proves a module *can* stand alone; `internal/constructor`
-is how a combination of proven modules becomes a working project in one command.
-`cmd/forgecrm scaffold <recipe> --output <dir>` reads a recipe manifest, copies
-exactly the named modules out of `internal/`, rewrites their imports to the
-project's module path, renders the recipe's templates and writes a README — then
-fails if any generated file still names ForgeCRM, or if the output directory
-already holds files. A recipe lives in `internal/constructor/recipes/<name>/`.
+Набор выделения доказывает, что модуль *может* стоять отдельно; `internal/constructor` —
+как комбинация доказанных модулей становится работающим проектом одной командой.
+`cmd/forgecrm scaffold <recipe> --output <dir>` читает манифест рецепта, копирует ровно
+названные модули из `internal/`, переписывает их импорты на путь модуля проекта,
+отрисовывает шаблоны рецепта и пишет README — затем падает, если какой-либо
+сгенерированный файл всё ещё называет ForgeCRM, или если выходной каталог уже содержит
+файлы. Рецепт живёт в `internal/constructor/recipes/<name>/`.
 
-Two properties matter and are easy to break:
+Два свойства важны и легко ломаются:
 
-- **It never overwrites.** Refusing a non-empty directory is deliberate: a
-  mistyped `--output` must not delete a user's work. Do not add a `--force` that
-  clears the directory.
-- **It is its own check.** A generated project must import no ForgeCRM package;
-  the generator enforces it and `scripts/constructor-test/run.sh` enforces it
-  again, independently, so a regression in the check cannot hide behind it.
+- **Он никогда не перезаписывает.** Отказ непустому каталогу намеренный: опечатка в
+  `--output` не должна удалять работу пользователя. Не добавляйте `--force`, который
+  очищает каталог.
+- **Он сам себе проверка.** Сгенерированный проект должен не импортировать ни одного пакета
+  ForgeCRM; генератор это обеспечивает, и `scripts/constructor-test/run.sh` обеспечивает
+  это снова, независимо, поэтому регрессия в проверке не может спрятаться за ней.
 
-`scripts/constructor-test/run.sh` scaffolds every recipe, then builds, tests and
-runs the generated project and checks the demo's deterministic output. It is a CI
-job (`constructor`) and a `make test-constructor` target. Add a recipe only once
-that passes. The constructor is itself extraction-proven (a leaf: stdlib plus a
-YAML parser), and its tests use a throwaway fixture tree rather than the real
-monolith so the package extracts with them. See `docs/CONSTRUCTOR.md`.
+`scripts/constructor-test/run.sh` создаёт каждый рецепт, затем собирает, тестирует и
+запускает сгенерированный проект и проверяет детерминированный вывод демо. Это задание CI
+(`constructor`) и цель `make test-constructor`. Добавляйте рецепт только когда это
+проходит. Конструктор сам доказан на выделение (лист: stdlib плюс парсер YAML), и его тесты
+используют одноразовое дерево фикстур, а не реальный монолит, поэтому пакет выделяется
+вместе с ними. См. `docs/CONSTRUCTOR.md`.
 
-## Conventions
+## Соглашения
 
-- `gofmt` clean, `go vet` clean, no new dependency where the standard library works.
-- Every endpoint checks a permission on the server. Hiding UI is not access control.
-- Tenant-scoped queries always filter by `organization_id`.
-- Comments explain *why*. Do not narrate the change in code; use the commit message.
-- Errors are wrapped with context: `fmt.Errorf("do the thing: %w", err)`.
+- `gofmt` чист, `go vet` чист, никакой новой зависимости там, где работает стандартная
+  библиотека.
+- Каждый эндпоинт проверяет разрешение на сервере. Скрытие UI — не контроль доступа.
+- Запросы с областью тенанта всегда фильтруют по `organization_id`.
+- Комментарии объясняют *почему*. Не повествуйте изменение в коде; используйте сообщение
+  коммита.
+- Ошибки оборачиваются с контекстом: `fmt.Errorf("do the thing: %w", err)`.
 
-## Status
+## Статус
 
-Backend, schema, RBAC, auth, audit, jobs, outbox, CRM domain, Import Center,
-integrations, events, notifications and the AI layer exist. The web interface
-covers sign-in with second factor, the CRM workspace, the Import Center, and the
-administration pages. Deployment, docs and CI are in place; CI runs a frontend
-job as well as the backend. The AI layer is backend-only — there is no AI page
-beyond the status screen. No license has been chosen — do not add one without
-asking the owner.
+Бэкенд, схема, RBAC, аутентификация, аудит, задания, outbox, домен CRM, Центр импорта,
+интеграции, события, уведомления и слой ИИ существуют. Веб-интерфейс покрывает вход со
+вторым фактором, рабочее пространство CRM, Центр импорта и страницы администрирования.
+Развёртывание, документация и CI на месте; CI запускает задание фронтенда, а также
+бэкенда. Слой ИИ только на бэкенде — нет страницы ИИ помимо экрана статуса. Лицензия не
+выбрана — не добавляйте её без согласия владельца.

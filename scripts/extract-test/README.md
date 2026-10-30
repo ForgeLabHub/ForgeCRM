@@ -1,85 +1,81 @@
-# Extraction harness
+# Набор выделения
 
-Proves that a module is independent of the ForgeCRM monolith, by removing the
-monolith and checking the module still works.
+Доказывает, что модуль независим от монолита ForgeCRM, удаляя монолит и проверяя, что
+модуль всё ещё работает.
 
-## Why this exists
+## Зачем это существует
 
-A package can build inside the monolith while depending on half of it. The build
-system is happy because the dependency is present; nothing fails until someone
-tries to take the package out, and then it fails in a way that is expensive to
-unpick.
+Пакет может собираться внутри монолита, завися от половины его. Система сборки довольна,
+потому что зависимость присутствует; ничто не падает, пока кто-то не попытается вынуть
+пакет, и тогда он падает так, что распутывать дорого.
 
-"This module is extraction-ready" is therefore a claim about a state nobody has
-tested. The only way to test it is to actually do the extraction: copy the
-package into a clean module, without the rest of ForgeCRM, and build, test and run
-it there. If it reaches back into the application layer, the copied project no
-longer contains the code it reached for and the build fails.
+Поэтому «этот модуль готов к выделению» — утверждение о состоянии, которое никто не
+проверял. Единственный способ его проверить — действительно выполнить выделение:
+скопировать пакет в чистый модуль, без остальной части ForgeCRM, и собрать, протестировать
+и запустить его там. Если он тянется обратно в прикладной слой, скопированный проект
+больше не содержит код, к которому он тянулся, и сборка падает.
 
-That is what this harness does, and it is why it is a test rather than a
-paragraph in a document.
+Вот что делает этот набор, и вот почему он тест, а не абзац в документе.
 
-## What counts as a hidden dependency
+## Что считается скрытой зависимостью
 
-Anything the package needs that is not:
+Всё, что нужно пакету и что не является:
 
-- the Go standard library,
-- a third-party module declared in the module's `go.mod`, or
-- another package the harness explicitly copies alongside it.
+- стандартной библиотекой Go,
+- сторонним модулем, объявленным в `go.mod` модуля, или
+- другим пакетом, который набор явно копирует рядом с ним.
 
-An import of `github.com/geff1778/forgecrm/internal/...` is a hidden dependency,
-even if it looks harmless, because it is exactly the edge that disappears when the
-module is taken out.
+Импорт `github.com/geff1778/forgecrm/internal/...` — это скрытая зависимость, даже если
+он выглядит безобидно, потому что это ровно то ребро, которое исчезает, когда модуль
+вынимают.
 
-## Running it
+## Запуск
 
 ```bash
-# every module listed in modules.txt
+# каждый модуль, перечисленный в modules.txt
 scripts/extract-test/run.sh
 
-# one module
+# один модуль
 scripts/extract-test/run.sh objectstore
 
-# keep the extracted project for inspection
+# сохранить выделенный проект для осмотра
 EXTRACT_TEST_KEEP=1 scripts/extract-test/run.sh objectstore
 ```
 
-The extracted project is written to `${TMPDIR:-/tmp}/forgecrm-extract-test/<module>`
-and removed afterwards unless `EXTRACT_TEST_KEEP=1` is set.
+Выделенный проект пишется в `${TMPDIR:-/tmp}/forgecrm-extract-test/<module>` и удаляется
+после этого, если не задано `EXTRACT_TEST_KEEP=1`.
 
-Each module's extraction must pass before the module is listed in `modules.txt`.
-Listing a module that does not extract would make the harness report a property
-that is not true, which is worse than not listing it at all.
+Выделение каждого модуля должно пройти, прежде чем модуль будет перечислен в
+`modules.txt`. Перечисление модуля, который не выделяется, заставило бы набор сообщать
+свойство, которое не является истинным, что хуже, чем не перечислять его вообще.
 
-## Adding a module
+## Добавление модуля
 
-1. Create `scripts/extract-test/<module>/`.
-2. Write `go.mod` for the extracted module. The simplest way to get it exactly
-   right is to do the extraction by hand once, run `go mod tidy`, and copy the
-   result. Do not hand-write the indirect requirements.
-3. Write `cmd/smoke/main.go`: a small program that exercises the module and exits
-   non-zero on failure. It imports the module by its ForgeCRM path; the setup
-   script rewrites that to the extracted path.
-4. Write `setup.sh`, modelled on an existing one. Use `extract_pkg` for the module
-   and for any in-module package it depends on, `install_module_files` for the
-   manifest and smoke, and `rewrite_import` to point the smoke at the extracted
-   copy.
-5. Add the module name to `modules.txt`.
+1. Создайте `scripts/extract-test/<module>/`.
+2. Напишите `go.mod` для выделенного модуля. Простейший способ получить его точно верным —
+   сделать выделение вручную один раз, запустить `go mod tidy` и скопировать результат.
+   Не пишите косвенные требования руками.
+3. Напишите `cmd/smoke/main.go`: небольшую программу, которая упражняет модуль и выходит
+   с ненулевым кодом при сбое. Она импортирует модуль по его пути ForgeCRM; скрипт setup
+   переписывает это на выделенный путь.
+4. Напишите `setup.sh`, по образцу существующего. Используйте `extract_pkg` для модуля и
+   для любого внутреннего пакета, от которого он зависит, `install_module_files` для
+   манифеста и smoke и `rewrite_import`, чтобы указать smoke на выделенную копию.
+5. Добавьте имя модуля в `modules.txt`.
 
-## Relationship to the constructor
+## Связь с конструктором
 
-This harness proves a module *can* stand alone. `internal/constructor` (with
-`cmd/forgecrm` and `scripts/constructor-test/run.sh`) is how a combination of
-proven modules becomes a working project in one command. A recipe is only built
-from modules this harness has passed; the two are not substitutes.
+Этот набор доказывает, что модуль *может* стоять отдельно. `internal/constructor` (с
+`cmd/forgecrm` и `scripts/constructor-test/run.sh`) — как комбинация доказанных модулей
+становится работающим проектом одной командой. Рецепт строится только из модулей, которые
+прошёл этот набор; они не заменяют друг друга.
 
-## Relationship to the archtest
+## Связь с archtest
 
-`internal/archtest` enforces the same boundaries cheaply, from the import graph,
-on every `go test ./...`. This harness is the expensive, always-true version: it
-does not read a graph, it removes the code and builds.
+`internal/archtest` обеспечивает те же границы дёшево, из графа импортов, на каждом
+`go test ./...`. Этот набор — дорогая, всегда верная версия: он не читает граф, он удаляет
+код и собирает.
 
-The two are deliberately independent. A stale archtest cannot hide a violation,
-because the harness would still fail; and a skipped CI job cannot hide one, because
-the archtest would still fail. The archtest pins the *shape* of the boundary; the
-harness proves the boundary is real.
+Они намеренно независимы. Устаревший archtest не может скрыть нарушение, потому что набор
+всё равно упал бы; а пропущенное задание CI не может скрыть одно, потому что archtest всё
+равно упал бы. Archtest закрепляет *форму* границы; набор доказывает, что граница реальна.
