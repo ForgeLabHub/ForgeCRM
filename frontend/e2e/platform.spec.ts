@@ -794,6 +794,59 @@ test.describe('single sign-on administration', () => {
   })
 })
 
+test.describe('MCP client credentials', () => {
+  test('an operator mints a credential, uses it against the MCP endpoint, and revokes it', async ({
+    authedPage: page,
+    request,
+  }) => {
+    const name = `E2E credential ${RUN_ID}`
+    await page.goto('/admin/mcp-credentials')
+
+    await page.getByRole('button', { name: 'New credential' }).click()
+    const dialog = page.getByRole('dialog')
+    await dialog.getByLabel('Name').fill(name)
+    // The protocol endpoint requires ai.tools.execute, so the credential must
+    // carry it to reach tools/list at all. It carries no write permission, so it
+    // can list tools but cannot mutate anything.
+    await dialog.getByLabel('ai.tools.execute').check()
+    await dialog.getByRole('button', { name: 'Create credential' }).click()
+
+    // The plaintext token is shown exactly once, in a dialog that says so.
+    const tokenDialog = page.getByRole('dialog')
+    await expect(tokenDialog.getByText(/only time the token is shown/i)).toBeVisible()
+    const token = (await tokenDialog.locator('div.mono').first().textContent())?.trim() ?? ''
+    expect(token.startsWith('fcmcp_')).toBe(true)
+    await tokenDialog.getByRole('button', { name: 'Done' }).click()
+
+    // The list reports the non-secret prefix, never the whole token.
+    const row = page.getByRole('row', { name: new RegExp(name) })
+    await expect(row).toBeVisible()
+    await expect(row.getByText('active')).toBeVisible()
+
+    // The token really authenticates against the protocol endpoint, which is the
+    // whole point: a session cookie was the only thing that worked before. A
+    // fresh request context is used rather than page.request, which would carry
+    // the browser's session cookie and take the session path (and its CSRF check)
+    // instead of the credential path under test.
+    const withToken = await request.post('/api/v1/mcp', {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} },
+    })
+    expect(withToken.status()).toBe(200)
+
+    // Revoke it and the same request is refused, so revocation is immediate.
+    await page.getByRole('row', { name: new RegExp(name) }).getByRole('button', { name: 'Revoke' }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Revoke' }).click()
+    await expect(row.getByText('revoked')).toBeVisible()
+
+    const afterRevoke = await request.post('/api/v1/mcp', {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} },
+    })
+    expect(afterRevoke.status()).toBe(401)
+  })
+})
+
 test.describe('health endpoints', () => {
   test('the API reports healthy and ready', async ({ request }) => {
     expect((await request.get('/health')).status()).toBe(200)
