@@ -8,6 +8,30 @@ once it reaches 1.0.
 
 ## [Unreleased]
 
+### Added
+
+- **AI replies stream as they are generated.** The assistant could only answer in
+  one piece: a user waited for the whole reply before seeing anything, and a long
+  generation looked like a hang. Two new routes — `POST /api/v1/ai/stream/chat`
+  and `POST /api/v1/ai/stream/assist/{id}` — answer with server-sent events.
+  Each `delta` event carries a piece of the model's text, the closing `done`
+  event carries the same result the buffered route returns, and an `error` event
+  carries the same code the buffered route would have used, so a client handles
+  both transports the same way. Both routes run the same service call, so the
+  permission checks, the rate cap and the `ai_tasks` record are identical; only
+  the transport differs, and the buffered routes are unchanged. The assistant
+  panel uses the stream, shows the reply forming, offers Stop, and falls back to
+  the buffered request when a stream closes with no result — which is what a
+  proxy that swallows the body produces. A provider that implements only the base
+  interface is buffered and delivered as a single delta, so a new provider can be
+  added without a streaming implementation. `internal/ai/streaming_test.go` drives
+  both provider wire formats against a real server; `internal/api/ai_stream_test.go`
+  holds the frame shape and the error mapping; the client's SSE parser and the
+  panel are covered by frontend tests; and
+  `internal/testsupport/ai_stream_test.go` verifies the streamed path against
+  PostgreSQL, including that the entity permission and the tenant scope are
+  enforced before any provider call.
+
 ### Fixed
 
 - **The specification described two streaming endpoints as JSON.** `POST

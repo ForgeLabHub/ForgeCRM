@@ -290,8 +290,13 @@ test.describe('contextual AI', () => {
     const { enabled } = (await status.json()) as { enabled: boolean }
     test.skip(enabled, 'a provider is configured; this case asserts the disabled stream')
 
+    // A mutating request needs the CSRF token the session issued, which the bare
+    // request context does not add on its own.
+    const me = await page.request.get('/api/v1/auth/me')
+    const csrf = (await me.json()).csrf_token as string
     const res = await page.request.post('/api/v1/ai/stream/chat', {
       data: { prompt: 'hello' },
+      headers: { 'X-CSRF-Token': csrf },
     })
     expect(res.status()).toBe(200)
     expect(res.headers()['content-type']).toContain('text/event-stream')
