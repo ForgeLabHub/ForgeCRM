@@ -171,6 +171,40 @@ var policies = []Policy{
 		Default: 7 * 24 * time.Hour, Min: 24 * time.Hour, BatchSize: 10000,
 		Reason: "an idempotency key only needs to outlive the client's retry window",
 	},
+	// --- Transient authentication and delivery rows -------------------------
+	//
+	// These tables hold single-use or single-delivery records that accumulate
+	// forever otherwise. Each is swept only on the row's own terminal condition, so
+	// an in-flight row is never touched: an unused reset token and a queued email
+	// are still pending and are never eligible.
+	{
+		Key: "oidc_login_states_expired", Table: "oidc_login_states",
+		TimeColumn: "expires_at", Default: 0, Min: 0, BatchSize: 5000,
+		ExpiryDriven: true,
+		Reason: "an OIDC sign-in request is one in-flight authorization: single-use, " +
+			"short-lived (StateTTL) and useless once expired, so the row's own " +
+			"expiry is the whole policy. Migration 0022 promised this sweeper; " +
+			"without it the table grows by one row per started sign-in",
+	},
+	{
+		Key: "password_reset_tokens_expired", Table: "password_reset_tokens",
+		TimeColumn: "expires_at",
+		Default:    7 * 24 * time.Hour, Min: 24 * time.Hour, BatchSize: 5000,
+		Reason: "a reset token is single-use and valid for ResetTokenTTL (an hour); " +
+			"once past its expiry it can never be redeemed, so it is swept on its " +
+			"own expiry column rather than on when it was created. An unexpired " +
+			"token, used or not, is never eligible",
+	},
+	{
+		Key: "email_log_settled", Table: "email_log", TimeColumn: "created_at",
+		StatusPredicate: "status IN ('sent','failed')",
+		Default:         90 * 24 * time.Hour, Min: 7 * 24 * time.Hour, BatchSize: 5000,
+		Reason: "a sent or failed email is a delivery receipt, not the message itself; " +
+			"it is kept long enough to answer 'was this sent' and then dropped. A " +
+			"queued email is still pending and is never swept, so an unsent message " +
+			"cannot be lost by a sweep",
+	},
+
 	{
 		Key: "sessions_expired", Table: "sessions", TimeColumn: "expires_at",
 		Default: 30 * 24 * time.Hour, Min: 24 * time.Hour, BatchSize: 5000,

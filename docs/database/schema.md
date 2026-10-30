@@ -1,6 +1,6 @@
 # Схема данных
 
-PostgreSQL 17, схема `forgecrm`, **72 таблицы**, **23 миграции**. Полное описание
+PostgreSQL 17, схема `forgecrm`, **72 таблицы**, **24 миграции**. Полное описание
 столбцов — в SQL (`backend/internal/migrations/*.up.sql`); здесь — карта владения и
 связей, чтобы понять, кто за что отвечает.
 
@@ -49,11 +49,14 @@ users 1─* sessions, mfa_factors, user_roles
 ## Индексы
 
 Индексы добавляются миграцией, а не вручную на проде. Отдельные миграции
-`0015_retention_indexes`, `0017_retention_sweep_indexes` и
-`0021_intelligence_retention_indexes` существуют потому, что retention-выборки без
-них деградируют на больших объёмах. `risk_signals` не нужен отдельный индекс в
-0021: миграция 0020 уже создала `risk_signals_terminal_idx` — частичный индекс по
-`status_changed_at` для терминальных статусов, ровно под этот sweep.
+`0015_retention_indexes`, `0017_retention_sweep_indexes`,
+`0021_intelligence_retention_indexes` и `0024_transient_retention_indexes`
+существуют потому, что retention-выборки без них деградируют на больших объёмах.
+`risk_signals` не нужен отдельный индекс в 0021: миграция 0020 уже создала
+`risk_signals_terminal_idx` — частичный индекс по `status_changed_at` для
+терминальных статусов, ровно под этот sweep. `oidc_login_states` тоже не нужен
+отдельный индекс в 0024: миграция 0022 уже создала `oidc_login_states_expires_idx`
+под эту же выборку.
 
 ## Проверка
 

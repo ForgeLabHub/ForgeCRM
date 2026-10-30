@@ -411,7 +411,7 @@ scripts/extract-test/retention/setup.sh
 #   ok    no import of the ForgeCRM monolith
 #   ok    go build ./...
 #   ok    go test ./...     # the retention safety tests
-#   ok    go run ./cmd/smoke # 22 policies; disabled runner refuses; dry-run default
+#   ok    go run ./cmd/smoke # 25 policies; disabled runner refuses; dry-run default
 #   ok    retention extracts cleanly
 ```
 

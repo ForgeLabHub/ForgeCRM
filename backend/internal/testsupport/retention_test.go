@@ -707,6 +707,125 @@ VALUES
 	}
 }
 
+// TestRetentionSweepsTransientAuthAndDeliveryRows covers the three policies added
+// for rows that accumulate by one per user action: an expired OIDC sign-in state,
+// an expired password-reset token and a settled email log entry.
+//
+// Each policy is swept on the row's own terminal condition, so an in-flight row of
+// the same age must survive: a login state that has not yet expired (or that was
+// already consumed within its window), a reset token that is still redeemable and a
+// queued email that has not been sent. A policy that swept by age alone would take
+// the live row too, and the assertions below would fail.
+func TestRetentionSweepsTransientAuthAndDeliveryRows(t *testing.T) {
+	db := connectOrSkip(t)
+	freshSchema(t, db)
+
+	ctx := context.Background()
+	org := retentionOrg(t, db, "retention-transient")
+	orgID := uuid.MustParse(org)
+	userID := insertUser(t, db, orgID, "transient@example.com")
+
+	now := time.Now()
+
+	// A provider to hang the login states off.
+	var providerID uuid.UUID
+	if err := db.Pool().QueryRow(ctx, `
+		INSERT INTO oidc_providers (key, display_name, issuer, client_id)
+		VALUES ('retention', 'Retention Test', 'https://issuer.example', 'client')
+		RETURNING id`).Scan(&providerID); err != nil {
+		t.Fatalf("insert oidc provider: %v", err)
+	}
+
+	// One expired state and one still within its window. The sweep is expiry-driven,
+	// so the unexpired one must survive.
+	if _, err := db.Pool().Exec(ctx, `
+		INSERT INTO oidc_login_states (state, provider_id, nonce, code_verifier, expires_at)
+		VALUES ('expired-state', $1, 'n1', 'v1', $2),
+		       ('live-state',    $1, 'n2', 'v2', $3)`,
+		providerID, now.Add(-time.Hour), now.Add(time.Hour)); err != nil {
+		t.Fatalf("insert login states: %v", err)
+	}
+
+	// One reset token expired well beyond the 7-day window and one still valid. The
+	// window is measured from expires_at (the same convention as sessions_expired), so
+	// a token that lapsed an hour ago is still inside the window and must survive. The
+	// token hash is a bytea with a UNIQUE constraint, so the two fixtures need
+	// distinct bytes.
+	if _, err := db.Pool().Exec(ctx, `
+		INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+		VALUES ($1, '\x01'::bytea, $2),
+	       ($1, '\x02'::bytea, $3)`,
+		userID, now.Add(-10*24*time.Hour), now.Add(time.Hour)); err != nil {
+		t.Fatalf("insert reset tokens: %v", err)
+	}
+
+	// One settled email (sent) and one still queued, both older than the window. Only
+	// the settled one may be swept.
+	old := now.Add(-200 * 24 * time.Hour)
+	if _, err := db.Pool().Exec(ctx, `
+		INSERT INTO email_log (organization_id, to_address, subject, status, created_at)
+		VALUES ($1, 'sent@example.com',    'settled', 'sent',    $2),
+	       ($1, 'queued@example.com', 'pending', 'queued', $2)`,
+		orgID, old); err != nil {
+		t.Fatalf("insert email log: %v", err)
+	}
+
+	runner := retention.New(db, audit.New(db), nil, retention.Options{Enabled: true, Delete: true})
+	results, err := runner.Run(ctx)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	for _, key := range []string{
+		"oidc_login_states_expired",
+		"password_reset_tokens_expired",
+		"email_log_settled",
+	} {
+		res := resultFor(results, key)
+		if res.Error != "" {
+			t.Fatalf("%s policy failed: %s", key, res.Error)
+		}
+		if res.Deleted != 1 {
+			t.Errorf("%s deleted %d rows, want exactly the one eligible row", key, res.Deleted)
+		}
+	}
+
+	count := func(table string) int64 {
+		t.Helper()
+		var n int64
+		if err := db.Pool().QueryRow(ctx, "SELECT count(*) FROM "+table).Scan(&n); err != nil {
+			t.Fatalf("count %s: %v", table, err)
+		}
+		return n
+	}
+	if n := count("oidc_login_states"); n != 1 {
+		t.Errorf("oidc_login_states holds %d rows, want the unexpired state preserved", n)
+	}
+	if n := count("password_reset_tokens"); n != 1 {
+		t.Errorf("password_reset_tokens holds %d rows, want the still-valid token preserved", n)
+	}
+	if n := count("email_log"); n != 1 {
+		t.Errorf("email_log holds %d rows, want the queued email preserved", n)
+	}
+
+	// The kept rows must be exactly the live ones, so a sweep that ignored the
+	// terminal condition cannot pass by matching a count.
+	var state string
+	if err := db.Pool().QueryRow(ctx, `SELECT state FROM oidc_login_states`).Scan(&state); err != nil {
+		t.Fatalf("read kept state: %v", err)
+	}
+	if state != "live-state" {
+		t.Errorf("kept login state is %q, want live-state", state)
+	}
+	var status string
+	if err := db.Pool().QueryRow(ctx, `SELECT status FROM email_log`).Scan(&status); err != nil {
+		t.Fatalf("read kept email: %v", err)
+	}
+	if status != "queued" {
+		t.Errorf("kept email status is %q, want queued", status)
+	}
+}
+
 // TestRetentionSweepIndexesExist pins the indexes the sweep depends on. A sweep
 // filters on the time column alone (plus a status predicate where one exists) and
 // no organization, so it needs an index that leads with that column. The per-org
@@ -734,6 +853,9 @@ func TestRetentionSweepIndexesExist(t *testing.T) {
 		// 0021: the intelligence run history.
 		"simulation_runs_created_at_idx",
 		"forecast_runs_created_at_idx",
+		// 0024: the transient auth and delivery rows.
+		"password_reset_tokens_expires_idx",
+		"email_log_settled_idx",
 	}
 	for _, name := range want {
 		var exists bool

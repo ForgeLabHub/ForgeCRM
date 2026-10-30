@@ -45,6 +45,11 @@
 | 0016 | `document_entities` | вложения |
 | 0018 | `ai_insights_columns` | расширение инсайтов |
 | 0019 | `simulation_lab` | сценарии «что если» |
+| 0020 | `forecasting_risk` | прогнозы и риск-сигналы |
+| 0021 | `intelligence_retention_indexes` | индексы ротации для истории прогонов |
+| 0022 | `sso_oidc` | SSO через OpenID Connect |
+| 0023 | `saved_views` | сохранённые представления |
+| 0024 | `transient_retention_indexes` | индексы ротации для временных строк |
 
 ## Осознанные ограничения
 

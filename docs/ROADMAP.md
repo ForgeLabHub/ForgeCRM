@@ -59,7 +59,7 @@ and compiles but is not yet covered by passing tests.
 | 4.1 | Diagnostics API + admin pages (logs, audit, jobs, events, metrics) | **VERIFIED** |
 | 4.2 | Metrics endpoint (protected context) | **VERIFIED** |
 | 4.3 | Backup / restore scripts + verification | **VERIFIED** |
-| 4.4 | Retention & rotation policy enforcement | **VERIFIED** — `internal/retention`; an opt-in registry of per-table windows, dry-run by default, batched deletes, append-only audit protection, per-policy counts and one audit entry per real run. Covers the run history that nothing pruned before: finished workflow runs, finished agent runs and processed inbound events, each swept by terminal status only so a paused run or an unhandled event is never removed. Covered by 13 integration tests in `internal/testsupport/retention_test.go` |
+| 4.4 | Retention & rotation policy enforcement | **VERIFIED** — `internal/retention`; an opt-in registry of per-table windows, dry-run by default, batched deletes, append-only audit protection, per-policy counts and one audit entry per real run. Covers the run history that nothing pruned before: finished workflow runs, finished agent runs and processed inbound events, each swept by terminal status only so a paused run or an unhandled event is never removed. Also covers the transient rows that accumulate one per user action and were never pruned: expired OIDC login states (the sweeper migration 0022 promised), expired password-reset tokens and settled email-log entries, each swept on the row's own terminal condition so a queued email, an unexpired token or a live sign-in is never touched. Covered by 14 integration tests in `internal/testsupport/retention_test.go` |
 
 ## Cycle 5 — AI & MCP
 
