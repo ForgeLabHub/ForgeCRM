@@ -1,76 +1,79 @@
-# Contributing to ForgeCRM
+# Участие в разработке ForgeCRM
 
-## Before you start
+## Перед началом
 
-Open an issue describing the change before writing significant code. For a bug, include
-the exact request, the observed response and the expected one.
+Прежде чем писать значительный объём кода, откройте issue с описанием изменения.
+Для ошибки укажите точный запрос, наблюдаемый ответ и ожидаемый.
 
-## Development environment
+## Окружение разработки
 
-Requires Go 1.24 and Docker with the Compose plugin.
+Требуется Go 1.26.10 и Docker с плагином Compose.
 
 ```bash
-git clone https://github.com/geff1778/ForgeCRM.git
+git clone https://github.com/ForgeLabHub/ForgeCRM.git
 cd ForgeCRM/backend
 go build ./...
 go test ./...
 ```
 
-For a full stack, follow the Quick start in [README.md](README.md).
+Для полного стека следуйте разделу «Быстрый старт» в [README.md](README.md).
 
-## What a change must include
+## Что обязательно должно входить в изменение
 
-Every functional change must come with:
+Каждое функциональное изменение сопровождается:
 
-1. **Tests.** A new endpoint needs a test for the success path, the authorisation
-   failure and the validation failure. A bug fix needs a test that fails before the fix.
-2. **A migration**, if the schema changes. Add `NNNN_name.up.sql` and
-   `NNNN_name.down.sql` under `backend/internal/migrations`. Never edit an applied
-   migration; add a new one.
-3. **Permission wiring**, if the endpoint exposes data. Add the permission to the
-   catalog and to the roles that should hold it, and check it on the server. Hiding a
-   button is not access control.
-4. **Documentation**, if behaviour, configuration or an API contract changes.
+1. **Тестами.** Новому эндпоинту нужны тесты на успешный путь, отказ в
+   авторизации и ошибку валидации. Исправление ошибки требует теста, который
+   падает до исправления.
+2. **Миграцией**, если меняется схема. Добавьте `NNNN_name.up.sql` и
+   `NNNN_name.down.sql` в `backend/internal/migrations`. Никогда не правьте уже
+   применённую миграцию; добавляйте новую.
+3. **Подключением прав**, если эндпоинт отдаёт данные. Добавьте разрешение в
+   каталог и в роли, которым оно положено, и проверяйте его на сервере. Скрытая
+   кнопка — это не контроль доступа.
+4. **Документацией**, если меняется поведение, конфигурация или контракт API.
 
-## Standards
+## Стандарты
 
-- Go code must be `gofmt`-clean and pass `go vet`.
-- Follow the existing style. Prefer small, explicit functions over clever ones.
-- Write comments that explain *why*, not *what*. Do not narrate the change history in
-  the code; that belongs in the commit message.
-- Do not add a dependency for something the standard library does well.
-- Never commit secrets, real customer data or a populated `.env`.
+- Код на Go должен быть чистым по `gofmt` и проходить `go vet`.
+- Следуйте существующему стилю. Предпочитайте небольшие явные функции «умным».
+- Пишите комментарии, объясняющие *почему*, а не *что*. Не пересказывайте историю
+  изменений в коде — ей место в сообщении коммита.
+- Не добавляйте зависимость для того, с чем хорошо справляется стандартная
+  библиотека.
+- Никогда не коммитьте секреты, реальные данные клиентов или заполненный `.env`.
 
-## Database changes
+## Изменения базы данных
 
-- Use explicit column lists; never `SELECT *` in application code.
-- Every query that filters by organization must include `organization_id`.
-- Wrap multi-statement writes in a transaction and record an audit entry.
-- Add indexes for the columns a query filters or sorts on.
+- Используйте явные списки столбцов; никогда не `SELECT *` в коде приложения.
+- Каждый запрос, фильтрующий по организации, должен включать `organization_id`.
+- Оборачивайте многошаговые записи в транзакцию и фиксируйте запись в аудите.
+- Добавляйте индексы для столбцов, по которым запрос фильтрует или сортирует.
 
-## Security expectations
+## Требования к безопасности
 
-ForgeCRM handles corporate data. Changes touching authentication, authorisation,
-secrets, file handling or outbound HTTP receive extra scrutiny.
+ForgeCRM обрабатывает корпоративные данные. Изменения, затрагивающие
+аутентификацию, авторизацию, секреты, работу с файлами или исходящий HTTP,
+проверяются особенно строго.
 
-- Enforce permissions on the server for every request.
-- Treat uploaded files and archive contents as hostile input. See
+- Проверяйте права на сервере для каждого запроса.
+- Считайте загруженные файлы и содержимое архивов враждебными. См.
   `backend/internal/importx/safe`.
-- Do not weaken the SSRF guard on outbound requests.
-- Do not log credentials, tokens or full personal data.
+- Не ослабляйте защиту SSRF на исходящих запросах.
+- Не логируйте учётные данные, токены или персональные данные целиком.
 
-Report a vulnerability privately as described in [SECURITY.md](SECURITY.md).
+О проблеме безопасности сообщайте приватно, как описано в [SECURITY.md](SECURITY.md).
 
-## Commits and pull requests
+## Коммиты и pull request'ы
 
-- Write a commit subject in the imperative mood, under 72 characters.
-- One logical change per pull request.
-- Describe what changed and how you verified it. Include the commands you ran and their
-  results. A claim of "works" without evidence will be sent back.
-- Update the pull request description if the scope changes during review.
+- Тема коммита — в повелительном наклонении, короче 72 символов.
+- Один логический изменение на pull request.
+- Опишите, что изменилось и как вы это проверили. Укажите запущенные команды и их
+  результат. Утверждение «работает» без доказательств будет отправлено на доработку.
+- Обновляйте описание pull request, если объём меняется по ходу ревью.
 
-## License
+## Лицензия
 
-No license has been chosen yet. By contributing you agree that your contribution may be
-distributed under whatever license the project owner selects. Ask before contributing if
-this matters to you.
+Лицензия пока не выбрана. Участвуя, вы соглашаетесь, что ваш вклад может
+распространяться под лицензией, которую выберет владелец проекта. Если это для вас
+важно, спросите перед тем, как вносить вклад.

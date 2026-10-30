@@ -1,115 +1,120 @@
-# ForgeCRM — Target Architecture
+# ForgeCRM — целевая архитектура
 
-> Status: **living document**. Sections marked _(planned)_ describe agreed design that is
-> not yet implemented. See `ROADMAP.md` for implementation status per module.
+> Статус: **живой документ**. Разделы с пометкой _(план)_ описывают согласованный,
+> но ещё не реализованный дизайн. Состояние реализации по модулям — в `ROADMAP.md`.
 
-## 1. Principles
+## 1. Принципы
 
-1. **One stable foundation, many adaptable solutions.** A single deployment serves CRM,
-   imports, integrations and AI, each independently switchable.
-2. **Works without AI, without external APIs, without optional integrations.** Optional
-   subsystems degrade to `disabled`; the core never depends on them.
-3. **Modular monolith.** One process family, one schema, hard package boundaries.
-   Extractable to services later; not prematurely distributed.
-4. **Explicit transactional boundaries.** Anything that writes data *and* emits an event
-   does so inside one transaction via the outbox.
-5. **Idempotency by default.** Repeatable operations carry an idempotency key.
-6. **Permissions are data, checked on the server.** No UI-only gating.
-7. **No cyclic dependencies.** Dependency direction is strictly `api → domain → platform`.
+1. **Одна устойчивая основа, много адаптируемых решений.** Одно развёртывание
+   обслуживает CRM, импорт, интеграции и ИИ, каждое можно включать независимо.
+2. **Работает без ИИ, без внешних API, без опциональных интеграций.** Опциональные
+   подсистемы деградируют до `disabled`; ядро никогда от них не зависит.
+3. **Модульный монолит.** Одно семейство процессов, одна схема, жёсткие границы
+   пакетов. Позже можно выделить в сервисы; но не распределяется преждевременно.
+4. **Явные границы транзакций.** Всё, что пишет данные *и* порождает событие,
+   делает это в одной транзакции через outbox.
+5. **Идемпотентность по умолчанию.** Повторяемые операции несут ключ идемпотентности.
+6. **Права — это данные, проверяются на сервере.** Никакого контроля только в UI.
+7. **Никаких циклических зависимостей.** Направление зависимостей строго
+   `api → domain → platform`.
 
-## 2. Component map
+## 2. Карта компонентов
 
 ```
                     ┌──────────────────────────┐
-   browser  ───────▶│  nginx (reverse proxy)   │
+   браузер  ───────▶│  nginx (обратный прокси) │
                     └───────┬──────────┬───────┘
                             │          │
                     ┌───────▼───┐  ┌───▼─────────┐
                     │ frontend  │  │  forgecrm-api│  Go, chi
-                    │ (static)  │  │  /api/v1     │
+                    │ (статика) │  │  /api/v1     │
                     └───────────┘  └───┬──────────┘
-                                       │  same schema, same packages
+                                       │  одна схема, одни пакеты
                                  ┌─────▼─────────────┐
-                                 │ forgecrm-worker   │  Go, jobs + outbox drain
+                                 │ forgecrm-worker   │  Go, jobs + разбор outbox
                                  └─────┬─────────────┘
                                        │
                               ┌────────▼────────┐
-                              │  PostgreSQL 17  │  state, jobs, outbox, audit
+                              │  PostgreSQL 17  │  состояние, jobs, outbox, аудит
                               └─────────────────┘
                                        ▲
-                              (optional) S3-compatible object store for import artefacts
+                              (опц.) объектное хранилище, совместимое с S3, для артефактов импорта
 ```
 
-### Backend package layout
+### Структура пакетов бэкенда
 
 ```
 backend/
-  cmd/forgecrm-api        API entrypoint
-  cmd/forgecrm-worker     worker entrypoint
+  cmd/forgecrm-api        точка входа API
+  cmd/forgecrm-worker     точка входа воркера
   internal/
-    config        env-driven configuration, validation, redaction
-    logging       slog setup, request/correlation IDs, secret redaction
-    database      pgx pool, tx helpers
-    migrate       embedded migration runner (golang-migrate)
-    migrations    *.sql, embedded
-    httpx         middleware, error envelope, pagination, JSON helpers
-    authn         password hashing, sessions, CSRF, MFA, lockout
-    rbac          permission catalog, role defaults, enforcement helpers
-    audit         append-only audit trail
-    jobs          Postgres-backed queue (SKIP LOCKED)
-    outbox        transactional outbox
-    crm           contacts, accounts, leads, deals, pipelines, tasks,
-                  activities, tickets, tags, custom fields, search, reports
-    importx       parsers, safe archive extraction, mapping, execution
-    migratex      source adapters (Postgres, SQLite, REST) + reconciliation
-    events        event gateway, webhook subscriptions + delivery
-    integrations  adapter interface, hub, SSRF guard
-    notify        SMTP email + Telegram adapters, templates, send log
-    ai            provider interface, Ollama + OpenAI-compatible, MCP tools
-    analytics     pure scenario maths: exact money, ratios, funnel/revenue/retention
-    simulate      Simulation Lab: saved scenarios, runs, catalog, API service
-    api           router and handlers (thin; no business logic)
+    config        конфигурация из окружения, валидация, маскирование
+    logging       настройка slog, request/correlation ID, маскирование секретов
+    database      пул pgx, помощники транзакций
+    migrate       встроенный запуск миграций (golang-migrate)
+    migrations    *.sql, встроены в бинарник
+    httpx         middleware, конверт ошибок, пагинация, помощники JSON
+    authn         хеширование паролей, сессии, CSRF, MFA, блокировка
+    rbac          каталог разрешений, роли по умолчанию, помощники проверки
+    audit         журнал аудита только для добавления
+    jobs          очередь на Postgres (SKIP LOCKED)
+    outbox        транзакционный outbox
+    crm           контакты, аккаунты, лиды, сделки, воронки, задачи,
+                  активности, обращения, теги, кастомные поля, поиск, отчёты
+    importx       парсеры, безопасная распаковка архивов, сопоставление, исполнение
+    migratex      адаптеры источников (Postgres, SQLite, REST) + сверка
+    events        шлюз событий, подписки на вебхуки + доставка
+    integrations  интерфейс адаптера, хаб, защита SSRF
+    notify        SMTP-почта и Telegram, шаблоны, журнал отправок
+    ai            интерфейс провайдера, Ollama + совместимые с OpenAI, инструменты MCP
+    analytics     чистая математика сценариев: точные деньги, доли, воронка/выручка/удержание
+    simulate      Simulation Lab: сохранённые сценарии, прогоны, каталог, сервис API
+    api           роутер и обработчики (тонкие; без бизнес-логики)
 ```
 
-Dependency rule: `api` may import `crm`, `importx`, …; those may import `audit`, `jobs`,
-`rbac`, `database`; **none** of the platform packages may import `api`. No domain package
-imports another domain package except through an interface it declares itself.
-`analytics` is the exception that proves the rule: it imports nothing but the standard
-library, so the arithmetic can be reviewed and unit-tested with no database, no clock and
-no service. `simulate` depends on `analytics` and on `crm` for the read-only baseline.
+Правило зависимостей: `api` может импортировать `crm`, `importx`, …; те могут
+импортировать `audit`, `jobs`, `rbac`, `database`; **ни один** из платформенных
+пакетов не может импортировать `api`. Ни один доменный пакет не импортирует другой
+доменный пакет иначе как через объявленный им самим интерфейс. `analytics` —
+исключение, подтверждающее правило: он импортирует только стандартную библиотеку,
+поэтому арифметику можно проверять и покрывать юнит-тестами без базы данных, без
+часов и без сервиса. `simulate` зависит от `analytics` и от `crm` (только чтение
+базовых данных).
 
-## 3. Identity, sessions, authorization
+## 3. Идентификация, сессии, авторизация
 
-- **Passwords**: Argon2id, per-user random salt, tuned parameters stored per-hash so they
-  can be raised later.
-- **Sessions**: opaque 256-bit random token. The database stores only a SHA-256 hash of
-  the token, never the token itself. Delivered in a `HttpOnly`, `SameSite=Lax`,
-  `Secure` (in production) cookie. No tokens in `localStorage`.
-- **CSRF**: double-submit token bound to the session, required on all state-changing
-  requests. Login is additionally protected by the same mechanism.
-- **Session fixation**: a fresh session token is issued on successful authentication.
-- **MFA**: TOTP (RFC 6238), verified as a second factor; recovery codes hashed.
-- **Brute-force**: per-account failed-attempt counter with lockout window, plus per-IP
-  rate limiting. Counters live in a `ratelimit.Store`: `MemoryStore` for one process,
-  `RedisStore` for several replicas. Authentication uses fail-closed, general API traffic
-  fail-open.
-- **Client address**: resolved once per request by `ClientIPMiddleware` from the
-  connection address, unless the peer is listed in `FORGECRM_TRUSTED_PROXIES`. Forwarding
-  headers are not read otherwise, so a caller cannot choose the address it is limited or
-  logged under.
-- **Bootstrap**: the first platform owner is created by an explicit, one-time
-  `bootstrap` command that requires an operator-supplied password (or generates a strong
-  random one printed once). **No default credentials ship in the code.**
-- **RBAC**: `permissions` (catalog) × `roles` (named sets) × `role_permissions` ×
-  `user_roles`. Enforcement is a server-side `RequirePermission("deals.update")` on every
-  handler. Record-level rules (owner / team) are applied as query predicates.
-- **Tenant isolation**: every tenant-scoped table carries `organization_id`; every query
-  in the tenant context includes that predicate. Cross-tenant access tests are part of
-  the suite.
+- **Пароли**: Argon2id, случайная соль на пользователя, параметры сохраняются рядом
+  с хешем, чтобы их можно было поднять позже.
+- **Сессии**: непрозрачный случайный токен на 256 бит. В базе хранится только
+  SHA-256 хеш токена, никогда сам токен. Передаётся в cookie `HttpOnly`,
+  `SameSite=Lax`, `Secure` (в production). Токенов в `localStorage` нет.
+- **CSRF**: токен двойной отправки, привязанный к сессии, обязателен для всех
+  изменяющих состояние запросов. Вход дополнительно защищён тем же механизмом.
+- **Фиксация сессии**: при успешной аутентификации выдаётся новый токен сессии.
+- **MFA**: TOTP (RFC 6238), проверяется как второй фактор; коды восстановления
+  хешируются.
+- **Перебор**: счётчик неудачных попыток по аккаунту с окном блокировки, плюс
+  ограничение частоты по IP. Счётчики живут в `ratelimit.Store`: `MemoryStore` для
+  одного процесса, `RedisStore` для нескольких реплик. Аутентификация работает
+  fail-closed, общий трафик API — fail-open.
+- **Адрес клиента**: определяется один раз за запрос в `ClientIPMiddleware` по
+  адресу соединения, если только узел не перечислен в `FORGECRM_TRUSTED_PROXIES`.
+  Иначе заголовки перенаправления не читаются, поэтому вызывающий не может выбрать
+  адрес, под которым его ограничивают или логируют.
+- **Bootstrap**: первый владелец платформы создаётся явной одноразовой командой
+  `bootstrap`, которая требует пароль от оператора (или генерирует надёжный
+  случайный и печатает один раз). **Учётных данных по умолчанию в коде нет.**
+- **RBAC**: `permissions` (каталог) × `roles` (именованные наборы) ×
+  `role_permissions` × `user_roles`. Проверка — серверный вызов
+  `RequirePermission("deals.update")` в каждом обработчике. Правила уровня записи
+  (владелец / команда) применяются как предикаты запроса.
+- **Изоляция тенантов**: каждая таблица с областью тенанта несёт `organization_id`;
+  каждый запрос в контексте тенанта включает этот предикат. Тесты доступа между
+  тенантами входят в набор.
 
-## 4. Data model (high level)
+## 4. Модель данных (общий уровень)
 
-Core: `organizations`, `users`, `memberships`, `teams`, `team_members`, `roles`,
+Ядро: `organizations`, `users`, `memberships`, `teams`, `team_members`, `roles`,
 `permissions`, `role_permissions`, `user_roles`, `sessions`, `mfa_factors`,
 `password_reset_tokens`, `login_attempts`.
 
@@ -118,65 +123,74 @@ CRM: `accounts`, `contacts`, `leads`, `pipelines`, `pipeline_stages`, `deals`,
 `documents`, `tags`, `taggables`, `custom_field_definitions`,
 `comments`, `notifications`, `approvals`.
 
-Platform: `audit_log`, `jobs`, `outbox_events`, `events_inbox`, `webhook_subscriptions`,
-`webhook_deliveries`, `integrations`, `integration_runs`, `import_jobs`,
-`import_templates`, `import_row_errors`, `export_jobs`, `migration_jobs`,
-`migration_reconciliation`, `email_log`, `telegram_links`, `ai_tasks`.
+Платформа: `audit_log`, `jobs`, `outbox_events`, `events_inbox`,
+`webhook_subscriptions`, `webhook_deliveries`, `integrations`, `integration_runs`,
+`import_jobs`, `import_templates`, `import_row_errors`, `export_jobs`,
+`migration_jobs`, `migration_reconciliation`, `email_log`, `telegram_links`,
+`ai_tasks`.
 
-All external identifiers live in dedicated `external_id` / `external_source` columns with
-a unique constraint scoped to `(organization_id, external_source, external_id)` — never
-reused as primary keys.
+Все внешние идентификаторы живут в отдельных столбцах `external_id` /
+`external_source` с уникальным ограничением в области
+`(organization_id, external_source, external_id)` — никогда не переиспользуются как
+первичные ключи.
 
-## 5. Import & Migration Center
+## 5. Центр импорта и миграций
 
-Pipeline: **source → detect format → safe extract → parse → infer schema → map → validate →
-dry-run → execute (batched, checkpointed) → report → reconcile**.
+Конвейер: **источник → определение формата → безопасная распаковка → разбор →
+вывод схемы → сопоставление → валидация → пробный прогон → исполнение (пакетно, с
+контрольными точками) → отчёт → сверка**.
 
-Untrusted-input rules enforced in code, not documentation:
+Правила для недоверенного ввода, обеспеченные кодом, а не документацией:
 
-- input size cap, total-uncompressed-size cap, entry-count cap, nesting-depth cap;
-- decompression-ratio (zip-bomb) guard;
-- every entry path is normalised and rejected if absolute, containing `..`, or escaping
-  the extraction root; symlinks/hardlinks are never followed;
-- extraction streams to a private temp dir, never an attacker-chosen location;
-- checksum verification on archive entries where the format provides one;
-- SQL inside dumps is **never auto-executed**;
-- temp dirs are always removed, including on error;
-- the original file's SHA-256, the processing config and the final report are recorded.
+- ограничение размера ввода, общего размера после распаковки, числа записей,
+  глубины вложенности;
+- защита от бомб распаковки (коэффициент сжатия);
+- каждый путь записи нормализуется и отклоняется, если он абсолютный, содержит `..`
+  или выходит за корень распаковки; символические и жёсткие ссылки не разыменуются;
+- распаковка идёт потоком в приватный временный каталог, никогда в выбранное
+  атакующим место;
+- проверка контрольных сумм записей архива там, где формат их даёт;
+- SQL внутри дампов **никогда не исполняется автоматически**;
+- временные каталоги удаляются всегда, включая путь ошибки;
+- SHA-256 исходного файла, конфигурация обработки и итоговый отчёт записываются.
 
-Migration sources default to **read-only** access. Reconciliation compares row counts and
-where possible checksums, and reports divergence. Incremental sync uses a watermark
-column; CDC is a documented adapter slot, not implemented this cycle.
+Источники миграции по умолчанию **только для чтения**. Сверка сравнивает счётчики
+строк и, где возможно, контрольные суммы, и сообщает о расхождениях.
+Инкрементальная синхронизация использует столбец-водяной знак; CDC — задокументированное
+место под адаптер, в этом цикле не реализован.
 
-## 6. Events, webhooks, jobs
+## 6. События, вебхуки, задания
 
-- **Outbox**: domain writes and event insertion share one transaction; a worker drains the
-  outbox to the dispatcher. Delivery is *at-least-once*; consumers must be idempotent.
-  The brief's "no exactly-once over the network" constraint is honoured explicitly.
-- **Envelope**: `event_id`, `event_type`, `occurred_at`, `source`, `schema_version`,
+- **Outbox**: доменные записи и вставка события делят одну транзакцию; воркер
+  разбирает outbox в диспетчер. Доставка — *at-least-once*; потребители должны быть
+  идемпотентны. Требование «нет exactly-once по сети» соблюдается явно.
+- **Конверт**: `event_id`, `event_type`, `occurred_at`, `source`, `schema_version`,
   `correlation_id`, `tenant_id`.
-- **Inbound**: HTTP endpoints with schema validation, HMAC signature, timestamp window,
-  replay protection, idempotency keys, size and rate limits, versioned types, audit.
-- **Outbound**: subscriptions with HMAC-signed payloads, exponential backoff, delivery
-  history, manual replay, dead-letter view, disable/revoke.
-- **Loop prevention**: events carry their origin; a delivery that originated from an
-  external system is not re-emitted to that same subscription.
-- **Jobs**: one Postgres table, `FOR UPDATE SKIP LOCKED`, attempt counters, exponential
-  backoff, cancellation, checkpoint column for resumable imports. An hourly maintenance
-  tick enqueues the periodic sweeps idempotently (`EnqueuePeriodic` takes an advisory lock
-  and inserts only when the kind is not already queued or running): `maintenance.retention`
-  prunes rows past their window, `agent.sweep_expired` closes approval requests nobody
-  decided, `maintenance.import_temp` reclaims extraction directories an import
-  abandoned when its worker died, `maintenance.import_files` reclaims uploaded files no
-  `import_jobs` row references, and `maintenance.storage_reconcile` repairs a
-  disagreement between the object store and the `documents` table. The last two are file
-  and object maintenance rather than row retention, so neither is part of the retention
-  registry; both inherit the retention engine's dry-run posture and delete nothing on a
-  deployment that has not opted into deletion.
+- **Входящие**: HTTP-эндпоинты с валидацией схемы, подписью HMAC, окном времени,
+  защитой от повторов, ключами идемпотентности, ограничениями размера и частоты,
+  версионированными типами, аудитом.
+- **Исходящие**: подписки с payload, подписанным HMAC, экспоненциальная задержка,
+  история доставок, ручной повтор, просмотр dead-letter, отключение/отзыв.
+- **Защита от циклов**: события несут свой источник; доставка, пришедшая из внешней
+  системы, не переотправляется в ту же подписку.
+- **Задания**: одна таблица Postgres, `FOR UPDATE SKIP LOCKED`, счётчики попыток,
+  экспоненциальная задержка, отмена, столбец контрольной точки для возобновляемого
+  импорта. Часовой такт обслуживания идемпотентно ставит периодические обходы
+  (`EnqueuePeriodic` берёт advisory-блокировку и вставляет, только если такой вид
+  ещё не в очереди и не выполняется): `maintenance.retention` чистит строки за
+  пределами окна, `agent.sweep_expired` закрывает запросы согласования, по которым
+  никто не принял решение, `maintenance.import_temp` возвращает каталоги
+  распаковки, брошенные импортом при смерти воркера, `maintenance.import_files`
+  возвращает загруженные файлы, на которые не ссылается ни одна строка
+  `import_jobs`, а `maintenance.storage_reconcile` исправляет расхождение между
+  объектным хранилищем и таблицей `documents`. Последние два — обслуживание файлов
+  и объектов, а не хранение строк, поэтому ни один не входит в реестр хранения;
+  оба наследуют режим пробного прогона движка хранения и ничего не удаляют на
+  развёртывании, которое не включило удаление.
 
-## 7. Integration hub
+## 7. Хаб интеграций
 
-Adapter lifecycle interface:
+Интерфейс жизненного цикла адаптера:
 
 ```go
 type Adapter interface {
@@ -185,61 +199,68 @@ type Adapter interface {
     DiscoverSchema(ctx context.Context) (Schema, error)
     ReadRecords(ctx context.Context, req ReadRequest) (RecordStream, error)
     TransformRecords(ctx context.Context, in RecordStream, m Mapping) (RecordStream, error)
-    WriteRecords(ctx context.Context, in RecordStream) (WriteResult, error) // only if allowed
+    WriteRecords(ctx context.Context, in RecordStream) (WriteResult, error) // только если разрешено
     GetStatus(ctx context.Context) (Status, error)
     Close() error
 }
 ```
 
-Cross-cutting: per-operation timeouts, retry with backoff, circuit breaker, idempotency,
-concurrency limits, quotas, secret masking in every log/response, config-change audit.
+Сквозные механизмы: тайм-ауты на операцию, повтор с задержкой, предохранитель,
+идемпотентность, ограничения параллелизма, квоты, маскирование секретов в каждом
+логе/ответе, аудит изменения конфигурации.
 
-**SSRF guard** for all outbound calls: resolve DNS and reject loopback, link-local,
-private, multicast and cloud-metadata ranges (169.254.169.254 / fd00:ec2::254); re-check
-after every redirect; cap redirects; refuse non-HTTP(S) schemes.
+**Защита SSRF** для всех исходящих вызовов: разрешить DNS и отклонить диапазоны
+loopback, link-local, приватные, multicast и облачные метаданные
+(169.254.169.254 / fd00:ec2::254); перепроверять после каждого перенаправления;
+ограничивать число перенаправлений; отклонять схемы, отличные от HTTP(S).
 
-## 8. AI & MCP
+## 8. ИИ и MCP
 
-- `ai.Provider` interface with `OllamaProvider` (local) and `OpenAICompatibleProvider`.
-  Provider selection, timeouts, request caps and cost metadata are configuration; the CRM
-  works with AI entirely disabled.
-- MCP tools (`search_accounts`, `account_summary`, `list_tasks`, `pipeline_overview`,
-  `create_task`, `create_ticket`, `update_deal_stage`, `get_report`) are thin
-  wrappers over the **same** domain services and the **same** authorization checks
-  as the REST API. No raw SQL, shell, filesystem or unbounded export is exposed.
-- The transport is JSON-RPC 2.0 (`internal/ai/jsonrpc.go`, `mcp_protocol.go`):
-  `initialize` with protocol-version negotiation, `ping`, `tools/list`, `tools/call`,
-  and notifications answered with an empty `202`. A standard MCP client can connect.
-  `MCPServer` wraps `ToolRegistry` rather than reimplementing it, so the protocol
-  cannot grant more authority than the registry enforces. A tool that changes data
-  requires `confirm: true`, and the requirement is published in the tool's
-  `inputSchema` so a client sees it before calling. The admin UI keeps its own
-  shape at `POST /api/v1/mcp/call`, which is not the protocol. Authentication is
-  the caller's session; a dedicated scoped credential is Phase 3, item 3.3.
-- Prompt-injection stance: content found in documents, emails, imported rows or external
-  responses is **data**. It never changes the agent's permission set, tool allowlist or
-  system instructions. Tool calls are authorized per-caller, not per-content.
+- Интерфейс `ai.Provider` с `OllamaProvider` (локально) и
+  `OpenAICompatibleProvider`. Выбор провайдера, тайм-ауты, ограничения запросов и
+  метаданные стоимости — это конфигурация; CRM полностью работает при отключённом ИИ.
+- Инструменты MCP (`search_accounts`, `account_summary`, `list_tasks`,
+  `pipeline_overview`, `create_task`, `create_ticket`, `update_deal_stage`,
+  `get_report`) — тонкие обёртки над **теми же** доменными сервисами и **теми же**
+  проверками авторизации, что и REST API. Ни сырой SQL, ни shell, ни файловая
+  система, ни неограниченный экспорт не выставляются.
+- Транспорт — JSON-RPC 2.0 (`internal/ai/jsonrpc.go`, `mcp_protocol.go`):
+  `initialize` с согласованием версии протокола, `ping`, `tools/list`, `tools/call`,
+  а уведомления получают пустой `202`. Стандартный MCP-клиент может подключиться.
+  `MCPServer` оборачивает `ToolRegistry`, а не переписывает его, поэтому протокол
+  не может дать больше полномочий, чем обеспечивает реестр. Инструмент, меняющий
+  данные, требует `confirm: true`, и это требование публикуется в `inputSchema`
+  инструмента, чтобы клиент видел его до вызова. У админ-UI своя форма на
+  `POST /api/v1/mcp/call`, которая не является протоколом. Аутентификация — сессия
+  вызывающего; отдельные учётные данные с ограниченной областью — Фаза 3, пункт 3.3.
+- Позиция по инъекции промптов: содержимое документов, писем, импортированных строк
+  или внешних ответов — это **данные**. Оно никогда не меняет набор прав агента,
+  белый список инструментов или системные инструкции. Вызовы инструментов
+  авторизуются по вызывающему, а не по содержимому.
 
-## 9. Observability
+## 9. Наблюдаемость
 
-Separated streams: application logs, user audit trail, auth/security log, job history,
-integration log, event/webhook history, metrics. Structured JSON logs with levels
-`debug|info|warn|error`, correlation IDs, and field-level redaction of passwords, tokens,
-keys and sensitive payloads. `/metrics` is only exposed in a protected context. Logs are
-size-capped, rotated and retention-policied; the public API cannot read arbitrary files,
-run OS commands or dump unbounded internal logs.
+Разделённые потоки: логи приложения, журнал действий пользователя, журнал
+аутентификации/безопасности, история заданий, журнал интеграций, история
+событий/вебхуков, метрики. Структурные JSON-логи с уровнями `debug|info|warn|error`,
+correlation ID и маскированием на уровне полей для паролей, токенов, ключей и
+чувствительных payload. `/metrics` выставляется только в защищённом контексте. Логи
+ограничены по размеру, ротируются и подчинены политике хранения; публичный API не
+может читать произвольные файлы, запускать команды ОС или выгружать неограниченные
+внутренние логи.
 
-## 10. Rust: decision
+## 10. Rust: решение
 
-**Not used in this cycle.** The brief explicitly forbids creating a Rust service just to
-use a second language, and requires a stated reason, interface, maintenance cost and
-verification criteria per extracted service. The candidate with the strongest case is
-isolated untrusted-archive processing; it is deferred because:
+**В этом цикле не используется.** Требование явно запрещает создавать сервис на Rust
+только ради второго языка и требует обоснованной причины, интерфейса, стоимости
+сопровождения и критериев проверки для каждого выделенного сервиса. Самый сильный
+кандидат — изолированная обработка недоверенных архивов; он отложен, потому что:
 
-- the Go implementation already enforces the full safety envelope with tests;
-- a second toolchain roughly doubles build/CI/deployment surface for one module;
-- the performance ceiling is not yet measured, so extraction would be premature.
+- реализация на Go уже обеспечивает полный контур безопасности с тестами;
+- второй toolchain примерно удваивает поверхность сборки/CI/развёртывания ради
+  одного модуля;
+- потолок производительности ещё не измерен, поэтому выделение преждевременно.
 
-Entry criteria for revisiting: a measured profile showing archive/transform work as the
-dominant cost, *and* a requirement that cannot be met inside the resource limits already
-enforced in Go.
+Критерии возврата к вопросу: измеренный профиль, показывающий работу с архивами и
+преобразованиями как доминирующую стоимость, *и* требование, которое нельзя
+удовлетворить в рамках ограничений ресурсов, уже обеспеченных в Go.

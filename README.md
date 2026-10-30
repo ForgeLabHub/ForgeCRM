@@ -1,165 +1,166 @@
 # ForgeCRM
 
-Self-hosted, open-source CRM platform for corporate data, integrations and automation.
+Самостоятельно размещаемая CRM-платформа с открытым исходным кодом для
+корпоративных данных, интеграций и автоматизации.
 
-ForgeCRM is one stable foundation for many business solutions: sales and customer
-management, support, data migration from existing CRMs, ERP and API integration,
-event-driven automation, and controlled AI assistance.
+ForgeCRM — это одна устойчивая основа для множества бизнес-решений: продажи и
+управление клиентами, поддержка, перенос данных из существующих CRM, интеграция
+с ERP и внешними API, событийная автоматизация и контролируемая помощь ИИ.
 
-The platform runs on its own, with no AI provider, no external API and no optional
-integration enabled. Every integration is opt-in and configurable.
+Платформа работает сама по себе: без провайдера ИИ, без внешних API и без
+включённых опциональных интеграций. Каждая интеграция включается отдельно и
+настраивается.
 
-## Status
+## Состояние
 
-Under active development on `main`. The backend,
-database schema, Import Center and the web interface are implemented and verified
-against a real PostgreSQL instance.
+Активная разработка ведётся в ветке `main`. Бэкенд, схема базы данных, Центр
+импорта и веб-интерфейс реализованы и проверены на реальном PostgreSQL.
 
-Verified (see [docs/PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md) for evidence):
+Проверено (доказательства — в [docs/PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md)):
 
-| Area | State |
+| Область | Состояние |
 | --- | --- |
-| Go API, migrations, PostgreSQL schema | Working, 16 migrations applied |
-| Authentication, sessions, CSRF, TOTP | Working |
-| RBAC: 87 permissions in the catalog, 14 system roles | Working, enforcement verified |
-| Audit log and security events | Working |
-| CRM entities (contacts, accounts, deals, tasks, tickets, ...) | Working |
-| Import Center: CSV, TSV, JSON, JSONL, XLSX, XML, archives | Working |
-| Background jobs and transactional outbox | Working |
-| Web interface: sign-in, CRM, Import Center, administration | Working, verified in a browser |
-| Docker Compose deployment | Verified end to end |
-| AI & MCP | Provider abstraction (Ollama, OpenAI-compatible), MCP JSON-RPC transport, contextual AI on account, contact, deal, ticket and task records, AI & MCP admin page |
-| Agent approvals (human-in-the-loop) | Working, second-factor step-up for destructive actions |
-| Workflow automation (event, schedule, manual triggers) | Working, verified against PostgreSQL; template catalog, import/export and a structured editor |
-| File attachments (S3-compatible) | Working; provider-agnostic object store, metadata in PostgreSQL, per-route permissions |
-| Retention & rotation | Working; opt-in per-table windows, dry-run, batched, audit-protected |
-| Constructor (recipe -> standalone project) | Working, verified end to end; the `analytics-demo` recipe generates a project that builds, tests and runs; a CI job regenerates and runs it |
+| Go API, миграции, схема PostgreSQL | Работает, применены миграции |
+| Аутентификация, сессии, CSRF, TOTP | Работает |
+| RBAC: 87 разрешений в каталоге, 14 системных ролей | Работает, проверка прав подтверждена |
+| Журнал аудита и события безопасности | Работает |
+| Сущности CRM (контакты, аккаунты, сделки, задачи, обращения, ...) | Работает |
+| Центр импорта: CSV, TSV, JSON, JSONL, XLSX, XML, архивы | Работает |
+| Фоновые задания и транзакционный outbox | Работает |
+| Веб-интерфейс: вход, CRM, Центр импорта, администрирование | Работает, проверено в браузере |
+| Развёртывание через Docker Compose | Проверено от начала до конца |
+| ИИ и MCP | Абстракция провайдеров (Ollama, совместимые с OpenAI), транспорт JSON-RPC MCP, контекстный ИИ на карточках аккаунта, контакта, сделки, обращения и задачи, страница администрирования ИИ и MCP |
+| Согласования агента (human-in-the-loop) | Работает, подтверждение вторым фактором для опасных действий |
+| Автоматизация workflow (события, расписание, ручной запуск) | Работает, проверено на PostgreSQL; каталог шаблонов, импорт/экспорт и структурированный редактор |
+| Файловые вложения (совместимые с S3) | Работает; независимое от провайдера объектное хранилище, метаданные в PostgreSQL, права на каждый маршрут |
+| Хранение и ротация | Работает; окна хранения по таблицам, включаются явно, предварительный просмотр, пакетная обработка, защита аудита |
+| Конструктор (рецепт → отдельный проект) | Работает, проверено от начала до конца; рецепт `analytics-demo` создаёт проект, который собирается, тестируется и запускается; задание CI пересоздаёт и запускает его |
 
-The web interface covers sign-in with second factor, the CRM workspace, the Import
-Center including the mapping wizard, integrations, events and webhooks, background
-jobs, agent approvals, and the administration pages for users, roles, organizations,
-teams, email, Telegram, audit, security and diagnostics.
+Веб-интерфейс охватывает вход со вторым фактором, рабочее пространство CRM,
+Центр импорта с мастером сопоставления, интеграции, события и вебхуки, фоновые
+задания, согласования агента и страницы администрирования: пользователи, роли,
+организации, команды, почта, Telegram, аудит, безопасность и диагностика.
 
-## Quick start
+## Быстрый старт
 
-Requires Docker with the Compose plugin.
+Требуется Docker с плагином Compose.
 
 ```bash
 git clone https://github.com/ForgeLabHub/ForgeCRM.git
 cd ForgeCRM
 
 cp .env.example .env
-# Generate the key that encrypts stored integration credentials.
-# Losing it makes those credentials unrecoverable.
+# Сгенерируйте ключ, которым шифруются сохранённые учётные данные интеграций.
+# Потеря ключа делает эти учётные данные невосстановимыми.
 printf 'FORGECRM_SECRET_KEY=%s\n' "$(openssl rand -base64 48)" >> .env
 
 docker compose up -d
 ```
 
-Create the first administrator. The password is passed through the environment so it
-never appears in the process list or shell history:
+Создайте первого администратора. Пароль передаётся через окружение, поэтому он
+никогда не попадает в список процессов или историю команд:
 
 ```bash
-FORGECRM_BOOTSTRAP_PASSWORD='<a strong password>' \
+FORGECRM_BOOTSTRAP_PASSWORD='<надёжный пароль>' \
   docker compose run --rm --no-deps -e FORGECRM_BOOTSTRAP_PASSWORD \
   api -bootstrap-admin -bootstrap-email you@example.com
 ```
 
-Confirm the instance is healthy:
+Убедитесь, что экземпляр работоспособен:
 
 ```bash
 ./scripts/smoke-test.sh http://localhost:8080
 
-FORGECRM_SMOKE_EMAIL=you@example.com FORGECRM_SMOKE_PASSWORD='<your password>' \
+FORGECRM_SMOKE_EMAIL=you@example.com FORGECRM_SMOKE_PASSWORD='<ваш пароль>' \
   ./scripts/smoke-test.sh http://localhost:8080
 ```
 
-Or run `./scripts/setup.sh you@example.com`, which performs these steps and checks the
-host environment first.
+Либо запустите `./scripts/setup.sh you@example.com` — скрипт выполнит эти шаги и
+сначала проверит окружение хоста.
 
-## Commands
+## Команды
 
-Everything below has a stable entry point; nothing requires remembering the
-underlying tool invocation.
+У всего перечисленного есть стабильная точка входа; запоминать внутренний вызов
+инструментов не требуется.
 
-| Command | What it does |
+| Команда | Что делает |
 | --- | --- |
-| `make doctor` | check tools, pinned versions and services; changes nothing |
-| `make build` | build API, worker and frontend artefacts |
-| `make test` | unit tests, no database required |
-| `make test-integration` | tests against a real PostgreSQL |
-| `make test-e2e` | Playwright against a real API and database |
-| `make openapi-check` | fail when the API specification drifts from the code |
-| `make compose-up` / `make compose-down` | start / stop the stack (data is kept) |
-| `make smoke-test` | verify a running instance |
-| `make verify` | lint, tests, OpenAPI and documentation checks locally |
-| `make docs-check` | documentation completeness, links and module specs |
+| `make doctor` | проверяет инструменты, закреплённые версии и сервисы; ничего не меняет |
+| `make build` | собирает артефакты API, воркера и фронтенда |
+| `make test` | модульные тесты, база данных не нужна |
+| `make test-integration` | тесты на реальном PostgreSQL |
+| `make test-e2e` | Playwright на реальных API и базе |
+| `make openapi-check` | падает, когда спецификация API расходится с кодом |
+| `make compose-up` / `make compose-down` | запуск / остановка стека (данные сохраняются) |
+| `make smoke-test` | проверка работающего экземпляра |
+| `make verify` | локально: линт, тесты, OpenAPI и проверки документации |
+| `make docs-check` | полнота документации, ссылки и спецификации модулей |
 
-The full matrix of what each check proves, and which CI job runs it, is
-[docs/verification/matrix.md](docs/verification/matrix.md).
+Полная матрица того, что доказывает каждая проверка и какое задание CI её
+запускает, — в [docs/verification/matrix.md](docs/verification/matrix.md).
 
-## Documentation
+## Документация
 
-Start at [docs/index.md](docs/index.md) - it maps every question to the document
-that answers it.
+Начните с [docs/index.md](docs/index.md) — он сопоставляет каждый вопрос с
+документом, который на него отвечает.
 
-- [Build from a clean machine](BUILD.md) - pinned versions, build levels A-E
-- [Project audit](docs/PROJECT_AUDIT.md) - verified state, findings, risks
-- [Portability audit](docs/audit/portability-audit-2026-10-29.md) - gaps found and closed
-- [Verification matrix](docs/verification/matrix.md) - claim -> command -> CI job
-- [Architecture](docs/ARCHITECTURE.md) - module boundaries and data flow
-- [Constructor](docs/CONSTRUCTOR.md) - build a standalone project from a recipe
-- [Workflow automation](docs/architecture/workflows.md) - triggers, steps, execution model
-- [Roadmap](docs/ROADMAP.md) - staged plan
-- [Acceptance criteria](docs/ACCEPTANCE_CRITERIA.md) - definition of done
-- [Frontend development](docs/development/frontend.md) - stack, layout, checks
-- [Deployment](docs/deployment/) - configuration and production checklist
-- [Operations](docs/operations/) - backup, restore, troubleshooting
+- [Сборка с чистой машины](BUILD.md) — закреплённые версии, уровни сборки A–E
+- [Аудит проекта](docs/PROJECT_AUDIT.md) — проверенное состояние, находки, риски
+- [Аудит переносимости](docs/audit/portability-audit-2026-10-29.md) — найденные и закрытые пробелы
+- [Матрица проверок](docs/verification/matrix.md) — утверждение → команда → задание CI
+- [Архитектура](docs/ARCHITECTURE.md) — границы модулей и потоки данных
+- [Конструктор](docs/CONSTRUCTOR.md) — собрать отдельный проект из рецепта
+- [Автоматизация workflow](docs/architecture/workflows.md) — триггеры, шаги, модель исполнения
+- [Дорожная карта](docs/ROADMAP.md) — поэтапный план
+- [Критерии приёмки](docs/ACCEPTANCE_CRITERIA.md) — определение готовности
+- [Разработка фронтенда](docs/development/frontend.md) — стек, структура, проверки
+- [Развёртывание](docs/deployment/) — конфигурация и чек-лист для production
+- [Эксплуатация](docs/operations/) — резервное копирование, восстановление, диагностика
 
-## Repository layout
+## Структура репозитория
 
 ```
-backend/            Go API and worker
-  cmd/              forgecrm-api, forgecrm-worker, forgecrm (constructor CLI)
+backend/            Go API и воркер
+  cmd/              forgecrm-api, forgecrm-worker, forgecrm (CLI конструктора)
   internal/
-    api/            HTTP handlers, routing, middleware
-    authn/          passwords, sessions, TOTP, OIDC
-    rbac/           permission catalog and enforcement
-    crm/            CRM domain: contacts, deals, tasks, tickets, search
-    importx/        Import Center: parsers, safe extraction, execution
-    importx/safe/   untrusted-archive handling
-    integrations/   adapter lifecycle and SSRF-guarded outbound HTTP
-    events/         event gateway and webhooks
-    outbox/         transactional outbox
-    jobs/           background job queue
-    audit/          audit and security event logging
-    notify/         email and Telegram
-    ai/             model provider abstraction
-    constructor/    recipes that build standalone projects; embeds recipes/
-    migrate/        schema migrations
-    database/       connection pool and transactions
-frontend/           React + TypeScript web interface (Vite)
-  src/api/          one module per backend area, plus the HTTP client
-  src/components/   shell, table list, permission gate, primitives
-  src/pages/        one file per route; admin pages in pages/admin/
-deploy/             reverse proxy configuration
-docs/               architecture, security, operations
+    api/            HTTP-обработчики, маршрутизация, middleware
+    authn/          пароли, сессии, TOTP, OIDC
+    rbac/           каталог разрешений и их проверка
+    crm/            домен CRM: контакты, сделки, задачи, обращения, поиск
+    importx/        Центр импорта: парсеры, безопасная распаковка, исполнение
+    importx/safe/   обработка недоверенных архивов
+    integrations/   жизненный цикл адаптеров и исходящий HTTP с защитой SSRF
+    events/         шлюз событий и вебхуки
+    outbox/         транзакционный outbox
+    jobs/           очередь фоновых заданий
+    audit/          журнал аудита и событий безопасности
+    notify/         почта и Telegram
+    ai/             абстракция провайдеров моделей
+    constructor/    рецепты, собирающие отдельные проекты; встраивает recipes/
+    migrate/        миграции схемы
+    database/       пул соединений и транзакции
+frontend/           веб-интерфейс на React + TypeScript (Vite)
+  src/api/          по модулю на каждую область бэкенда плюс HTTP-клиент
+  src/components/   оболочка, табличный список, шлюз по правам, примитивы
+  src/pages/        по файлу на маршрут; страницы администрирования в pages/admin/
+deploy/             конфигурация обратного прокси
+docs/               архитектура, безопасность, эксплуатация
 scripts/            setup, migrate, backup, restore, smoke test
 ```
 
-## Development
+## Разработка
 
 ```bash
 cd backend
 go build ./...
 go vet ./...
 go test ./...
-gofmt -l ./cmd ./internal    # must print nothing
+gofmt -l ./cmd ./internal    # должен ничего не вывести
 ```
 
-The constructor turns a recipe from `internal/constructor` into a standalone
-project on disk. `analytics-demo` lifts the pure analytics core into a project
-with no database, no service and no secrets:
+Конструктор превращает рецепт из `internal/constructor` в отдельный проект на
+диске. `analytics-demo` выносит чистое аналитическое ядро в проект без базы
+данных, без сервиса и без секретов:
 
 ```bash
 cd backend
@@ -168,14 +169,14 @@ go run ./cmd/forgecrm scaffold analytics-demo --output /tmp/demo
 cd /tmp/demo && go test ./... && go run ./cmd/demo
 ```
 
-Integration tests run against a real database:
+Интеграционные тесты запускаются на реальной базе данных:
 
 ```bash
 FORGECRM_TEST_DATABASE_URL='postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_test?sslmode=disable' \
   go test -tags=integration ./...
 ```
 
-The frontend has its own checks:
+У фронтенда свои проверки:
 
 ```bash
 cd frontend
@@ -183,31 +184,31 @@ npm ci
 npm run typecheck && npm run lint && npm run test && npm run build
 ```
 
-## Known limitations
+## Известные ограничения
 
-Stated explicitly so nobody assumes more than the project provides:
+Перечислены явно, чтобы никто не ожидал от проекта большего, чем он даёт:
 
-- **PostgreSQL 17 is the only supported database.** MySQL/MariaDB are not supported
-  *as the datastore* (see [ADR 0008](docs/adr/0008-mysql-mariadb-datastore-blockers.md)).
-  A MySQL/MariaDB database can, however, be used as a **migration source** — the
-  Import Center reads from one — which is a different question from running ForgeCRM
-  on it.
-- **No license file yet.** Until one is chosen the default applies and the code is
-  not licensed for redistribution - an owner decision, tracked in
-  [CONTRIBUTING.md](CONTRIBUTING.md).
-- **No horizontal scaling without Redis**: the in-memory rate limiter is per process
-  (see [ADR 0003](docs/adr/0003-multi-replica-safety-detour.md)).
-- **Schema migrations do not roll back automatically**; the recovery path is a
-  verified backup ([docs/database/backup-restore.md](docs/database/backup-restore.md)).
-- **No distributed tracing**: `request_id` covers the request, not the async path.
-- **AI output is not guaranteed**; approvals and audit are the compensating controls.
-- **No load tests and no numeric SLOs** are claimed.
+- **PostgreSQL 17 — единственная поддерживаемая СУБД.** MySQL/MariaDB не
+  поддерживаются *как хранилище* (см. [ADR 0008](docs/adr/0008-mysql-mariadb-datastore-blockers.md)).
+  При этом база MySQL/MariaDB может использоваться как **источник миграции** —
+  Центр импорта читает из неё, — и это отдельный вопрос от запуска ForgeCRM на ней.
+- **Файла лицензии пока нет.** Пока лицензия не выбрана, действует режим по
+  умолчанию, и код не лицензирован для распространения — это решение владельца,
+  отслеживается в [CONTRIBUTING.md](CONTRIBUTING.md).
+- **Нет горизонтального масштабирования без Redis**: лимитер в памяти действует
+  на процесс (см. [ADR 0003](docs/adr/0003-multi-replica-safety-detour.md)).
+- **Миграции схемы не откатываются автоматически**; путь восстановления —
+  проверенная резервная копия ([docs/database/backup-restore.md](docs/database/backup-restore.md)).
+- **Нет распределённой трассировки**: `request_id` покрывает запрос, но не
+  асинхронный путь.
+- **Вывод ИИ не гарантирован**; компенсирующие меры — согласования и аудит.
+- **Нагрузочных тестов и числовых SLO нет.**
 
-## License
+## Лицензия
 
-No license file is present yet. The distribution model is an owner decision; see
-[CONTRIBUTING.md](CONTRIBUTING.md). Until a license is chosen, the default applies and
-the code is not licensed for redistribution.
+Файла лицензии пока нет. Модель распространения — решение владельца; см.
+[CONTRIBUTING.md](CONTRIBUTING.md). Пока лицензия не выбрана, действует режим по
+умолчанию, и код не лицензирован для распространения.
 
 ## Управление проектом: `forge.sh` и `forge.bat`
 
