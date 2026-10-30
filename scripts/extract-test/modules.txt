@@ -23,6 +23,10 @@
 # outbox        transactional outbox with the event vocabulary
 # retention     data-retention engine: policy catalog, dry-run default, opt-in delete
 # agent         human-in-the-loop proposal queue with a signed approval
+# jobs          the queue: enqueue, claim, complete/fail, bounded retry backoff
+# crm           the domain service: accounts, contacts, deals, tasks, tickets, activities
+# storage       object-store application layer: documents, entity attachment, reconcile
+# integrations  Integration Hub: adapter lifecycle, SSRF guard, secret handoff, run log
 
 netguard
 analytics
@@ -39,3 +43,7 @@ audit
 outbox
 retention
 agent
+jobs
+crm
+storage
+integrations

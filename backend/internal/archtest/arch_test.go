@@ -213,7 +213,7 @@ func TestCoreDoesNotImportCompositionOrHTTP(t *testing.T) {
 // graph, so a regression is caught by `go test ./...` and not only by the heavier
 // extraction harness in scripts/extract-test.
 //
-// Fifteen modules are pinned:
+// Nineteen modules are pinned:
 //
 //   - netguard is the SSRF guard. It is a leaf: it must depend on nothing inside
 //     this module and nothing outside the standard library. That is what lets the
@@ -251,6 +251,15 @@ func TestCoreDoesNotImportCompositionOrHTTP(t *testing.T) {
 //     approval. It may depend only on the audit trail, the database handle and the
 //     HTTP primitives — the widest set of any proven module, and every one of them
 //     is proven in turn.
+//   - jobs is the queue. It may depend only on the database handle.
+//   - crm is the domain service. It may depend only on the database handle, the
+//     audit trail, the HTTP primitives, the outbox and RBAC.
+//   - storage is the object-store application layer. It may depend only on the
+//     database handle, the audit trail, the HTTP primitives, the provider contract
+//     (objectstore, and objectstore's own netguard) and RBAC.
+//   - integrations is the Integration Hub. It may depend only on the database
+//     handle, the audit trail, the HTTP primitives, the SSRF guard (netguard), RBAC
+//     and the secret keyring.
 //
 // This is the cheap, always-on half of the check. The extraction harness is the
 // expensive half that actually compiles the module on its own; the two are
@@ -311,6 +320,20 @@ func TestExtractionBoundaryHolds(t *testing.T) {
 		// audit trail, the database handle and the HTTP primitives, all of them
 		// proven leaves or proven scoped modules themselves.
 		"agent": {"database": true, "audit": true, "logging": true, "httpx": true, "ratelimit": true},
+		// jobs is the queue: a unit of work enqueued, claimed, completed or failed
+		// with a bounded retry. Its only in-module dependency is the database handle.
+		"jobs": {"database": true},
+		// crm is the domain service. It is built on the database handle, the audit
+		// trail, the HTTP primitives, the outbox and RBAC, and on nothing else — no
+		// dependency on the API layer, the workflow engine or a sibling domain.
+		"crm": {"database": true, "audit": true, "httpx": true, "outbox": true, "rbac": true},
+		// storage is the application layer over an object store. It re-exports the
+		// provider contract from objectstore (which itself depends only on netguard),
+		// so the store travels with it.
+		"storage": {"database": true, "audit": true, "httpx": true, "objectstore": true, "rbac": true},
+		// integrations is the Integration Hub: adapter lifecycle, the SSRF guard
+		// (aliased from netguard), the secret handoff and the run log.
+		"integrations": {"database": true, "audit": true, "httpx": true, "netguard": true, "rbac": true, "secrets": true},
 	}
 	forbiddenDeps := map[string]map[string]bool{
 		"objectstore": forbiddenForObjectstore,

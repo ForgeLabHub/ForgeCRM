@@ -241,6 +241,48 @@ Both are acceptable outcomes; silently importing half the monolith is not.
 - **Hidden dependencies found:** none. The `Executor` seam travels with the
   package, which is what lets a host supply the real tool path.
 
+### `jobs` — READY
+
+- **Internal imports:** `database` (extracted alongside it).
+- **Commands:** `scripts/extract-test/jobs/setup.sh` — `go build`, `go test` and a
+  smoke that checks the kind/status vocabularies and the pre-write validation.
+- **Result:** built, tested and ran standalone. Writing the backoff test found a
+  real latent bug: the shift was clamped at 10, so the retry delay topped out at
+  1024s and the documented 30-minute ceiling was unreachable dead code.
+- **Hidden dependencies found:** none.
+
+### `crm` — READY
+
+- **Internal imports:** `audit`, `database`, `httpx`, `outbox`, `rbac` (all
+  extracted alongside it).
+- **Commands:** `scripts/extract-test/crm/setup.sh` — `go build`, `go test` and a
+  smoke that drives the validators and the `JSONMap` codec.
+- **Result:** built, tested and ran standalone. The package had no in-package
+  tests; it now has the first, covering the validators that run before any
+  database access.
+- **Hidden dependencies found:** none. The docs' claim that `httpx` and `outbox`
+  were "the real friction" was wrong — both are proven, so they travel.
+
+### `storage` — READY
+
+- **Internal imports:** `audit`, `database`, `httpx`, `objectstore`, `netguard`,
+  `ratelimit`, `rbac` (all extracted alongside it).
+- **Commands:** `scripts/extract-test/storage/setup.sh` — `go build`, `go test`
+  (the key/extension/entity/S3-config tests) and a smoke that drives the memory
+  store round trip and the unconfigured-service posture.
+- **Result:** built, tested and ran standalone.
+- **Hidden dependencies found:** none.
+
+### `integrations` — READY
+
+- **Internal imports:** `audit`, `database`, `httpx`, `netguard`, `ratelimit`,
+  `rbac`, `secrets` (all extracted alongside it).
+- **Commands:** `scripts/extract-test/integrations/setup.sh` — `go build`,
+  `go test` and a smoke that drives the SSRF guard's address and URL decisions.
+- **Result:** built, tested and ran standalone. The guard refuses loopback,
+  private and link-local addresses and a `file://` URL before any dial.
+- **Hidden dependencies found:** none.
+
 ### `secrets` — ALMOST (superseded by READY above)
 
 - **Source SHA:** `7a6d67f`
@@ -283,9 +325,9 @@ should notice. The harness was itself verified to fail: replacing `objectstore`'
 `netguard` import with `integrations` made both the harness and the archtest report
 the violation, and giving `logging` an in-module import made the archtest fail.
 
-`modules.txt` lists fifteen modules today: `netguard`, `analytics`, `ratelimit`,
+`modules.txt` lists nineteen modules today: `netguard`, `analytics`, `ratelimit`,
 `objectstore`, `secrets`, `logging`, `httpx`, `safe` (internal/importx/safe),
 `parsers` (internal/importx/parsers), `database`, `rbac`, `audit`, `outbox`,
-`retention` and `agent`.
+`retention`, `agent`, `jobs`, `crm`, `storage` and `integrations`.
 
 See `scripts/extract-test/README.md` for how to add a module.

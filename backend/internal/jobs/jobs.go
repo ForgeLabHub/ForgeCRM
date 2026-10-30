@@ -280,7 +280,10 @@ func (q *Queue) Fail(ctx context.Context, job *Job, cause error) error {
 
 // backoffFor returns an exponential backoff capped at 30 minutes.
 func backoffFor(attempt int) time.Duration {
-	d := time.Duration(1<<uint(min(attempt, 10))) * time.Second
+	// The shift is clamped so a very large attempt cannot overflow the
+	// multiplication; the clamp has to sit above the ceiling below, or the ceiling
+	// is unreachable and the delay silently stops growing short of it.
+	d := time.Duration(1<<uint(min(attempt, 11))) * time.Second
 	if d > 30*time.Minute {
 		return 30 * time.Minute
 	}

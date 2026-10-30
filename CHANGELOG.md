@@ -25,10 +25,35 @@ once it reaches 1.0.
   passes. A CI job `extraction` runs the harness, and `TestExtractionBoundaryHolds`
   in `internal/archtest` enforces the same boundary cheaply on every
   `go test ./...`; the two are independent, so neither a stale check nor a skipped
-  job can hide a violation. Fifteen modules are proven today: the four above plus
+  job can hide a violation. Nineteen modules are proven today: the four above plus
   `secrets` and `logging` (which became provable once they gained their own tests),
   `httpx`, `importx/safe`, `importx/parsers`, `database`, `rbac`, `audit`,
-  `outbox`, `retention` and `agent` (the last six added in this slice).
+  `outbox`, `retention`, `agent`, `jobs`, `crm`, `storage` and `integrations` (the
+  last ten added in the last two slices).
+
+- **The queue, the domain service, the object-store layer and the Integration Hub
+  are now extraction-proven.** Four more modules lift out, taking the harness to
+  nineteen. `internal/jobs` (the queue) depends only on `database`. `internal/crm`
+  (the domain service — accounts, contacts, deals, tasks, tickets, activities,
+  search, analytics) depends on `audit`, `database`, `httpx`, `outbox` and `rbac`.
+  `internal/storage` (the object-store application layer) on `audit`, `database`,
+  `httpx`, `objectstore`, `ratelimit` and `rbac`. `internal/integrations` (the
+  Integration Hub) on `audit`, `database`, `httpx`, `netguard`, `rbac` and
+  `secrets`. Every dependency was already proven, so none was friction; the docs'
+  claim that `crm`'s `httpx`/`outbox` imports were "the real friction" was wrong.
+
+- **A latent retry bug in the job queue was found and fixed.** `backoffFor`
+  clamped the shift exponent at 10 before shifting, so the retry delay topped out
+  at `1<<10 s = 1024s` and the documented 30-minute ceiling was unreachable dead
+  code. Writing the first `jobs` tests surfaced it; the clamp is now 11, so the
+  ceiling is real and the test pins both the growth and the cap.
+
+- **`internal/jobs` and `internal/crm` gained their first in-package tests.**
+  `jobs` had none: it now covers the status and kind vocabularies, the validation
+  that rejects a job with no kind before the database is touched, and the retry
+  backoff. `crm` had none: it now covers the validators that run before any
+  database access — the boundary an attacker's payload hits first — and the
+  `JSONMap` column codec.
 
 - **The retention engine and the human-in-the-loop layer are now
   extraction-proven.** `internal/retention` — the data-retention engine with its

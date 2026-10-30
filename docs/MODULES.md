@@ -94,15 +94,16 @@ Two things this document deliberately does not do:
 - **Internal deps:** `audit, database, httpx, outbox, rbac`.
 - **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`.
 - **Fake:** none in-process. Tests drive a real PostgreSQL.
-- **Tests:** no `_test.go` in-package; exercised heavily by
-  `internal/testsupport` integration tests and `internal/api` handler tests.
-- **Extract:** `almost` — see `EXTRACT_READY.md`. Nothing imports `crm` back, so
-  the boundary is one-directional, but it imports `httpx` and `outbox`, which are
-  platform concerns that would have to travel or be inverted. The blocker is real
-  but bounded, which is what `almost` means.
-- **Cut lines:** the package moves whole. `database` (pool + `WithTx`) and
-  `rbac` (Principal + permission catalog) travel as declared dependencies;
-  `httpx` and `outbox` are the real friction.
+- **Tests:** `crm_test.go` (the validators and the `JSONMap` column codec; the
+  first in-package tests) plus `internal/testsupport` integration tests and
+  `internal/api` handler tests, which drive a real PostgreSQL.
+- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/crm`,
+  with `audit`, `database`, `httpx`, `outbox` and `rbac` as its dependencies, all
+  of them proven. The "`httpx` and `outbox` are the real friction" claim was
+  wrong: both are proven leaves/scoped modules, so they travel with it.
+- **Cut lines:** the package moves whole. `database` (pool + `WithTx`), `rbac`
+  (Principal + permission catalog), `httpx` and `outbox` travel as declared
+  dependencies.
 
 ### internal/analytics  — pure computation
 - **Responsibility:** pure, deterministic arithmetic over money, ratios,
@@ -325,7 +326,11 @@ Two things this document deliberately does not do:
   implementations.
 - **Tests:** `integrations` unit tests (URL validation) + integration. The SSRF
   tests moved to `netguard`.
-- **Extract:** `almost` — the SSRF guard is already out; the rest needs `secrets`
+- **Extract:** **`yes`** — extracted and proven by
+  `scripts/extract-test/integrations`, with `audit`, `database`, `httpx`,
+  `netguard`, `rbac` and `secrets` as its dependencies, all of them proven. The
+  SSRF guard is already out to `netguard`; the rest lifts out with the keyring.
+  **was:** `almost` — the SSRF guard is already out; the rest needs `secrets`
   and `audit`.
 - **Cut lines:** the guard moved to `netguard`; the persistence does not.
 
@@ -535,7 +540,11 @@ Two things this document deliberately does not do:
 - **Fake:** `objectstore.Memory` through the re-exported `NewMemory`.
 - **Tests:** `storage_test.go` (key/extension/entity rules) +
   `testsupport/storage_s3_test.go`.
-- **Extract:** `no` — `Service` binds to `rbac`/`audit`/`database` by design; the
+- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/storage`,
+  with `audit`, `database`, `httpx`, `objectstore` (and its `netguard`), `ratelimit`
+  and `rbac` as its dependencies, all of them proven. Binding to
+  `rbac`/`audit`/`database` by design is not a blocker when all three are proven.
+  **was:** `no` — `Service` binds to `rbac`/`audit`/`database` by design; the
   portable half (`objectstore`) has already been lifted out.
 - **Cut lines:** the provider layer moved to `internal/objectstore`; `Service` stays.
 
@@ -546,8 +555,12 @@ Two things this document deliberately does not do:
 - **Internal deps:** `database`.
 - **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`.
 - **Fake:** none.
-- **Tests:** none in-package.
-- **Extract:** `almost` — 1 internal dep.
+- **Tests:** `jobs_test.go` (status/kind vocabularies, the pre-write validation,
+  and the retry backoff; the first in-package tests).
+- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/jobs`,
+  with `database` as its dependency. Writing the backoff test found a real latent
+  bug: the shift was clamped at 10, so the delay topped out at 1024s and the
+  documented 30-minute ceiling was unreachable dead code; the clamp is now 11.
 - **Cut lines:** moves with `database`.
 
 ### internal/outbox  — transactional outbox
@@ -698,10 +711,10 @@ Two things this document deliberately does not do:
   seams without a shipped fake: `ai.Provider`, `events.Poster`,
   `integrations.Adapter`, `migratex.Source`, `agent.Executor`,
   `database.Querier`, `objectstore.ObjectStore`, `ratelimit.Store`.
-- **Extract status:** fifteen modules are `yes` — `analytics`, `ratelimit`,
+- **Extract status:** nineteen modules are `yes` — `analytics`, `ratelimit`,
   `netguard`, `objectstore`, `secrets`, `logging`, `httpx`, `importx/safe`,
-  `importx/parsers`, `database`, `rbac`, `audit`, `outbox`, `retention` and
-  `agent` — because they were
+  `importx/parsers`, `database`, `rbac`, `audit`, `outbox`, `retention`, `agent`,
+  `jobs`, `crm`, `storage` and `integrations` — because they were
   actually extracted, built, tested and run in a clean module, now by the
   automated harness in `scripts/extract-test/`. The statuses here match
   `EXTRACT_READY.md` exactly.

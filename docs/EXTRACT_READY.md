@@ -451,6 +451,128 @@ scripts/extract-test/agent/setup.sh
 
 ---
 
+## Candidate 14 — `internal/jobs` — **READY**
+
+**Why:** the queue: a unit of work enqueued (optionally inside the caller's
+transaction), claimed with `SKIP LOCKED`, completed or failed with a bounded retry
+backoff, and swept for staleness. Its only in-module dependency is `database`.
+
+**Blocker that was:** the docs said "`almost` — 1 internal dep". One proven dep is
+not a blocker. The package lifts out, and it had no in-package tests.
+
+**Evidence:**
+
+```bash
+scripts/extract-test/jobs/setup.sh
+#   copied internal/jobs -> . (2 files)
+#   copied internal/database -> database (2 files)
+#   ok    no import of the ForgeCRM monolith
+#   ok    go build ./...
+#   ok    go test ./...     # the first in-package tests
+#   ok    go run ./cmd/smoke # 11 kinds; validation runs before any write
+#   ok    jobs extracts cleanly
+```
+
+Writing the backoff test found a real latent bug: the shift was clamped at 10, so
+the delay topped out at `1<<10 s = 1024s` and the documented 30-minute ceiling was
+unreachable dead code. The clamp is now 11, so the ceiling is real.
+
+**Files that move:** `internal/jobs/*.go` (1 source + 1 test file) and
+`internal/database`.
+
+---
+
+## Candidate 15 — `internal/crm` — **READY**
+
+**Why:** the domain service — accounts, contacts, leads, deals, tasks, tickets,
+activities, the pipeline read, search and the baseline analytics. It is the core of
+the product, and it depends only on `database`, `audit`, `httpx`, `outbox` and
+`rbac`, all proven.
+
+**Blocker that was:** the docs said "`almost` — it imports `httpx` and `outbox`,
+which are platform concerns that would have to travel or be inverted". That claim
+was wrong: `httpx` and `outbox` are proven modules, so they travel as declared
+dependencies rather than friction. Nothing imports `crm` back.
+
+**Evidence:**
+
+```bash
+scripts/extract-test/crm/setup.sh
+#   copied internal/crm -> . (9 files)
+#   copied internal/{audit,database,logging,httpx,ratelimit,outbox,rbac}
+#   ok    no import of the ForgeCRM monolith
+#   ok    go build ./...
+#   ok    go test ./...     # the first in-package tests: the validators + JSONMap
+#   ok    go run ./cmd/smoke # deal/contact/bulk validation; JSONMap codec
+#   ok    crm extracts cleanly
+```
+
+The package had no in-package tests. It now has the first, covering the validators
+that run before any database access — the boundary an attacker's payload hits first
+— and the `JSONMap` column codec.
+
+**Files that move:** `internal/crm/*.go` (8 source + 1 test file),
+`internal/{audit,database,httpx,outbox,rbac}` (and their own leaves).
+
+---
+
+## Candidate 16 — `internal/storage` — **READY**
+
+**Why:** the application layer over an object store: it owns the document rows, the
+entity attachment rules, the size and content-type limits, the object key and the
+reconciliation. The provider layer was already lifted to `internal/objectstore`
+(which depends only on `netguard`), and the service layer depends only on
+`database`, `audit`, `httpx`, `objectstore`, `ratelimit` and `rbac`, all proven.
+
+**Blocker that was:** the docs said `no` — "`Service` binds to
+`rbac`/`audit`/`database` by design". Binding to proven modules by design is not a
+blocker; the harness proves it.
+
+**Evidence:**
+
+```bash
+scripts/extract-test/storage/setup.sh
+#   copied internal/storage -> . (4 files)
+#   copied internal/{audit,database,logging,httpx,ratelimit,objectstore,netguard,rbac}
+#   ok    no import of the ForgeCRM monolith
+#   ok    go build ./...
+#   ok    go test ./...     # key/extension/entity/S3-config tests
+#   ok    go run ./cmd/smoke # memory round trip; unconfigured service reports off
+#   ok    storage extracts cleanly
+```
+
+**Files that move:** `internal/storage/*.go` (4 files incl. tests),
+`internal/objectstore`, `internal/{audit,database,httpx,ratelimit,rbac}`.
+
+---
+
+## Candidate 17 — `internal/integrations` — **READY**
+
+**Why:** the Integration Hub — adapter lifecycle, the SSRF guard (aliased from
+`netguard`), the encrypted secret handoff and the run log. It depends only on
+`audit`, `database`, `httpx`, `netguard`, `rbac` and `secrets`, all proven.
+
+**Blocker that was:** the docs said "`almost` — the rest needs `secrets`". `secrets`
+is proven, so it travels.
+
+**Evidence:**
+
+```bash
+scripts/extract-test/integrations/setup.sh
+#   copied internal/integrations -> . (4 files)
+#   copied internal/{audit,database,logging,httpx,ratelimit,netguard,rbac,secrets}
+#   ok    no import of the ForgeCRM monolith
+#   ok    go build ./...
+#   ok    go test ./...
+#   ok    go run ./cmd/smoke # SSRF guard refuses loopback/private/link-local/file://
+#   ok    integrations extracts cleanly
+```
+
+**Files that move:** `internal/integrations/*.go` (4 files),
+`internal/{audit,database,httpx,netguard,rbac,secrets}`.
+
+---
+
 ## Candidates assessed but not extracted
 
 These were evaluated from the dependency graph and marked without an extraction
@@ -458,10 +580,6 @@ run, because each has a concrete blocker that an extraction would only confirm.
 
 | Module | Status | Evidence | Blockers | Next actions |
 | --- | --- | --- | --- | --- |
-| `internal/storage` | **SPLIT — `objectstore` READY** | The provider layer was lifted into `internal/objectstore` and extracted: `go build`, the shared provider contract (Memory and real S3 wire protocol) and a smoke all pass in a clean module. `Service` keeps the authorization, metadata and reconciliation and stays behind. | `Service` still imports `audit, database, httpx, rbac`. That is correct — those are its job — and it is why only the provider layer was lifted. | None for `objectstore`. `Service` is not an extraction target; it is the application layer. |
-| `internal/jobs` | **ALMOST** | One internal dep (`database`); clear responsibility. | Uses `FOR UPDATE … SKIP LOCKED`; PostgreSQL-specific. | Would need a dialect abstraction. |
-| `internal/integrations` | **ALMOST** | `Adapter` interface; unit tests. | Depends on `audit, database, httpx, rbac, secrets`. | The SSRF guard alone was extracted: it now lives in `internal/netguard` (standard library only) and `integrations` re-exports it. |
-| `internal/crm` | **ALMOST** | The domain core; nothing imports it back, so the boundary is one-directional. | Depends on `httpx` and `outbox` (platform concerns) besides `audit/database/rbac`. | Invert `httpx`/`outbox` behind interfaces first. |
 | `internal/ai` | **NOT READY** | 9 internal deps; binds to `crm` for context. | `agent, audit, config, crm, database, httpx, logging, ratelimit, rbac`. | Split `Provider`+prompt+confidence (portable) from the context assembly (bound). |
 | `internal/importx` | **NOT READY** | 10 internal deps; writes into `crm`. | `parsers/` and `safe/` are separable; the service is not. | Extract the two sub-packages only. |
 | `internal/events` | **NOT READY** | 8 internal deps. | `audit, database, httpx, integrations, logging, outbox, rbac, secrets`. | The `Poster` interface is the only clean seam. |
@@ -492,6 +610,10 @@ run, because each has a concrete blocker that an extraction would only confirm.
 | `outbox` | **READY** | Extracted with `database` and `logging`; its vocabulary test and a smoke ran. |
 | `retention` | **READY** | Extracted with `audit` and `database`; its safety tests and a policy-catalog smoke ran. |
 | `agent` | **READY** | Extracted with `audit`, `database` and `httpx`; its argument-hash test and a smoke ran. |
+| `jobs` | **READY** | Extracted with `database`; its first tests (backoff bug found) and a smoke ran. |
+| `crm` | **READY** | Extracted with `audit`, `database`, `httpx`, `outbox` and `rbac`; its first tests (validators) and a smoke ran. |
+| `storage` | **READY** | Extracted with `audit`, `database`, `httpx`, `objectstore`, `ratelimit` and `rbac`; its tests and a smoke ran. |
+| `integrations` | **READY** | Extracted with `audit`, `database`, `httpx`, `netguard`, `rbac` and `secrets`; the SSRF smoke ran. |
 | everything else | **ALMOST** / **NOT READY** | Concrete blocker listed above. |
 
 **No module is marked `READY` without an extraction run recorded here**, and the
@@ -499,6 +621,6 @@ run is now automated: `scripts/extract-test/run.sh` performs it for every module
 `modules.txt` on each CI run. `analytics`, `ratelimit`, `netguard`, `objectstore`,
 `secrets`, `logging`, `httpx`, `importx/safe` and `importx/parsers` pass that bar today.
 
-The fifteen `READY` modules are proven by the harness, not by this document. If the
+The nineteen `READY` modules are proven by the harness, not by this document. If the
 harness ever fails for one of them, the status here is wrong and the harness is
 right.
