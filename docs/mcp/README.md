@@ -16,23 +16,66 @@ can never do more than the signed-in user could do through the web interface.
 | `POST` | `/api/v1/mcp` | The MCP protocol (JSON-RPC 2.0). This is what an MCP client uses. |
 | `GET` | `/api/v1/mcp/tools` | The tool catalogue for the admin UI, with the permission each tool needs. |
 | `POST` | `/api/v1/mcp/call` | A single tool call in the admin UI's own shape. |
+| `GET` | `/api/v1/mcp/credentials` | List the MCP client credentials in the organization. |
+| `POST` | `/api/v1/mcp/credentials` | Mint a credential; the plaintext token is returned once. |
+| `POST` | `/api/v1/mcp/credentials/{id}/rotate` | Issue a fresh token for an existing credential. |
+| `DELETE` | `/api/v1/mcp/credentials/{id}` | Revoke a credential. |
 
 `GET /api/v1/mcp/tools` and `POST /api/v1/mcp/call` are conveniences for ForgeCRM's
 own interface, which is not an MCP client. They are documented here only so the
 three surfaces are not confused: only `POST /api/v1/mcp` speaks the protocol.
 
+The credential routes are session-only: a credential may not mint another, so an
+external client cannot widen its own reach. Reading the list needs
+`mcp.credentials.read`; minting, rotating and revoking need `mcp.credentials.manage`.
+
 ## Authentication
 
-The protocol endpoint authenticates with the same session cookie the web
-interface uses. A request without a valid session is refused with `401` before any
+The protocol endpoint accepts either credential:
+
+- the session cookie the web interface uses, or
+- an `Authorization: Bearer fcmcp_…` header carrying an MCP client credential.
+
+A session is tried first, because the admin UI already has one. A request with a
+cookie that does not resolve is not retried against the header: presenting an
+expired session is an authentication failure, not an invitation to try a different
+credential. A request with no valid credential is refused with `401` before any
 tool logic runs.
 
-> **Limitation.** There is no dedicated MCP credential yet. An MCP client therefore
-> needs a browser session cookie, which is awkward for a long-running client and
-> cannot be revoked independently of the user's login. A scoped, revocable MCP key
-> with its own read/write split is tracked as Phase 3, item 3.3 in
-> [`docs/ROADMAP.md`](../ROADMAP.md). Do not build a production integration on the
-> assumption that a separate key exists.
+### MCP client credentials
+
+A credential is a personal access token bound to one organization and one owner.
+It carries an explicit permission list, and a tool call is authorized against that
+list — never the owner's roles. A read-only credential therefore cannot mutate CRM
+data even when its owner is an administrator. The scope must be a subset of what
+the caller holds, so a credential can narrow authority but never widen it.
+
+Only the SHA-256 of the token is stored, so the plaintext is shown exactly once, at
+creation or rotation. The list reports a non-secret prefix (`fcmcp_ab12cd34…`) so a
+token can be told apart without being recoverable.
+
+A credential stops working immediately when it is revoked, when its `expires_at`
+passes, when its owner is blocked or suspended, or when the owner's membership in
+the organization is removed. Create, rotate and revoke are audited; the token value
+is never recorded.
+
+A per-credential rate limit (`FORGECRM_MCP_REQUESTS_PER_MIN`, default `120`) bounds
+a noisy client. It is keyed by the credential id, so one client cannot spend another
+client's budget.
+
+### Managing credentials
+
+An operator with `mcp.credentials.manage` manages them at `/admin/mcp-credentials`:
+
+1. **New credential** — name it, choose an expiry (or none), and tick the
+   permissions it may use. The permission picker only offers what the operator
+   holds.
+2. **Copy the token** — it is shown once and cannot be recovered. Store it in the
+   client's secret store.
+3. **Rotate** issues a fresh token with the same scope; the previous token stops
+   working at once.
+4. **Revoke** disconnects the client immediately. The row is kept for the audit
+   trail and is swept by retention once it can no longer authenticate.
 
 ## The protocol
 
@@ -112,15 +155,15 @@ part of the same message the permission check inspects.
 
 ## A worked session
 
-Every message goes to `POST /api/v1/mcp` with the session cookie and
-`Content-Type: application/json`. These examples use `$BASE` for the origin and
-`$COOKIE` for the session cookie.
+Every message goes to `POST /api/v1/mcp` with `Content-Type: application/json` and
+one of the two credentials. These examples use `$BASE` for the origin and
+`$TOKEN` for an MCP credential (a session cookie works identically if you prefer).
 
 **1. Initialize**
 
 ```bash
 curl -s "$BASE/api/v1/mcp" -H "Content-Type: application/json" \
-  -H "Cookie: forgecrm_session=$COOKIE" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}'
 ```
 
@@ -135,7 +178,7 @@ curl -s "$BASE/api/v1/mcp" -H "Content-Type: application/json" \
 
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' "$BASE/api/v1/mcp" -H "Content-Type: application/json" \
-  -H "Cookie: forgecrm_session=$COOKIE" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{"jsonrpc":"2.0","method":"notifications/initialized"}'
 # 202
 ```
@@ -144,7 +187,7 @@ curl -s -o /dev/null -w '%{http_code}\n' "$BASE/api/v1/mcp" -H "Content-Type: ap
 
 ```bash
 curl -s "$BASE/api/v1/mcp" -H "Content-Type: application/json" \
-  -H "Cookie: forgecrm_session=$COOKIE" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
 ```
 
@@ -152,7 +195,7 @@ curl -s "$BASE/api/v1/mcp" -H "Content-Type: application/json" \
 
 ```bash
 curl -s "$BASE/api/v1/mcp" -H "Content-Type: application/json" \
-  -H "Cookie: forgecrm_session=$COOKIE" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{"jsonrpc":"2.0","id":3,"method":"tools/call",
        "params":{"name":"search_accounts","arguments":{"query":"Acme"}}}'
 ```
@@ -162,18 +205,16 @@ protocol specifies for a text result.
 
 ## Client configuration
 
-An MCP client needs a URL and a credential. ForgeCRM's credential is the session
-cookie, so a client must be configured to send it.
+An MCP client needs a URL and a credential.
 
 - **Transport:** streamable HTTP, `POST /api/v1/mcp`.
 - **URL:** `https://<your-host>/api/v1/mcp`.
-- **Credential:** the `forgecrm_session` cookie.
+- **Credential:** `Authorization: Bearer fcmcp_…`, minted at
+  `/admin/mcp-credentials`.
 
-Because the credential is a browser session, the practical options today are a
-client that can attach a cookie header, or a small proxy that holds the cookie and
-forwards the protocol messages. The scoped-key work in item 3.3 is what removes
-this constraint; until then, treat the cookie as a short-lived credential and
-expect to re-authenticate when the session expires.
+The token never expires unless an expiry was set, and it can be revoked on its own
+without touching the owner's login. Scope it to the tools the client needs: the
+least-privilege list is what limits the damage if the token leaks.
 
 ## What MCP does not change
 

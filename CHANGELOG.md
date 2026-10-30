@@ -10,6 +10,33 @@ once it reaches 1.0.
 
 ### Added
 
+- **Scoped, revocable MCP client credentials.** The MCP protocol endpoint
+  authenticated only with the browser session cookie, so a real MCP client could
+  not use it: a long-running client cannot hold an interactive session, and an
+  operator could not revoke an agent's access without ending the person's own
+  login. An external client can now authenticate with an
+  `Authorization: Bearer fcmcp_…` credential. A credential is bound to one
+  organization and one owner and carries an explicit permission list; a tool call
+  is authorized against that list, never the owner's roles, so a read-only
+  credential cannot mutate CRM data even when its owner is an administrator. The
+  scope must be a subset of what the caller holds, so a credential can narrow
+  authority but never widen it. Only the SHA-256 of the token is stored, so the
+  plaintext is shown once; the list reports a non-secret prefix. A credential
+  stops working immediately when it is revoked, when its expiry passes, when its
+  owner is blocked or suspended, or when the owner's membership is removed. A
+  per-credential rate limit (`FORGECRM_MCP_REQUESTS_PER_MIN`) bounds a noisy
+  client, and create/rotate/revoke are audited without recording the token.
+  Permissions `mcp.credentials.read` and `mcp.credentials.manage` and the table
+  are seeded by migration `0025`, which also adds a `created_at` index for the
+  retention sweep. A new administration page (`/admin/mcp-credentials`) lists
+  credentials, mints one with a permission picker, reveals the token exactly once,
+  and rotates or revokes it. `MCPCredentialsPage.test.tsx` pins the one-time
+  reveal, the request body and the read-only gate; `internal/mcpcred` and
+  `internal/api/mcp_credential_integration_test.go` cover scope escalation,
+  revocation, expiry and cross-organization isolation; a Playwright scenario mints
+  a credential in the browser, proves the token authenticates against the protocol
+  endpoint, and proves revocation makes the same request fail.
+
 - **Single sign-on over OpenID Connect, and the page that configures it.** A
   deployment could only authenticate with a local password; an organization that
   runs an identity provider had no way to use it. An operator can now register an
