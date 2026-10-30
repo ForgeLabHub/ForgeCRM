@@ -1,124 +1,125 @@
-# ADR 0001 — Hybrid architecture: one deployable, many boundaries
+# ADR 0001 — Гибридная архитектура: одно развёртывание, много границ
 
-- **Status:** Accepted
-- **Date:** 2026-10-28
-- **Deciders:** project owner, engineering agent
-- **Supersedes:** none
+- **Статус:** Принято
+- **Дата:** 2026-10-28
+- **Решающие:** владелец проекта, инженерный агент
+- **Заменяет:** нет
 
-## Context
+## Контекст
 
-ForgeCRM is a self-hosted CRM that must run for a single company on one server and
-still absorb requirements nobody has written down yet. The mission asks for CRM,
-an admin console, import and migration, integrations, events, notifications, MCP,
-an AI layer, observability and reproducible deployment.
+ForgeCRM — это самостоятельно размещаемая CRM, которая должна работать для одной
+компании на одном сервере и при этом впитывать требования, которые ещё никто не
+записал. Задача требует CRM, консоль администратора, импорт и миграцию, интеграции,
+события, уведомления, MCP, слой ИИ, наблюдаемость и воспроизводимое развёртывание.
 
-That list is long enough that the obvious move is to split it into services: an
-import service, an integration service, an AI service, a notification service. The
-pressure is real, because these workloads differ — importing a 2 GiB archive and
-reading one contact should not compete for the same resources.
+Список достаточно длинный, чтобы очевидным ходом было разбить его на сервисы:
+сервис импорта, сервис интеграций, сервис ИИ, сервис уведомлений. Давление
+реально, потому что эти нагрузки различаются — импорт архива на 2 ГиБ и чтение
+одного контакта не должны конкурировать за одни ресурсы.
 
-The counter-pressure is equally real. Every process boundary turns a function call
-into a network call with its own failure modes, and turns a database transaction
-into a saga. This domain is unusually transactional: archiving a contact,
-converting a lead, moving a deal and writing the audit entry must all happen or
-none of them. Across services that means distributed transactions — either
-two-phase commit or eventual consistency plus reconciliation, a large amount of
-machinery whose only job is to undo a design decision.
+Контрдавление столь же реально. Каждая граница процесса превращает вызов функции в
+сетевой вызов со своими режимами отказа и превращает транзакцию базы в сагу. Этот
+домен необычайно транзакционен: архивирование контакта, конвертация лида,
+перемещение сделки и запись в аудит должны произойти все вместе или ни одна.
+Между сервисами это означает распределённые транзакции — либо двухфазный коммит,
+либо согласованность в конечном счёте плюс сверка, — большой объём механики,
+единственная работа которой — отменять архитектурное решение.
 
-The platform must also be operable. The realistic target is one VM or a small
-cluster run by a team with no dedicated platform group. Every extra process is
-another thing to configure, monitor, upgrade and back up.
+Платформа должна ещё и эксплуатироваться. Реалистичная цель — одна виртуальная
+машина или небольшой кластер, которыми управляет команда без выделенной
+платформенной группы. Каждый лишний процесс — это ещё одна вещь для настройки,
+мониторинга, обновления и резервного копирования.
 
-## Decision
+## Решение
 
-Adopt a **hybrid architecture**: a modular monolith with enforced module
-boundaries and independently runnable processes sharing one codebase.
+Принять **гибридную архитектуру**: модульный монолит с обеспеченными границами
+модулей и независимо запускаемыми процессами, делящими одну кодовую базу.
 
-1. **One Go module, one database, one set of domain rules.** The CRM domain,
-   transactions and business rules live in the monolith. Every business rule has
-   exactly one implementation.
+1. **Один модуль Go, одна база, один набор доменных правил.** Домен CRM,
+   транзакции и бизнес-правила живут в монолите. У каждого бизнес-правила ровно
+   одна реализация.
 
-2. **Multiple processes, not multiple services.** `forgecrm-api` serves HTTP;
-   `forgecrm-worker` runs background jobs. Separate binaries from one module,
-   sharing packages. The split exists to isolate *workloads*, not to separate
-   *domains*: a runaway import cannot exhaust the API's connection budget, and the
-   API can be replicated without duplicating the worker.
+2. **Несколько процессов, а не несколько сервисов.** `forgecrm-api` обслуживает
+   HTTP; `forgecrm-worker` выполняет фоновые задания. Отдельные бинарники из одного
+   модуля, делящие пакеты. Разделение существует, чтобы изолировать *нагрузки*, а
+   не разделять *домены*: вышедший из-под контроля импорт не может исчерпать
+   бюджет соединений API, а API можно реплицировать, не дублируя воркер.
 
-3. **Boundaries are enforced by dependency direction, not by the network.**
-   The domain is layered: `crm` is the core; `importx`, `migratex`, `ai`, `events`
-   and `notify` are application services that orchestrate it; `api` is the
-   composition layer on top. The core never imports an application service, and no
-   package imports `api`. These rules are stated in `docs/ARCHITECTURE.md` and
-   enforced by tests in `backend/internal/archtest`, which read the real import
-   graph through `go list`.
+3. **Границы обеспечиваются направлением зависимостей, а не сетью.** Домен
+   слоистый: `crm` — ядро; `importx`, `migratex`, `ai`, `events` и `notify` —
+   прикладные сервисы, которые его оркестрируют; `api` — слой композиции сверху.
+   Ядро никогда не импортирует прикладной сервис, и ни один пакет не импортирует
+   `api`. Эти правила изложены в `docs/ARCHITECTURE.md` и обеспечены тестами в
+   `backend/internal/archtest`, которые читают реальный граф импортов через
+   `go list`.
 
-4. **Cross-cutting concerns are shared code, not shared services.** Audit, RBAC,
-   consent and event publication are libraries invoked in-process. A new caller
-   cannot bypass them by calling a different service, because there is no
-   different service.
+4. **Сквозные механизмы — это общий код, а не общие сервисы.** Аудит, RBAC,
+   согласие и публикация событий — библиотеки, вызываемые в процессе. Новый
+   вызывающий не может их обойти, вызвав другой сервис, потому что другого сервиса
+   нет.
 
-5. **Extraction is a measured decision with stated triggers**, recorded in ADR
-   0002. Until a trigger is met, a workload stays in the monolith.
+5. **Выделение — это измеренное решение с явными триггерами**, зафиксированными в
+   ADR 0002. Пока триггер не достигнут, нагрузка остаётся в монолите.
 
-## Consequences
+## Последствия
 
-### Positive
+### Положительные
 
-- Business rules exist once. An MCP tool, an HTTP handler and a background job all
-  call the same `crm.Service` method, so they cannot disagree about permissions or
-  validation. This is the property the mission's "no double implementation" rule
-  requires, and it is cheap here and expensive after extraction.
-- Transactions stay transactions. Archiving a contact and writing its audit entry
-  commit together.
-- One artifact to build, version, back up and reason about.
-- The operator runs two processes and one database.
+- Бизнес-правила существуют один раз. Инструмент MCP, HTTP-обработчик и фоновое
+  задание вызывают один и тот же метод `crm.Service`, поэтому не могут разойтись в
+  разрешениях или валидации. Это свойство требует правило «без двойной реализации»
+  из задачи, и здесь оно дешёвое, а после выделения — дорогое.
+- Транзакции остаются транзакциями. Архивирование контакта и запись его в аудит
+  коммитятся вместе.
+- Один артефакт для сборки, версионирования, резервного копирования и осмысления.
+- Оператор запускает два процесса и одну базу.
 
-### Negative
+### Отрицательные
 
-- A bad deploy affects HTTP and background work together; there is no per-service
-  rollout.
-- One Go module means a shared-package change rebuilds everything.
-- Nothing physically stops a developer importing across a boundary; the rule is
-  enforced by tests and review, not by the compiler.
-- Resource isolation is coarse: API and worker scale separately, but the shared
-  database remains a shared bottleneck.
+- Плохой деплой влияет на HTTP и фоновую работу вместе; нет выката по сервисам.
+- Один модуль Go означает, что изменение общего пакета пересобирает всё.
+- Ничто физически не мешает разработчику импортировать через границу; правило
+  обеспечивается тестами и ревью, а не компилятором.
+- Изоляция ресурсов грубая: API и воркер масштабируются раздельно, но общая база
+  остаётся общим узким местом.
 
-### Neutral
+### Нейтральные
 
-- The architecture is deliberately reversible in the direction that is hard to
-  reverse later: splitting a modular monolith is far easier than merging services.
+- Архитектура намеренно обратима в том направлении, которое позже трудно
+  обратить: разбить модульный монолит гораздо проще, чем слить сервисы.
 
-## Alternatives considered
+## Рассмотренные альтернативы
 
-**Microservices from the start.** Rejected. The domain is transactional, the team
-is small, and the operational budget is one server. The cost is paid immediately
-and in full while the benefit — independent scaling — is speculative until a
-measured trigger is met.
+**Микросервисы с самого начала.** Отклонено. Домен транзакционен, команда мала, а
+эксплуатационный бюджет — один сервер. Издержки платятся немедленно и полностью,
+тогда как выгода — независимое масштабирование — умозрительна, пока не достигнут
+измеренный триггер.
 
-**Serverless per endpoint.** Rejected. Long-running imports with checkpointing and
-streaming archive extraction fit a request-scoped model poorly, and cold-start and
-execution-time limits would become product constraints.
+**Serverless на каждый эндпоинт.** Отклонено. Долгие импорты с контрольными точками
+и потоковой распаковкой архивов плохо ложатся на модель с областью запроса, а
+ограничения холодного старта и времени исполнения стали бы продуктовыми
+ограничениями.
 
-**Monolith with no process split.** Rejected, narrowly. It is the simplest option
-and sufficient for a small deployment, but import and AI workloads are bursty and
-memory-hungry, and sharing a process lets a large import starve the API. Two
-processes from one codebase buy most of the isolation for a fraction of the cost of
-services.
+**Монолит без разделения процессов.** Отклонено, с небольшим перевесом. Это самый
+простой вариант и достаточный для небольшого развёртывания, но нагрузки импорта и
+ИИ импульсны и прожорливы к памяти, а общий процесс позволяет большому импорту
+заморить API. Два процесса из одной кодовой базы дают большую часть изоляции за
+часть цены сервисов.
 
-## Verification
+## Проверка
 
-| Claim | Evidence |
+| Утверждение | Доказательство |
 |---|---|
-| Two processes | `backend/cmd/forgecrm-api`, `backend/cmd/forgecrm-worker` |
-| Shared domain | Both call `internal/crm.Service`; MCP tools in `internal/ai/mcp.go` call the same service, not a parallel path |
-| One-way dependency into the core | `TestApplicationServicesDependOnTheCoreAndNotTheReverse` |
-| Nothing imports `api` | `TestNoPackageImportsAPI` |
-| Core free of the composition layer | `TestCoreDoesNotImportCompositionOrHTTP` |
+| Два процесса | `backend/cmd/forgecrm-api`, `backend/cmd/forgecrm-worker` |
+| Общий домен | Оба вызывают `internal/crm.Service`; инструменты MCP в `internal/ai/mcp.go` вызывают тот же сервис, а не параллельный путь |
+| Односторонняя зависимость в ядро | `TestApplicationServicesDependOnTheCoreAndNotTheReverse` |
+| Ничто не импортирует `api` | `TestNoPackageImportsAPI` |
+| Ядро свободно от слоя композиции | `TestCoreDoesNotImportCompositionOrHTTP` |
 
-## Known deviations
+## Известные отклонения
 
-`crm` imports `httpx` for `APIError`, `Pagination` and `SortSpec` (29 uses). A
-domain error type does not belong in a package named for HTTP. It is
-one-directional, so it is not a cycle and the rules are still written once. The
-tests pin what must stay true while the debt exists and it is recorded in
+`crm` импортирует `httpx` ради `APIError`, `Pagination` и `SortSpec` (29
+использований). Тип доменной ошибки не место в пакете, названном по HTTP. Это
+однонаправленно, поэтому не цикл, и правила всё ещё написаны один раз. Тесты
+фиксируют то, что должно оставаться верным, пока существует долг, и он записан в
 `docs/PROJECT_AUDIT.md`.
