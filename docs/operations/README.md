@@ -1,313 +1,317 @@
-# Operations
+# Эксплуатация
 
-## Health and readiness
+## Работоспособность и готовность
 
-| Endpoint | Meaning |
+| Эндпоинт | Значение |
 | --- | --- |
-| `GET /health` | The process is alive. Does not touch the database. |
-| `GET /ready` | The database is reachable. Returns 503 otherwise. |
-| `GET /metrics` | Prometheus metrics. Protect with `FORGECRM_METRICS_TOKEN`. |
+| `GET /health` | Процесс жив. Не трогает базу данных. |
+| `GET /ready` | База данных доступна. Иначе возвращает 503. |
+| `GET /metrics` | Метрики Prometheus. Защитите через `FORGECRM_METRICS_TOKEN`. |
 
-Use `/health` for a liveness probe and `/ready` for a readiness probe, so a database
-outage removes an instance from rotation instead of restarting it.
+Используйте `/health` для проверки живости, а `/ready` — для проверки готовности,
+чтобы отказ базы выводил экземпляр из ротации, а не перезапускал его.
 
-## Backup
+## Резервное копирование
 
 ```bash
 ./scripts/backup.sh ./backups
 ```
 
-This produces a consistent custom-format `pg_dump` (taken with
-`--serializable-deferrable`, so it reflects one point in time while the API keeps
-serving), a tarball of the import data volume, and a SHA-256 checksum file.
+Это создаёт согласованный `pg_dump` в custom-формате (снятый с
+`--serializable-deferrable`, поэтому он отражает одну точку во времени, пока API
+продолжает обслуживать), tar-архив тома данных импорта и файл контрольной суммы
+SHA-256.
 
-Back up before every upgrade and on a schedule that matches how much data you are
-willing to lose. The database dump alone is not a complete backup: uploaded files live
-in the `importdata` volume.
+Копируйте перед каждым обновлением и по расписанию, соответствующему тому, сколько
+данных вы готовы потерять. Одного дампа базы недостаточно для полной копии:
+загруженные файлы живут в томе `importdata`.
 
-## Restore
+## Восстановление
 
 ```bash
 ./scripts/restore.sh ./backups/forgecrm-db-20260101T000000Z.dump --yes-really
 ```
 
-The script verifies the checksum, stops the API and worker so nothing writes during the
-restore, recreates the database, restores, and restarts the services. It refuses to run
-without `--yes-really` because it destroys current data.
+Скрипт проверяет контрольную сумму, останавливает API и воркер, чтобы ничто не
+писало во время восстановления, пересоздаёт базу, восстанавливает и перезапускает
+сервисы. Он отказывается запускаться без `--yes-really`, потому что уничтожает
+текущие данные.
 
-Test a restore on a throwaway instance before you need one. An untested backup is not a
-backup.
+Проверьте восстановление на одноразовом экземпляре, прежде чем оно понадобится.
+Непроверенная резервная копия — не резервная копия.
 
-## Troubleshooting
+## Диагностика
 
-### The API starts but `/ready` returns 503
+### API стартует, но `/ready` возвращает 503
 
-The database is unreachable. Check that the `postgres` service is healthy and that
-`FORGECRM_DATABASE_URL` points at it. `docker compose logs postgres` shows why.
+База данных недоступна. Проверьте, что сервис `postgres` работоспособен и что
+`FORGECRM_DATABASE_URL` указывает на него. `docker compose logs postgres` покажет
+почему.
 
-### Imports stay in `queued` and never run
+### Импорты остаются в `queued` и никогда не выполняются
 
-No worker is consuming jobs. Check `docker compose logs worker`. If the worker is
-running, look at `GET /api/v1/jobs` for a job stuck in `running`: a worker that died
-mid-job leaves it claimed until the visibility timeout expires.
+Ни один воркер не потребляет задания. Проверьте `docker compose logs worker`. Если
+воркер работает, посмотрите `GET /api/v1/jobs` на предмет задания, застрявшего в
+`running`: воркер, умерший посреди задания, оставляет его заявленным, пока не
+истечёт тайм-аут видимости.
 
-### An import fails with `unsupported tabular format`
+### Импорт падает с `unsupported tabular format`
 
-The format could not be determined from either the file name or the content. Confirm
-the file is one of the supported formats and that its name has a recognisable
-extension. For archives, the error names the entry that could not be parsed.
+Формат не удалось определить ни по имени файла, ни по содержимому. Убедитесь, что
+файл — один из поддерживаемых форматов и что его имя имеет распознаваемое
+расширение. Для архивов ошибка называет запись, которую не удалось разобрать.
 
-### An archive is rejected
+### Архив отклонён
 
-The message says why. `compression ratio exceeds the limit` means the file looks like an
-archive bomb; raise `FORGECRM_IMPORT_MAX_RATIO` only if you trust the source.
-`escapes the extraction root` or `is absolute` means the archive contains a path
-traversal attempt and was correctly refused. `file is not valid UTF-8` means the data
-file is not UTF-8; re-export it.
+Сообщение говорит почему. `compression ratio exceeds the limit` означает, что файл
+похож на архивную бомбу; поднимайте `FORGECRM_IMPORT_MAX_RATIO` только если
+доверяете источнику. `escapes the extraction root` или `is absolute` означает, что
+архив содержит попытку обхода пути и был правильно отклонён. `file is not valid
+UTF-8` означает, что файл данных не UTF-8; переэкспортируйте его.
 
-### Login fails with the correct password
+### Вход падает с верным паролем
 
-After too many failed attempts the account is locked. The lock clears after
-`FORGECRM_LOCKOUT_WINDOW`, or an administrator can unblock the user. A blocked user's
-sessions are revoked immediately.
+После слишком многих неудачных попыток аккаунт заблокирован. Блокировка снимается
+после `FORGECRM_LOCKOUT_WINDOW`, либо администратор может разблокировать
+пользователя. Сессии заблокированного пользователя отзываются немедленно.
 
-### Resetting a password when email is not configured
+### Сброс пароля, когда почта не настроена
 
-With `FORGECRM_SMTP_ENABLED=false` and `FORGECRM_ENV=development`, the invite response
-includes a `reset_token`. With `FORGECRM_ENV=production` it does not, and an
-administrator must configure SMTP or reset the password another way.
+При `FORGECRM_SMTP_ENABLED=false` и `FORGECRM_ENV=development` ответ на приглашение
+включает `reset_token`. При `FORGECRM_ENV=production` — нет, и администратор должен
+настроить SMTP или сбросить пароль другим способом.
 
-## Logs
+## Логи
 
-Logs are structured JSON with `debug`, `info`, `warn` and `error` levels, and carry a
-request correlation identifier. Set `FORGECRM_LOG_FORMAT=text` for local reading.
+Логи — структурный JSON с уровнями `debug`, `info`, `warn` и `error`, и несут
+идентификатор корреляции запроса. Задайте `FORGECRM_LOG_FORMAT=text` для локального
+чтения.
 
-Credentials, tokens, keys and full personal data are never logged. Import logs record
-the source file, its checksum and the processing configuration, not the row contents.
+Учётные данные, токены, ключи и персональные данные целиком никогда не логируются.
+Логи импорта записывают исходный файл, его контрольную сумму и конфигурацию
+обработки, а не содержимое строк.
 
-The administration API exposes filtered views of application logs, the audit log,
-security events, job history, integration runs and webhook deliveries at
-`/api/v1/audit`, `/api/v1/security-events` and `/api/v1/admin/logs`. These require the
-corresponding permissions.
+API администрирования выставляет отфильтрованные представления логов приложения,
+журнала аудита, событий безопасности, истории заданий, прогонов интеграций и
+доставок вебхуков на `/api/v1/audit`, `/api/v1/security-events` и
+`/api/v1/admin/logs`. Они требуют соответствующих разрешений.
 
-## Webhook delivery
+## Доставка вебхуков
 
-A subscription receives every matching event. Delivery is **at-least-once**, not
-exactly-once: a worker that dies after the endpoint accepted the POST but before the row
-was marked delivered leaves the claim to expire and the delivery is sent again. Every
-payload therefore carries a stable `event_id` for the receiver to de-duplicate on.
+Подписка получает каждое совпадающее событие. Доставка — **at-least-once**, а не
+exactly-once: воркер, который умирает после того, как эндпоинт принял POST, но до
+того, как строка была помечена доставленной, оставляет заявку истечь, и доставка
+отправляется снова. Поэтому каждый payload несёт стабильный `event_id`, по которому
+получатель дедуплицирует.
 
-### Event types
+### Типы событий
 
-A subscription names the event types it wants. The names are namespaced by domain —
-`crm.contact.created`, `crm.deal.won`, `support.ticket.closed`, `data.import.completed`,
-`integration.run.completed`, `platform.user.invited` — and the dispatcher matches them
-exactly. A name that is not in the list matches nothing and the subscription silently
-receives no deliveries, so the authoritative list is published rather than left to be
-guessed:
+Подписка называет типы событий, которые хочет. Имена имеют пространство имён по
+домену — `crm.contact.created`, `crm.deal.won`, `support.ticket.closed`,
+`data.import.completed`, `integration.run.completed`, `platform.user.invited` — и
+диспетчер сопоставляет их точно. Имя, которого нет в списке, не совпадает ни с чем,
+и подписка молча не получает доставок, поэтому авторитетный список публикуется, а не
+оставляется на угадывание:
 
 ```
 GET /api/v1/system/capabilities   →   { "event_types": ["crm.account.created", …] }
 ```
 
-The admin UI builds its event picker from that field, and
-`TestWebhookEventVocabularyMatchesTheDispatcher` emits and dispatches every advertised
-type so the list and the dispatcher cannot drift apart.
+Админ-UI строит свой выбор событий из этого поля, а
+`TestWebhookEventVocabularyMatchesTheDispatcher` порождает и доставляет каждый
+объявленный тип, чтобы список и диспетчер не могли разойтись.
 
-A delivery that keeps failing is retried with exponential backoff up to the
-subscription's `max_attempts`, then moves to the terminal `dead` state. Dead is visible,
-not silent:
+Доставка, которая продолжает падать, повторяется с экспоненциальной задержкой до
+`max_attempts` подписки, затем переходит в терминальное состояние `dead`. Dead
+виден, а не молчалив:
 
-- the transition writes one `webhooks.delivery_dead_lettered` audit entry, once per
-  transition, so an alert built on it does not repeat for a single failure;
-- `dead_lettered_at` records when it happened;
-- `GET /api/v1/admin/metrics` reports three counters.
+- переход пишет одну запись аудита `webhooks.delivery_dead_lettered`, один раз на
+  переход, поэтому алерт, построенный на ней, не повторяется из-за одного сбоя;
+- `dead_lettered_at` записывает, когда это произошло;
+- `GET /api/v1/admin/metrics` сообщает три счётчика.
 
-| Counter | Meaning | Alert on it? |
+| Счётчик | Значение | Алертить? |
 | --- | --- | --- |
-| `webhook_deliveries_dead` | Deliveries in the terminal dead state right now. Falls when a delivery is replayed or swept. | No — it is a level, not an event. |
-| `webhook_deliveries_dead_lettered_total` | Transitions into the dead state, ever. Read from the audit trail, so it only rises. | Yes — a rate over this is the signal. |
-| `webhook_deliveries_pending_total` | Deliveries still eligible for an attempt. | If it grows without draining. |
+| `webhook_deliveries_dead` | Доставки в терминальном состоянии dead прямо сейчас. Падает, когда доставка повторена или очищена. | Нет — это уровень, а не событие. |
+| `webhook_deliveries_dead_lettered_total` | Переходы в состояние dead за всё время. Читается из журнала аудита, поэтому только растёт. | Да — скорость по этому — сигнал. |
+| `webhook_deliveries_pending_total` | Доставки, всё ещё годные на попытку. | Если растёт, не разгружаясь. |
 
-All three are read from the database rather than a per-process counter, so they are
-correct when several workers and API replicas run at once. None is labelled: a tenant id
-or target URL in a metric label would multiply the series without bound and leak a
-customer's endpoint into the monitoring system. The per-organization view is in the audit
-page.
+Все три читаются из базы, а не из счётчика на процесс, поэтому они корректны, когда
+одновременно работают несколько воркеров и реплик API. Ни одна не имеет меток: id
+тенанта или целевой URL в метке метрики умножал бы ряды безгранично и утекал бы
+эндпоинт клиента в систему мониторинга. Представление по организации — на странице
+аудита.
 
-Only `webhook_deliveries_dead_lettered_total` carries the `_total` suffix, because only
-it is a counter. `webhook_deliveries_dead` is a gauge: it goes down when a delivery is
-replayed or swept, so a `rate()` over it would report nonsense. The suggested alert is
+Только `webhook_deliveries_dead_lettered_total` несёт суффикс `_total`, потому что
+только он счётчик. `webhook_deliveries_dead` — это gauge: он падает, когда доставка
+повторена или очищена, поэтому `rate()` по нему сообщал бы бессмыслицу.
+Предлагаемый алерт:
 
 ```
 rate(webhook_deliveries_dead_lettered_total[1h]) > 0
 ```
 
-Any sustained transition into the dead state is an incident: an endpoint the customer
-configured has stopped receiving events. Start with `> 0` and raise the threshold only
-after the baseline is known; do not alert on the gauge, which returns to zero on its own
-when the deliveries are replayed.
+Любой устойчивый переход в состояние dead — инцидент: эндпоинт, который настроил
+клиент, перестал получать события. Начните с `> 0` и поднимайте порог только после
+того, как базовый уровень известен; не алертите по gauge, который возвращается к
+нулю сам, когда доставки повторены.
 
-### Replaying a delivery
+### Повтор доставки
 
-`POST /api/v1/webhooks/{id}/deliveries/{deliveryID}/replay` re-arms a delivery. It
-resets the per-window attempt count, which grants a fresh retry budget, and increments
-`replay_count` — never reset — so an operator can tell a delivery that has just died from
-one that has already exhausted several budgets. The dead-letter marker is cleared and the
-replay is audited.
+`POST /api/v1/webhooks/{id}/deliveries/{deliveryID}/replay` перезаряжает доставку.
+Он сбрасывает счётчик попыток текущего окна, что даёт свежий бюджет повторов, и
+увеличивает `replay_count` — никогда не сбрасываемый, — чтобы оператор мог отличить
+доставку, которая только что умерла, от той, что уже исчерпала несколько бюджетов.
+Маркер dead-letter очищается, а повтор аудируется.
 
-A replay is refused when the delivery is already in flight — `pending` (queued) or
-`delivering` (a worker has claimed it and is sending it now). Refusing the `delivering`
-case matters: replaying a delivery mid-send would grant a second window that the
-in-progress attempt consumes, and one event could produce two sends. The refusal is
-reported as not found, as is a delivery that belongs to another organization or to a
-different subscription than the one named in the path, so none of those is
-distinguishable from an id that does not exist.
+Повтор отклоняется, когда доставка уже в полёте — `pending` (в очереди) или
+`delivering` (воркер забрал её и отправляет сейчас). Отказ в случае `delivering`
+важен: повтор доставки посреди отправки дал бы второе окно, которое потребит уже
+идущая попытка, и одно событие могло бы дать две отправки. Отказ сообщается как
+«не найдено», как и доставка, принадлежащая другой организации или другой подписке,
+чем названная в пути, поэтому ни одна из них неотличима от несуществующего id.
 
-## Rate limiting
+## Ограничение частоты
 
-Requests to `/api/v1` are limited per client address. Authentication endpoints
-have their own, tighter budget so that password guessing is bounded separately
-from ordinary API traffic. Both are configurable:
+Запросы к `/api/v1` ограничиваются по адресу клиента. У эндпоинтов аутентификации
+свой, более тесный бюджет, чтобы подбор пароля ограничивался отдельно от обычного
+трафика API. Оба настраиваются:
 
-| Setting | Default | Meaning |
+| Настройка | По умолчанию | Значение |
 |---|---|---|
-| `FORGECRM_RATE_LIMIT_PER_MIN` | 300 | API requests per client address per minute |
-| `FORGECRM_LOGIN_RATE_LIMIT_PER_MIN` | 60 | Authentication attempts per client address per minute |
+| `FORGECRM_RATE_LIMIT_PER_MIN` | 300 | Запросов API на адрес клиента в минуту |
+| `FORGECRM_LOGIN_RATE_LIMIT_PER_MIN` | 60 | Попыток аутентификации на адрес клиента в минуту |
 
-A refusal is `429` with `Retry-After`, `RateLimit-Limit`, `RateLimit-Remaining`
-and `RateLimit-Reset`. The older `X-RateLimit-*` names are sent as well.
+Отказ — это `429` с `Retry-After`, `RateLimit-Limit`, `RateLimit-Remaining` и
+`RateLimit-Reset`. Более старые имена `X-RateLimit-*` тоже отправляются.
 
-### Choosing where the counters live
+### Где живут счётчики
 
-`FORGECRM_RATE_LIMIT_STORE` decides:
+`FORGECRM_RATE_LIMIT_STORE` решает:
 
-- `memory` (default) keeps counters in the API process. Each replica then
-  enforces its own budget, so **N replicas grant N times the configured limit**.
-  This is correct for the default single-container deployment.
-- `redis` shares counters across replicas, so the configured value is the actual
-  budget. It requires `FORGECRM_REDIS_URL`, for example
+- `memory` (по умолчанию) держит счётчики в процессе API. Каждая реплика тогда
+  обеспечивает свой бюджет, поэтому **N реплик дают N раз настроенного лимита**.
+  Это верно для развёртывания по умолчанию с одним контейнером.
+- `redis` делит счётчики между репликами, поэтому настроенное значение и есть
+  фактический бюджет. Требует `FORGECRM_REDIS_URL`, например
   `redis://:password@redis:6379/0`.
 
 ```bash
-# Start the optional Redis service and point the API at it.
+# Запустите опциональный сервис Redis и направьте на него API.
 docker compose --profile redis up -d
-# then in .env:
+# затем в .env:
 #   FORGECRM_RATE_LIMIT_STORE=redis
 #   FORGECRM_REDIS_URL=redis://redis:6379/0
 ```
 
-The API refuses to start when `redis` is selected but the server cannot be
-reached. That is deliberate: starting anyway would leave the limit unenforced and
-report it only as a per-request warning.
+API отказывается стартовать, когда выбран `redis`, но сервер недостижим. Это
+намеренно: стартовать всё равно означало бы оставить лимит неисполненным и сообщить
+об этом лишь предупреждением на запрос.
 
-### Behaviour when the counter store is unavailable
+### Поведение, когда хранилище счётчиков недоступно
 
-The two policies fail in opposite directions, because they protect different
-things:
+Две политики отказывают в противоположных направлениях, потому что защищают разные
+вещи:
 
-- **General API traffic fails open.** A request is allowed and the decision is
-  marked degraded. A broken counter must not take the whole API down.
-- **Authentication fails closed.** A request is refused with `503` and code
-  `unavailable`. If the counter cannot be read, there is no barrier to password
-  guessing.
+- **Общий трафик API работает fail-open.** Запрос разрешается, а решение помечается
+  как деградированное. Сломанный счётчик не должен валить весь API.
+- **Аутентификация работает fail-closed.** Запрос отклоняется с `503` и кодом
+  `unavailable`. Если счётчик нельзя прочитать, нет барьера для подбора пароля.
 
-Both cases log a warning and are visible in the metrics; neither is reported as a
-`429`, because a `429` tells the client to slow down when the truth is that the
-server cannot count.
+Оба случая логируют предупреждение и видны в метриках; ни один не сообщается как
+`429`, потому что `429` говорит клиенту замедлиться, тогда как правда в том, что
+сервер не может считать.
 
-### Client address behind a proxy
+### Адрес клиента за прокси
 
-By default the client address is the connection address, and forwarding headers
-are ignored. Set `FORGECRM_TRUSTED_PROXIES` to a comma-separated list of the
-proxies in front of the API:
+По умолчанию адрес клиента — это адрес соединения, а заголовки перенаправления
+игнорируются. Задайте `FORGECRM_TRUSTED_PROXIES` как список прокси перед API через
+запятую:
 
 ```
 FORGECRM_TRUSTED_PROXIES=10.0.0.0/8,192.168.0.0/16
 ```
 
-This is a security setting, not a convenience. `X-Forwarded-For` is a request
-header that any client can set. When the connection does not come from a listed
-proxy, the header is ignored, which is what stops a caller from moving itself
-into a fresh rate-limit bucket on every request or forging its entry in the
-authentication log.
+Это настройка безопасности, а не удобство. `X-Forwarded-For` — заголовок запроса,
+который может задать любой клиент. Когда соединение приходит не от перечисленного
+прокси, заголовок игнорируется, что и не даёт вызывающему переводить себя в свежий
+бакет ограничения на каждом запросе или подделывать свою запись в журнале
+аутентификации.
 
-If the API is reachable only through the proxy, `*` trusts every peer. That
-accepts the header from anyone and lets a caller choose its own address, so the
-API logs a warning at startup when it is set. The proxy chain is read
-right-to-left, skipping addresses in the trusted list; the first untrusted entry
-is the client, because that is the address the last trusted hop observed and the
-client cannot have written it.
+Если API достижим только через прокси, `*` доверяет любому узлу. Это принимает
+заголовок от кого угодно и позволяет вызывающему выбрать свой адрес, поэтому API
+логирует предупреждение при старте, когда это задано. Цепочка прокси читается
+справа налево, пропуская адреса из доверенного списка; первая недоверенная запись —
+это клиент, потому что это адрес, который наблюдал последний доверенный узел, и
+клиент не мог его записать.
 
-### Troubleshooting
+### Диагностика
 
-**A limit is configured but a client is not being refused.** Check which store is
-in use in the startup log (`rate limiter configured`). With `memory` and several
-replicas, the effective limit is the configured value times the replica count.
+**Лимит настроен, но клиенту не отказывают.** Проверьте, какое хранилище
+используется, в логе старта (`rate limiter configured`). При `memory` и нескольких
+репликах фактический лимит — настроенное значение, умноженное на число реплик.
 
-**Every client shares one bucket.** The proxy is not in
-`FORGECRM_TRUSTED_PROXIES`, so all requests are attributed to the proxy's
-address. Add the proxy's network to the list.
+**Все клиенты делят один бакет.** Прокси нет в `FORGECRM_TRUSTED_PROXIES`, поэтому
+все запросы приписываются адресу прокси. Добавьте сеть прокси в список.
 
-**A `503` with code `unavailable` appears on a sign-in.** The counter store is
-unreachable and authentication is failing closed. This is not a rate limit: no
-budget was consumed and `Retry-After` is absent. Check that Redis is up and that
-`FORGECRM_REDIS_URL` points at it. The warning `rate limit store unavailable;
-policy fail mode applied` names the policy.
+**`503` с кодом `unavailable` появляется при входе.** Хранилище счётчиков
+недостижимо, и аутентификация работает fail-closed. Это не ограничение частоты:
+бюджет не израсходован, и `Retry-After` отсутствует. Проверьте, что Redis поднят и
+что `FORGECRM_REDIS_URL` указывает на него. Предупреждение `rate limit store
+unavailable; policy fail mode applied` называет политику.
 
-**General traffic is served but the limit is not enforced.** The counter store is
-unreachable and general traffic is failing open. The same warning is logged. This
-is the intended degradation, but it is worth an alert: while it lasts, the limit
-exists in configuration only.
+**Общий трафик обслуживается, но лимит не исполняется.** Хранилище счётчиков
+недостижимо, и общий трафик работает fail-open. Логируется то же предупреждение.
+Это намеренная деградация, но она заслуживает алерта: пока она длится, лимит
+существует только в конфигурации.
 
-## Verifying multi-replica operation
+## Проверка работы при нескольких репликах
 
-A single-replica deployment cannot tell a shared counter from a per-process one,
-because there is only one process. The rehearsal below builds the topology that
-can: two API containers behind a real nginx, sharing one PostgreSQL and one
-Redis.
+Развёртывание с одной репликой не может отличить общий счётчик от счётчика на
+процесс, потому что процесс один. Репетиция ниже строит топологию, которая может:
+два контейнера API за реальным nginx, делящие один PostgreSQL и один Redis.
 
 ```bash
-./scripts/multi-replica-verify.sh          # tear the stack down afterwards
-./scripts/multi-replica-verify.sh --keep   # leave it up to inspect
+./scripts/multi-replica-verify.sh          # разобрать стек после
+./scripts/multi-replica-verify.sh --keep   # оставить для осмотра
 ```
 
-It uses a separate compose project, separate ports (18080-18082) and a separate
-volume, so it cannot touch the default stack. It checks, and fails loudly on:
+Он использует отдельный compose-проект, отдельные порты (18080-18082) и отдельный
+том, поэтому не может затронуть стек по умолчанию. Он проверяет и громко падает на:
 
-1. every container reaches `healthy`, and both replicas answer `/ready`;
-2. a session created on one replica is accepted by the other, and logout and
-   revocation on one take effect on the other;
-3. the login budget is a property of the deployment, not of a replica — a budget
-   of 2 is 2 attempts across the pair, not 2 per replica;
-4. a direct client cannot open its own bucket by sending `X-Forwarded-For`, and
-   rotating the header through the proxy does not help either;
-5. with Redis down, sign-in returns `503 unavailable` (fail-closed) while
-   ordinary API traffic keeps being served (fail-open), and both recover;
-6. stopping one replica leaves the other serving, and the counters written before
-   a restart are still in force afterwards.
+1. каждый контейнер достигает `healthy`, и обе реплики отвечают на `/ready`;
+2. сессия, созданная на одной реплике, принимается другой, а выход и отзыв на
+   одной действуют на другой;
+3. бюджет входа — свойство развёртывания, а не реплики — бюджет 2 это 2 попытки на
+   пару, а не 2 на реплику;
+4. прямой клиент не может открыть свой бакет, отправив `X-Forwarded-For`, и
+   вращение заголовка через прокси тоже не помогает;
+5. при выключенном Redis вход возвращает `503 unavailable` (fail-closed), тогда как
+   обычный трафик API продолжает обслуживаться (fail-open), и оба восстанавливаются;
+6. остановка одной реплики оставляет другую обслуживать, и счётчики, записанные до
+   перезапуска, всё ещё в силе после него.
 
-The same properties are asserted at the code level, without containers, by the
-integration tests in `internal/api/cross_replica_test.go` and
-`internal/api/session_sharing_test.go`, and the lockout counter by
-`internal/authn/lockout_integration_test.go`. Those run in CI against a real
-PostgreSQL and Redis and are the faster signal; the script is what proves the
-deployment wiring.
+Те же свойства утверждаются на уровне кода, без контейнеров, интеграционными
+тестами в `internal/api/cross_replica_test.go` и
+`internal/api/session_sharing_test.go`, а счётчик блокировки —
+`internal/authn/lockout_integration_test.go`. Они идут в CI против реальных
+PostgreSQL и Redis и являются более быстрым сигналом; скрипт — то, что доказывает
+связывание развёртывания.
 
-### Running a production replica set
+### Запуск продакшн-набора реплик
 
-The rehearsal's topology is the shape to copy, with three settings that must
-match across replicas:
+Топология репетиции — та форма, которую нужно копировать, с тремя настройками,
+которые должны совпадать между репликами:
 
-- `FORGECRM_SECRET_KEY` must be identical, or a session or encrypted value
-  written by one replica cannot be read by another.
-- `FORGECRM_RATE_LIMIT_STORE=redis` with a shared `FORGECRM_REDIS_URL`, or each
-  replica enforces its own budget.
-- `FORGECRM_TRUSTED_PROXIES` must name the load balancer's addresses, or every
-  request is attributed to the balancer and one client's traffic counts against
-  another's budget.
+- `FORGECRM_SECRET_KEY` должна быть идентичной, иначе сессию или зашифрованное
+  значение, записанные одной репликой, не сможет прочитать другая.
+- `FORGECRM_RATE_LIMIT_STORE=redis` с общим `FORGECRM_REDIS_URL`, иначе каждая
+  реплика обеспечивает свой бюджет.
+- `FORGECRM_TRUSTED_PROXIES` должна называть адреса балансировщика, иначе каждый
+  запрос приписывается балансировщику и трафик одного клиента считается против
+  бюджета другого.
 
-`FORGECRM_MIGRATE_ON_START` may be left on for every replica: migrations are
-advisory-locked, so concurrent starts serialise rather than race. Leaving it on
-for one replica and off for the rest, as the rehearsal does, is only to keep the
-startup log unambiguous.
+`FORGECRM_MIGRATE_ON_START` можно оставить включённой для каждой реплики: миграции
+защищены advisory-блокировкой, поэтому одновременные старты сериализуются, а не
+гоняются. Оставлять её включённой на одной реплике и выключенной на остальных, как
+делает репетиция, — лишь чтобы лог старта был однозначным.

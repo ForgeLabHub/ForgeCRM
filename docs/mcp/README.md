@@ -1,165 +1,168 @@
-# MCP — connecting an AI client
+# MCP — подключение ИИ-клиента
 
-ForgeCRM exposes its CRM tools over the Model Context Protocol, so a standard MCP
-client can search accounts, read a customer summary, list tasks, read the pipeline
-and — with an explicit acknowledgement — create a task or a ticket, change a deal
-stage and pull a report.
+ForgeCRM выставляет свои CRM-инструменты по протоколу Model Context Protocol,
+поэтому стандартный MCP-клиент может искать аккаунты, читать сводку по клиенту,
+перечислять задачи, читать воронку и — с явным подтверждением — создавать задачу
+или обращение, менять стадию сделки и получать отчёт.
 
-The tools are not a separate implementation. Each one calls the same `crm.Service`
-the REST API calls and passes through the same permission check, so an MCP client
-can never do more than the signed-in user could do through the web interface.
+Инструменты не являются отдельной реализацией. Каждый из них вызывает тот же
+`crm.Service`, что и REST API, и проходит ту же проверку прав, поэтому MCP-клиент
+никогда не может сделать больше, чем вошедший пользователь мог бы сделать через
+веб-интерфейс.
 
-## Endpoints
+## Эндпоинты
 
-| Method | Path | Purpose |
+| Метод | Путь | Назначение |
 |---|---|---|
-| `POST` | `/api/v1/mcp` | The MCP protocol (JSON-RPC 2.0). This is what an MCP client uses. |
-| `GET` | `/api/v1/mcp/tools` | The tool catalogue for the admin UI, with the permission each tool needs. |
-| `POST` | `/api/v1/mcp/call` | A single tool call in the admin UI's own shape. |
-| `GET` | `/api/v1/mcp/credentials` | List the MCP client credentials in the organization. |
-| `POST` | `/api/v1/mcp/credentials` | Mint a credential; the plaintext token is returned once. |
-| `POST` | `/api/v1/mcp/credentials/{id}/rotate` | Issue a fresh token for an existing credential. |
-| `DELETE` | `/api/v1/mcp/credentials/{id}` | Revoke a credential. |
+| `POST` | `/api/v1/mcp` | Протокол MCP (JSON-RPC 2.0). Его использует MCP-клиент. |
+| `GET` | `/api/v1/mcp/tools` | Каталог инструментов для админ-UI, с разрешением, нужным каждому инструменту. |
+| `POST` | `/api/v1/mcp/call` | Один вызов инструмента в собственной форме админ-UI. |
+| `GET` | `/api/v1/mcp/credentials` | Список учётных данных MCP-клиентов в организации. |
+| `POST` | `/api/v1/mcp/credentials` | Выпустить учётные данные; открытый токен возвращается один раз. |
+| `POST` | `/api/v1/mcp/credentials/{id}/rotate` | Выдать новый токен для существующих учётных данных. |
+| `DELETE` | `/api/v1/mcp/credentials/{id}` | Отозвать учётные данные. |
 
-`GET /api/v1/mcp/tools` and `POST /api/v1/mcp/call` are conveniences for ForgeCRM's
-own interface, which is not an MCP client. They are documented here only so the
-three surfaces are not confused: only `POST /api/v1/mcp` speaks the protocol.
+`GET /api/v1/mcp/tools` и `POST /api/v1/mcp/call` — удобства для собственного
+интерфейса ForgeCRM, который не является MCP-клиентом. Они документированы здесь
+только чтобы три поверхности не путали: только `POST /api/v1/mcp` говорит на
+протоколе.
 
-The credential routes are session-only: a credential may not mint another, so an
-external client cannot widen its own reach. Reading the list needs
-`mcp.credentials.read`; minting, rotating and revoking need `mcp.credentials.manage`.
+Маршруты учётных данных только для сессии: учётные данные не могут выпустить
+другие, поэтому внешний клиент не может расширить собственную досягаемость. Чтение
+списка требует `mcp.credentials.read`; выпуск, ротация и отзыв требуют
+`mcp.credentials.manage`.
 
-## Authentication
+## Аутентификация
 
-The protocol endpoint accepts either credential:
+Эндпоинт протокола принимает либо одни, либо другие учётные данные:
 
-- the session cookie the web interface uses, or
-- an `Authorization: Bearer fcmcp_…` header carrying an MCP client credential.
+- cookie сессии, которую использует веб-интерфейс, или
+- заголовок `Authorization: Bearer fcmcp_…` с учётными данными MCP-клиента.
 
-A session is tried first, because the admin UI already has one. A request with a
-cookie that does not resolve is not retried against the header: presenting an
-expired session is an authentication failure, not an invitation to try a different
-credential. A request with no valid credential is refused with `401` before any
-tool logic runs.
+Сессия пробуется первой, потому что у админ-UI она уже есть. Запрос с cookie,
+которая не разрешается, не повторяется по заголовку: предъявление истёкшей сессии
+— это отказ аутентификации, а не приглашение попробовать другие учётные данные.
+Запрос без действительных учётных данных отклоняется с `401` до того, как
+выполнится какая-либо логика инструмента.
 
-### MCP client credentials
+### Учётные данные MCP-клиента
 
-A credential is a personal access token bound to one organization and one owner.
-It carries an explicit permission list, and a tool call is authorized against that
-list — never the owner's roles. A read-only credential therefore cannot mutate CRM
-data even when its owner is an administrator. The scope must be a subset of what
-the caller holds, so a credential can narrow authority but never widen it.
+Учётные данные — это персональный токен доступа, привязанный к одной организации и
+одному владельцу. Он несёт явный список разрешений, и вызов инструмента
+авторизуется по этому списку — никогда по ролям владельца. Учётные данные только для
+чтения поэтому не могут изменить данные CRM, даже когда их владелец — администратор.
+Область должна быть подмножеством того, что держит вызывающий, поэтому учётные
+данные могут сузить полномочия, но никогда расширить.
 
-Only the SHA-256 of the token is stored, so the plaintext is shown exactly once, at
-creation or rotation. The list reports a non-secret prefix (`fcmcp_ab12cd34…`) so a
-token can be told apart without being recoverable.
+Хранится только SHA-256 токена, поэтому открытый текст показывается ровно один раз,
+при создании или ротации. Список сообщает несекретный префикс (`fcmcp_ab12cd34…`),
+чтобы токен можно было отличить, не имея возможности его восстановить.
 
-A credential stops working immediately when it is revoked, when its `expires_at`
-passes, when its owner is blocked or suspended, or when the owner's membership in
-the organization is removed. Create, rotate and revoke are audited; the token value
-is never recorded.
+Учётные данные перестают работать немедленно, когда их отзывают, когда проходит их
+`expires_at`, когда их владелец заблокирован или приостановлен, или когда участие
+владельца в организации удалено. Создание, ротация и отзыв аудируются; значение
+токена никогда не записывается.
 
-A per-credential rate limit (`FORGECRM_MCP_REQUESTS_PER_MIN`, default `120`) bounds
-a noisy client. It is keyed by the credential id, so one client cannot spend another
-client's budget.
+Ограничение частоты на учётные данные (`FORGECRM_MCP_REQUESTS_PER_MIN`, по
+умолчанию `120`) ограничивает шумного клиента. Ключ — id учётных данных, поэтому
+один клиент не может израсходовать бюджет другого.
 
-### Managing credentials
+### Управление учётными данными
 
-An operator with `mcp.credentials.manage` manages them at `/admin/mcp-credentials`:
+Оператор с `mcp.credentials.manage` управляет ими на `/admin/mcp-credentials`:
 
-1. **New credential** — name it, choose an expiry (or none), and tick the
-   permissions it may use. The permission picker only offers what the operator
-   holds.
-2. **Copy the token** — it is shown once and cannot be recovered. Store it in the
-   client's secret store.
-3. **Rotate** issues a fresh token with the same scope; the previous token stops
-   working at once.
-4. **Revoke** disconnects the client immediately. The row is kept for the audit
-   trail and is swept by retention once it can no longer authenticate.
+1. **New credential** — назовите, выберите срок действия (или без него) и отметьте
+   разрешения, которыми он может пользоваться. Выбор разрешений предлагает только
+   то, что держит оператор.
+2. **Скопируйте токен** — он показывается один раз и не может быть восстановлен.
+   Сохраните его в хранилище секретов клиента.
+3. **Rotate** выдаёт новый токен с той же областью; предыдущий токен перестаёт
+   работать сразу.
+4. **Revoke** немедленно отключает клиента. Строка сохраняется для журнала аудита и
+   очищается хранением, когда больше не может аутентифицироваться.
 
-## The protocol
+## Протокол
 
-JSON-RPC 2.0. `id` is echoed back unchanged and may be a string or a number.
+JSON-RPC 2.0. `id` возвращается без изменений и может быть строкой или числом.
 
-### Methods
+### Методы
 
-| Method | Kind | Result |
+| Метод | Вид | Результат |
 |---|---|---|
-| `initialize` | request | `protocolVersion`, `capabilities`, `serverInfo` |
-| `notifications/initialized` | notification | none (the server answers `202`) |
-| `notifications/cancelled` | notification | none |
-| `ping` | request | an empty object |
-| `tools/list` | request | `{ "tools": [ … ] }` |
-| `tools/call` | request | `{ "content": [ { "type": "text", "text": "…" } ], "is_error": false }` |
+| `initialize` | запрос | `protocolVersion`, `capabilities`, `serverInfo` |
+| `notifications/initialized` | уведомление | нет (сервер отвечает `202`) |
+| `notifications/cancelled` | уведомление | нет |
+| `ping` | запрос | пустой объект |
+| `tools/list` | запрос | `{ "tools": [ … ] }` |
+| `tools/call` | запрос | `{ "content": [ { "type": "text", "text": "…" } ], "is_error": false }` |
 
-A message without an `id` is a notification and receives an empty `202` with no
-body. Replying to a notification is a protocol error, so the server does not.
+Сообщение без `id` — это уведомление, и оно получает пустой `202` без тела.
+Отвечать на уведомление — это ошибка протокола, поэтому сервер не отвечает.
 
-### Protocol version
+### Версия протокола
 
-The server supports `2025-06-18` and `2024-11-05`. It echoes the version the client
-asks for when it supports it, and otherwise reports its own. An unsupported version
-is not an error: a client whose messages are otherwise understood should not be
-locked out over a version string.
+Сервер поддерживает `2025-06-18` и `2024-11-05`. Он возвращает версию, которую
+запрашивает клиент, когда поддерживает её, иначе сообщает свою. Неподдерживаемая
+версия не является ошибкой: клиент, чьи сообщения в остальном понятны, не должен
+быть заблокирован из-за строки версии.
 
-### Capabilities
+### Возможности
 
-The `initialize` result advertises `tools` and nothing else. `resources` and
-`prompts` are not implemented, so they are not advertised — a client that read
-either in the capabilities would call a method this server answers with
-`method not found`.
+Результат `initialize` объявляет `tools` и ничего больше. `resources` и `prompts` не
+реализованы, поэтому не объявляются — клиент, прочитавший любое из них в
+возможностях, вызвал бы метод, на который этот сервер отвечает `method not found`.
 
-### Error codes
+### Коды ошибок
 
-| Code | When |
+| Код | Когда |
 |---|---|
-| `-32700` | the body is not valid JSON |
-| `-32600` | `jsonrpc` is not `"2.0"`, or `method` is missing |
-| `-32601` | the method is unknown, or the tool does not exist |
-| `-32602` | the arguments are invalid, the tool requires confirmation and did not receive it, or the caller lacks the tool's permission |
-| `-32603` | an internal failure |
+| `-32700` | тело не является валидным JSON |
+| `-32600` | `jsonrpc` не `"2.0"` или отсутствует `method` |
+| `-32601` | метод неизвестен или инструмент не существует |
+| `-32602` | аргументы неверны, инструмент требует подтверждения и не получил его, или у вызывающего нет разрешения на инструмент |
+| `-32603` | внутренний сбой |
 
-A failure carries the HTTP status in `error.data.status`, so a client can tell a
-permission refusal (`403`) from a bad argument (`400`).
+Сбой несёт HTTP-статус в `error.data.status`, поэтому клиент может отличить отказ в
+правах (`403`) от плохого аргумента (`400`).
 
-## The tools
+## Инструменты
 
-| Tool | Permission | Changes data |
+| Инструмент | Разрешение | Меняет данные |
 |---|---|---|
-| `search_accounts` | `accounts.read` | no |
-| `account_summary` | `accounts.read` | no |
-| `list_tasks` | `tasks.read` | no |
-| `pipeline_overview` | `pipelines.read` | no |
-| `get_report` | `reports.read` | no |
-| `create_task` | `tasks.create` | **yes** |
-| `create_ticket` | `tickets.create` | **yes** |
-| `update_deal_stage` | `deals.change_stage` | **yes** |
+| `search_accounts` | `accounts.read` | нет |
+| `account_summary` | `accounts.read` | нет |
+| `list_tasks` | `tasks.read` | нет |
+| `pipeline_overview` | `pipelines.read` | нет |
+| `get_report` | `reports.read` | нет |
+| `create_task` | `tasks.create` | **да** |
+| `create_ticket` | `tickets.create` | **да** |
+| `update_deal_stage` | `deals.change_stage` | **да** |
 
-There is no tool for raw SQL, shell, filesystem access or an unbounded export, by
-construction: the registry contains only CRM operations.
+Инструмента для сырого SQL, shell, доступа к файловой системе или неограниченного
+экспорта нет по построению: реестр содержит только операции CRM.
 
-### Confirming a write
+### Подтверждение записи
 
-A tool that changes data is refused unless the call carries `confirm: true` in its
-arguments:
+Инструмент, меняющий данные, отклоняется, если вызов не несёт `confirm: true` в
+своих аргументах:
 
 ```json
 {"jsonrpc":"2.0","id":3,"method":"tools/call",
  "params":{"name":"create_task","arguments":{"title":"Call Acme","confirm":true}}}
 ```
 
-The requirement is published in the tool's `inputSchema`, so a client can see it
-before calling rather than receiving a refusal it cannot explain. The
-acknowledgement travels in the arguments, not in a transport-level flag, so it is
-part of the same message the permission check inspects.
+Требование публикуется в `inputSchema` инструмента, чтобы клиент видел его до
+вызова, а не получал отказ, который не может объяснить. Подтверждение идёт в
+аргументах, а не во флаге уровня транспорта, поэтому оно часть того же сообщения,
+которое проверяет проверка прав.
 
-## A worked session
+## Разобранная сессия
 
-Every message goes to `POST /api/v1/mcp` with `Content-Type: application/json` and
-one of the two credentials. These examples use `$BASE` for the origin and
-`$TOKEN` for an MCP credential (a session cookie works identically if you prefer).
+Каждое сообщение идёт на `POST /api/v1/mcp` с `Content-Type: application/json` и
+одними из двух учётных данных. В этих примерах `$BASE` — источник, а `$TOKEN` —
+учётные данные MCP (cookie сессии работает идентично, если предпочитаете её).
 
-**1. Initialize**
+**1. Инициализация**
 
 ```bash
 curl -s "$BASE/api/v1/mcp" -H "Content-Type: application/json" \
@@ -174,7 +177,7 @@ curl -s "$BASE/api/v1/mcp" -H "Content-Type: application/json" \
   "serverInfo":{"name":"forgecrm","version":"…"}}}
 ```
 
-**2. Acknowledge the handshake** (a notification — no `id`, so no reply body)
+**2. Подтвердите рукопожатие** (уведомление — нет `id`, поэтому нет тела ответа)
 
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' "$BASE/api/v1/mcp" -H "Content-Type: application/json" \
@@ -183,7 +186,7 @@ curl -s -o /dev/null -w '%{http_code}\n' "$BASE/api/v1/mcp" -H "Content-Type: ap
 # 202
 ```
 
-**3. List the tools**
+**3. Перечислите инструменты**
 
 ```bash
 curl -s "$BASE/api/v1/mcp" -H "Content-Type: application/json" \
@@ -191,7 +194,7 @@ curl -s "$BASE/api/v1/mcp" -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
 ```
 
-**4. Call one**
+**4. Вызовите один**
 
 ```bash
 curl -s "$BASE/api/v1/mcp" -H "Content-Type: application/json" \
@@ -200,40 +203,41 @@ curl -s "$BASE/api/v1/mcp" -H "Content-Type: application/json" \
        "params":{"name":"search_accounts","arguments":{"query":"Acme"}}}'
 ```
 
-The `content[0].text` member holds the result as a JSON string, which is what the
-protocol specifies for a text result.
+Член `content[0].text` содержит результат как строку JSON, что и определяет
+протокол для текстового результата.
 
-## Client configuration
+## Настройка клиента
 
-An MCP client needs a URL and a credential.
+MCP-клиенту нужны URL и учётные данные.
 
-- **Transport:** streamable HTTP, `POST /api/v1/mcp`.
-- **URL:** `https://<your-host>/api/v1/mcp`.
-- **Credential:** `Authorization: Bearer fcmcp_…`, minted at
+- **Транспорт:** streamable HTTP, `POST /api/v1/mcp`.
+- **URL:** `https://<ваш-хост>/api/v1/mcp`.
+- **Учётные данные:** `Authorization: Bearer fcmcp_…`, выпущенные на
   `/admin/mcp-credentials`.
 
-The token never expires unless an expiry was set, and it can be revoked on its own
-without touching the owner's login. Scope it to the tools the client needs: the
-least-privilege list is what limits the damage if the token leaks.
+Токен не истекает, если не задан срок, и его можно отозвать отдельно, не трогая
+вход владельца. Ограничьте его инструментами, которые нужны клиенту: список
+наименьших привилегий — то, что ограничивает ущерб, если токен утечёт.
 
-## What MCP does not change
+## Что MCP не меняет
 
-- **Authorization.** A tool call runs the caller's own permission check. A client
-  cannot reach a tool the user could not reach in the interface, and the check is
-  the same code path, so the two cannot drift apart.
-- **Tenant scope.** Tools read and write inside the caller's organization. An
-  account in another organization is not returned, and its identifier cannot be
-  guessed into a result.
-- **Audit.** Every tool invocation is recorded, including a denied attempt, with
-  the tool name and whether it was allowed.
-- **Prompt injection.** Instructions found inside imported rows, documents or
-  external responses do not change what a tool is allowed to do. The permission
-  check reads the caller's roles, not the content being processed.
+- **Авторизация.** Вызов инструмента выполняет собственную проверку прав
+  вызывающего. Клиент не может достичь инструмента, которого пользователь не мог бы
+  достичь в интерфейсе, и проверка — тот же путь кода, поэтому они не могут
+  разойтись.
+- **Область тенанта.** Инструменты читают и пишут внутри организации вызывающего.
+  Аккаунт из другой организации не возвращается, и его идентификатор нельзя угадать
+  в результате.
+- **Аудит.** Каждый вызов инструмента записывается, включая отклонённую попытку, с
+  именем инструмента и тем, было ли разрешено.
+- **Инъекция промптов.** Инструкции, найденные внутри импортированных строк,
+  документов или внешних ответов, не меняют того, что инструменту разрешено. Проверка
+  прав читает роли вызывающего, а не обрабатываемое содержимое.
 
-## See also
+## См. также
 
-- [`docs/api/README.md`](../api/README.md) — the REST API, including the generated
-  OpenAPI document.
-- [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) §8 — where the AI layer sits in the
-  service graph.
-- [`docs/ROADMAP.md`](../ROADMAP.md) — Phase 3, the MCP work that remains.
+- [`docs/api/README.md`](../api/README.md) — REST API, включая сгенерированный
+  документ OpenAPI.
+- [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) §8 — где слой ИИ находится в графе
+  сервисов.
+- [`docs/ROADMAP.md`](../ROADMAP.md) — Фаза 3, оставшаяся работа по MCP.
