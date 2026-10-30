@@ -1,215 +1,213 @@
-# Configuration profiles
+# Профили конфигурации
 
-ForgeCRM is configured entirely from environment variables. This document
-describes four intended profiles — **demo**, **development**, **hackathon** and
-**production** — and, crucially, separates **what exists in the code today** from
-**what is targeted**. Nothing here is implemented by this document; the profiles
-are described so the work can be planned against a fixed target.
+ForgeCRM настраивается целиком из переменных окружения. Этот документ описывает
+четыре предполагаемых профиля — **demo**, **development**, **hackathon** и
+**production** — и, что важно, разделяет **то, что существует в коде сегодня**, и
+**то, к чему стремятся**. Ничто здесь не реализуется этим документом; профили
+описаны, чтобы работу можно было планировать против фиксированной цели.
 
-The single most important rule:
+Единственное самое важное правило:
 
-> **Demo mode must never be able to switch itself on in production.** A profile
-> is a deliberate choice, not a default that leaks. Today the code enforces part
-> of this already (see "What exists today"); the rest is target behaviour.
-
----
-
-## What exists today (code-verified at `7a6d67f`)
-
-- `FORGECRM_ENV` is validated to be exactly one of `development`, `test` or
-  `production` (`internal/config`). There is **no `demo` and no `hackathon` value
-  today** — a request for one is refused at startup.
-- `Config.IsProduction()` returns `Env == "production"`.
-- In production, `FORGECRM_SECRET_KEY` is **required**; startup fails without it.
-- Optional subsystems degrade to "off" rather than failing:
-  - `FORGECRM_AI_ENABLED=false` → the assist/MCP service reports `disabled`.
-  - `FORGECRM_STORAGE_ENABLED=false` → document routes answer 503
-    `not configured`, not 500.
-  - `FORGECRM_SMTP_ENABLED=false` → `EmailService.Enabled()` is false.
-  - `FORGECRM_TELEGRAM_ENABLED=false` → `TelegramService.Enabled()` is false.
-  - No `FORGECRM_REDIS_URL` → the rate limiter uses `MemoryStore`.
-- `FORGECRM_RETENTION_ENABLED` defaults to **off**, and retention defaults to
-  **dry-run** even when enabled.
-- The storage S3 client refuses a private/loopback endpoint unless
-  `FORGECRM_STORAGE_ALLOW_PRIVATE_ENDPOINT=true` (SSRF guard).
-- `.env.example` ships development defaults and states they are not production
-  safe.
-
-**There is no demo/hackathon profile, no seed generator, and no fake-adapter
-switch in the code yet.** Where a profile below describes fakes or a `demo` mode,
-it is target behaviour, marked as such.
+> **Демо-режим никогда не должен иметь возможности включить себя в production.**
+> Профиль — это осознанный выбор, а не умолчание, которое утекает. Сегодня код уже
+> обеспечивает часть этого (см. «Что существует сегодня»); остальное — целевое
+> поведение.
 
 ---
 
-## Profile: `demo`
+## Что существует сегодня (проверено по коду на `7a6d67f`)
 
-**Goal:** run the product with no external services at all — no PostgreSQL, no
-Redis, no S3, no SMTP, no AI provider — and predictable data.
+- `FORGECRM_ENV` валидируется как ровно одно из `development`, `test` или
+  `production` (`internal/config`). **Сегодня нет значений `demo` и `hackathon`** —
+  запрос одного из них отклоняется при старте.
+- `Config.IsProduction()` возвращает `Env == "production"`.
+- В production `FORGECRM_SECRET_KEY` **обязательна**; без неё старт падает.
+- Опциональные подсистемы деградируют до «off», а не падают:
+  - `FORGECRM_AI_ENABLED=false` → сервис assist/MCP сообщает `disabled`.
+  - `FORGECRM_STORAGE_ENABLED=false` → маршруты документов отвечают 503
+    `not configured`, а не 500.
+  - `FORGECRM_SMTP_ENABLED=false` → `EmailService.Enabled()` ложно.
+  - `FORGECRM_TELEGRAM_ENABLED=false` → `TelegramService.Enabled()` ложно.
+  - Нет `FORGECRM_REDIS_URL` → ограничитель частоты использует `MemoryStore`.
+- `FORGECRM_RETENTION_ENABLED` по умолчанию **выключен**, а хранение по умолчанию —
+  **пробный прогон**, даже когда включено.
+- S3-клиент хранилища отклоняет приватный/loopback-эндпоинт, если не задано
+  `FORGECRM_STORAGE_ALLOW_PRIVATE_ENDPOINT=true` (защита SSRF).
+- `.env.example` поставляет умолчания для разработки и заявляет, что они не
+  безопасны для production.
 
-### Services (target)
+**В коде пока нет профиля demo/hackathon, генератора сидов и переключателя фейковых
+адаптеров.** Там, где профиль ниже описывает фейки или режим `demo`, это целевое
+поведение, помеченное как таковое.
 
-| Capability | Adapter | Status |
+---
+
+## Профиль: `demo`
+
+**Цель:** запустить продукт вообще без внешних сервисов — без PostgreSQL, без Redis,
+без S3, без SMTP, без провайдера ИИ — и с предсказуемыми данными.
+
+### Сервисы (цель)
+
+| Возможность | Адаптер | Статус |
 | --- | --- | --- |
-| Storage | `storage.Memory` (exists) | **exists** |
-| Rate limit | `ratelimit.MemoryStore` (exists) | **exists** |
-| AI provider | a deterministic fake `ai.Provider` | **target** (today: `Provider` is an interface but no fake ships) |
-| SMTP | a no-op or file-backed mailer | **target** (today: disabled service only) |
-| Database | PostgreSQL required | **blocker** — nothing runs without a DB today |
+| Хранилище | `storage.Memory` (существует) | **существует** |
+| Ограничение частоты | `ratelimit.MemoryStore` (существует) | **существует** |
+| Провайдер ИИ | детерминированный фейк `ai.Provider` | **цель** (сегодня: `Provider` — интерфейс, но фейка нет) |
+| SMTP | no-op или почтовик на файлах | **цель** (сегодня: только выключенный сервис) |
+| База данных | требуется PostgreSQL | **блокер** — сегодня без БД ничего не работает |
 
-### Constraints
+### Ограничения
 
-- External calls are off; every adapter is in-process.
-- Seed data is related and reproducible from a fixed seed.
-- All state is resettable.
+- Внешние вызовы выключены; каждый адаптер в процессе.
+- Сид-данные связаны и воспроизводимы из фиксированного сида.
+- Всё состояние сбрасываемо.
 
-### Required settings
+### Обязательные настройки
 
-- `FORGECRM_ENV=development` (there is no `demo` value yet; a real `demo` value is
-  target work).
+- `FORGECRM_ENV=development` (значения `demo` пока нет; реальное значение `demo` —
+  целевая работа).
 - `FORGECRM_AI_ENABLED=false`, `FORGECRM_STORAGE_ENABLED=false`,
   `FORGECRM_SMTP_ENABLED=false`, `FORGECRM_TELEGRAM_ENABLED=false`.
-- No `FORGECRM_REDIS_URL`.
+- Без `FORGECRM_REDIS_URL`.
 
-### Security rules
+### Правила безопасности
 
-- Demo must not be reachable by setting `FORGECRM_ENV=demo` in a production
-  deployment. The target is that `production` **refuses** any demo adapter
-  (a fake `ai.Provider`, a `MemoryStore`, an `AllowAllAuthorizer`) unless an
-  explicit unsafe flag is set, and that flag is refused when `IsProduction()`.
-- Demo data must never be written over real data: the seed generator must refuse
-  to run against a database that contains non-demo rows.
+- Demo не должен быть достижим установкой `FORGECRM_ENV=demo` в
+  production-развёртывании. Цель — чтобы `production` **отклонял** любой демо-адаптер
+  (фейковый `ai.Provider`, `MemoryStore`, `AllowAllAuthorizer`), если не задан явный
+  небезопасный флаг, и этот флаг отклоняется при `IsProduction()`.
+- Демо-данные никогда не должны записываться поверх реальных: генератор сидов должен
+  отказываться работать против базы, содержащей не-демо строки.
 
 ---
 
-## Profile: `development`
+## Профиль: `development`
 
-**Goal:** local development with real services where they are needed.
+**Цель:** локальная разработка с реальными сервисами там, где они нужны.
 
-### Services
+### Сервисы
 
-| Capability | Adapter |
+| Возможность | Адаптер |
 | --- | --- |
-| Database | real local PostgreSQL (required) |
-| Rate limit | `MemoryStore` by default, or Redis if `FORGECRM_REDIS_URL` is set |
-| Storage | disabled, or MinIO with `FORGECRM_STORAGE_ALLOW_PRIVATE_ENDPOINT=true` |
-| AI | disabled, or a local Ollama / OpenAI-compatible endpoint |
-| SMTP | disabled, or Mailpit |
+| База данных | реальный локальный PostgreSQL (обязателен) |
+| Ограничение частоты | `MemoryStore` по умолчанию или Redis, если задан `FORGECRM_REDIS_URL` |
+| Хранилище | выключено или MinIO с `FORGECRM_STORAGE_ALLOW_PRIVATE_ENDPOINT=true` |
+| ИИ | выключен или локальный Ollama / эндпоинт, совместимый с OpenAI |
+| SMTP | выключено или Mailpit |
 
-### Constraints
+### Ограничения
 
-- Dev conveniences are on: `FORGECRM_ENV=development` returns reset tokens in API
-  responses. This is why it must never be used in production.
-- Diagnostics and verbose logs are acceptable.
+- Удобства разработки включены: `FORGECRM_ENV=development` возвращает токены сброса в
+  ответах API. Вот почему это никогда не должно использоваться в production.
+- Диагностика и подробные логи приемлемы.
 
-### Required settings
+### Обязательные настройки
 
 - `FORGECRM_ENV=development`
 - `FORGECRM_DATABASE_URL=postgres://…`
-- `FORGECRM_SECRET_KEY` may be a throwaway value.
+- `FORGECRM_SECRET_KEY` может быть одноразовым значением.
 
-### Security rules
+### Правила безопасности
 
-- The dev convenience of echoing reset tokens is refused under
-  `IsProduction()`.
+- Удобство разработки — отражать токены сброса — отклоняется при `IsProduction()`.
 
 ---
 
-## Profile: `hackathon`
+## Профиль: `hackathon`
 
-**Goal:** the shortest path from clone to a running, protected API for a
-demonstration. Few external dependencies, real protections kept on.
+**Цель:** кратчайший путь от клонирования до работающего, защищённого API для
+демонстрации. Мало внешних зависимостей, реальные защиты остаются включёнными.
 
-### Services (target)
+### Сервисы (цель)
 
-| Capability | Adapter |
+| Возможность | Адаптер |
 | --- | --- |
-| Database | PostgreSQL (Docker Compose or a managed instance) |
-| Rate limit | `MemoryStore` (single replica) |
-| Storage | `storage.Memory` or MinIO |
-| AI | a real provider if a key is supplied, otherwise a fake |
-| Audit | on, real |
+| База данных | PostgreSQL (Docker Compose или управляемый экземпляр) |
+| Ограничение частоты | `MemoryStore` (одна реплика) |
+| Хранилище | `storage.Memory` или MinIO |
+| ИИ | реальный провайдер, если задан ключ, иначе фейк |
+| Аудит | включён, реальный |
 
-### Constraints
+### Ограничения
 
-- Authentication, RBAC, tenant isolation and audit stay **on**. A hackathon
-  profile is a fast profile, not an insecure one.
-- `.env.example` is the entry point; the number of mandatory variables is
-  minimised.
+- Аутентификация, RBAC, изоляция тенантов и аудит остаются **включёнными**. Профиль
+  хакатона — это быстрый профиль, а не небезопасный.
+- `.env.example` — точка входа; число обязательных переменных минимизировано.
 
-### Required settings
+### Обязательные настройки
 
-- `FORGECRM_ENV=development` (until a `hackathon` value exists).
+- `FORGECRM_ENV=development` (пока не существует значения `hackathon`).
 - `FORGECRM_DATABASE_URL`, `FORGECRM_SECRET_KEY`.
 
-### Security rules
+### Правила безопасности
 
-- No demo adapter is enabled unless the operator opts in.
-- The SSRF guard stays on for storage endpoints.
+- Ни один демо-адаптер не включается, если оператор не дал согласия.
+- Защита SSRF остаётся включённой для эндпоинтов хранилища.
 
 ---
 
-## Profile: `production`
+## Профиль: `production`
 
-**Goal:** real services only, safe defaults, mandatory secrets.
+**Цель:** только реальные сервисы, безопасные умолчания, обязательные секреты.
 
-### Services
+### Сервисы
 
-| Capability | Adapter |
+| Возможность | Адаптер |
 | --- | --- |
-| Database | managed PostgreSQL |
-| Rate limit | Redis (`FORGECRM_RATE_LIMIT_STORE=redis` + `FORGECRM_REDIS_URL`) for multi-replica |
-| Storage | S3-compatible (real endpoint) |
-| AI | a real provider, or disabled |
-| SMTP/Telegram | real, or disabled |
+| База данных | управляемый PostgreSQL |
+| Ограничение частоты | Redis (`FORGECRM_RATE_LIMIT_STORE=redis` + `FORGECRM_REDIS_URL`) для нескольких реплик |
+| Хранилище | совместимое с S3 (реальный эндпоинт) |
+| ИИ | реальный провайдер или выключен |
+| SMTP/Telegram | реальные или выключены |
 
-### Constraints
+### Ограничения
 
-- Multi-replica correctness requires Redis (see ADR 0003).
-- Retention, if enabled, must be configured with explicit windows.
+- Корректность при нескольких репликах требует Redis (см. ADR 0003).
+- Хранение, если включено, должно быть настроено с явными окнами.
 
-### Required settings
+### Обязательные настройки
 
 - `FORGECRM_ENV=production`
-- `FORGECRM_SECRET_KEY` — **required**; startup fails without it.
-- `FORGECRM_COOKIE_SECURE=true`, `FORGECRM_BASE_URL` over HTTPS.
+- `FORGECRM_SECRET_KEY` — **обязательна**; без неё старт падает.
+- `FORGECRM_COOKIE_SECURE=true`, `FORGECRM_BASE_URL` по HTTPS.
 
-### Security rules
+### Правила безопасности
 
-- **Demo adapters are forbidden.** Target: startup refuses `MemoryStore` as the
-  rate-limit store, a fake AI provider, and any `AllowAll` authorizer when
-  `IsProduction()` is true.
-- Storage private endpoints are refused unless explicitly allowed, and the
-  allowance is logged.
-- No secret is ever written to a log or returned by an API.
+- **Демо-адаптеры запрещены.** Цель: старт отклоняет `MemoryStore` как хранилище
+  ограничения частоты, фейковый провайдер ИИ и любой авторизатор `AllowAll`, когда
+  `IsProduction()` истинно.
+- Приватные эндпоинты хранилища отклоняются, если явно не разрешены, и разрешение
+  логируется.
+- Ни один секрет никогда не пишется в лог и не возвращается API.
 
 ---
 
-## The demo-never-in-production rule
+## Правило «demo никогда в production»
 
-This is the rule the profiles exist to make enforceable:
+Это правило, ради исполнимости которого и существуют профили:
 
-1. A profile is selected by an explicit variable (`FORGECRM_ENV`), never inferred
-   from the presence or absence of another setting.
-2. `production` fails fast on any configuration that would silently weaken a
-   protection:
-   - missing `FORGECRM_SECRET_KEY` — **already enforced**;
-   - a demo/fake adapter — **target**;
-   - an insecure cookie setting — **target**.
-3. A fake that returns success for everything is never acceptable, in any profile,
-   because it cannot fail a test.
+1. Профиль выбирается явной переменной (`FORGECRM_ENV`), никогда не выводится из
+   наличия или отсутствия другой настройки.
+2. `production` быстро падает на любой конфигурации, которая молча ослабила бы защиту:
+   - отсутствующая `FORGECRM_SECRET_KEY` — **уже обеспечено**;
+   - демо/фейковый адаптер — **цель**;
+   - небезопасная настройка cookie — **цель**.
+3. Фейк, возвращающий успех для всего, никогда не допустим, ни в одном профиле,
+   потому что он не может провалить тест.
 
-## Summary table
+## Сводная таблица
 
-| Setting | demo (target) | development | hackathon (target) | production |
+| Настройка | demo (цель) | development | hackathon (цель) | production |
 | --- | --- | --- | --- | --- |
 | `FORGECRM_ENV` | `development`* | `development` | `development`* | `production` |
-| Database | PostgreSQL (blocker) | local PostgreSQL | PostgreSQL | managed PostgreSQL |
-| Rate limit store | Memory | Memory / Redis | Memory | Redis |
-| Storage | Memory | disabled / MinIO | Memory / MinIO | S3 |
-| AI | fake (target) | disabled / local | real or fake | real / disabled |
-| SMTP | no-op (target) | disabled / Mailpit | disabled / real | real / disabled |
-| Secrets required | no | throwaway | yes | yes (enforced) |
-| Demo adapters allowed | yes | yes | opt-in | **never** |
+| База данных | PostgreSQL (блокер) | локальный PostgreSQL | PostgreSQL | управляемый PostgreSQL |
+| Хранилище ограничителя | Memory | Memory / Redis | Memory | Redis |
+| Хранилище | Memory | выкл / MinIO | Memory / MinIO | S3 |
+| ИИ | фейк (цель) | выкл / локальный | реальный или фейк | реальный / выкл |
+| SMTP | no-op (цель) | выкл / Mailpit | выкл / реальный | реальный / выкл |
+| Обязательные секреты | нет | одноразовые | да | да (обеспечено) |
+| Демо-адаптеры допустимы | да | да | по согласию | **никогда** |
 
-\* A distinct `demo`/`hackathon` value for `FORGECRM_ENV` is target work; today
-both would run as `development`.
+\* Отдельное значение `demo`/`hackathon` для `FORGECRM_ENV` — целевая работа; сегодня
+оба работали бы как `development`.

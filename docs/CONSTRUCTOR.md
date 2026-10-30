@@ -1,66 +1,67 @@
-# The constructor
+# Конструктор
 
-The extraction harness answers one question: can this module stand alone? The
-constructor answers the next one: can someone actually build a project from a
-chosen set of modules, without doing the extraction by hand?
+Набор для выделения отвечает на один вопрос: может ли этот модуль стоять отдельно?
+Конструктор отвечает на следующий: может ли кто-то действительно собрать проект из
+выбранного набора модулей, не делая выделение вручную?
 
-It is the operational half of the same idea. The harness proves a property in CI;
-the constructor is the tool that acts on it.
+Это операционная половина той же идеи. Набор доказывает свойство в CI; конструктор —
+инструмент, который на него опирается.
 
-## What it does
+## Что он делает
 
 ```bash
 cd backend
-go run ./cmd/forgecrm recipes             # list the catalog
+go run ./cmd/forgecrm recipes             # список каталога
 go run ./cmd/forgecrm scaffold analytics-demo --output /tmp/demo
 cd /tmp/demo && go run ./cmd/demo
 ```
 
 `forgecrm scaffold`:
 
-1. reads a **recipe** — a manifest naming the modules to copy, the adapters they
-   use and a demo program;
-2. copies exactly those modules out of `backend/internal`, rewriting every
-   `github.com/geff1778/forgecrm/internal/...` import to the recipe's module path;
-3. renders the recipe's templates (a `.tmpl` file becomes a real file);
-4. writes a README generated from the recipe, so it cannot drift from what was
-   built;
-5. refuses to finish if any generated file still names ForgeCRM, or if the output
-   directory already holds files.
+1. читает **рецепт** — манифест, называющий модули для копирования, используемые ими
+   адаптеры и демо-программу;
+2. копирует ровно эти модули из `backend/internal`, переписывая каждый импорт
+   `github.com/geff1778/forgecrm/internal/...` на путь модуля рецепта;
+3. отрисовывает шаблоны рецепта (файл `.tmpl` становится реальным файлом);
+4. пишет README, сгенерированный из рецепта, поэтому он не может разойтись с тем,
+   что было собрано;
+5. отказывается завершиться, если какой-либо сгенерированный файл всё ещё называет
+   ForgeCRM, или если выходной каталог уже содержит файлы.
 
-The result is a project that builds, tests and runs with no dependency on the
-monolith and no ForgeCRM service.
+Результат — проект, который собирается, тестируется и запускается без зависимости
+от монолита и без сервиса ForgeCRM.
 
-## Why it is trustworthy
+## Почему ему можно доверять
 
-The claim a constructor makes is "the project it produced is standalone". Three
-things make that true rather than aspirational:
+Утверждение конструктора — «проект, который он произвёл, автономен». Три вещи
+делают это истинным, а не умозрительным:
 
-- **It refuses to overwrite.** Generating into a non-empty directory is an error,
-  not a warning, so a mistyped path cannot delete a user's work. A failed
-  generation also writes nothing: the module list is resolved before the first
-  file is written.
-- **It checks its own output.** After writing, it walks the tree and fails if any
-  Go file still names the monolith. The name check would be worthless if the code
-  could skip it, so `scripts/constructor-test/run.sh` repeats it independently.
-- **The demo asserts numbers.** The generated `cmd/demo` does not print "success".
-  It computes a fixed scenario and checks the results against the values the module
-  produces inside ForgeCRM, exiting non-zero on a mismatch. A module that compiles
-  but behaves differently is caught.
+- **Он отказывается перезаписывать.** Генерация в непустой каталог — это ошибка, а не
+  предупреждение, поэтому опечатка в пути не может удалить работу пользователя.
+  Неудачная генерация тоже ничего не пишет: список модулей разрешается до того, как
+  записан первый файл.
+- **Он проверяет собственный вывод.** После записи он обходит дерево и падает, если
+  какой-либо файл Go всё ещё называет монолит. Проверка имени была бы бесполезна,
+  если бы код мог её пропустить, поэтому `scripts/constructor-test/run.sh` повторяет
+  её независимо.
+- **Демо проверяет числа.** Сгенерированный `cmd/demo` не печатает «success». Он
+  вычисляет фиксированный сценарий и сверяет результаты со значениями, которые модуль
+  даёт внутри ForgeCRM, выходя с ненулевым кодом при несовпадении. Модуль, который
+  компилируется, но ведёт себя иначе, ловится.
 
-## A recipe
+## Рецепт
 
-A recipe lives in `internal/constructor/recipes/<name>/`:
+Рецепт живёт в `internal/constructor/recipes/<name>/`:
 
 ```
-recipe.yaml          the manifest
-files/               templates rendered into the project
+recipe.yaml          манифест
+files/               шаблоны, отрисовываемые в проект
   go.mod.tmpl
   cmd/demo/main.go.tmpl
 ```
 
-`recipe.yaml` names the modules, the module path of the generated project, its Go
-version, any adapters and environment variables, and the demo:
+`recipe.yaml` называет модули, путь модуля генерируемого проекта, его версию Go,
+любые адаптеры и переменные окружения и демо:
 
 ```yaml
 name: analytics-demo
@@ -80,72 +81,70 @@ commands:
   run: go run ./cmd/demo
 ```
 
-`modules` lists package paths under `backend/internal`. A recipe that needs
-dependencies names them too; the generator still fails if a copied file reaches
-for a package the recipe did not include, because the import would name a package
-that is not in the project.
+`modules` перечисляет пути пакетов под `backend/internal`. Рецепт, которому нужны
+зависимости, называет и их; генератор всё равно падает, если скопированный файл
+тянется к пакету, который рецепт не включил, потому что импорт назвал бы пакет,
+которого нет в проекте.
 
-`env` is optional. When it is present, an `.env.example` is written and any entry
-marked `secret` is left blank — the generator never invents or copies a
-credential.
+`env` опционален. Когда он присутствует, пишется `.env.example`, и любая запись,
+помеченная `secret`, остаётся пустой — генератор никогда не выдумывает и не копирует
+учётные данные.
 
-## The first recipe: `analytics-demo`
+## Первый рецепт: `analytics-demo`
 
-It lifts the pure `analytics` core — the money, ratio and scenario maths, the
-forecast and the risk rules — into a project with no database, no external
-service and no secrets. `analytics` has zero in-module and zero third-party
-dependencies, so the recipe's module list is one line and the generated project
-has no `require` block at all.
+Он поднимает чистое ядро `analytics` — математику денег, долей и сценариев, прогноз и
+правила риска — в проект без базы данных, без внешнего сервиса и без секретов.
+`analytics` имеет ноль внутренних и ноль сторонних зависимостей, поэтому список
+модулей рецепта — одна строка, а в сгенерированном проекте нет блока `require` вообще.
 
-The demo reads a frozen snapshot of one organization's pipeline and its last
-thirty days, then:
+Демо читает замороженный снимок воронки одной организации и её последних тридцати
+дней, затем:
 
-- runs the **funnel** scenario with 10% more leads;
-- runs the **revenue** scenario with a higher ticket, a better win rate and more
-  deals;
-- runs the **retention** scenario with 20% less churn;
-- runs a **trend forecast** over five observed months, scored against the naive
-  baseline;
-- scans for a **stalled deal**;
-- checks every headline number against the value the module produces inside
-  ForgeCRM.
+- прогоняет сценарий **funnel** с на 10% большим числом лидов;
+- прогоняет сценарий **revenue** с более высоким чеком, лучшей долей выигрышей и
+  большим числом сделок;
+- прогоняет сценарий **retention** с на 20% меньшим оттоком;
+- прогоняет **trend forecast** по пяти наблюдаемым месяцам, оценённый против наивной
+  базовой линии;
+- сканирует на **застрявшую сделку**;
+- сверяет каждое ключевое число со значением, которое модуль даёт внутри ForgeCRM.
 
-## Verifying it
+## Проверка
 
 ```bash
-# each recipe generates a project that builds, tests and runs
+# каждый рецепт генерирует проект, который собирается, тестируется и запускается
 make test-constructor
 
-# keep a generated project for inspection
+# сохранить сгенерированный проект для осмотра
 CONSTRUCTOR_TEST_KEEP=1 scripts/constructor-test/run.sh
 ```
 
-The script reads the recipe list from `forgecrm recipes --json`, so it never keeps
-a second, hand-maintained list that could drift from the recipes. It runs in CI as
-the `constructor` job.
+Скрипт читает список рецептов из `forgecrm recipes --json`, поэтому он никогда не
+держит второй, поддерживаемый руками список, который мог бы разойтись с рецептами. Он
+идёт в CI как задание `constructor`.
 
-The constructor package is itself extraction-proven: it is a leaf that depends
-only on the standard library and a YAML parser, and its tests use a throwaway
-fixture tree rather than the real monolith. It is listed in
-`scripts/extract-test/modules.txt` and pinned in `internal/archtest`.
+Пакет конструктора сам доказан на выделяемость: это лист, зависящий только от
+стандартной библиотеки и парсера YAML, а его тесты используют одноразовое дерево
+фикстур, а не реальный монолит. Он перечислен в
+`scripts/extract-test/modules.txt` и закреплён в `internal/archtest`.
 
-## Adding a recipe
+## Добавление рецепта
 
-1. Create `internal/constructor/recipes/<name>/recipe.yaml`.
-2. Add `files/` with the templates, or omit it for a project that only ships
-   copied modules.
-3. Run `go test ./internal/constructor/` — the loader validates the manifest.
-4. Run `scripts/constructor-test/run.sh <name>` — it must generate a project that
-   builds, tests and runs.
-5. Only then does the recipe belong in the catalog. A recipe that does not
-   produce a working project is a promise, not a feature.
+1. Создайте `internal/constructor/recipes/<name>/recipe.yaml`.
+2. Добавьте `files/` с шаблонами или опустите его для проекта, который поставляет
+   только скопированные модули.
+3. Запустите `go test ./internal/constructor/` — загрузчик валидирует манифест.
+4. Запустите `scripts/constructor-test/run.sh <name>` — он должен сгенерировать
+   проект, который собирается, тестируется и запускается.
+5. Только тогда рецепт принадлежит каталогу. Рецепт, не дающий работающего проекта, —
+   это обещание, а не функция.
 
-## Limits
+## Ограничения
 
-- The constructor copies whole packages, not selected files. A recipe is a
-  package-level cut, which is the granularity the extraction work established.
-- It does not fetch third-party modules: a generated project that needs one must
-  run `go mod tidy` itself, with network access. The analytics-demo recipe needs
-  none, so generation works offline.
-- Adapters are declared and validated but not code-generated; a recipe that needs
-  a fake implementation ships it under `files/`.
+- Конструктор копирует целые пакеты, а не выбранные файлы. Рецепт — это срез на
+  уровне пакета, что и есть гранулярность, установленная работой по выделению.
+- Он не скачивает сторонние модули: сгенерированному проекту, которому нужен такой,
+  придётся самому запустить `go mod tidy`, с доступом к сети. Рецепту analytics-demo
+  не нужно ни одного, поэтому генерация работает офлайн.
+- Адаптеры объявляются и валидируются, но не генерируются кодом; рецепт, которому
+  нужна фейковая реализация, поставляет её в `files/`.
