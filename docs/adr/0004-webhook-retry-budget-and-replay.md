@@ -1,76 +1,75 @@
-# ADR 0004 — Webhook delivery retry budget and replay semantics
+# ADR 0004 — Бюджет повторов доставки вебхуков и семантика повтора
 
-- **Status:** Accepted
-- **Date:** 2026-10-28
-- **Deciders:** project owner, engineering agent
-- **Depends on:** ADR 0003 (multi-replica safety detour)
-- **Scope:** `internal/events/delivery.go`, `internal/events/events.go`, migration 0008
+- **Статус:** Принято
+- **Дата:** 2026-10-28
+- **Решающие:** владелец проекта, инженерный агент
+- **Зависит от:** ADR 0003 (отступление по безопасности при нескольких репликах)
+- **Область:** `internal/events/delivery.go`, `internal/events/events.go`, миграция 0008
 
-## Context
+## Контекст
 
-A webhook delivery can be attempted again for two unrelated reasons:
+Доставку вебхука можно попытаться выполнить снова по двум несвязанным причинам:
 
-1. **Automatic retry** after a failed attempt, up to the subscription's
-   `max_attempts`, with exponential backoff. This is the machine deciding the
-   endpoint may recover on its own.
-2. **Operator replay** after the delivery has been dead-lettered. This is a human
-   deciding the endpoint is fixed and the event should be delivered now.
+1. **Автоматический повтор** после неудачной попытки, до `max_attempts` подписки,
+   с экспоненциальной задержкой. Это машина решает, что эндпоинт может
+   восстановиться сам.
+2. **Повтор оператором** после того, как доставка попала в dead-letter. Это человек
+   решает, что эндпоинт починен и событие нужно доставить сейчас.
 
-Both reset the attempt count, and the first implementation conflated them. The
-draft computed the retry budget as
+Обе сбрасывают счётчик попыток, и первая реализация их смешала. Черновик вычислял
+бюджет повторов как
 
 ```
 budget = max_attempts * (replay_count + 1)
 ```
 
-while `attempts` was *not* reset on replay. That is wrong in two ways at once, and
-neither is obvious from reading a single function:
+при этом `attempts` при повторе *не* сбрасывался. Это неверно сразу в двух
+смыслах, и ни один не очевиден при чтении одной функции:
 
-- `attempts` is what the sender compares against the budget. If it is never reset,
-  a replayed delivery starts already at `max_attempts` and is dead on its next
-  failure — the replay grants nothing.
-- If the budget is multiplied by `replay_count` while `attempts` *is* reset, then
-  the budget for the second window is `2 * max_attempts`, which silently doubles
-  the retries the operator configured. The subscription says five attempts; the
-  system performs ten.
+- `attempts` — это то, что отправитель сравнивает с бюджетом. Если он никогда не
+  сбрасывается, повторная доставка начинается уже с `max_attempts` и мертва при
+  следующем сбое — повтор ничего не даёт.
+- Если бюджет умножается на `replay_count`, а `attempts` *сбрасывается*, то бюджет
+  для второго окна равен `2 * max_attempts`, что молча удваивает повторы,
+  настроенные оператором. Подписка говорит о пяти попытках; система выполняет
+  десять.
 
-The defect was found on review of the code, not by a test, and not by reading a
-document — because the formula existed nowhere except in the implementation. That
-is the specific failure this ADR prevents: a non-obvious rule that lives only in
-code gets written wrong, and the error is invisible until someone traces the
-arithmetic.
+Дефект был найден при ревью кода, а не тестом и не чтением документа — потому что
+формула не существовала нигде, кроме реализации. Именно такой отказ предотвращает
+этот ADR: неочевидное правило, живущее только в коде, записывается неверно, и
+ошибка невидима, пока кто-то не проследит арифметику.
 
-## Decision
+## Решение
 
-Define the two counters and the budget explicitly, and give each counter one job.
+Определить два счётчика и бюджет явно и дать каждому счётчику одну работу.
 
-### The two counters
+### Два счётчика
 
-| Column | Meaning | Reset on replay? |
+| Столбец | Значение | Сбрасывается при повторе? |
 |---|---|---|
-| `attempts` | Attempts in the **current window**. The sender compares it against `max_attempts`. | **Yes** — this is what grants a fresh budget. |
-| `replay_count` | Lifetime number of windows. A monotonic record of operator intervention. | **No** — never reset. |
+| `attempts` | Попытки в **текущем окне**. Отправитель сравнивает его с `max_attempts`. | **Да** — именно это даёт свежий бюджет. |
+| `replay_count` | Число окон за всё время. Монотонная запись вмешательств оператора. | **Нет** — никогда не сбрасывается. |
 
-### The budget
+### Бюджет
 
 ```
 budget = max_attempts
 ```
 
-The budget is the subscription's configured `max_attempts`, always. It does not
-depend on `replay_count`, because `attempts` is reset to zero on replay, so each
-window starts with a full budget. A replay therefore grants exactly one more
-window of `max_attempts` attempts — not more, not fewer.
+Бюджет — это всегда настроенный `max_attempts` подписки. Он не зависит от
+`replay_count`, потому что `attempts` при повторе сбрасывается в ноль, поэтому
+каждое окно начинается с полного бюджета. Повтор, таким образом, даёт ровно одно
+дополнительное окно из `max_attempts` попыток — не больше и не меньше.
 
-The alternative — a budget that scales with `replay_count` — was rejected because
-it makes the retry policy depend on history rather than on configuration, so the
-number of attempts a subscription performs is not derivable from its own settings.
-An operator who configures five attempts must be able to rely on five.
+Альтернатива — бюджет, масштабируемый по `replay_count`, — отклонена, потому что
+она делает политику повторов зависимой от истории, а не от конфигурации, так что
+число попыток, выполняемых подпиской, не выводится из её собственных настроек.
+Оператор, настроивший пять попыток, должен иметь возможность на них положиться.
 
-### The dead-letter transition
+### Переход в dead-letter
 
-`attempts >= budget` moves the delivery to `dead`. The transition and its guard
-are one statement:
+`attempts >= budget` переводит доставку в `dead`. Переход и его защита — одно
+выражение:
 
 ```sql
 UPDATE webhook_deliveries
@@ -79,76 +78,77 @@ WHERE id = $1 AND status <> 'dead'
 RETURNING organization_id, subscription_id, event_type
 ```
 
-`WHERE status <> 'dead'` makes "exactly one audit entry per transition" a database
-property rather than a code convention. Two workers that both decide the delivery
-is exhausted: the first updates a row and writes an entry, the second updates no
-row and writes none. A `SELECT`-then-`UPDATE` would let both read `failed` and
-both write, and no integration test would catch it reliably — which is the reason
-the guard is in the statement and not in Go.
+`WHERE status <> 'dead'` делает «ровно одна запись аудита на переход» свойством
+базы, а не соглашением в коде. Два воркера, которые оба решат, что доставка
+исчерпана: первый обновляет строку и пишет запись, второй не обновляет строку и не
+пишет. `SELECT`-затем-`UPDATE` позволил бы обоим прочитать `failed` и обоим
+записать, и ни один интеграционный тест не поймал бы это надёжно — вот почему
+защита в выражении, а не в Go.
 
-A replay sets `status = 'pending'` and clears `dead_lettered_at`. A delivery that
-dies again after a replay is a **genuine second transition** and is audited again.
-That is the distinction the guard draws: one entry per time the delivery actually
-reaches the dead state, not one per attempt and not one ever.
+Повтор устанавливает `status = 'pending'` и очищает `dead_lettered_at`. Доставка,
+которая умирает снова после повтора, — это **настоящий второй переход** и
+аудируется снова. Именно это различие проводит защита: одна запись каждый раз,
+когда доставка действительно достигает состояния dead, а не одна на попытку и не
+одна навсегда.
 
-### Replay is idempotent in the safe direction
+### Повтор идемпотентен в безопасную сторону
 
-Replay refuses a delivery that is already in flight. "In flight" covers both
-`pending` (queued, not yet claimed) and `delivering` (claimed by a worker and being
-sent right now), so the guard is `status NOT IN ('pending', 'delivering')`.
+Повтор отказывает доставке, которая уже в полёте. «В полёте» охватывает и
+`pending` (в очереди, ещё не забрана) и `delivering` (забрана воркером и
+отправляется прямо сейчас), поэтому защита — `status NOT IN ('pending',
+'delivering')`.
 
-The `delivering` half is not optional. A worker that has claimed a delivery holds
-the row in that state while the POST is in progress; replaying it there would grant
-a second window while the first attempt is still running, so the operator's fresh
-budget would be consumed by the attempt already underway and one event could
-produce two sends. A guard of `status <> 'pending'` — the first form of this
-rule — allowed exactly that, because a claimed delivery is not `pending`. The
-mistake is instructive: the guard named one in-flight state when the model has two.
+Часть про `delivering` не опциональна. Воркер, забравший доставку, держит строку в
+этом состоянии, пока идёт POST; повтор в этот момент дал бы второе окно, пока
+первая попытка ещё выполняется, поэтому свежий бюджет оператора был бы израсходован
+уже идущей попыткой, и одно событие могло бы дать две отправки. Защита
+`status <> 'pending'` — первая форма этого правила — допускала ровно это, потому
+что забранная доставка не `pending`. Ошибка поучительна: защита назвала одно
+состояние «в полёте», тогда как у модели их два.
 
-Two replays of one delivery cannot hand the sender a budget the operator did not
-intend, and concurrent replays behave the same as a single one: the guard lives in
-the `UPDATE`'s `WHERE` clause, so the row lock makes the second writer observe the
-new state and affect no rows.
+Два повтора одной доставки не могут дать отправителю бюджет, которого оператор не
+задумывал, а одновременные повторы ведут себя так же, как один: защита живёт в
+`WHERE` у `UPDATE`, поэтому блокировка строки заставляет второго писателя увидеть
+новое состояние и не затронуть ни одной строки.
 
-### Replay is scoped by subscription, not only by organization
+### Повтор ограничен подпиской, а не только организацией
 
-The route nests a delivery under its subscription
-(`/webhooks/{id}/deliveries/{deliveryId}/replay`), and the OpenAPI document marks
-both path parameters required, so the subscription is part of the delivery's
-identity. The `UPDATE`'s `WHERE` clause therefore filters on `organization_id`
-*and* `subscription_id`, both in the statement that mutates the row. A handler
-that read only `deliveryId` and ignored `{id}` accepted a request whose path named
-a subscription the delivery did not belong to — the same request would then mean
-two different things depending on which half of the path the handler happened to
-read. Refusing it keeps the path honest, and the two predicates together make a
-mismatched id indistinguishable from one that does not exist.
+Маршрут вкладывает доставку в её подписку
+(`/webhooks/{id}/deliveries/{deliveryId}/replay`), и документ OpenAPI помечает оба
+параметра пути обязательными, поэтому подписка — часть идентичности доставки.
+`WHERE` у `UPDATE` поэтому фильтрует по `organization_id` *и* `subscription_id`,
+оба в выражении, которое мутирует строку. Обработчик, читающий только `deliveryId`
+и игнорирующий `{id}`, принимал запрос, чей путь называл подписку, которой доставка
+не принадлежала, — тот же запрос означал бы тогда две разные вещи в зависимости от
+того, какую половину пути обработчик случайно прочитал. Отказ держит путь честным,
+а два предиката вместе делают несовпадающий id неотличимым от несуществующего.
 
-## Consequences
+## Последствия
 
-- **Positive.** The number of attempts a subscription performs is a function of
-  its configuration alone. A replay grants exactly one more window.
-- **Positive.** `replay_count` is a durable, monotonic record of how often an
-  operator has intervened, which is what a support engineer needs to judge whether
-  an endpoint is broken or was briefly down.
-- **Positive.** "Exactly one audit entry per transition" is enforced where the
-  race is, so it holds under concurrency without relying on caller discipline.
-- **Negative.** `attempts` no longer carries lifetime information, so anything
-  that wants to display "total attempts ever" must read `replay_count` as well.
-  This is documented here and in `docs/operations/README.md` so it is not
-  rediscovered.
-- **Negative.** The guard now enumerates both in-flight states rather than the one
-  that was obvious. A future state added to `webhook_deliveries.status` must be
-  considered here: if it also means "a worker holds this row", it belongs in the
-  refusal list, and the `CHECK` constraint is the place to look for the full set.
-- **Neutral.** A replay is not a retry in the automatic sense and does not inherit
-  the backoff schedule; it is scheduled immediately, because the operator is
-  asserting the endpoint is ready.
+- **Положительное.** Число попыток, выполняемых подпиской, — функция только её
+  конфигурации. Повтор даёт ровно одно дополнительное окно.
+- **Положительное.** `replay_count` — долговечная монотонная запись того, как часто
+  вмешивался оператор, что нужно инженеру поддержки, чтобы судить, сломан ли
+  эндпоинт или был ненадолго недоступен.
+- **Положительное.** «Ровно одна запись аудита на переход» обеспечивается там, где
+  гонка, поэтому выполняется при параллелизме без опоры на дисциплину вызывающего.
+- **Отрицательное.** `attempts` больше не несёт информации за всё время, поэтому
+  всё, что хочет показать «всего попыток за всё время», должно читать и
+  `replay_count`. Это документировано здесь и в `docs/operations/README.md`, чтобы
+  это не открывали заново.
+- **Отрицательное.** Защита теперь перечисляет оба состояния «в полёте», а не одно
+  очевидное. Будущее состояние, добавленное в `webhook_deliveries.status`, должно
+  быть здесь учтено: если оно тоже означает «воркер держит эту строку», ему место в
+  списке отказа, а `CHECK`-ограничение — место, где искать полный набор.
+- **Нейтральное.** Повтор — это не повтор в автоматическом смысле и он не
+  наследует график задержек; он планируется немедленно, потому что оператор
+  утверждает, что эндпоинт готов.
 
-## References
+## Ссылки
 
 - `backend/internal/migrations/0008_webhook_delivery_lifecycle.up.sql`
 - `backend/internal/events/delivery.go` — `retryOrFail`, `deadLetter`
 - `backend/internal/events/events.go` — `Replay`
-- `backend/internal/testsupport/webhook_deadletter_test.go` — the state-machine evidence
-- `backend/internal/api/webhook_replay_http_test.go` — the HTTP-level evidence,
-  including the in-flight refusal and the subscription scoping
+- `backend/internal/testsupport/webhook_deadletter_test.go` — доказательство конечного автомата
+- `backend/internal/api/webhook_replay_http_test.go` — доказательство на уровне HTTP,
+  включая отказ при «в полёте» и ограничение по подписке

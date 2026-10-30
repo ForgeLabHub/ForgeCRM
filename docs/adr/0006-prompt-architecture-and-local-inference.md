@@ -1,141 +1,146 @@
-# ADR 0006 — Prompt architecture and local inference
+# ADR 0006 — Архитектура промптов и локальный вывод
 
-- **Status:** Accepted
-- **Date:** 2026-10-28
-- **Deciders:** project owner, engineering agent
-- **Depends on:** ADR 0001 (hybrid architecture), ADR 0005 (HITL agent execution model)
-- **Scope:** `internal/ai/prompt.go`, `internal/ai/prompt_test.go`,
+- **Статус:** Принято
+- **Дата:** 2026-10-28
+- **Решающие:** владелец проекта, инженерный агент
+- **Зависит от:** ADR 0001 (гибридная архитектура), ADR 0005 (модель исполнения агента с HITL)
+- **Область:** `internal/ai/prompt.go`, `internal/ai/prompt_test.go`,
   `internal/ai/prompt_descriptors_test.go`, `internal/ai/mcp.go`
   (`PromptDescriptors`), `internal/api/ai_handlers.go`, `internal/config`
 
-## Context
+## Контекст
 
-The AI layer had one prompt: a single constant string in the HTTP handler. It told
-the model to treat record content as data, to use only tools, and not to claim
-unperformed actions. Every one of those instructions was correct, and every one
-was in the same place as the tool list, the output format and the per-request
-context — or, worse, was absent from the parts that varied per request.
+У слоя ИИ был один промпт: одна константная строка в HTTP-обработчике. Она велела
+модели относиться к содержимому записей как к данным, использовать только
+инструменты и не заявлять о невыполненных действиях. Каждая из этих инструкций была
+верна, и каждая была в том же месте, что и список инструментов, формат вывода и
+контекст запроса — или, что хуже, отсутствовала в тех частях, которые менялись от
+запроса к запросу.
 
-That shape has three concrete costs:
+У такой формы три конкретные цены:
 
-1. **It cannot be tested in parts.** A change to how lists are formatted and a
-   change to what the agent may do arrive in the same diff, reviewed together, and
-   there is no test that can fail on one without the other.
-2. **The tool list drifts.** The tools the model is told about lived in prose. The
-   tools the server authorises live in the registry. Two lists, one code path
-   enforcing them, and nothing that fails when they disagree.
-3. **Per-request data has no provenance.** A deal note and an operator instruction
-   were both just text in the conversation. Nothing marked which could be believed.
+1. **Её нельзя тестировать по частям.** Изменение того, как форматируются списки, и
+   изменение того, что агенту разрешено, приходят в одном диффе, рецензируются
+   вместе, и нет теста, который мог бы упасть на одном без другого.
+2. **Список инструментов расходится.** Инструменты, о которых модели сказано,
+   жили в прозе. Инструменты, которые авторизует сервер, живут в реестре. Два
+   списка, один путь кода, обеспечивающий их, и ничто не падает, когда они
+   расходятся.
+3. **У данных запроса нет происхождения.** Заметка о сделке и инструкция оператора
+   были просто текстом в разговоре. Ничто не помечало, чему можно верить.
 
-Separately, the platform runs local models as a first-class option, and the
-choice of inference engine had never been written down. "It seemed fast" is not a
-decision anyone can act on later.
+Отдельно: платформа запускает локальные модели как первоклассную опцию, и выбор
+движка вывода никогда не был записан. «Казалось быстрым» — это не решение, по
+которому кто-то может действовать позже.
 
-## Decision
+## Решение
 
-### 1. Four prompt layers, assembled, not concatenated
+### 1. Четыре слоя промпта, собираемые, а не сцепляемые
 
-The system prompt is assembled from four layers by `ai.AssembleSystemPrompt`:
+Системный промпт собирается из четырёх слоёв функцией `ai.AssembleSystemPrompt`:
 
-| Layer | Content | Changes |
+| Слой | Содержание | Меняется |
 | --- | --- | --- |
-| Role & scope | Who the agent is; that its authority is the caller's permissions and one organization; no answering CRM questions from general knowledge | With the code |
-| Tool contract | How to choose a tool: ask rather than guess; explain a limitation rather than approximate; read before write; confirmation is a person's decision | With the code |
-| Context injection | The request's data, each block labelled with its source and trust level | Every request |
-| Output contract | Reply shape, and that a confirmation-required action must never be reported as done | With the code |
+| Роль и область | Кто агент; что его полномочия — это разрешения вызывающего и одна организация; не отвечать на вопросы CRM из общих знаний | С кодом |
+| Контракт инструментов | Как выбирать инструмент: спрашивать, а не гадать; объяснять ограничение, а не приближать; читать до записи; подтверждение — решение человека | С кодом |
+| Инъекция контекста | Данные запроса, каждый блок помечен своим источником и уровнем доверия | Каждый запрос |
+| Контракт вывода | Форма ответа и что действие, требующее подтверждения, никогда не должно сообщаться как выполненное | С кодом |
 
-Layers 1, 2 and 4 are constants and are versioned as code. Layer 3 is built per
-request. Keeping them separate is what allows each to be reviewed and tested
-alone.
+Слои 1, 2 и 4 — константы и версионируются как код. Слой 3 строится на запрос.
+Их разделение и позволяет рецензировать и тестировать каждый в одиночку.
 
-### 2. The tool contract is derived from the registry
+### 2. Контракт инструментов выводится из реестра
 
-The tool list is rendered from `ToolRegistry.PromptDescriptors()`, not written into
-the prose. `RequiresConfirmation` mirrors the registry's `Dangerous` flag. A test
-(`TestPromptDescriptorsComeFromTheRegistry`) asserts that a known read is not
-advertised as needing confirmation and a known write is, so the prompt cannot
-quietly describe a different tool set from the one the server enforces.
+Список инструментов отрисовывается из `ToolRegistry.PromptDescriptors()`, а не
+вписан в прозу. `RequiresConfirmation` отражает флаг `Dangerous` реестра. Тест
+(`TestPromptDescriptorsComeFromTheRegistry`) утверждает, что известное чтение не
+рекламируется как требующее подтверждения, а известная запись — да, поэтому промпт
+не может тихо описать иной набор инструментов, чем тот, что обеспечивает сервер.
 
-Rendering is order-stable (tools are sorted), so the same tool set produces an
-identical prefix across requests. That is what makes prefix caching effective and
-is why the sort exists rather than relying on map order.
+Отрисовка стабильна по порядку (инструменты отсортированы), поэтому один набор
+инструментов даёт идентичный префикс во всех запросах. Именно это делает кэширование
+префикса эффективным, и ради этого существует сортировка, а не опора на порядок map.
 
-### 3. Context is tagged with provenance, and cannot escape its block
+### 3. Контекст помечен происхождением и не может вырваться из своего блока
 
-Every `ContextBlock` carries a `Label`, a `Source` (e.g. `crm.accounts`,
-`import:contacts.csv`) and a `Trust` level:
+Каждый `ContextBlock` несёт `Label`, `Source` (например, `crm.accounts`,
+`import:contacts.csv`) и уровень `Trust`:
 
-- `system` — operator-authored, the only class that may contain instructions;
-- `internal` — data written by authenticated users of the organization (a comment
-  is data, not a command channel);
-- `external` — imported files, inbound email, webhook payloads, third-party tool
-  output.
+- `system` — написан оператором, единственный класс, который может содержать
+  инструкции;
+- `internal` — данные, записанные аутентифицированными пользователями организации
+  (комментарий — это данные, а не канал команд);
+- `external` — импортированные файлы, входящая почта, payload вебхуков, вывод
+  сторонних инструментов.
 
-An unknown or unset trust level is downgraded to `external`, the least trusted,
-rather than defaulting to trusted. The context section states in words that the
-blocks are data and that no text inside one can grant a permission or authorize an
-action. Each block is wrapped in a delimiter, and any delimiter inside the content
-is neutralised, so a record cannot close its own block and continue as if it were
-outside the data region (`TestContextCannotForgeItsWayOutOfTheDataBlock`).
+Неизвестный или неустановленный уровень доверия понижается до `external`, самого
+недоверенного, а не по умолчанию считается доверенным. В разделе контекста словами
+сказано, что блоки — это данные и что никакой текст внутри одного из них не может
+дать разрешение или авторизовать действие. Каждый блок обёрнут в разделитель, и
+любой разделитель внутри содержимого нейтрализуется, поэтому запись не может
+закрыть свой собственный блок и продолжить, как будто она вне области данных
+(`TestContextCannotForgeItsWayOutOfTheDataBlock`).
 
-**This tagging is a probabilistic filter, not a boundary.** The boundary is the
-server: a tool call is authorized against the caller's permissions at execution
-time regardless of what any text says, and a mutating tool needs a human decision
-(ADR 0005). The tagging exists to make the model's job easier and to reduce the
-rate of injection succeeding, not to be the thing that stops it.
+**Эта разметка — вероятностный фильтр, а не граница.** Граница — это сервер: вызов
+инструмента авторизуется по разрешениям вызывающего во время исполнения, что бы ни
+говорил какой-либо текст, а мутирующий инструмент требует решения человека (ADR
+0005). Разметка существует, чтобы облегчить работу модели и снизить частоту
+успешных инъекций, а не чтобы быть тем, что их останавливает.
 
-### 4. Capability minimisation is the primary defence
+### 4. Минимизация возможностей — основная защита
 
-The registry has eight CRM tools. There is no raw SQL, shell, filesystem or
-unbounded export tool, by construction. The blast radius of a fully compromised
-prompt is bounded by what the tools can do and by the permissions of the principal
-they run as, not by the prompt's resilience. Every tool added is a new verb for an
-attacker, which is why the default for an unrecognised tool name in `RiskTier` is
-the most restrictive tier.
+В реестре восемь инструментов CRM. Ни сырого SQL, ни shell, ни файловой системы,
+ни неограниченного экспорта — по построению. Радиус поражения полностью
+скомпрометированного промпта ограничен тем, что могут делать инструменты, и
+разрешениями принципала, под которым они работают, а не устойчивостью промпта.
+Каждый добавленный инструмент — новое действие для атакующего, поэтому значение по
+умолчанию для нераспознанного имени инструмента в `RiskTier` — самый
+ограничительный уровень.
 
-### 5. Local inference: engine is chosen by deployment, not by fashion
+### 5. Локальный вывод: движок выбирается развёртыванием, а не модой
 
-The same weights are served by different engines per environment:
+Одни и те же веса обслуживаются разными движками в разных окружениях:
 
-| Environment | Engine | Why |
+| Окружение | Движок | Почему |
 | --- | --- | --- |
-| Development | Ollama | One-command install, single user |
-| Staging | llama.cpp | CPU-friendly, full control over quantisation, minimal dependencies |
-| Production | vLLM or SGLang | Batching and memory management that hold throughput under many concurrent users |
+| Разработка | Ollama | Установка одной командой, один пользователь |
+| Staging | llama.cpp | Дружелюбен к CPU, полный контроль над квантизацией, минимум зависимостей |
+| Production | vLLM или SGLang | Батчинг и управление памятью, держащие пропускную способность при многих одновременных пользователях |
 
-Ollama is a development engine. It is adequate for one user and degrades under
-concurrent load, so it must not be the production default. The provider
-abstraction (`ai.Provider`, with the Ollama and OpenAI-compatible implementations)
-is the seam: the engine is configuration, not a code change.
+Ollama — движок для разработки. Он достаточен для одного пользователя и деградирует
+под параллельной нагрузкой, поэтому не должен быть продакшн-значением по умолчанию.
+Абстракция провайдера (`ai.Provider`, с реализациями Ollama и совместимой с
+OpenAI) — это шов: движок это конфигурация, а не изменение кода.
 
-Speed is mostly not a model choice. In order of effect: cache the stable prompt
-prefix (this is why the tool list is order-stable), stream tokens to the UI rather
-than waiting for a complete reply, do not call the model for work a SQL query can
-do (a list of 100k deals is a query, not a completion), and batch bulk work rather
-than issuing one call per record.
+Скорость в основном не вопрос выбора модели. В порядке влияния: кэшировать
+стабильный префикс промпта (вот почему список инструментов стабилен по порядку),
+стримить токены в UI, а не ждать полного ответа, не вызывать модель для работы,
+которую может сделать SQL-запрос (список из 100 тысяч сделок — это запрос, а не
+генерация), и батчить массовую работу, а не делать один вызов на запись.
 
-### 6. Degradation is explicit, and never a silent fallback to the cloud
+### 6. Деградация явная и никогда не молчаливый откат в облако
 
-If the configured local engine is unavailable, the platform enters a degraded mode
-that says so. It does not fall back to a cloud provider: a silent fallback sends a
-customer's data to a third party that was never configured to receive it. If the
-configured cloud provider is unavailable, only read-only tools and template answers
-remain. `ai.ErrDisabled` already models "AI off is a normal state"; degradation is
-the same idea for "AI configured but unreachable".
+Если настроенный локальный движок недоступен, платформа входит в режим деградации и
+сообщает об этом. Она не падает обратно на облачного провайдера: молчаливый откат
+отправляет данные клиента третьей стороне, которая никогда не была настроена их
+получать. Если недоступен настроенный облачный провайдер, остаются только
+инструменты для чтения и шаблонные ответы. `ai.ErrDisabled` уже моделирует
+«ИИ выключен — это нормальное состояние»; деградация — та же идея для «ИИ настроен,
+но недостижим».
 
-## Consequences
+## Последствия
 
-- **Positive.** The stable layers are testable in isolation. The tool contract
-  cannot drift from the registry. Provenance is explicit in the prompt, so the
-  model can distinguish a record from an instruction. The engine choice is recorded
-  and is configuration.
-- **Negative.** Assembly is more code than a constant. The prompt is longer,
-  which costs input tokens on every call — mitigated by prefix caching, which the
-  order-stable tool list is designed for.
-- **Not claimed.** Tagging does not make injection impossible; it lowers the hit
-  rate and bounds the consequence. The claim is blast-radius containment plus
-  server-side authorization, not prompt immunity.
-- **Deferred.** The configuration schema for multiple named providers with routing
-  (`tool_calling` / `reasoning` / `embeddings`) and per-tenant budget caps is
-  designed here but only partially implemented: today a single provider is
-  configured. The routing table is the next slice.
+- **Положительное.** Стабильные слои тестируются изолированно. Контракт
+  инструментов не может разойтись с реестром. Происхождение явно в промпте, поэтому
+  модель может отличить запись от инструкции. Выбор движка записан и является
+  конфигурацией.
+- **Отрицательное.** Сборка — это больше кода, чем константа. Промпт длиннее, что
+  стоит входных токенов на каждом вызове — смягчается кэшированием префикса, под
+  которое и рассчитан список инструментов, стабильный по порядку.
+- **Не заявляется.** Разметка не делает инъекцию невозможной; она снижает частоту
+  попаданий и ограничивает последствие. Заявляется ограничение радиуса поражения
+  плюс серверная авторизация, а не иммунитет промпта.
+- **Отложено.** Схема конфигурации для нескольких именованных провайдеров с
+  маршрутизацией (`tool_calling` / `reasoning` / `embeddings`) и бюджетами на тенант
+  спроектирована здесь, но реализована лишь частично: сегодня настраивается один
+  провайдер. Таблица маршрутизации — следующий срез.

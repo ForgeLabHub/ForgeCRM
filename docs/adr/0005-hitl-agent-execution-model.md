@@ -1,218 +1,223 @@
-# ADR 0005 — Human-in-the-loop agent execution model
+# ADR 0005 — Модель исполнения агента с участием человека (HITL)
 
-- **Status:** Accepted
-- **Date:** 2026-10-28
-- **Deciders:** project owner, engineering agent
-- **Depends on:** ADR 0001 (hybrid architecture), ADR 0003 (multi-replica safety detour)
-- **Scope:** migrations 0009–0011, `internal/agent`, `internal/authn` (step-up),
+- **Статус:** Принято
+- **Дата:** 2026-10-28
+- **Решающие:** владелец проекта, инженерный агент
+- **Зависит от:** ADR 0001 (гибридная архитектура), ADR 0003 (отступление по безопасности при нескольких репликах)
+- **Область:** миграции 0009–0011, `internal/agent`, `internal/authn` (step-up),
   `internal/api/agent_handlers.go`, `internal/api/step_up_handlers.go`,
   `frontend/src/pages/ApprovalsPage.tsx`
 
-## Context
+## Контекст
 
-The roadmap's Phase 4 requires an agent runtime with "observe / suggest /
-act-with-approval" semantics, and its exit criterion is that "budget and scope
-violations are refused and audited". The mission adds a sharper requirement: an
-agent must be able to act autonomously, but a consequential action must not be
-possible without a signed human decision.
+Фаза 4 дорожной карты требует runtime агента с семантикой «наблюдать /
+предлагать / действовать с согласованием», и её критерий выхода — что «нарушения
+бюджета и области видимости отклоняются и аудируются». Задача добавляет более
+резкое требование: агент должен уметь действовать автономно, но значимое действие
+не должно быть возможно без подписанного решения человека.
 
-The tempting implementation is a prompt that tells the model to ask permission
-before acting. It does not work, and it is worth recording why, because it is the
-first thing a reasonable engineer reaches for:
+Соблазнительная реализация — промпт, который велит модели спрашивать разрешение
+перед действием. Это не работает, и стоит записать почему, потому что за это
+хватается первым делом разумный инженер:
 
-- **A prompt is advisory.** The model can be talked out of it by content in the
-  very data it is processing — an email, an imported row, a webhook payload. That
-  content is untrusted input, and the agent reads it by design.
-- **A prompt cannot be verified.** There is no artefact to check afterwards that
-  proves a human approved. "The model said it would ask" is not evidence.
-- **A prompt is not a boundary.** Even a compliant model can be bypassed by a
-  caller who invokes the tool API directly. If approval lives in the prompt, it
-  exists only on one code path.
+- **Промпт — это совет.** Модель можно отговорить содержимым тех самых данных,
+  которые она обрабатывает — письмом, импортированной строкой, payload вебхука.
+  Это содержимое — недоверенный ввод, и агент читает его по замыслу.
+- **Промпт нельзя проверить.** Нет артефакта, который можно проверить после, чтобы
+  доказать, что человек одобрил. «Модель сказала, что спросит» — не доказательство.
+- **Промпт — не граница.** Даже послушную модель можно обойти, вызвав API
+  инструментов напрямую. Если согласование живёт в промпте, оно существует только
+  на одном пути кода.
 
-So approval must be a **property of the server**, not an instruction to the model.
-A tool that requires approval must be structurally unable to execute until a
-signed human decision exists. This ADR fixes that structure.
+Поэтому согласование должно быть **свойством сервера**, а не инструкцией модели.
+Инструмент, требующий согласования, должен быть структурно неспособен исполниться,
+пока не существует подписанного решения человека. Этот ADR фиксирует такую
+структуру.
 
-## Decision
+## Решение
 
-Implement human-in-the-loop execution as a **durable state machine in PostgreSQL**,
-reusing the existing job queue, outbox, audit trail and RBAC. No new broker, no
-workflow engine.
+Реализовать исполнение с участием человека как **долговечный конечный автомат в
+PostgreSQL**, переиспользуя существующую очередь заданий, outbox, журнал аудита и
+RBAC. Никакого нового брокера, никакого движка workflow.
 
-### 1. An approval-gated tool proposes; it does not execute
+### 1. Инструмент под согласованием предлагает; он не исполняет
 
-When the agent calls a tool whose risk tier is `confirm` or `destructive`, the
-runtime does not invoke the handler. It writes an `agent_actions` row with
-`status = 'proposed'`, moves the run to `waiting_approval`, and returns a
-`pending` result to the agent. The agent stops there.
+Когда агент вызывает инструмент с уровнем риска `confirm` или `destructive`,
+runtime не вызывает обработчик. Он пишет строку `agent_actions` со
+`status = 'proposed'`, переводит прогон в `waiting_approval` и возвращает агенту
+результат `pending`. Агент на этом останавливается.
 
-The only code path that executes an approval-gated tool is `ExecuteApprovedAction`,
-and it is reachable only from a decision that passed signature verification.
+Единственный путь кода, исполняющий инструмент под согласованием, —
+`ExecuteApprovedAction`, и он достижим только из решения, прошедшего проверку
+подписи.
 
-### 2. Risk tiers are assigned by the tool, on the server
+### 2. Уровни риска назначает инструмент, на сервере
 
-| Tier | Examples | Behaviour |
+| Уровень | Примеры | Поведение |
 |---|---|---|
-| `safe` | read, search, list, aggregate | Executes immediately; audited |
-| `confirm` | create, update, send email, change stage | Proposes; waits for a human |
-| `destructive` | delete, bulk-update above a threshold, export off-platform, change permissions | Proposes; waits for a human **and** a re-authentication factor |
+| `safe` | чтение, поиск, список, агрегат | Исполняется немедленно; аудируется |
+| `confirm` | создать, обновить, отправить письмо, сменить стадию | Предлагает; ждёт человека |
+| `destructive` | удалить, массовое обновление выше порога, экспорт за пределы платформы, смена прав | Предлагает; ждёт человека **и** фактор повторной аутентификации |
 
-The tier is a field on the tool definition in Go. The model cannot read it, lower
-it, or argue with it. A tool marked `destructive` stays `destructive` no matter
-what the agent's context says.
+Уровень — это поле определения инструмента в Go. Модель не может его прочитать,
+понизить или оспорить. Инструмент, помеченный `destructive`, остаётся
+`destructive`, что бы ни говорил контекст агента.
 
-### 3. Write-before-execute
+### 3. Запись до исполнения
 
-Every transition writes its audit entry **before** the effect, in the same
-transaction as the state change:
+Каждый переход пишет свою запись аудита **до** эффекта, в той же транзакции, что и
+изменение состояния:
 
-- `proposed` → the `agent_actions` row itself is the durable record of intent.
-- `approved` → audit `agent.action.approved` with `arguments_hash` and signature.
-- `executed` → audit `agent.action.executed` with the result summary.
-- `rejected` → audit `agent.action.rejected` with the operator's comment.
+- `proposed` → сама строка `agent_actions` и есть долговечная запись намерения.
+- `approved` → аудит `agent.action.approved` с `arguments_hash` и подписью.
+- `executed` → аудит `agent.action.executed` с кратким итогом результата.
+- `rejected` → аудит `agent.action.rejected` с комментарием оператора.
 
-The intent is recorded before the effect, so an action can never exist without a
-record of why it was allowed. The audit write uses the ambient transaction, which
-makes it atomic with the state change it describes — the same property the rest of
-the platform relies on.
+Намерение записывается до эффекта, поэтому действие не может существовать без
+записи о том, почему оно было разрешено. Запись аудита использует окружающую
+транзакцию, что делает её атомарной с изменением состояния, которое она
+описывает, — то же свойство, на которое опирается остальная платформа.
 
-### 4. Decisions are append-only and signed
+### 4. Решения только добавляются и подписываются
 
-`agent_approvals` is a separate table, never an update to `agent_actions`. If an
-operator changes their mind, that is a new row, not a rewrite. The decision row
-carries an HMAC over the canonical tuple
+`agent_approvals` — отдельная таблица, никогда не обновление `agent_actions`. Если
+оператор передумал, это новая строка, а не перезапись. Строка решения несёт HMAC
+по каноническому кортежу
 
 ```
 action_id | organization_id | arguments_hash | decided_by | decision | decided_at
 ```
 
-keyed by a purpose-derived key from the platform secret (`forgecrm:approval:v1`,
-following the existing `DeriveCSRF` / `WebhookSign` pattern). The signature is
-produced by the server, not supplied by the client. Its purpose is to make the
-record **tamper-evident against direct database access**: an attacker who can write
-to `agent_approvals` but does not hold the platform secret cannot forge a decision
-that verifies. The platform secret lives in the environment, never in the database.
+с ключом, выведенным по назначению из секрета платформы (`forgecrm:approval:v1`,
+следуя существующему шаблону `DeriveCSRF` / `WebhookSign`). Подпись создаёт сервер,
+а не поставляет клиент. Её назначение — сделать запись **защищённой от подмены при
+прямом доступе к базе**: атакующий, который может писать в `agent_approvals`, но не
+держит секрет платформы, не может подделать решение, которое пройдёт проверку.
+Секрет платформы живёт в окружении, никогда в базе.
 
-### 5. The decision binds to the action the human saw
+### 5. Решение привязано к действию, которое видел человек
 
-At `approve` time the server recomputes the canonical `arguments_hash` from the
-stored arguments and compares it with the hash the client submits — the hash of
-what the operator actually saw rendered. A mismatch is refused with `409
-ACTION_CHANGED`. This closes the time-of-check/time-of-use gap: between the page
-loading and the operator clicking approve, the action cannot have been altered
-into something else.
+Во время `approve` сервер пересчитывает канонический `arguments_hash` из
+сохранённых аргументов и сравнивает его с хешем, который присылает клиент, — хешем
+того, что оператор реально видел отрисованным. Несовпадение отклоняется с `409
+ACTION_CHANGED`. Это закрывает разрыв между проверкой и использованием: между
+загрузкой страницы и нажатием «одобрить» действие не могло быть подменено на другое.
 
-### 6. A destructive decision needs a second factor, resolved from the session
+### 6. Опасное решение требует второго фактора, взятого из сессии
 
-The `destructive` tier requires more than an authenticated session, because the
-actions in it are the ones where a single compromised session must not be enough.
-The requirement is enforced in `Decide`, and the factor is a property of the
-**session**, never of the request:
+Уровень `destructive` требует больше, чем аутентифицированной сессии, потому что
+действия в нём — те, где одной скомпрометированной сессии быть не должно хватать.
+Требование обеспечивается в `Decide`, и фактор — свойство **сессии**, никогда
+запроса:
 
-- `sessions.step_up_at` records when a session last presented a factor. It is set
-  at login — the caller has just presented a password, and a TOTP code when MFA is
-  enabled — and refreshed by `POST /api/v1/auth/step-up`.
-- `authn.Session.SteppedUp()` reports whether that timestamp is within
-  `StepUpWindow` (15 minutes). The window is short on purpose: the point of a
-  step-up is that the operator is present *now*, not that they authenticated at
-  some earlier point in a long-lived session.
-- The handler resolves the flag from the session and passes it in `agent.Decider`.
-  The decision body has no field for it, so a client cannot assert it. `Decide`
-  loads the action first and consults the flag only when the stored tier is
-  `destructive`; a refusal leaves the action `proposed` and executes nothing.
-- The endpoint re-verifies a real factor — a TOTP or recovery code with MFA, the
-  password without — and records which kind backed the decision in the audit
-  entry. A connection check or a client-side flag would not be a factor.
+- `sessions.step_up_at` записывает, когда сессия в последний раз предъявляла
+  фактор. Он устанавливается при входе — вызывающий только что предъявил пароль и
+  код TOTP, если включён MFA — и обновляется через `POST /api/v1/auth/step-up`.
+- `authn.Session.SteppedUp()` сообщает, в пределах ли этой отметки `StepUpWindow`
+  (15 минут). Окно короткое намеренно: смысл step-up в том, что оператор
+  присутствует *сейчас*, а не в том, что он аутентифицировался в какой-то более
+  ранний момент долгоживущей сессии.
+- Обработчик определяет флаг из сессии и передаёт его в `agent.Decider`. В теле
+  решения нет поля для него, поэтому клиент не может его заявить. `Decide` сначала
+  загружает действие и учитывает флаг, только когда сохранённый уровень —
+  `destructive`; отказ оставляет действие `proposed` и ничего не исполняет.
+- Эндпоинт заново проверяет реальный фактор — код TOTP или восстановления при MFA,
+  пароль без неё — и записывает в аудит, какой именно вид подкрепил решение. Проверка
+  соединения или клиентский флаг не были бы фактором.
 
-Why `mfa_verified` was not reused: it is set once at login and stays true for the
-whole session, so a session opened in the morning would satisfy "a second factor"
-all day. Recency needs its own column.
+Почему `mfa_verified` не переиспользован: он устанавливается один раз при входе и
+остаётся истинным всю сессию, поэтому сессия, открытая утром, удовлетворяла бы
+«второй фактор» весь день. Недавности нужен свой столбец.
 
-### 7. Execution is idempotent
+### 7. Исполнение идемпотентно
 
-`agent_actions.idempotency_key` is unique. Execution transitions
-`approved → executed` with a guard on the current status, so a double submit, a
-retry or a reconnecting client produces **one** execution. A second attempt finds
-the row already `executed` and returns the recorded result rather than performing
-the effect again.
+`agent_actions.idempotency_key` уникален. Исполнение переводит
+`approved → executed` с защитой по текущему статусу, поэтому двойная отправка,
+повтор или переподключающийся клиент дают **одно** исполнение. Вторая попытка
+видит строку уже `executed` и возвращает записанный результат, а не выполняет
+эффект снова.
 
-### 8. Waiting is durable and bounded
+### 8. Ожидание долговечно и ограничено
 
-A run in `waiting_approval` holds no connection and no CPU. The state is a row, so
-it survives a restart, a redeploy, or a multi-hour pause. `agent_actions.expires_at`
-bounds the wait. Without a bound, "waiting" degrades into "hung forever".
+Прогон в `waiting_approval` не держит ни соединения, ни CPU. Состояние — это
+строка, поэтому оно переживает перезапуск, повторный деплой или многочасовую
+паузу. `agent_actions.expires_at` ограничивает ожидание. Без границы «ожидание»
+вырождается в «завис навсегда».
 
-Two paths enforce the deadline, and they agree by construction:
+Два пути обеспечивают срок, и они согласованы по построению:
 
-- The **sweeper** moves every overdue proposal to `expired` and fails the runs that
-  were waiting on them.
-- A **decision that arrives too late** takes the same transition: the expiry is
-  committed, and the refusal is returned *after* the transaction. Returning the
-  refusal from inside the transaction would roll the expiry back — `WithTx`
-  discards everything a closure reports an error for — leaving the row `proposed`
-  and the deadline unenforced. Both paths move the row with a guarded
-  `status = 'proposed'` update, so a sweep and a decision racing at the same
-  moment cannot both act: whichever runs second affects no rows.
+- **Обходчик** переводит каждое просроченное предложение в `expired` и проваливает
+  прогоны, которые его ждали.
+- **Решение, пришедшее слишком поздно**, делает тот же переход: срок коммитится, а
+  отказ возвращается *после* транзакции. Возврат отказа изнутри транзакции откатил
+  бы срок — `WithTx` отбрасывает всё, о чём замыкание сообщает ошибку, — оставив
+  строку `proposed` и срок невыполненным. Оба пути двигают строку защищённым
+  обновлением `status = 'proposed'`, поэтому обход и решение, гоняющиеся в один
+  момент, не могут оба сработать: кто выполнится вторым, не затронет ни одной
+  строки.
 
-Both paths also fail a run that has no proposed action left, so a run never waits
-on a decision that can no longer arrive. A decision that expires one proposal of a
-run which still has another leaves the run waiting.
+Оба пути также проваливают прогон, у которого не осталось предложенных действий,
+поэтому прогон никогда не ждёт решения, которое уже не может прийти. Решение,
+которое истекает для одного предложения прогона, у которого есть ещё одно, оставляет
+прогон ждать.
 
-### 9. Limits are enforced, not advised
+### 9. Лимиты обеспечиваются, а не рекомендуются
 
-- **Token budget per run** (`agent_runs.budget_tokens`). Exceeding it fails the run.
-- **Action cap per run.** A run cannot propose without bound.
-- **Scope.** The agent acts as `user_id`; every tool call goes through the same
-  RBAC check as a human request. An approval does not and cannot grant a
-  permission the user lacks.
-- **Tenant isolation.** `organization_id` is checked in the same statement that
-  mutates each row, so an id from another organization is indistinguishable from
-  one that does not exist.
-- **Denied tools.** A configured denylist (`users.delete`,
-  `integrations.rotate_secret`, …) is unreachable by the agent regardless of
-  approval.
+- **Бюджет токенов на прогон** (`agent_runs.budget_tokens`). Его превышение
+  проваливает прогон.
+- **Предел действий на прогон.** Прогон не может предлагать безгранично.
+- **Область видимости.** Агент действует как `user_id`; каждый вызов инструмента
+  проходит ту же проверку RBAC, что и запрос человека. Согласование не даёт и не
+  может дать разрешение, которого у пользователя нет.
+- **Изоляция тенантов.** `organization_id` проверяется в том же выражении, что
+  мутирует каждую строку, поэтому id из другой организации неотличим от
+  несуществующего.
+- **Запрещённые инструменты.** Настроенный чёрный список (`users.delete`,
+  `integrations.rotate_secret`, …) недостижим для агента независимо от согласования.
 
-### 10. No workflow engine
+### 10. Никакого движка workflow
 
-Durable waiting is a database row plus the existing job queue. Temporal or a
-message broker would add an operational component and a new failure surface for a
-state machine that fits in three tables. The threshold for revisiting this is
-recorded in ADR 0002: a workflow that genuinely spans days with branching
-compensation logic, which this is not.
+Долговечное ожидание — это строка базы плюс существующая очередь заданий. Temporal
+или брокер сообщений добавили бы эксплуатационный компонент и новую поверхность
+отказов ради конечного автомата, который помещается в три таблицы. Порог для
+пересмотра этого записан в ADR 0002: workflow, который действительно охватывает дни
+с ветвящейся логикой компенсации, — а это не он.
 
-## Consequences
+## Последствия
 
-- **Positive.** Approval cannot be bypassed by prompt injection, by calling the
-  tool API directly, or by editing the action between display and decision. The
-  only path to execution runs through a verified, signed decision.
-- **Positive.** Every decision and execution is a durable, append-only, tamper-
-  evident record, which is what makes the audit trail usable for an incident
-  review rather than merely present.
-- **Positive.** No new infrastructure. The feature ships in the existing two
-  processes and one database.
-- **Negative.** Three new tables and a new state machine to maintain, with their
-  own expiry and sweep jobs.
-- **Negative.** `destructive` actions need a second factor, which means an
-  additional interaction the UI must implement and the API must enforce. Both
-  sides exist: `POST /api/v1/auth/step-up` and the step-up prompt on the approvals
-  page. The cost is a migration (`0011_session_step_up`) and one column, not a new
-  component.
-- **Neutral.** The agent runtime is a *consumer* of the tool registry, not a
-  parallel implementation. It inherits the tool permission model rather than
-  restating it, so the two cannot drift.
+- **Положительное.** Согласование нельзя обойти инъекцией промпта, прямым вызовом
+  API инструментов или изменением действия между отображением и решением.
+  Единственный путь к исполнению идёт через проверенное подписанное решение.
+- **Положительное.** Каждое решение и исполнение — долговечная, только
+  добавляемая, защищённая от подмены запись, что делает журнал аудита пригодным для
+  разбора инцидента, а не просто присутствующим.
+- **Положительное.** Никакой новой инфраструктуры. Функция поставляется в
+  существующих двух процессах и одной базе.
+- **Отрицательное.** Три новые таблицы и новый конечный автомат для сопровождения,
+  со своими заданиями истечения и обхода.
+- **Отрицательное.** Опасные действия требуют второго фактора, что означает
+  дополнительное взаимодействие, которое UI должен реализовать, а API обеспечить.
+  Обе стороны существуют: `POST /api/v1/auth/step-up` и запрос step-up на странице
+  согласований. Цена — миграция (`0011_session_step_up`) и один столбец, а не новый
+  компонент.
+- **Нейтральное.** Runtime агента — *потребитель* реестра инструментов, а не
+  параллельная реализация. Он наследует модель прав инструментов, а не
+  переформулирует её, поэтому они не могут разойтись.
 
-## Alternatives considered
+## Рассмотренные альтернативы
 
-- **Prompt-based approval.** Rejected: advisory, unverifiable, bypassable.
-- **Approval as a column on `agent_actions`.** Rejected: rewriting a decision
-  destroys the history the audit exists to preserve.
-- **Client-supplied signature.** Rejected: a client that can sign can forge. The
-  server signs; the client only proves it saw the same arguments.
-- **Temporal / broker.** Rejected for now, per ADR 0002's extraction threshold.
+- **Согласование на основе промпта.** Отклонено: совещательное, непроверяемое,
+  обходимое.
+- **Согласование как столбец в `agent_actions`.** Отклонено: перезапись решения
+  уничтожает историю, которую аудит существует, чтобы сохранить.
+- **Подпись, поставляемая клиентом.** Отклонено: клиент, который может подписать,
+  может подделать. Подписывает сервер; клиент лишь доказывает, что видел те же
+  аргументы.
+- **Temporal / брокер.** Отклонено пока, согласно порогу выделения из ADR 0002.
 
-## References
+## Ссылки
 
 - `backend/internal/migrations/0009_agent_approvals.up.sql`
-- `backend/internal/agent/` — the state machine
-- `docs/SECURITY.md` — trust boundaries
-- ADR 0004 — the same "guard in the statement" discipline applied to webhooks
+- `backend/internal/agent/` — конечный автомат
+- `docs/SECURITY.md` — границы доверия
+- ADR 0004 — та же дисциплина «защита в выражении», применённая к вебхукам
