@@ -86,9 +86,22 @@ this by making the worker wait for the API to be healthy.
 - **Rate limiting is per process.** With multiple API replicas, a limit applies per
   replica, not globally. Move to a shared store before relying on it for protection.
 
+## Other hosts
+
+- **Platforms that build the repository root** (blitz.cloud and similar) use the
+  root `Dockerfile`, which builds the API, the worker and the web interface into
+  one image, and the root `docker-compose.yml`, whose two parts (`api`, `worker`)
+  run that image with different entrypoints. See
+  [blitz-cloud.md](blitz-cloud.md) for the free-tier walkthrough.
+
 ## Verified deployment
 
 The stack in this repository was brought up and tested end to end: four containers
 started, health checks passed, migrations reached version 5, an administrator was
 bootstrapped, and the smoke test reported 9 of 9 checks passing, including a full
 archive import executed by the worker.
+
+The root build file was verified separately: the image built from the repository
+root, migrations reached version 25, `/health` and `/ready` answered 200, the web
+interface loaded at `/` and survived a refresh on a client-side route, and an
+administrator signed in through the browser.

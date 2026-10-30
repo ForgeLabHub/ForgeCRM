@@ -10,6 +10,27 @@ once it reaches 1.0.
 
 ### Added
 
+- **Deployment on platforms that build the repository root, including blitz.cloud.**
+  The repository had no top-level build file, so a host that builds the root — as
+  blitz.cloud does — could not produce an image: the only Dockerfile lived under
+  `backend/` and expected that directory as its build context, while the compose
+  file it read named the root. A root `Dockerfile` now builds all three artefacts
+  in one image: the API binary, the worker binary and the built web interface,
+  which the API serves from `/app/public`. The root `docker-compose.yml` declares
+  the two parts (`api` and `worker`) that build that image and run a different
+  entrypoint, and its `env_file` entries are optional so a managed platform that
+  injects its own variables is not blocked by a missing `.env`. The API also binds
+  to `PORT` when the platform sets it, and falls back to `DATABASE_URL` when
+  `FORGECRM_DATABASE_URL` is absent, because that is the name a managed database
+  injects. `docs/deployment/blitz-cloud.md` documents the free-tier steps.
+- **The web interface is served by the API itself.** The API had a static handler,
+  but it was registered before the API routes and chi keeps only the last
+  `NotFound` handler, so the JSON 404 registered afterwards silently replaced it
+  and every page returned an error document. The handler now runs after the API
+  routes: a request for a real file returns it, any other non-API path returns
+  `index.html` so client-side routes survive a refresh, and an unknown `/api/...`
+  path stays a JSON 404.
+
 - **Scoped, revocable MCP client credentials.** The MCP protocol endpoint
   authenticated only with the browser session cookie, so a real MCP client could
   not use it: a long-running client cannot hold an interactive session, and an
@@ -99,6 +120,14 @@ once it reaches 1.0.
   enforced before any provider call.
 
 ### Fixed
+
+- **The web interface was never copied into the image, and its handler was
+  unreachable.** The backend image created `/app/public` but left it empty, so a
+  container that was meant to serve the UI returned a 404 for every page even
+  though the directory existed. Separately, the static handler was registered
+  before the API routes and chi keeps only the last `NotFound` handler, so the
+  JSON 404 registered afterwards silently replaced it and even a populated
+  directory would not have been served. The handler now runs after the API routes.
 
 - **The specification described two streaming endpoints as JSON.** `POST
   /api/v1/exports` and `GET /api/v1/documents/{id}/download` write the CSV, JSONL

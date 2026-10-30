@@ -1,0 +1,43 @@
+# Keep the build context small and free of secrets and local artefacts.
+# The root Dockerfile builds both the Go binaries and the web interface, so
+# everything here that is rebuilt inside the image is excluded from the context.
+
+# Version control and editor state.
+.git
+.gitignore
+.github
+.idea
+.vscode
+
+# Secrets and local configuration. .env holds FORGECRM_SECRET_KEY.
+.env
+.env.*
+!.env.example
+*.local
+
+# Backups and dumps contain real data.
+backups
+*.dump
+*.sql.gz
+
+# Web dependencies and build output are rebuilt in the image.
+frontend/node_modules
+frontend/dist
+frontend/.vite
+frontend/test-results
+frontend/playwright-report
+frontend/blob-report
+*.tsbuildinfo
+
+# Go build output and test artefacts.
+backend/bin
+*.test
+*.out
+coverage.out
+coverage.html
+
+# Agent and build scratch.
+.agent_tmp
+.run
+__pycache__
+*.pyc
