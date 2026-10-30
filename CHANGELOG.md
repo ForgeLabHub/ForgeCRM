@@ -10,6 +10,21 @@ once it reaches 1.0.
 
 ### Added
 
+- **Notifications have an inbox.** The workflow `notify` action writes a
+  notification addressed to a single user, and the server implemented list and
+  mark-read — but no page consumed them, so a notification a workflow raised
+  could not be seen or cleared from the product. `NotificationsPage` is the
+  missing surface: it lists the signed-in user's notifications, filters to the
+  unread ones, shows the unread count, marks one read, and follows a row to the
+  record it names when the notification carries an `entity_type`/`entity_id`.
+  The read is scoped server-side to the notification's own user and
+  organization, not just the row id. `NotificationsPage.test.tsx` covers the
+  list, the unread filter, the mark-read write and the read-only state;
+  `internal/api/notifications_test.go` adds list/mark-read, per-user and
+  cross-tenant isolation and a 404 for an unknown id against PostgreSQL; an E2E
+  scenario seeds a notification by running a real notify workflow and then
+  clears it from the page.
+
 - **Custom fields are visible and editable in the product.** A tenant could
   already define extra fields per entity type and every record already carried
   its values in a `custom_fields` map, but nothing rendered them: definitions

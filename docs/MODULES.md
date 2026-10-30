@@ -721,6 +721,7 @@ Two things this document deliberately does not do:
 | **Shell/nav** | app frame and routing chrome | `components/AppShell.tsx`, `pages/ErrorPages.tsx` | auth | via E2E | `no` |
 | **ResourceList / BulkArchive** | generic list + bulk actions | `components/ResourceList.tsx`, `BulkArchiveButton.tsx` | `api/crm.ts` | `.test.tsx` (2) | `almost` |
 | **CRM pages** | accounts/contacts/leads/deals/tasks/tickets | `pages/{Accounts,Account,Contacts,Leads,Deals,Tasks,Tickets}Page.tsx` | `api/crm.ts` | E2E | `no` |
+| **Record panels** | custom fields + tags/comments on a detail page | `components/{CustomFieldsPanel,RecordCollabPanel}.tsx` | `api/crm.ts` | `.test.tsx` (2) | `almost` |
 | **AssistPanel** | contextual AI surface | `components/AssistPanel.tsx`, `api/assist.ts` | `api/assist.ts` | `AssistPanel.test.tsx` | `almost` |
 | **Workflow editor** | step editor + validation | `components/WorkflowEditor.tsx`, `pages/WorkflowsPage.tsx`, `api/workflows.ts` | `api/workflows.ts` | `WorkflowEditor.test.tsx` | `almost` |
 | **Simulation page** | Simulation Lab UI | `pages/SimulationPage.tsx`, `api/simulation.ts` | `api/simulation.ts` | `SimulationPage.test.tsx` | `almost` |
@@ -728,11 +729,12 @@ Two things this document deliberately does not do:
 | **AI/MCP page** | provider status, tool catalogue | `pages/AiPage.tsx`, `api/ai.ts` | `api/ai.ts` | E2E | `almost` |
 | **Import pages** | Import Center UI | `pages/{ImportCenter,ImportDetail}Page.tsx`, `api/imports.ts` | `api/imports.ts` | E2E | `no` |
 | **Integrations/Webhooks/Events/Jobs pages** | admin surfaces | `pages/{Integrations,Webhooks,Events,Jobs,Migrations}Page.tsx` + matching api clients | their api clients | E2E | `no` |
+| **Notifications page** | the inbox for workflow notifications | `pages/NotificationsPage.tsx` | `api/crm.ts` | `NotificationsPage.test.tsx` | `almost` |
 | **Admin pages** | audit, users, roles, orgs, teams, security, diagnostics, email, telegram | `pages/admin/*.tsx`, `api/admin.ts` | `api/admin.ts` | `SecurityPage.test.tsx` | `no` |
 | **Attachments** | document upload/download | `components/AttachmentPanel.tsx`, `api/documents.ts` | `api/documents.ts` | `AttachmentPanel.test.tsx` | `almost` |
 
-**Frontend totals:** 76 `.ts`/`.tsx` files; 13 unit test files (97 tests); E2E in
-`frontend/e2e/platform.spec.ts` (43 passing, 1 conditionally skipped).
+**Frontend totals:** 82 `.ts`/`.tsx` files; 16 unit test files (112 tests); E2E in
+`frontend/e2e/platform.spec.ts` (46 passing, 1 conditionally skipped).
 
 ---
 

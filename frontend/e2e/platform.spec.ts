@@ -584,6 +584,53 @@ test.describe('custom fields', () => {
   })
 })
 
+test.describe('notifications', () => {
+  test('a workflow notification appears in the inbox and can be marked read', async ({
+    authedPage: page,
+  }) => {
+    // Seed a notification the way the product creates one: a workflow with a
+    // notify step, run through the real API. This proves the page reads a row the
+    // workflow engine actually wrote, not a fixture.
+    const me = await page.request.get('/api/v1/auth/me')
+    expect(me.status()).toBe(200)
+    const { user, csrf_token } = (await me.json()) as {
+      user: { id: string }
+      csrf_token: string
+    }
+
+    const title = `E2E Notify ${RUN_ID}`
+    const created = await page.request.post('/api/v1/workflows', {
+      headers: { 'X-CSRF-Token': csrf_token },
+      data: {
+        name: `E2E notify ${RUN_ID}`,
+        trigger_type: 'manual',
+        definition: {
+          steps: [
+            { id: 'n1', type: 'notify', args: { title, user_id: user.id } },
+          ],
+        },
+      },
+    })
+    expect(created.status()).toBe(201)
+    const wf = (await created.json()) as { id: string }
+
+    const run = await page.request.post(`/api/v1/workflows/${wf.id}/run`, {
+      headers: { 'X-CSRF-Token': csrf_token },
+    })
+    expect(run.ok()).toBeTruthy()
+
+    await page.goto('/notifications')
+    const row = page.getByText(title)
+    await expect(row).toBeVisible({ timeout: 15_000 })
+
+    // Mark it read from the page; the row's action disappears when it succeeds.
+    await page.getByRole('button', { name: 'Mark read' }).first().click()
+    await expect(page.getByRole('button', { name: 'Mark read' }).first()).toBeHidden({
+      timeout: 15_000,
+    })
+  })
+})
+
 test.describe('health endpoints', () => {
   test('the API reports healthy and ready', async ({ request }) => {
     expect((await request.get('/health')).status()).toBe(200)

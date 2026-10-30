@@ -54,6 +54,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/workflows', label: 'Workflows', permission: 'workflows.read' },
       { to: '/jobs', label: 'Background jobs', permission: 'jobs.read' },
       { to: '/approvals', label: 'Agent approvals', permission: 'approvals.read' },
+      { to: '/notifications', label: 'Notifications', permission: 'notifications.read' },
       { to: '/ai', label: 'AI & MCP', permission: 'ai.read' },
     ],
   },
