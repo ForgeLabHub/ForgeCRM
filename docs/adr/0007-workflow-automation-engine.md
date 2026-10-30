@@ -1,116 +1,119 @@
-# ADR 0007: Workflow automation engine
+# ADR 0007: Движок автоматизации workflow
 
-Status: accepted
-Date: 2026-10-29
+Статус: принято
+Дата: 2026-10-29
 
-## Context
+## Контекст
 
-ForgeCRM already had the parts an automation engine needs and no engine to use
-them: a transactional outbox that commits domain events with the write that caused
-them, a worker that drains that outbox, a `crm.Service` that owns every CRM write,
-and an RBAC service that resolves a user's effective permissions. What was missing
-was a way for an organization to say "when this happens, do that" without writing
-code, and a way to do it that could not be used to exceed the author's own
-authority.
+У ForgeCRM уже были части, которые нужны движку автоматизации, и не было движка,
+чтобы их использовать: транзакционный outbox, который коммитит доменные события
+вместе с записью, их вызвавшей, воркер, разбирающий этот outbox, `crm.Service`,
+владеющий каждой записью CRM, и сервис RBAC, определяющий действующие разрешения
+пользователя. Не хватало способа для организации сказать «когда это произойдёт,
+сделай то» без написания кода, и способа сделать это, который нельзя было бы
+использовать для превышения собственных полномочий автора.
 
-The requirement is not a general-purpose orchestrator. It is the automation that a
-corporate CRM needs: react to a record changing, run something on a schedule, create
-a follow-up task, move a deal, raise a ticket, tell someone, and wait a while before
-the next step.
+Требование — это не оркестратор общего назначения. Это автоматизация, которая
+нужна корпоративной CRM: реагировать на изменение записи, запускать что-то по
+расписанию, создавать задачу-продолжение, двигать сделку, поднимать обращение,
+кого-то уведомлять и подождать некоторое время перед следующим шагом.
 
-## Decision
+## Решение
 
-Add a workflow engine as a module in the monolith, driven by the existing outbox and
-scheduled by the existing worker.
+Добавить движок workflow как модуль в монолит, приводимый в действие существующим
+outbox и планируемый существующим воркером.
 
-A workflow is a trigger plus an ordered list of steps, stored as a JSON document in
-`workflows.definition` with denormalised trigger columns beside it for matching. The
-denormalised columns exist so the engine does not parse every definition on every
-event; the application keeps them in sync in one transaction on write.
+Workflow — это триггер плюс упорядоченный список шагов, хранимый как JSON-документ
+в `workflows.definition` с денормализованными столбцами триггера рядом для
+сопоставления. Денормализованные столбцы существуют, чтобы движок не разбирал все
+определения на каждое событие; приложение держит их синхронными в одной транзакции
+при записи.
 
-### The engine acts as its author, re-checked at execution time
+### Движок действует как свой автор, перепроверяя при исполнении
 
-Every step runs through the same `crm.Service` the HTTP API uses, as the user who
-created the workflow. That user's permissions are resolved from the database on
-every run, not captured when the workflow was saved. If the author is blocked,
-removed from the organization, or has a role revoked, the workflow loses that
-authority immediately. A workflow whose author is no longer a valid member fails
-rather than running with no authority.
+Каждый шаг проходит через тот же `crm.Service`, что и HTTP API, от имени
+пользователя, создавшего workflow. Разрешения этого пользователя определяются из
+базы на каждом прогоне, а не фиксируются при сохранении workflow. Если автор
+заблокирован, удалён из организации или лишён роли, workflow немедленно теряет эти
+полномочия. Workflow, чей автор больше не является действительным участником,
+падает, а не выполняется без полномочий.
 
-### The engine enforces the coarse permission itself
+### Движок сам обеспечивает грубое разрешение
 
-This is the subtle one. `crm.Service` enforces tenant scoping and record ownership,
-but the coarse "may you do this at all" permission (`tasks.create`,
-`deals.change_stage`, …) is enforced by the HTTP middleware on the API path and by
-the tool registry on the MCP path — the service layer does not check it. The engine
-calls the service directly, so without its own check a user holding
-`workflows.manage` but not `tasks.create` could author a workflow that creates
-tasks. The engine therefore maps each step type to the permission it requires and
-checks it against the freshly resolved principal before running the step.
+Это тонкий момент. `crm.Service` обеспечивает ограничение тенантом и владение
+записью, но грубое разрешение «можешь ли ты делать это вообще» (`tasks.create`,
+`deals.change_stage`, …) обеспечивается middleware HTTP на пути API и реестром
+инструментов на пути MCP — слой сервиса его не проверяет. Движок вызывает сервис
+напрямую, поэтому без собственной проверки пользователь, держащий
+`workflows.manage`, но не `tasks.create`, мог бы создать workflow, создающий
+задачи. Поэтому движок сопоставляет каждый тип шага с требуемым им разрешением и
+проверяет его против заново определённого принципала перед выполнением шага.
 
-The alternative — teaching `crm.Service` to check the coarse permission — was
-rejected because it would make the service layer's contract depend on the caller's
-identity in a way the existing callers do not expect, and because the API already
-enforces it. The engine is a new caller of the service and takes on the obligation
-that comes with bypassing the middleware.
+Альтернатива — научить `crm.Service` проверять грубое разрешение — отклонена,
+потому что она сделала бы контракт слоя сервиса зависимым от личности вызывающего
+так, как существующие вызывающие не ожидают, и потому что API уже это обеспечивает.
+Движок — новый вызывающий сервиса и принимает на себя обязательство, которое идёт
+с обходом middleware.
 
-### Delivery is at-least-once, and de-duplication is a database constraint
+### Доставка at-least-once, а дедупликация — ограничение базы
 
-The outbox can deliver the same event more than once. The engine de-duplicates on
-`(workflow_id, event_id)`: the claim is a primary-key insert into
-`workflow_run_events`, and the run row is created in the same transaction. A
-duplicate delivery commits nothing at all — no run row, not even a skipped one — so
-the history stays one run per event.
+Outbox может доставить одно событие более одного раза. Движок дедуплицирует по
+`(workflow_id, event_id)`: заявка — это вставка первичного ключа в
+`workflow_run_events`, а строка прогона создаётся в той же транзакции. Дублирующая
+доставка не коммитит вообще ничего — ни строки прогона, ни даже пропущенной, —
+поэтому история остаётся один прогон на событие.
 
-An earlier ordering created the run first and marked the duplicate `skipped`. That
-was wrong: under an outbox that retries, it accumulated one orphan run per
-redelivery. The test that caught it delivers one event three times and asserts one
-run.
+Более ранний порядок создавал прогон первым и помечал дубликат `skipped`. Это было
+неверно: при outbox, который повторяет, накапливался один осиротевший прогон на
+каждую повторную доставку. Тест, который это поймал, доставляет одно событие три
+раза и утверждает один прогон.
 
-### A delay does not hold a worker
+### Задержка не держит воркер
 
-A `delay` step writes a resume instant and the next step index onto the run and
-returns. The worker's scheduler selects paused runs whose instant has passed and
-resumes them from that index. No worker is blocked waiting for a delay, and a
-restart does not lose the pause because it is a row.
+Шаг `delay` записывает момент возобновления и индекс следующего шага в прогон и
+возвращает управление. Планировщик воркера выбирает приостановленные прогоны, чей
+момент прошёл, и возобновляет их с этого индекса. Ни один воркер не блокируется в
+ожидании задержки, и перезапуск не теряет паузу, потому что это строка.
 
-### A chain a workflow causes is bounded
+### Цепочка, вызванная workflow, ограничена
 
-A step that writes a record emits an event through the outbox. That event inherits
-the correlation id of the run that caused it, so runs in one causal chain share a
-correlation id. The chain depth is the number of runs already recorded for that
-correlation. A run at the workflow's `max_depth` is recorded as `skipped` rather
-than executed. This is what stops two workflows that watch each other from running
-forever, and it is a property of the data rather than of a timer.
+Шаг, который пишет запись, порождает событие через outbox. Это событие наследует
+correlation id прогона, который его вызвал, поэтому прогоны одной причинной цепочки
+делят correlation id. Глубина цепочки — число прогонов, уже записанных для этого
+correlation. Прогон на `max_depth` workflow записывается как `skipped`, а не
+исполняется. Именно это останавливает два workflow, которые следят друг за другом,
+от бесконечного выполнения, и это свойство данных, а не таймера.
 
-### Multi-replica safety
+### Безопасность при нескольких репликах
 
-The scheduler claims each due workflow by advancing its `next_run_at` inside the
-same transaction that selects it, so two replicas cannot both fire the same due
-time. Paused runs are claimed the same way.
+Планировщик забирает каждый готовый workflow, продвигая его `next_run_at` внутри
+той же транзакции, которая его выбирает, поэтому две реплики не могут обе
+сработать на одно и то же наступившее время. Приостановленные прогоны забираются
+так же.
 
-## Consequences
+## Последствия
 
-- A workflow cannot exceed its author's authority, and a revoked permission takes
-  effect on the next run. This is tested by revoking a permission and asserting the
-  next run fails without creating anything.
-- A redelivered event has no effect the second time, and leaves no trace. This is
-  tested by delivering an event three times.
-- Two workflows that watch each other stop at the depth limit instead of looping.
-- The engine adds no new event mechanism, no new queue, and no external dependency:
-  it is a consumer of the outbox the platform already had.
-- The engine must be given the same permission checks the middleware performs, and
-  that obligation is now explicit in the code and in this document. A future step
-  type added without a `requiredPermission` entry would be a bug, so the map is
-  the place to look when adding one.
+- Workflow не может превысить полномочия своего автора, а отозванное разрешение
+  вступает в силу на следующем прогоне. Это проверяется отзывом разрешения и
+  утверждением, что следующий прогон падает, ничего не создавая.
+- Повторно доставленное событие не даёт эффекта во второй раз и не оставляет следа.
+  Это проверяется доставкой события три раза.
+- Два workflow, которые следят друг за другом, останавливаются на пределе глубины,
+  а не зацикливаются.
+- Движок не добавляет ни нового механизма событий, ни новой очереди, ни внешней
+  зависимости: он потребитель outbox, который уже был у платформы.
+- Движку должны быть даны те же проверки прав, что выполняет middleware, и это
+  обязательство теперь явно в коде и в этом документе. Будущий тип шага,
+  добавленный без записи в `requiredPermission`, был бы ошибкой, поэтому map — то
+  место, куда смотреть при добавлении.
 
-## Not decided here
+## Здесь не решено
 
-- A visual workflow editor. The API and the JSON document are the contract; a
-  builder UI is a frontend concern that can be added without changing the engine.
-- Rollback of a partially completed run. A step that wrote a record cannot be
-  automatically undone, and pretending otherwise would be worse than not offering
-  it. A run reports which steps succeeded so an operator can act.
-- A distributed scheduler. The claim-by-update makes several replicas safe, which is
-  enough; a separate scheduling service would add operational cost without a
-  correctness gain at this scale.
+- Визуальный редактор workflow. API и JSON-документ — это контракт; UI-конструктор —
+  забота фронтенда, которую можно добавить, не меняя движок.
+- Откат частично завершённого прогона. Шаг, записавший запись, нельзя автоматически
+  отменить, и делать вид, что это возможно, было бы хуже, чем не предлагать этого.
+  Прогон сообщает, какие шаги удались, чтобы оператор мог действовать.
+- Распределённый планировщик. Заявка-через-обновление делает несколько реплик
+  безопасными, чего достаточно; отдельный сервис планирования добавил бы
+  эксплуатационную цену без выигрыша в корректности на таком масштабе.

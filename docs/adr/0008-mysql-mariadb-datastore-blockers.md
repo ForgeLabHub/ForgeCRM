@@ -1,21 +1,20 @@
-# ADR 0008 — MySQL/MariaDB as a datastore: the verified blockers
+# ADR 0008 — MySQL/MariaDB как хранилище: проверенные блокеры
 
-- **Status:** Accepted (direction deferred; blockers recorded)
-- **Date:** 2026-10-29
-- **Deciders:** project owner, engineering agent
-- **Depends on:** ADR 0001 (hybrid architecture)
+- **Статус:** Принято (направление отложено; блокеры зафиксированы)
+- **Дата:** 2026-10-29
+- **Решающие:** владелец проекта, инженерный агент
+- **Зависит от:** ADR 0001 (гибридная архитектура)
 
-## Context
+## Контекст
 
-The roadmap has carried "MySQL/MariaDB adapter" as a separate direction. The
-question that has to be answered before any code is written is not "can the
-`database` package be made dialect-aware" — it is "what does the application
-actually depend on PostgreSQL for, and how much of that is the storage engine
-rather than the queries?"
+Дорожная карта несла «адаптер MySQL/MariaDB» как отдельное направление. Вопрос,
+на который нужно ответить до написания любого кода, — не «можно ли сделать пакет
+`database` осведомлённым о диалекте», а «от чего приложение действительно зависит в
+PostgreSQL и сколько из этого — движок хранения, а не запросы?»
 
-This ADR answers that from the code, not from intent. The counts below were taken
-with `grep` over the non-test Go sources and the embedded migrations at commit
-`4fafe6a`, and they are reproducible:
+Этот ADR отвечает на это из кода, а не из намерения. Приведённые ниже числа были
+получены через `grep` по не-тестовым исходникам Go и встроенным миграциям на
+коммите `4fafe6a`, и они воспроизводимы:
 
 ```bash
 cd backend
@@ -31,103 +30,106 @@ grep -rl "gen_random_uuid" internal/migrations/*.up.sql | wc -l                 
 grep -rl "plpgsql\|CREATE TRIGGER" internal/migrations/*.up.sql | wc -l                   #  6
 ```
 
-## Decision
+## Решение
 
-**PostgreSQL remains the only supported datastore.** A MySQL/MariaDB adapter is
-not implemented in this cycle, and the direction is deferred until the blockers
-below are resolved by a dedicated stage — not by a driver swap.
+**PostgreSQL остаётся единственным поддерживаемым хранилищем.** Адаптер
+MySQL/MariaDB в этом цикле не реализуется, а направление отложено до тех пор, пока
+блокеры ниже не будут устранены отдельным этапом — а не подменой драйвера.
 
-This is not a claim that the database is "Postgres-shaped" in a way a shim could
-hide. It is the opposite: the application is written *against* PostgreSQL
-features at four levels, and each level has to be addressed separately.
+Это не заявление, что база «имеет форму Postgres» так, что шим мог бы это скрыть.
+Это противоположное: приложение написано *под* возможности PostgreSQL на четырёх
+уровнях, и каждый уровень нужно рассматривать отдельно.
 
-### Blocker 1 — the driver, not the dialect
+### Блокер 1 — драйвер, а не диалект
 
-`internal/database` wraps `*pgxpool.Pool` directly (`database.go`), and the `Tx`
-type is `pgx.Tx`. Nineteen non-test files import `jackc/pgx` or `jackc/pgconn`,
-and several of them do more than pass a connection around:
+`internal/database` оборачивает `*pgxpool.Pool` напрямую (`database.go`), а тип
+`Tx` — это `pgx.Tx`. Девятнадцать не-тестовых файлов импортируют `jackc/pgx` или
+`jackc/pgconn`, и некоторые из них делают больше, чем просто передают соединение:
 
-- `internal/crm/search.go` and `internal/crm/crm.go` scan with `pgx.Row`.
-- `internal/jobs/jobs.go` and `internal/events/delivery.go` use
-  `errors.Is(err, pgx.ErrNoRows)` to mean "no row", which is a pgx sentinel, not
-  `database/sql.ErrNoRows`.
-- `internal/importx/writer.go` and `internal/importx/service.go` use
-  `errors.Is(err, pgx.ErrNoRows)` to distinguish "no row" from a real error while
-  resolving references during an import, which is again a pgx sentinel.
+- `internal/crm/search.go` и `internal/crm/crm.go` сканируют через `pgx.Row`.
+- `internal/jobs/jobs.go` и `internal/events/delivery.go` используют
+  `errors.Is(err, pgx.ErrNoRows)` в значении «нет строки» — это sentinel из pgx, а
+  не `database/sql.ErrNoRows`.
+- `internal/importx/writer.go` и `internal/importx/service.go` используют
+  `errors.Is(err, pgx.ErrNoRows)`, чтобы отличить «нет строки» от настоящей ошибки
+  при разрешении ссылок во время импорта, — снова sentinel из pgx.
 
-A `database/sql` + `go-sql-driver/mysql` adapter would therefore require rewriting
-the *call sites*, not only the wrapper: every `pgx.Row`/`pgx.Rows` signature and
-every `pgx.ErrNoRows` check (in `jobs`, `events`, `importx`, `authn`, `crm`, the
-workflow store and the outbox) has to move to the `database/sql` equivalents
-together, or half the codebase keeps importing pgx and the adapter is a fiction.
+Адаптер на `database/sql` + `go-sql-driver/mysql` поэтому потребовал бы
+переписать *места вызова*, а не только обёртку: каждая сигнатура
+`pgx.Row`/`pgx.Rows` и каждая проверка `pgx.ErrNoRows` (в `jobs`, `events`,
+`importx`, `authn`, `crm`, хранилище workflow и outbox) должна перейти на
+эквиваленты `database/sql` вместе, иначе половина кодовой базы продолжает
+импортировать pgx, и адаптер — фикция.
 
-### Blocker 2 — SQL the server executes, not the client
+### Блокер 2 — SQL, который исполняет сервер, а не клиент
 
-These are not formatting differences; they change what the statement means:
+Это не различия в форматировании; они меняют смысл выражения:
 
-| Idiom | Uses | MySQL/MariaDB equivalent | Cost |
+| Идиома | Использований | Эквивалент в MySQL/MariaDB | Цена |
 |---|---|---|---|
-| `INSERT ... RETURNING` | 64 | none (MariaDB 10.5+ has `RETURNING` for `INSERT`, but not `UPDATE`/`DELETE`; MySQL has none) | Every insert/update that returns a row becomes insert-then-select, inside the same transaction, and needs a generated-key or last-insert-id strategy per table |
-| `ON CONFLICT ... DO UPDATE/NOTHING` | 21 | `INSERT ... ON DUPLICATE KEY UPDATE` / `INSERT IGNORE` | Different semantics: `ON DUPLICATE KEY UPDATE` fires on *any* unique key, not the named one, and `INSERT IGNORE` swallows every error, not only the conflict. Each call site needs its own translation and test |
-| `FOR UPDATE SKIP LOCKED` | 8 | MySQL 8.0+ and MariaDB 10.6+ support it | This is the queue's correctness foundation (`jobs.Claim`, `ClaimDelivery`). It works, but the minimum versions become a hard floor and every claim query needs a MariaDB variant |
-| `ILIKE` | 26 | `LIKE` with a case-insensitive collation, or `LOWER()` | Collation-dependent; the search behaviour would silently change with the server's default collation |
-| `now() - $1::interval` | 7 | `DATE_SUB(now(), INTERVAL ? SECOND)` | Parameter binding differs; the lease and retry arithmetic is spread across the queue and delivery code |
-| `pg_advisory_xact_lock` | 1 | `GET_LOCK`/`RELEASE_LOCK`, session-scoped | `EnqueuePeriodic`'s de-duplication depends on a *transaction-scoped* lock; the MySQL equivalent is session-scoped and needs explicit release, which is a different failure mode |
+| `INSERT ... RETURNING` | 64 | нет (MariaDB 10.5+ имеет `RETURNING` для `INSERT`, но не для `UPDATE`/`DELETE`; в MySQL нет вовсе) | Каждый insert/update, возвращающий строку, становится insert-then-select внутри той же транзакции и требует стратегии сгенерированного ключа или last-insert-id для каждой таблицы |
+| `ON CONFLICT ... DO UPDATE/NOTHING` | 21 | `INSERT ... ON DUPLICATE KEY UPDATE` / `INSERT IGNORE` | Другая семантика: `ON DUPLICATE KEY UPDATE` срабатывает на *любом* уникальном ключе, а не на названном, а `INSERT IGNORE` глотает каждую ошибку, а не только конфликт. Каждому месту вызова нужен свой перевод и тест |
+| `FOR UPDATE SKIP LOCKED` | 8 | MySQL 8.0+ и MariaDB 10.6+ поддерживают | Это фундамент корректности очереди (`jobs.Claim`, `ClaimDelivery`). Работает, но минимальные версии становятся жёстким порогом, и каждый запрос заявки нуждается в варианте для MariaDB |
+| `ILIKE` | 26 | `LIKE` с регистронезависимой коллацией или `LOWER()` | Зависит от коллации; поведение поиска молча менялось бы вместе с коллацией по умолчанию на сервере |
+| `now() - $1::interval` | 7 | `DATE_SUB(now(), INTERVAL ? SECOND)` | Привязка параметров различается; арифметика аренды и повторов размазана по коду очереди и доставки |
+| `pg_advisory_xact_lock` | 1 | `GET_LOCK`/`RELEASE_LOCK`, с областью сессии | Дедупликация `EnqueuePeriodic` зависит от блокировки *с областью транзакции*; эквивалент в MySQL имеет область сессии и требует явного освобождения, что является другим режимом отказа |
 
-### Blocker 3 — schema and migrations
+### Блокер 3 — схема и миграции
 
-The 16 migrations are PostgreSQL DDL and are embedded in the binary. They use:
+16 миграций — это DDL для PostgreSQL, и они встроены в бинарник. Они используют:
 
-- `gen_random_uuid()` as a column default in six migrations — MySQL would need
-  `UUID()` (MariaDB) or application-side generation (MySQL has no `UUID` default
-  in all versions), and a `CHAR(36)`/`BINARY(16)` representation choice that
-  changes every UUID column and index size.
-- `CREATE TRIGGER` with `plpgsql` in six migrations — notably the append-only
-  audit trigger. MariaDB has no `plpgsql`; the trigger must be rewritten in its
-  dialect and re-verified, because "the audit log cannot be deleted" is a security
-  property, not a convenience.
-- Partial indexes (`CREATE INDEX ... WHERE`) in four migrations — unsupported in
-  MySQL, so each becomes a functional or full index plus a query change.
-- `jsonb` columns in seven migrations — `JSON` in MySQL/MariaDB, with different
-  operators (`->>` vs `JSON_EXTRACT`), different indexing, and no `jsonb` equality.
-- Array columns (`uuid[]`, `text[]`) in five migrations — MySQL has no array type;
-  each becomes a join table or a JSON array, which is a data-model change.
+- `gen_random_uuid()` как значение по умолчанию в шести миграциях — MySQL
+  потребовал бы `UUID()` (MariaDB) или генерацию на стороне приложения (в MySQL
+  нет значения по умолчанию `UUID` во всех версиях), а также выбор представления
+  `CHAR(36)`/`BINARY(16)`, что меняет каждый столбец UUID и размер индексов.
+- `CREATE TRIGGER` с `plpgsql` в шести миграциях — в частности, триггер аудита
+  «только добавление». В MariaDB нет `plpgsql`; триггер нужно переписать на её
+  диалекте и заново проверить, потому что «журнал аудита нельзя удалить» — это
+  свойство безопасности, а не удобство.
+- Частичные индексы (`CREATE INDEX ... WHERE`) в четырёх миграциях — не
+  поддерживаются в MySQL, поэтому каждый становится функциональным или полным
+  индексом плюс изменение запроса.
+- Столбцы `jsonb` в семи миграциях — `JSON` в MySQL/MariaDB, с другими операторами
+  (`->>` против `JSON_EXTRACT`), другим индексированием и без равенства `jsonb`.
+- Столбцы-массивы (`uuid[]`, `text[]`) в пяти миграциях — в MySQL нет типа-массива;
+  каждый становится таблицей соединения или JSON-массивом, что является изменением
+  модели данных.
 
-There is no shared migration dialect today, and `migrate.Up` runs the embedded
-PostgreSQL files directly. A second datastore needs a second migration set kept in
-lockstep, not a translation layer.
+Сегодня общего диалекта миграций нет, и `migrate.Up` запускает встроенные файлы
+PostgreSQL напрямую. Второму хранилищу нужен второй набор миграций, держимый в
+шаге, а не слой трансляции.
 
-### Blocker 4 — the worker and the queue
+### Блокер 4 — воркер и очередь
 
-The queue's guarantees — `FOR UPDATE SKIP LOCKED` claims, `ON CONFLICT` de-dup,
-the advisory lock in `EnqueuePeriodic`, `::interval` lease arithmetic — are the
-worker's correctness foundation. A datastore port that leaves any of them
-approximated would ship a queue that double-runs or strands jobs, which is worse
-than not supporting the datastore at all.
+Гарантии очереди — заявки `FOR UPDATE SKIP LOCKED`, дедупликация `ON CONFLICT`,
+advisory-блокировка в `EnqueuePeriodic`, арифметика аренды `::interval` — это
+фундамент корректности воркера. Порт хранилища, оставляющий хоть одну из них
+приблизительной, поставил бы очередь, которая дважды запускает или бросает задания,
+что хуже, чем вовсе не поддерживать хранилище.
 
-## Consequences
+## Последствия
 
-- The `migratex` *source* side is a separate question from running ForgeCRM *on*
-  MySQL, and it is now implemented: `internal/migratex/mysql.go` reads from a MySQL
-  or MariaDB database, so a customer can migrate *from* MySQL. That does not move
-  this ADR's decision — reading a foreign database over `database/sql` exercises
-  none of the blockers below, which are all about ForgeCRM's *own* schema, queries
-  and queue running on the datastore. The datastore direction keeps the posture of
-  honest refusal, not partial support.
-- A future MySQL/MariaDB stage must, in order: (1) introduce a `database/sql`
-  seam with a per-dialect statement builder and a `database.ErrNoRows` sentinel to
-  replace the pgx one; (2) replace the COPY importer path; (3) author and verify a
-  full second migration set, including the audit trigger in the target dialect;
-  (4) run the queue and delivery claim tests against a real MariaDB before the
-  datastore is claimed as supported.
-- Compilation against a MySQL driver is explicitly **not** evidence of support.
-  The acceptance bar is the integration suite — tenant isolation, the queue's
-  claim behaviour, and the append-only audit trigger — passing on a real server.
+- *Источниковая* сторона `migratex` — это отдельный вопрос от запуска ForgeCRM *на*
+  MySQL, и она теперь реализована: `internal/migratex/mysql.go` читает из базы MySQL
+  или MariaDB, поэтому клиент может мигрировать *из* MySQL. Это не меняет решение
+  этого ADR — чтение чужой базы через `database/sql` не затрагивает ни один из
+  блокеров ниже, все они о *собственной* схеме, запросах и очереди ForgeCRM,
+  работающих на хранилище. Направление хранилища сохраняет позицию честного отказа,
+  а не частичной поддержки.
+- Будущий этап MySQL/MariaDB должен, по порядку: (1) ввести шов `database/sql` со
+  сборщиком выражений по диалекту и sentinel `database.ErrNoRows` взамен pgx;
+  (2) заменить путь импортёра через COPY; (3) написать и проверить полный второй
+  набор миграций, включая триггер аудита на целевом диалекте; (4) прогнать тесты
+  заявок очереди и доставки на реальном MariaDB, прежде чем хранилище можно будет
+  заявить как поддерживаемое.
+- Компиляция с драйвером MySQL явно **не** является доказательством поддержки.
+  Планка приёмки — интеграционный набор (изоляция тенантов, поведение заявок
+  очереди и триггер аудита «только добавление»), проходящий на реальном сервере.
 
-## Status of the code
+## Состояние кода
 
-No MySQL/MariaDB *datastore* code is added by this ADR. It records the measured
-blockers so that a later stage starts from facts, and so that the roadmap does not
-carry the direction as "nearly done" when it is not started. The MySQL/MariaDB
-*migration source* (`internal/migratex/mysql.go`) is a distinct, verified
-capability — see roadmap row 2.6 — and does not depend on any of the blockers here.
+Этим ADR не добавлено никакого кода *хранилища* MySQL/MariaDB. Он фиксирует
+измеренные блокеры, чтобы более поздний этап начал с фактов и чтобы дорожная карта
+не несла это направление как «почти готовое», когда оно не начато. *Источник*
+миграции MySQL/MariaDB (`internal/migratex/mysql.go`) — отдельная, проверенная
+возможность (см. строку 2.6 дорожной карты) и не зависит ни от одного блокера здесь.

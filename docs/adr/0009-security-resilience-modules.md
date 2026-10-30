@@ -1,116 +1,119 @@
-# ADR 0009 — Security and resilience as independent building blocks, not a monolith
+# ADR 0009 — Безопасность и отказоустойчивость как независимые блоки, а не монолит
 
-- **Status:** Accepted
-- **Date:** 2026-10-29
-- **Deciders:** project owner, engineering agent
-- **Depends on:** ADR 0001 (hybrid architecture), ADR 0002 (extraction triggers)
+- **Статус:** Принято
+- **Дата:** 2026-10-29
+- **Решающие:** владелец проекта, инженерный агент
+- **Зависит от:** ADR 0001 (гибридная архитектура), ADR 0002 (триггеры выделения)
 
-## Context
+## Контекст
 
-ForgeCRM is being repositioned from a single CRM product into a *hackathon backend
-builder*: a kit from which a developer can lift verified components, assemble a
-backend for a specific case, substitute external dependencies with fakes, run
-without heavy infrastructure, and extract individual pieces into separate
-projects.
+ForgeCRM перепозиционируется из единого продукта CRM в *конструктор бэкенда для
+хакатонов*: набор, из которого разработчик может поднять проверенные компоненты,
+собрать бэкенд под конкретный случай, заменить внешние зависимости заглушками,
+запустить без тяжёлой инфраструктуры и выделить отдельные части в самостоятельные
+проекты.
 
-Security and resilience are the parts of the system most tempting to grow into one
-big subsystem — "the Security Platform" — because authorization, rate limiting,
-auditing and idempotency are all "security", and because they share a request
-pipeline today. The audit at `7a6d67f` shows what that tendency produced:
+Безопасность и отказоустойчивость — части системы, которые соблазнительнее всего
+вырастить в одну большую подсистему — «Платформу безопасности», — потому что
+авторизация, ограничение частоты, аудит и идемпотентность — всё это
+«безопасность», и потому что сегодня они делят один конвейер запроса. Аудит на
+`7a6d67f` показывает, что эта тенденция произвела:
 
-- Authorization is **not** a module. It is enforced inline: `rbac.Principal` holds
-  a permission set, `api` middleware calls `Require`, and `crm` adds
-  ownership/tenant checks. There is no `Authorizer` type, no `Decision`, and no
-  policy object. It works, but it cannot be lifted or tested in isolation.
-- Rate limiting **is** already a clean module (`internal/ratelimit`) with a
-  `Store` interface, a real in-process `MemoryStore` and a `RedisStore`. It is the
-  proof that the shape this ADR argues for is achievable here.
-- Audit **is** a module (`internal/audit`) but has no verifier and no hash chain;
-  the trail is append-only by a database trigger, which protects against the
-  application but not against anyone who can rewrite rows with DDL rights.
+- Авторизация **не** является модулем. Она обеспечивается встроенно:
+  `rbac.Principal` держит набор разрешений, middleware `api` вызывает `Require`, а
+  `crm` добавляет проверки владения/тенанта. Нет типа `Authorizer`, нет `Decision`,
+  нет объекта политики. Работает, но не может быть поднята или протестирована
+  изолированно.
+- Ограничение частоты **уже** чистый модуль (`internal/ratelimit`) с интерфейсом
+  `Store`, реальным `MemoryStore` в процессе и `RedisStore`. Это доказательство,
+  что форма, за которую ратует этот ADR, здесь достижима.
+- Аудит **является** модулем (`internal/audit`), но у него нет верификатора и нет
+  хеш-цепочки; журнал «только добавление» обеспечивается триггером базы, что
+  защищает от приложения, но не от того, у кого есть права DDL переписать строки.
 
-A monolithic Security Platform would make all of these unextractable at once, and
-would couple a project that only needs an authorizer to Redis, PostgreSQL and an
-audit schema it does not use.
+Монолитная Платформа безопасности сделала бы всё это невыделяемым сразу и связала
+бы проект, которому нужен только авторизатор, с Redis, PostgreSQL и схемой аудита,
+которую он не использует.
 
-## Decision
+## Решение
 
-ForgeCRM will **not** build a monolithic Security Platform. Security and
-resilience are provided as **independent building blocks**, each designed around:
+ForgeCRM **не будет** строить монолитную Платформу безопасности. Безопасность и
+отказоустойчивость предоставляются как **независимые блоки**, каждый спроектирован
+вокруг:
 
-- an **interface** (the contract a consumer depends on);
-- a **fake implementation** (deterministic, realistic, able to fail);
-- one or more **real implementations** (the production adapter);
-- **configuration** (so the block is selected, never guessed);
-- **tests** (unit, integration, contract);
-- an explicit **extraction boundary** (what moves, what stays).
+- **интерфейса** (контракт, от которого зависит потребитель);
+- **фейковой реализации** (детерминированной, реалистичной, умеющей падать);
+- одной или нескольких **реальных реализаций** (продакшн-адаптер);
+- **конфигурации** (чтобы блок выбирался, а не угадывался);
+- **тестов** (модульные, интеграционные, контрактные);
+- явной **границы выделения** (что переносится, что остаётся).
 
-Each block is independently selectable, independently testable, and independently
-extractable. A consumer that needs only an authorizer takes only the authorizer;
-it does not inherit Redis, S3 or the audit schema.
+Каждый блок независимо выбираем, независимо тестируем и независимо извлекаем.
+Потребитель, которому нужен только авторизатор, берёт только авторизатор; он не
+наследует Redis, S3 или схему аудита.
 
-### Planned blocks
+### Планируемые блоки
 
-These are **plans, not implemented capabilities.** Naming them here fixes the
-target and the order; it does not claim they exist.
+Это **планы, а не реализованные возможности.** Назвать их здесь — зафиксировать
+цель и порядок; это не заявляет, что они существуют.
 
-1. **Authorization Policy Engine** — a `Subject`/`Action`/`Resource` → `Decision`
-   contract with `RBACAuthorizer`, `FakeAuthorizer`, and an `AllowAllAuthorizer`
-   that only demo/test may select. Planned in ADR 0010.
-2. **Rate Limiter** — the existing `internal/ratelimit` generalised to the
-   `Limiter` contract with `MemoryLimiter`, `RedisLimiter`, `NoopLimiter` and
-   per-policy fail modes. Planned in ADR 0011.
-3. **Audit Writer + Verifier** — the existing append-only writer plus a
-   `HashChainVerifier` over a SHA-256 hash chain. Planned in ADR 0012.
+1. **Движок политик авторизации** — контракт `Subject`/`Action`/`Resource` →
+   `Decision` с `RBACAuthorizer`, `FakeAuthorizer` и `AllowAllAuthorizer`, который
+   может выбрать только демо/тест. Спланировано в ADR 0010.
+2. **Ограничитель частоты** — существующий `internal/ratelimit`, обобщённый до
+   контракта `Limiter` с `MemoryLimiter`, `RedisLimiter`, `NoopLimiter` и режимами
+   отказа на политику. Спланировано в ADR 0011.
+3. **Писатель + верификатор аудита** — существующий писатель «только добавление»
+   плюс `HashChainVerifier` над хеш-цепочкой SHA-256. Спланировано в ADR 0012.
 
-Further blocks (idempotency, circuit breaker, timeout/retry budget) are recorded
-in the roadmap and follow the same shape. They are not authorised by this ADR.
+Дальнейшие блоки (идемпотентность, предохранитель, бюджет тайм-аутов/повторов)
+записаны в дорожной карте и следуют той же форме. Этим ADR они не разрешены.
 
-## Constraints each block must satisfy
+## Ограничения, которым должен удовлетворять каждый блок
 
-- **Interface + fake + real.** A block with no fake is not finished; a fake that
-  returns success for everything is not a fake.
-- **No hidden coupling.** A block does not import `api`, `wiring` or another
-  block's concrete implementation. Dependencies point at interfaces.
-- **Configurable selection.** The adapter is chosen by configuration; the default
-  is the safe one.
-- **Demo cannot leak into production.** `AllowAllAuthorizer`, `NoopLimiter` and a
-  fake audit writer are refused when `config.IsProduction()` is true. This is the
-  same rule the profiles in `CONFIG_PROFILES.md` enforce.
-- **Honest failure.** A block that cannot reach its store reports the condition;
-  it does not report success. This mirrors the existing `ErrProviderUnavailable`
-  handling and the rate limiter's `ErrUnavailable`.
-- **No second source of truth.** A block integrates with the existing subsystem
-  (the RBAC catalog, the audit table, the rate-limit middleware). It must not
-  create a parallel authorization model or a parallel log.
+- **Интерфейс + фейк + реальная реализация.** Блок без фейка не закончен; фейк,
+  возвращающий успех для всего, — не фейк.
+- **Никакой скрытой связи.** Блок не импортирует `api`, `wiring` или конкретную
+  реализацию другого блока. Зависимости указывают на интерфейсы.
+- **Конфигурируемый выбор.** Адаптер выбирается конфигурацией; значение по
+  умолчанию — безопасное.
+- **Демо не может просочиться в production.** `AllowAllAuthorizer`, `NoopLimiter` и
+  фейковый писатель аудита отклоняются, когда `config.IsProduction()` истинно. Это
+  то же правило, что обеспечивают профили в `CONFIG_PROFILES.md`.
+- **Честный отказ.** Блок, который не может достичь своего хранилища, сообщает об
+  условии; он не сообщает об успехе. Это повторяет существующую обработку
+  `ErrProviderUnavailable` и `ErrUnavailable` ограничителя частоты.
+- **Никакого второго источника истины.** Блок интегрируется с существующей
+  подсистемой (каталог RBAC, таблица аудита, middleware ограничения частоты). Он не
+  должен создавать параллельную модель авторизации или параллельный лог.
 
-## Alternatives considered
+## Рассмотренные альтернативы
 
-- **One `security` package** containing authorization, rate limiting, auditing
-  and idempotency. Rejected: it couples unrelated dependencies (Redis for the
-  limiter, a DB for audit) and makes selective reuse impossible — the opposite of
-  the builder goal.
-- **Leave authorization inline and only generalise rate limiting.** Rejected: the
-  inline model is the hardest to test for BOLA/IDOR and the most valuable to
-  extract.
-- **Adopt an external policy engine (OPA/Casbin).** Rejected for now: it adds a
-  large dependency and a second policy language before the existing RBAC model has
-  been expressed as a contract. Revisit if the contract proves insufficient.
+- **Один пакет `security`**, содержащий авторизацию, ограничение частоты, аудит и
+  идемпотентность. Отклонено: он связывает несвязанные зависимости (Redis для
+  лимитера, БД для аудита) и делает выборочное переиспользование невозможным —
+  противоположность цели конструктора.
+- **Оставить авторизацию встроенной и обобщить только ограничение частоты.**
+  Отклонено: встроенную модель труднее всего тестировать на BOLA/IDOR и ценнее
+  всего выделить.
+- **Взять внешний движок политик (OPA/Casbin).** Отклонено пока: он добавляет
+  крупную зависимость и второй язык политик до того, как существующая модель RBAC
+  выражена контрактом. Вернуться, если контракт окажется недостаточным.
 
-## Consequences
+## Последствия
 
-- More, smaller packages instead of one large one. Slightly more wiring in
-  `wiring.Build`, in exchange for independent extraction.
-- Each block needs its own fake and its own extract-test before it may be called
-  ready. This is deliberate friction: it is what makes "modular" provable rather
-  than asserted.
-- The existing inline authorization must be migrated onto the engine carefully —
-  a behavioural change in authorization is a security change. The engine's first
-  implementation must reproduce the current decisions exactly, proven by tests
-  that run against both.
+- Больше мелких пакетов вместо одного крупного. Чуть больше связывания в
+  `wiring.Build` в обмен на независимое выделение.
+- Каждому блоку нужны собственный фейк и собственный extract-тест, прежде чем его
+  можно назвать готовым. Это намеренное трение: именно оно делает «модульность»
+  доказуемой, а не заявленной.
+- Существующую встроенную авторизацию нужно аккуратно перенести на движок —
+  поведенческое изменение авторизации является изменением безопасности. Первая
+  реализация движка должна в точности воспроизводить текущие решения, что
+  доказывается тестами, прогоняемыми против обеих.
 
-## Revision trigger
+## Триггер пересмотра
 
-Revisit if the contract proves too coarse to express a real rule (for example a
-conditional permission), if an external engine becomes justified, or if a block's
-fake cannot model a failure the production adapter can produce.
+Вернуться, если контракт окажется слишком грубым, чтобы выразить реальное правило
+(например, условное разрешение), если внешний движок станет оправданным, или если
+фейк блока не может смоделировать отказ, который может произвести продакшн-адаптер.
