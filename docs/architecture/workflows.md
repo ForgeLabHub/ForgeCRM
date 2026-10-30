@@ -1,39 +1,39 @@
-# Workflow automation
+# Автоматизация workflow
 
-A workflow is a trigger plus an ordered list of steps. It reacts to a committed
-event, runs on a schedule, or runs when someone asks for it. Steps act on CRM
-records through the same service the HTTP API uses, as the user who created the
-workflow, with that user's permissions resolved on every run.
+Workflow — это триггер плюс упорядоченный список шагов. Он реагирует на
+закоммиченное событие, работает по расписанию или запускается, когда кто-то его
+запросит. Шаги действуют на записи CRM через тот же сервис, что использует HTTP
+API, от имени пользователя, создавшего workflow, с разрешениями этого пользователя,
+определяемыми на каждом прогоне.
 
-For the reasoning behind the design, see
-[ADR 0007](../adr/0007-workflow-automation-engine.md).
+Обоснование дизайна — в [ADR 0007](../adr/0007-workflow-automation-engine.md).
 
-## Triggers
+## Триггеры
 
-| Trigger | When it runs | Notes |
+| Триггер | Когда работает | Примечания |
 | --- | --- | --- |
-| `event` | An event of the named type is committed to the outbox | De-duplicated per event |
-| `schedule` | A 5-field cron expression matches, in the workflow's timezone | Claimed by `next_run_at` |
-| `manual` | `POST /api/v1/workflows/{id}/run` | Synchronous |
+| `event` | Событие названного типа коммитится в outbox | Дедуплицируется по событию |
+| `schedule` | Совпадает cron-выражение из 5 полей, в часовом поясе workflow | Забирается по `next_run_at` |
+| `manual` | `POST /api/v1/workflows/{id}/run` | Синхронно |
 
-## Steps
+## Шаги
 
-| Type | What it does | Required permission |
+| Тип | Что делает | Требуемое разрешение |
 | --- | --- | --- |
-| `condition` | Continues only when its expression is true | — |
-| `branch` | Chooses a step list by a condition | — |
-| `create_task` | Creates a task | `tasks.create` |
-| `create_ticket` | Creates a support ticket | `tickets.create` |
-| `update_deal` | Moves a deal to a stage | `deals.change_stage` |
-| `notify` | Notifies a member of the same organization | `notifications.read` |
-| `find_deals` | Selects deals by pipeline, stage and bound date filters | `deals.read` |
-| `foreach` | Runs a nested step list once per item in a list | — |
-| `delay` | Pauses the run and resumes it later | — |
+| `condition` | Продолжает, только когда его выражение истинно | — |
+| `branch` | Выбирает список шагов по условию | — |
+| `create_task` | Создаёт задачу | `tasks.create` |
+| `create_ticket` | Создаёт обращение в поддержку | `tickets.create` |
+| `update_deal` | Перемещает сделку на стадию | `deals.change_stage` |
+| `notify` | Уведомляет участника той же организации | `notifications.read` |
+| `find_deals` | Выбирает сделки по воронке, стадии и связанным фильтрам даты | `deals.read` |
+| `foreach` | Выполняет вложенный список шагов по разу на элемент списка | — |
+| `delay` | Приостанавливает прогон и возобновляет его позже | — |
 
-A step's arguments can reference data from the event that triggered the run with
-`{{path}}`, for example `{{account_name}}` or `{{payload.deal_id}}`.
+Аргументы шага могут ссылаться на данные события, вызвавшего прогон, через
+`{{path}}`, например `{{account_name}}` или `{{payload.deal_id}}`.
 
-### Definition shape
+### Форма определения
 
 ```json
 {
@@ -46,29 +46,29 @@ A step's arguments can reference data from the event that triggered the run with
 }
 ```
 
-Limits are enforced at save time: 50 steps per definition, a branch depth of 5, and
-a delay of at most 30 days.
+Лимиты обеспечиваются при сохранении: 50 шагов на определение, глубина ветвления
+5 и задержка не более 30 дней.
 
-## Execution model
+## Модель исполнения
 
-- **At-least-once, de-duplicated.** The outbox can deliver an event more than once.
-  The engine claims `(workflow_id, event_id)` with a primary-key insert and creates
-  the run in the same transaction. A duplicate delivery commits nothing, so there is
-  one run per event.
-- **Permissions at execution time.** The author's effective permissions are read
-  from the database on every run. A revoked permission stops the next run.
-- **Delays do not hold a worker.** A `delay` writes a resume instant and the next
-  step index; the scheduler resumes the run from there.
-- **Chains are bounded.** An event caused by a run inherits the run's correlation
-  id, and the chain depth is the number of runs already recorded for it. A run at
-  `max_depth` is recorded as `skipped` rather than executed, which stops two
-  workflows that watch each other.
-- **Multi-replica safe.** The scheduler claims a due workflow by advancing its
-  `next_run_at` in the same transaction that selects it.
+- **At-least-once, с дедупликацией.** Outbox может доставить событие более одного
+  раза. Движок заявляет `(workflow_id, event_id)` вставкой первичного ключа и
+  создаёт прогон в той же транзакции. Дублирующая доставка не коммитит ничего,
+  поэтому на событие приходится один прогон.
+- **Разрешения на момент исполнения.** Действующие разрешения автора читаются из
+  базы на каждом прогоне. Отозванное разрешение останавливает следующий прогон.
+- **Задержки не держат воркер.** `delay` записывает момент возобновления и индекс
+  следующего шага; планировщик возобновляет прогон с этого места.
+- **Цепочки ограничены.** Событие, вызванное прогоном, наследует correlation id
+  прогона, а глубина цепочки — число уже записанных для него прогонов. Прогон на
+  `max_depth` записывается как `skipped`, а не исполняется, что останавливает два
+  workflow, следящих друг за другом.
+- **Безопасно при нескольких репликах.** Планировщик заявляет готовый workflow,
+  продвигая его `next_run_at` в той же транзакции, которая его выбирает.
 
 ## API
 
-| Method | Path | Permission |
+| Метод | Путь | Разрешение |
 | --- | --- | --- |
 | `GET` | `/api/v1/workflows` | `workflows.read` |
 | `POST` | `/api/v1/workflows` | `workflows.manage` |
@@ -86,63 +86,65 @@ a delay of at most 30 days.
 | `GET` | `/api/v1/workflows/{id}/export` | `workflows.read` |
 | `POST` | `/api/v1/workflows/import` | `workflows.manage` |
 
-A manual run returns `200` with the run result, or `202` with the run id when the
-run paused on a delay.
+Ручной прогон возвращает `200` с результатом прогона или `202` с id прогона, когда
+прогон приостановился на задержке.
 
-## Templates
+## Шаблоны
 
-A template is a named definition the server builds and validates, so a client never
-supplies one. The catalog is registered against `outbox.EventTypes()` at startup: a
-template whose trigger is not in that vocabulary fails construction, which is what
-stops a scenario shipping that would be created, enabled and then never fire. The
-catalog ships six CRM scenarios — notify the owner about an overdue deal, create a
-follow-up task when a deal changes stage, remind the owner about a deal with no
-recent activity, acknowledge a new ticket, start onboarding when a deal is won, and
-triage a new ticket by priority.
+Шаблон — это именованное определение, которое строит и валидирует сервер, поэтому
+клиент никогда его не поставляет. Каталог регистрируется против
+`outbox.EventTypes()` при старте: шаблон, чей триггер не входит в этот словарь,
+падает при построении, что и не даёт поставить сценарий, который был бы создан,
+включён и затем никогда не срабатывал. Каталог поставляет шесть CRM-сценариев —
+уведомить владельца о просроченной сделке, создать задачу-продолжение при смене
+стадии сделки, напомнить владельцу о сделке без недавней активности, подтвердить
+получение нового обращения, начать онбординг при выигрыше сделки и рассортировать
+новое обращение по приоритету.
 
-## Import and export
+## Импорт и экспорт
 
-A workflow exports as a portable document carrying a format name and a version.
-Import checks both before applying anything, so a document from another version is
-refused with a reason rather than partially applied. The exported definition is the
-same `{steps: [...]}` the engine parses; there is no second format.
+Workflow экспортируется как переносимый документ, несущий имя формата и версию.
+Импорт проверяет и то, и другое, прежде чем что-либо применить, поэтому документ
+из другой версии отклоняется с причиной, а не применяется частично. Экспортируемое
+определение — тот же `{steps: [...]}`, который разбирает движок; второго формата нет.
 
-## The editor
+## Редактор
 
-The `/workflows` page offers a structured editor over that same document — the
-raw-JSON view is the document serialised, so an edit made in either view is what is
-saved. Step types and condition operators are drawn from lists that mirror the
-engine, so the form cannot offer a step that does not exist. The structural rules the
-parser enforces (a non-empty step list, unique ids, a condition with an operator, no
-delay inside a `foreach`) are checked before save and shown per error; the server
-remains the authority and its message is shown verbatim.
+Страница `/workflows` предлагает структурированный редактор над этим же
+документом — представление с сырым JSON — это тот же документ, сериализованный,
+поэтому правка, сделанная в любом из представлений, и есть то, что сохраняется.
+Типы шагов и операторы условий берутся из списков, отражающих движок, поэтому форма
+не может предложить несуществующий шаг. Структурные правила, которые обеспечивает
+парсер (непустой список шагов, уникальные id, условие с оператором, отсутствие
+`delay` внутри `foreach`), проверяются перед сохранением и показываются по каждой
+ошибке; сервер остаётся авторитетом, и его сообщение показывается дословно.
 
-## Data model
+## Модель данных
 
-| Table | Purpose |
+| Таблица | Назначение |
 | --- | --- |
-| `workflows` | The definition and its denormalised trigger fields |
-| `workflow_runs` | One execution: trigger, status, counters, pause state |
-| `workflow_step_runs` | One row per step per run, appended as it finishes |
-| `workflow_run_events` | The de-duplication ledger, keyed `(workflow_id, event_id)` |
+| `workflows` | Определение и его денормализованные поля триггера |
+| `workflow_runs` | Одно исполнение: триггер, статус, счётчики, состояние паузы |
+| `workflow_step_runs` | Одна строка на шаг на прогон, дописывается по завершении |
+| `workflow_run_events` | Реестр дедупликации с ключом `(workflow_id, event_id)` |
 
-## Verified behaviour
+## Проверенное поведение
 
-Integration tests run the real engine against a real PostgreSQL schema
-(`internal/testsupport/workflow_engine_test.go`, build tag `integration`):
+Интеграционные тесты прогоняют реальный движок на реальной схеме PostgreSQL
+(`internal/testsupport/workflow_engine_test.go`, тег сборки `integration`):
 
-| Test | What it proves |
+| Тест | Что доказывает |
 | --- | --- |
-| `TestWorkflowManualRunExecutesAStep` | A run writes a real task and records a successful step |
-| `TestWorkflowEventTriggerIsDeDuplicated` | Three deliveries of one event produce one run and one task |
-| `TestWorkflowPermissionIsRecheckedAtExecutionTime` | Revoking `tasks.create` fails the next run and creates nothing |
-| `TestWorkflowCannotNotifyAcrossOrganizations` | A recipient in another organization is refused and nothing is written |
-| `TestWorkflowDelayPausesAndResumes` | Nothing runs before the instant; the run completes after it |
-| `TestWorkflowDepthLimitStopsLoops` | A chained event at the depth limit is skipped |
+| `TestWorkflowManualRunExecutesAStep` | Прогон пишет реальную задачу и записывает успешный шаг |
+| `TestWorkflowEventTriggerIsDeDuplicated` | Три доставки одного события дают один прогон и одну задачу |
+| `TestWorkflowPermissionIsRecheckedAtExecutionTime` | Отзыв `tasks.create` проваливает следующий прогон и ничего не создаёт |
+| `TestWorkflowCannotNotifyAcrossOrganizations` | Получатель в другой организации отклоняется, и ничего не пишется |
+| `TestWorkflowDelayPausesAndResumes` | До момента ничего не выполняется; прогон завершается после него |
+| `TestWorkflowDepthLimitStopsLoops` | Цепное событие на пределе глубины пропускается |
 
-## Not implemented
+## Не реализовано
 
-- Rollback of a partially completed run. A run reports which steps succeeded so an
-  operator can act; it does not claim to undo a write.
-- A separate scheduling service. Claim-by-update makes several replicas safe, which
-  is enough at this scale.
+- Откат частично завершённого прогона. Прогон сообщает, какие шаги удались, чтобы
+  оператор мог действовать; он не заявляет, что отменяет запись.
+- Отдельный сервис планирования. Заявка-через-обновление делает несколько реплик
+  безопасными, чего достаточно на таком масштабе.

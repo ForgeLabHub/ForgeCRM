@@ -1,41 +1,41 @@
-# Frontend development
+# Разработка фронтенда
 
-The frontend is a React + TypeScript single-page application built with Vite. It
-is served by the same Nginx instance as the API, so every request is same-origin.
-That is what lets the session cookie and the CSRF double-submit work without any
-CORS configuration.
+Фронтенд — это одностраничное приложение на React + TypeScript, собираемое Vite.
+Его обслуживает тот же экземпляр Nginx, что и API, поэтому каждый запрос идёт из
+одного источника. Именно это позволяет cookie сессии и двойной отправке CSRF
+работать без какой-либо настройки CORS.
 
-## Stack
+## Стек
 
-| Concern | Choice |
+| Забота | Выбор |
 | --- | --- |
-| Build tool | Vite 6 |
-| Language | TypeScript 5.7 (strict) |
+| Инструмент сборки | Vite 6 |
+| Язык | TypeScript 5.7 (strict) |
 | UI | React 19 |
-| Routing | React Router 7 |
-| Server state | TanStack Query 5 |
-| Tests | Vitest 3 with Testing Library |
-| Lint | ESLint 9 (flat config) |
+| Маршрутизация | React Router 7 |
+| Серверное состояние | TanStack Query 5 |
+| Тесты | Vitest 3 с Testing Library |
+| Линт | ESLint 9 (flat config) |
 
-There is no component library and no CSS framework. `src/index.css` holds a small
-set of design tokens and the primitives the application needs, which keeps the
-bundle small and the markup readable.
+Библиотеки компонентов и CSS-фреймворка нет. `src/index.css` держит небольшой
+набор дизайн-токенов и примитивов, нужных приложению, что держит бандл небольшим,
+а разметку читаемой.
 
-## Layout
+## Структура
 
 ```
 frontend/src/
-  api/          One module per backend area, plus the shared HTTP client
-  components/   Reusable UI: shell, table list, permission gate, primitives
-  hooks/        Auth context and session state
-  pages/        One file per route; admin pages live in pages/admin/
-  test/         Vitest setup
-  types/        API response types, kept in step with the Go handlers
+  api/          По модулю на каждую область бэкенда плюс общий HTTP-клиент
+  components/   Переиспользуемый UI: оболочка, табличный список, шлюз по правам, примитивы
+  hooks/        Контекст аутентификации и состояние сессии
+  pages/        По файлу на маршрут; страницы администрирования в pages/admin/
+  test/         Настройка Vitest
+  types/        Типы ответов API, синхронизированные с обработчиками Go
 ```
 
-## Running it
+## Запуск
 
-The API must be running first. Then:
+Сначала должен быть запущен API. Затем:
 
 ```bash
 cd frontend
@@ -43,10 +43,10 @@ npm ci
 npm run dev
 ```
 
-Vite proxies `/api` and `/health` to `http://127.0.0.1:8080` by default. Point it
-elsewhere with `FORGECRM_API_URL`.
+Vite проксирует `/api` и `/health` на `http://127.0.0.1:8080` по умолчанию.
+Направьте его в другое место через `FORGECRM_API_URL`.
 
-## Checks
+## Проверки
 
 ```bash
 npm run typecheck   # tsc --noEmit
@@ -55,62 +55,64 @@ npm run test        # vitest run
 npm run build       # tsc -b && vite build
 ```
 
-All four must pass before a change is mergeable.
+Все четыре должны пройти, прежде чем изменение можно мёрджить.
 
-## How the frontend talks to the API
+## Как фронтенд общается с API
 
-Two rules shape `src/api/client.ts`, and both exist for security rather than
-convenience:
+Форму `src/api/client.ts` задают два правила, и оба существуют ради безопасности, а
+не удобства:
 
-1. **The session lives in an HttpOnly cookie.** The browser cannot read it and
-   the client never tries to. No credential is ever put in `localStorage`, so an
-   XSS bug cannot exfiltrate a long-lived token.
-2. **Every mutation carries a CSRF token** that the server derived for the
-   current session. The token is not a secret on its own — it only proves the
-   request came from our own page — and it is held in memory, refreshed from
-   `/auth/me` after a reload.
+1. **Сессия живёт в HttpOnly cookie.** Браузер не может её прочитать, и клиент
+   никогда не пытается. Никакие учётные данные никогда не кладутся в
+   `localStorage`, поэтому баг XSS не может выкрасть долгоживущий токен.
+2. **Каждая мутация несёт CSRF-токен**, который сервер вывел для текущей сессии.
+   Токен сам по себе не секрет — он лишь доказывает, что запрос пришёл с нашей
+   страницы, — и он держится в памяти, обновляясь из `/auth/me` после перезагрузки.
 
-A `401` clears the stored CSRF token and notifies the application so the user is
-returned to the sign-in page. A `403` deliberately does not: a permission failure
-must not sign the user out.
+`401` очищает сохранённый CSRF-токен и уведомляет приложение, чтобы пользователя
+вернули на страницу входа. `403` намеренно не делает этого: отказ в правах не
+должен разлогинивать пользователя.
 
-## Authorisation in the interface
+## Авторизация в интерфейсе
 
-`useAuth()` exposes `can(permission)`, and `RequirePermission` guards a route.
-These control what is *shown*; they are not the security boundary. The server
-re-checks every request, and the interface is written on the assumption that a
-user may know a record ID they are not allowed to read.
+`useAuth()` предоставляет `can(permission)`, а `RequirePermission` охраняет
+маршрут. Они управляют тем, что *показывается*; они не являются границей
+безопасности. Сервер перепроверяет каждый запрос, и интерфейс написан в
+предположении, что пользователь может знать id записи, которую ему не разрешено
+читать.
 
-## Adding a page
+## Добавление страницы
 
-1. Add the API calls to the relevant module under `src/api/`.
-2. Add or extend the response types in `src/types/api.ts`. Keep them matched to
-   the Go handler's JSON, including nullability.
-3. Build the page under `src/pages/`, reusing `ResourceList` for any paginated
-   collection — it already handles search, paging and the empty and error states.
-4. Register the route in `src/App.tsx` and, if it belongs in the navigation, in
+1. Добавьте вызовы API в соответствующий модуль в `src/api/`.
+2. Добавьте или расширьте типы ответов в `src/types/api.ts`. Держите их
+   соответствующими JSON обработчика Go, включая возможность null.
+3. Постройте страницу в `src/pages/`, переиспользуя `ResourceList` для любой
+   постраничной коллекции — он уже обрабатывает поиск, пагинацию и состояния
+   пустоты и ошибки.
+4. Зарегистрируйте маршрут в `src/App.tsx` и, если он принадлежит навигации, в
    `src/components/AppShell.tsx`.
-5. Add a test if the page contains logic worth testing. Tests exercise real
-   components against a stubbed `fetch` rather than mocking our own modules.
+5. Добавьте тест, если страница содержит логику, которую стоит тестировать. Тесты
+   упражняют реальные компоненты против заглушённого `fetch`, а не мокают наши
+   собственные модули.
 
-## Testing approach
+## Подход к тестированию
 
-`fetch` is stubbed at the boundary, so the client, the auth context, the query
-cache and the components all run for real. Mocking our own modules would test
-that the mocks agree with each other and nothing else. See
-`src/api/client.test.ts`, `src/components/ResourceList.test.tsx` and
+`fetch` заглушается на границе, поэтому клиент, контекст аутентификации, кэш
+запросов и компоненты работают по-настоящему. Мокирование наших собственных модулей
+проверяло бы, что моки согласованы друг с другом, и ничего больше. См.
+`src/api/client.test.ts`, `src/components/ResourceList.test.tsx` и
 `src/components/RequirePermission.test.tsx`.
 
-## End-to-end tests
+## Сквозные тесты
 
-The unit tests above stub `fetch`, which proves the components behave. They
-cannot prove that a button performs the operation it claims to, because the
-operation itself is the thing being stubbed. The end-to-end suite closes that
-gap: it drives a real Chromium browser against the real Go API and a real
-PostgreSQL database, with no network stubbing anywhere.
+Модульные тесты выше заглушают `fetch`, что доказывает поведение компонентов. Они
+не могут доказать, что кнопка выполняет заявленную операцию, потому что сама
+операция и есть то, что заглушено. Набор сквозных тестов закрывает этот пробел: он
+управляет реальным браузером Chromium против реального API на Go и реальной базы
+PostgreSQL, без заглушек сети где-либо.
 
 ```bash
-# 1. PostgreSQL with migrations applied
+# 1. PostgreSQL с применёнными миграциями
 createdb forgecrm_e2e
 cd backend
 FORGECRM_DATABASE_URL='postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_e2e?sslmode=disable' \
@@ -118,48 +120,49 @@ FORGECRM_SECRET_KEY='a-development-secret-key-long-enough-for-hkdf' \
 FORGECRM_ENV=development \
   go run ./cmd/forgecrm-api -migrate
 
-# 2. A platform owner, created through the same path an operator uses
+# 2. Владелец платформы, созданный тем же путём, которым пользуется оператор
 FORGECRM_DATABASE_URL='postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_e2e?sslmode=disable' \
 FORGECRM_SECRET_KEY='a-development-secret-key-long-enough-for-hkdf' \
 FORGECRM_ENV=development \
   ../scripts/e2e-bootstrap.sh
 
-# 3. The API
+# 3. API
 FORGECRM_DATABASE_URL='postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_e2e?sslmode=disable' \
 FORGECRM_SECRET_KEY='a-development-secret-key-long-enough-for-hkdf' \
 FORGECRM_ENV=development \
 FORGECRM_HTTP_ADDR=127.0.0.1:8080 \
   go run ./cmd/forgecrm-api
 
-# 4. The suite; Playwright starts the Vite dev server itself
+# 4. Набор; Playwright сам запускает dev-сервер Vite
 cd ../frontend
 FORGECRM_API_URL='http://127.0.0.1:8080' npm run e2e
 ```
 
-CI runs exactly these steps as the `e2e` job in `.github/workflows/ci.yml`.
+CI прогоняет ровно эти шаги как задание `e2e` в `.github/workflows/ci.yml`.
 
-### Two things that will bite you
+### Две вещи, которые вас укусят
 
-**Raise the rate limits when running the suite.** The suite signs in repeatedly
-and drives many requests from a single address, which the production budgets are
-correct to refuse. Set `FORGECRM_RATE_LIMIT_PER_MIN` and
-`FORGECRM_LOGIN_RATE_LIMIT_PER_MIN` high for a local run, as CI does. A `429` in
-a failure message is the product working, not a broken test.
+**Поднимите лимиты частоты при прогоне набора.** Набор входит в систему
+многократно и гонит много запросов с одного адреса, что продакшн-бюджеты правильно
+отклоняют. Задайте `FORGECRM_RATE_LIMIT_PER_MIN` и
+`FORGECRM_LOGIN_RATE_LIMIT_PER_MIN` высокими для локального прогона, как делает CI.
+`429` в сообщении о сбое — это продукт, работающий правильно, а не сломанный тест.
 
-**The tests share one database and must run one at a time.** `workers: 1` and
-`fullyParallel: false` are set in `playwright.config.ts` for that reason.
+**Тесты делят одну базу и должны запускаться по одному.** `workers: 1` и
+`fullyParallel: false` заданы в `playwright.config.ts` именно поэтому.
 
-### Writing a test
+### Написание теста
 
-Prefer asserting on the effect over the rendering. After a write, re-read the
-record through the API and confirm the value landed; then reload the page and
-confirm it is still there. A test that only checks a toast appeared will pass
-even when nothing was saved.
+Предпочитайте утверждение об эффекте, а не об отрисовке. После записи перечитайте
+запись через API и подтвердите, что значение сохранилось; затем перезагрузите
+страницу и подтвердите, что оно всё ещё там. Тест, который лишь проверяет, что
+появился тост, пройдёт даже когда ничего не сохранилось.
 
-For the page-load cases, assert on the page's own `h1`, not the shell's. The
-application shell renders `<h1>ForgeCRM</h1>` on every route, so a test that
-looks for any `h1` passes even when the route fell through to the overview.
+Для случаев загрузки страницы утверждайте по собственному `h1` страницы, а не по
+`h1` оболочки. Оболочка приложения отрисовывает `<h1>ForgeCRM</h1>` на каждом
+маршруте, поэтому тест, который ищет любой `h1`, проходит, даже когда маршрут
+провалился в обзор.
 
-Target form inputs by their stable `id` (`#account-name`) rather than their
-label. A required field renders its label as `Name *`, which makes the visible
-text differ from the `label` prop and breaks a label-based locator.
+Нацеливайтесь на поля формы по их стабильному `id` (`#account-name`), а не по их
+метке. Обязательное поле отрисовывает свою метку как `Name *`, что делает видимый
+текст отличным от пропа `label` и ломает локатор по метке.
