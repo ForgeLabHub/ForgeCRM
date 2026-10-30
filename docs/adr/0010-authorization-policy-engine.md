@@ -1,131 +1,134 @@
-# ADR 0010 — Authorization Policy Engine
+# ADR 0010 — Движок политик авторизации
 
-- **Status:** Proposed (plan; no code yet)
-- **Date:** 2026-10-29
-- **Deciders:** project owner, engineering agent
-- **Depends on:** ADR 0009 (security as independent building blocks)
+- **Статус:** Предложено (план; кода пока нет)
+- **Дата:** 2026-10-29
+- **Решающие:** владелец проекта, инженерный агент
+- **Зависит от:** ADR 0009 (безопасность как независимые блоки)
 
-## Context
+## Контекст
 
-Authorization in ForgeCRM today is real but not a module. Three layers enforce it:
+Авторизация в ForgeCRM сегодня реальна, но не является модулем. Её обеспечивают
+три слоя:
 
-1. `rbac.Principal` carries a permission set and exposes `Has`, `HasAll`,
-   `HasAny`, `Require`. It is built from the user's roles and team memberships.
-2. `api` middleware calls `Require(perm)` before a handler runs, per route. The
-   route's access level is declared so `internal/openapi` can enforce that every
-   route names one.
-3. `crm` adds object-level checks: tenant scoping (`organization_id`) and
-   ownership, so a user cannot read another organisation's record by changing an
-   id in the URL.
+1. `rbac.Principal` несёт набор разрешений и предоставляет `Has`, `HasAll`,
+   `HasAny`, `Require`. Он строится из ролей и участия в командах пользователя.
+2. Middleware `api` вызывает `Require(perm)` перед выполнением обработчика, по
+   маршруту. Уровень доступа маршрута объявлен, чтобы `internal/openapi` мог
+   обеспечить, что каждый маршрут его называет.
+3. `crm` добавляет проверки уровня объекта: ограничение тенантом
+   (`organization_id`) и владение, чтобы пользователь не мог прочитать запись
+   другой организации, изменив id в URL.
 
-This works. Its problem is that it cannot be tested or extracted as a unit: there
-is no single place that answers "may this subject do this action to this
-resource?", so BOLA/IDOR behaviour is proven only through the full HTTP stack, and
-a new project that wants the same authorization must copy the middleware, the
-catalog and the ownership checks separately.
+Это работает. Проблема в том, что это нельзя протестировать или выделить как
+единицу: нет одного места, которое отвечает на вопрос «может ли этот субъект
+совершить это действие над этим ресурсом?», поэтому поведение BOLA/IDOR
+доказывается только через весь HTTP-стек, а новый проект, который хочет ту же
+авторизацию, должен скопировать middleware, каталог и проверки владения по
+отдельности.
 
-The security risk this ADR addresses is **BOLA/IDOR**: validating a session is not
-authorizing a resource. A valid JWT plus a permission is not enough if the
-resource belongs to another tenant or another owner.
+Риск безопасности, которому посвящён этот ADR, — **BOLA/IDOR**: проверка сессии не
+есть авторизация ресурса. Валидный JWT плюс разрешение недостаточны, если ресурс
+принадлежит другому тенанту или другому владельцу.
 
-## Proposed contract
+## Предлагаемый контракт
 
 ```go
 type Subject struct {
-	UserID   string
-	TenantID string
-	Roles    []string
+        UserID   string
+        TenantID string
+        Roles    []string
 }
 
 type Action string
 
 type Resource struct {
-	Type     string
-	ID       string
-	TenantID string
-	OwnerID  string
+        Type     string
+        ID       string
+        TenantID string
+        OwnerID  string
 }
 
 type Decision struct {
-	Allow  bool
-	Reason string
+        Allow  bool
+        Reason string
 }
 
 type Authorizer interface {
-	Authorize(ctx context.Context, subject Subject, action Action, resource Resource) (Decision, error)
+        Authorize(ctx context.Context, subject Subject, action Action, resource Resource) (Decision, error)
 }
 ```
 
-This is a **starting shape**, not a fixed one. It must be checked against the
-existing model before implementation:
+Это **начальная форма**, а не фиксированная. Её нужно сверить с существующей
+моделью перед реализацией:
 
-- `rbac.Principal` uses `uuid.UUID` ids and a `map[Permission]struct{}`; the
-  contract's string ids and role list must map onto it without loss.
-- Permissions are a fixed catalog (`rbac.Permission`), not free-form actions. The
-  `Action` type should resolve to that catalog, or the catalog becomes a second
-  source of truth.
-- The existing ownership rule lives in `crm`; the engine must reproduce it exactly
-  or the two disagree.
+- `rbac.Principal` использует id `uuid.UUID` и `map[Permission]struct{}`; строковые
+  id и список ролей контракта должны отображаться на это без потерь.
+- Разрешения — фиксированный каталог (`rbac.Permission`), а не произвольные
+  действия. Тип `Action` должен разрешаться в этот каталог, иначе каталог
+  становится вторым источником истины.
+- Существующее правило владения живёт в `crm`; движок должен воспроизводить его в
+  точности, иначе они разойдутся.
 
-If the contract cannot express a real current rule, it is corrected — the existing
-authorization is the source of truth, and a new model must not silently change a
-decision.
+Если контракт не может выразить реальное текущее правило, он исправляется —
+существующая авторизация является источником истины, и новая модель не должна
+молча менять решение.
 
-## Implementations
+## Реализации
 
-- `RBACAuthorizer` — the production adapter, built from the existing
-  `rbac.Service` and the catalog. Its first requirement is **decision parity**: for
-  every case the current inline path decides, it decides the same. This is proven
-  by tests that run both and compare.
-- `FakeAuthorizer` — deterministic, returns a configured decision per
-  (action, resource). It can deny, and it can return an error, so a test can drive
-  the failure path.
-- `AllowAllAuthorizer` — allowed **only** in explicitly selected demo/test
-  profiles. `config.IsProduction()` must refuse it (see `CONFIG_PROFILES.md`).
+- `RBACAuthorizer` — продакшн-адаптер, построенный из существующего `rbac.Service`
+  и каталога. Его первое требование — **паритет решений**: для каждого случая,
+  который решает текущий встроенный путь, он решает то же самое. Это доказывается
+  тестами, которые прогоняют оба и сравнивают.
+- `FakeAuthorizer` — детерминированный, возвращает настроенное решение на пару
+  (action, resource). Он умеет отказывать и умеет возвращать ошибку, поэтому тест
+  может прогнать путь отказа.
+- `AllowAllAuthorizer` — разрешён **только** в явно выбранных профилях демо/теста.
+  `config.IsProduction()` должен его отклонять (см. `CONFIG_PROFILES.md`).
 
-## Required checks
+## Обязательные проверки
 
-Every implementation is tested against at least:
+Каждая реализация тестируется как минимум на:
 
-- a subject reading its own resource → allow;
-- a subject reading another owner's resource → deny;
-- a subject from another tenant → deny;
-- an id swapped in the URL to a foreign resource → deny;
-- a subject deleting another's resource → deny;
-- a subject raising its own role → deny;
-- an unknown resource type → deny (not allow);
-- an unknown action → deny;
-- a malformed tenant → deny;
-- an authorizer error → deny (fail closed), never allow.
+- субъект читает свой ресурс → разрешить;
+- субъект читает ресурс другого владельца → отказать;
+- субъект из другого тенанта → отказать;
+- id в URL подменён на чужой ресурс → отказать;
+- субъект удаляет чужой ресурс → отказать;
+- субъект повышает свою роль → отказать;
+- неизвестный тип ресурса → отказать (не разрешать);
+- неизвестное действие → отказать;
+- искажённый тенант → отказать;
+- ошибка авторизатора → отказать (fail closed), никогда не разрешать.
 
-**Unknown and error cases must never accidentally allow.** This is the rule that
-BOLA bugs violate.
+**Неизвестные случаи и случаи ошибок никогда не должны случайно разрешать.** Это
+правило, которое нарушают баги BOLA.
 
-## Mass assignment
+## Массовое присваивание
 
-Authorization is not complete without input control. The engine does not read the
-request body; handlers must bind explicit DTOs with a field whitelist. A client
-must never be able to set `role`, `tenant_id`, `owner_id`, or a system status
-through a create/update payload. Negative tests assert each is ignored or refused.
+Авторизация не полна без контроля ввода. Движок не читает тело запроса;
+обработчики должны связывать явные DTO с белым списком полей. Клиент никогда не
+должен иметь возможность установить `role`, `tenant_id`, `owner_id` или системный
+статус через payload создания/обновления. Негативные тесты утверждают, что каждое
+из них игнорируется или отклоняется.
 
-## Compatibility and risks
+## Совместимость и риски
 
-- **Behavioural drift** is the main risk: a re-implementation that decides
-  differently is a security regression. Mitigation: parity tests against the
-  current path before the engine is used for real decisions.
-- **Second catalog** is the second risk. Mitigation: the engine consumes
-  `rbac.Permission`; it does not define its own action strings.
-- **AllowAll leakage** is the third. Mitigation: refused under `IsProduction()`.
+- **Поведенческий дрейф** — главный риск: переписанная реализация, решающая
+  иначе, является регрессией безопасности. Смягчение: тесты паритета против
+  текущего пути до того, как движок будет использоваться для реальных решений.
+- **Второй каталог** — второй риск. Смягчение: движок потребляет
+  `rbac.Permission`; он не определяет свои строки действий.
+- **Утечка AllowAll** — третий. Смягчение: отклоняется при `IsProduction()`.
 
-## Extract boundary
+## Граница выделения
 
-The engine, its fakes and its tests move as a unit. It must not import `api` or
-`wiring`; it depends on `rbac` (catalog + principal) and, for the real adapter,
-`database`. The extract-test builds it in a clean module with the fake authorizer
-and runs the BOLA smoke without the CRM, the frontend or Compose.
+Движок, его фейки и тесты переносятся как единица. Он не должен импортировать
+`api` или `wiring`; он зависит от `rbac` (каталог + принципал) и, для реального
+адаптера, от `database`. Extract-тест собирает его в чистом модуле с фейковым
+авторизатором и прогоняет smoke по BOLA без CRM, фронтенда или Compose.
 
-## Revision trigger
+## Триггер пересмотра
 
-Revisit if a real rule cannot be expressed (a conditional permission, a
-relationship-based rule), or if decision parity with the inline path cannot be
-reached without changing a current decision.
+Вернуться, если реальное правило не удаётся выразить (условное разрешение, правило
+на основе отношения) или если паритет решений со встроенным путём не достигается
+без изменения текущего решения.

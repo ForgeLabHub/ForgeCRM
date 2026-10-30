@@ -1,107 +1,109 @@
-# ADR 0011 — Pluggable rate limiter
+# ADR 0011 — Подключаемый ограничитель частоты
 
-- **Status:** Proposed (plan; the module partly exists)
-- **Date:** 2026-10-29
-- **Deciders:** project owner, engineering agent
-- **Depends on:** ADR 0009 (security as independent building blocks), ADR 0003 (multi-replica safety)
+- **Статус:** Предложено (план; модуль частично существует)
+- **Дата:** 2026-10-29
+- **Решающие:** владелец проекта, инженерный агент
+- **Зависит от:** ADR 0009 (безопасность как независимые блоки), ADR 0003 (безопасность при нескольких репликах)
 
-## Context
+## Контекст
 
-`internal/ratelimit` already exists and already has the shape this ADR argues for:
-a `Store` interface, a `MemoryStore` (single process, swept, bounded), a
-`RedisStore` (atomic Lua, shared across replicas) and a `Policy` with a `FailMode`
-(`fail-open` / `fail-closed`). `httpx.RateLimitMiddleware` consumes it. It is the
-one security concern in ForgeCRM that is already a clean, extractable block, and
-it is the model the other blocks follow.
+`internal/ratelimit` уже существует и уже имеет форму, за которую ратует этот ADR:
+интерфейс `Store`, `MemoryStore` (один процесс, с очисткой, ограниченный),
+`RedisStore` (атомарный Lua, общий для реплик) и `Policy` с `FailMode`
+(`fail-open` / `fail-closed`). Его потребляет `httpx.RateLimitMiddleware`. Это
+единственная забота безопасности в ForgeCRM, которая уже является чистым,
+извлекаемым блоком, и это образец, которому следуют другие блоки.
 
-Two gaps remain against the target:
+Против цели остаются два пробела:
 
-1. There is no `NoopLimiter` for explicitly-disabled scenarios, and no explicit
-   `Limiter` contract distinct from the concrete `Limiter` type.
-2. Policies are partly configuration-driven (`FORGECRM_RATE_LIMIT_PER_MIN`,
-   `FORGECRM_LOGIN_RATE_LIMIT_PER_MIN`) but not yet a named policy catalog.
+1. Нет `NoopLimiter` для явно отключённых сценариев и нет явного контракта
+   `Limiter`, отдельного от конкретного типа `Limiter`.
+2. Политики частично управляются конфигурацией (`FORGECRM_RATE_LIMIT_PER_MIN`,
+   `FORGECRM_LOGIN_RATE_LIMIT_PER_MIN`), но ещё не являются именованным каталогом
+   политик.
 
-## Proposed contract
+## Предлагаемый контракт
 
 ```go
 type Policy struct {
-	Name      string
-	Limit     int
-	Window    time.Duration
-	FailMode  FailMode
-	KeyPrefix string
+        Name      string
+        Limit     int
+        Window    time.Duration
+        FailMode  FailMode
+        KeyPrefix string
 }
 
 type Result struct {
-	Allowed   bool
-	Remaining int
-	ResetAt   time.Time
-	FailMode  string
+        Allowed   bool
+        Remaining int
+        ResetAt   time.Time
+        FailMode  string
 }
 
 type Limiter interface {
-	Allow(ctx context.Context, key string, policy Policy) (Result, error)
+        Allow(ctx context.Context, key string, policy Policy) (Result, error)
 }
 ```
 
-The existing `Store.Increment(ctx, key, window, now)` stays as the storage seam;
-`now` is passed in so window boundaries are testable without a real clock, which
-the current tests already rely on.
+Существующий `Store.Increment(ctx, key, window, now)` остаётся швом хранения;
+`now` передаётся, чтобы границы окна были тестируемы без реальных часов, на что уже
+опираются текущие тесты.
 
-## Implementations
+## Реализации
 
-- `MemoryLimiter` — the current `MemoryStore` behind the `Limiter` contract.
-  Bounds its key count and sweeps expired keys.
-- `RedisLimiter` — the current `RedisStore`. Coordinates several instances so a
-  limit is shared, not per-process. Redis is **optional**: the memory path needs
-  no Redis module at all (proven by the extract-test in `EXTRACT_READY.md`).
-- `NoopLimiter` — allowed only when explicitly selected, and refused under
+- `MemoryLimiter` — текущий `MemoryStore` за контрактом `Limiter`. Ограничивает
+  число ключей и очищает истёкшие.
+- `RedisLimiter` — текущий `RedisStore`. Координирует несколько экземпляров, чтобы
+  лимит был общим, а не на процесс. Redis **опционален**: путь в памяти вообще не
+  требует модуля Redis (доказано extract-тестом в `EXTRACT_READY.md`).
+- `NoopLimiter` — разрешён только при явном выборе и отклоняется при
   `config.IsProduction()`.
 
-## Policies
+## Политики
 
-Policies are configuration, not constants buried in middleware. The named set:
+Политики — это конфигурация, а не константы, зарытые в middleware. Именованный
+набор:
 
-- `login`, `otp_send`, `otp_verify`, `password_reset` — the authentication
-  surface, where fail-closed is defensible;
-- `api_read`, `api_write` — the general API;
-- `webhook` — inbound delivery;
-- `ai_requests` — the AI surface (already enforced per-organisation in `ai`).
+- `login`, `otp_send`, `otp_verify`, `password_reset` — поверхность
+  аутентификации, где fail-closed оправдан;
+- `api_read`, `api_write` — общий API;
+- `webhook` — входящая доставка;
+- `ai_requests` — поверхность ИИ (уже обеспечивается по организации в `ai`).
 
-Initial values come from configuration with safe defaults. `FailMode` is chosen
-per policy: **fail-closed only for explicitly critical routes** (login, OTP,
-password reset). An unreachable Redis must **not** block the general API — a
-rate-limiter outage becoming a full outage is the failure this rule prevents, and
-it is already reflected in the current tests (`TestDegradedFailOpenServesTheRequest`).
+Начальные значения берутся из конфигурации с безопасными умолчаниями. `FailMode`
+выбирается на политику: **fail-closed только для явно критичных маршрутов** (вход,
+OTP, сброс пароля). Недостижимый Redis **не должен** блокировать общий API — отказ
+ограничителя, становящийся полным отказом, — именно тот сбой, который это правило
+предотвращает, и он уже отражён в текущих тестах
+(`TestDegradedFailOpenServesTheRequest`).
 
-## Required tests
+## Обязательные тесты
 
-- over-limit is refused; under-limit is allowed;
-- the window resets after expiry; `ResetAt` is correct;
-- concurrent requests for one key yield distinct counts (race-free);
-- different identities, IPs and tenants do not share a budget;
-- an unreachable store with fail-open serves the request; with fail-closed it
-  refuses;
-- `MemoryLimiter` and `NoopLimiter` behave as named;
-- a store error is reported as an error, not as `rate_limited`.
+- сверх лимита — отказ; в пределах — разрешено;
+- окно сбрасывается после истечения; `ResetAt` корректен;
+- одновременные запросы по одному ключу дают различные счётчики (без гонок);
+- разные идентичности, IP и тенанты не делят бюджет;
+- недостижимое хранилище с fail-open обслуживает запрос; с fail-closed — отказывает;
+- `MemoryLimiter` и `NoopLimiter` ведут себя согласно названию;
+- ошибка хранилища сообщается как ошибка, а не как `rate_limited`.
 
-Run with `-race`.
+Запускать с `-race`.
 
-## Compatibility
+## Совместимость
 
-`httpx.RateLimitMiddleware` and `SubjectFunc` are unchanged; the limiter is
-injected as it is today. Existing route limits keep their current values.
+`httpx.RateLimitMiddleware` и `SubjectFunc` не меняются; лимитер внедряется как
+сегодня. Существующие лимиты маршрутов сохраняют текущие значения.
 
-## Extract boundary
+## Граница выделения
 
-The `Store`/`Limiter` interfaces, `MemoryStore`/`MemoryLimiter` and the tests move
-as a unit and build with **no third-party module**. `redis.go` is the only file
-that names `go-redis`, and it should be separable (a build tag or a sub-package)
-so a Redis-free extraction needs no external dependency. The extract-test builds
-the memory path in a clean module and runs its tests; the Redis path is verified
-separately against a real Redis.
+Интерфейсы `Store`/`Limiter`, `MemoryStore`/`MemoryLimiter` и тесты переносятся как
+единица и собираются **без стороннего модуля**. `redis.go` — единственный файл,
+называющий `go-redis`, и его следует сделать отделяемым (тег сборки или
+подпакет), чтобы выделение без Redis не требовало внешней зависимости.
+Extract-тест собирает путь в памяти в чистом модуле и прогоняет его тесты; путь
+Redis проверяется отдельно на реальном Redis.
 
-## Revision trigger
+## Триггер пересмотра
 
-Revisit if a policy needs a sliding window rather than a fixed window, or if
-per-route fail modes multiply into per-route limiter instances.
+Вернуться, если политике нужно скользящее окно вместо фиксированного или если
+режимы отказа на маршрут размножаются в экземпляры лимитера на маршрут.

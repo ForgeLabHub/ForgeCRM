@@ -1,124 +1,127 @@
-# ADR 0012 — Audit writer and hash-chain verifier
+# ADR 0012 — Писатель аудита и верификатор хеш-цепочки
 
-- **Status:** Proposed (plan; the writer exists, the verifier does not)
-- **Date:** 2026-10-29
-- **Deciders:** project owner, engineering agent
-- **Depends on:** ADR 0009 (security as independent building blocks)
+- **Статус:** Предложено (план; писатель существует, верификатора нет)
+- **Дата:** 2026-10-29
+- **Решающие:** владелец проекта, инженерный агент
+- **Зависит от:** ADR 0009 (безопасность как независимые блоки)
 
-## Context
+## Контекст
 
-`internal/audit` already writes two streams:
+`internal/audit` уже пишет два потока:
 
-- `audit_log` — the action trail, append-only **enforced by a PostgreSQL trigger**
-  (`audit_log_immutable`) that raises on `UPDATE`/`DELETE`. It records actor,
-  action, entity, before/after JSON, metadata, correlation id, IP and time, with
-  indexes on `(organization_id, created_at)`, `(actor_user_id, created_at)`,
-  `(entity_type, entity_id)` and `(action, created_at)`.
-- `security_events` — authentication and security events.
+- `audit_log` — журнал действий, «только добавление», **обеспеченный триггером
+  PostgreSQL** (`audit_log_immutable`), который поднимает ошибку на `UPDATE`/`DELETE`.
+  Он записывает действующее лицо, действие, сущность, JSON до/после, метаданные,
+  correlation id, IP и время, с индексами по `(organization_id, created_at)`,
+  `(actor_user_id, created_at)`, `(entity_type, entity_id)` и `(action, created_at)`.
+- `security_events` — события аутентификации и безопасности.
 
-The trail is append-only against the **application**. It is not tamper-evident
-against anyone who can run DDL: such a person can disable the trigger, rewrite a
-row, and re-enable it, leaving no trace. A verifier over a cryptographic hash
-chain closes that gap for *detection* — it cannot prevent the rewrite, but it
-makes a silent rewrite detectable.
+Журнал «только добавление» против **приложения**. Он не защищён от подмены против
+того, кто может выполнять DDL: такой человек может отключить триггер, переписать
+строку и включить триггер обратно, не оставив следа. Верификатор над
+криптографической хеш-цепочкой закрывает этот пробел для *обнаружения* — он не
+может предотвратить перезапись, но делает молчаливую перезапись обнаружимой.
 
-The current writer uses the ambient transaction (`database.WithTx`), which is what
-makes an audited write atomic with the write it describes. A verifier must not
-break that property.
+Текущий писатель использует окружающую транзакцию (`database.WithTx`), что и
+делает аудируемую запись атомарной с записью, которую она описывает. Верификатор не
+должен нарушать это свойство.
 
-## Proposed contract
+## Предлагаемый контракт
 
 ```go
 type Event struct {
-	ID          string
-	Actor       string
-	Action      string
-	Resource    string
-	PayloadHash []byte
-	PrevHash    []byte
-	Hash        []byte
-	At          time.Time
+        ID          string
+        Actor       string
+        Action      string
+        Resource    string
+        PayloadHash []byte
+        PrevHash    []byte
+        Hash        []byte
+        At          time.Time
 }
 
 type Writer interface {
-	Append(ctx context.Context, event Event) error
+        Append(ctx context.Context, event Event) error
 }
 
 type Verifier interface {
-	Verify(ctx context.Context, from, to time.Time) (VerifyResult, error)
+        Verify(ctx context.Context, from, to time.Time) (VerifyResult, error)
 }
 ```
 
-The event model must be checked against the existing `audit.Entry` and the
-`audit_log` columns before implementation. The chain adds `payload_hash`,
-`prev_hash` and `hash`; the existing columns are not replaced. This is an
-extension of the current writer, **not a parallel logging system** — a second
-audit path would be worse than none, because it would split the source of truth.
+Модель события нужно сверить с существующим `audit.Entry` и столбцами `audit_log`
+перед реализацией. Цепочка добавляет `payload_hash`, `prev_hash` и `hash`;
+существующие столбцы не заменяются. Это расширение текущего писателя, **а не
+параллельная система логирования** — второй путь аудита был бы хуже, чем никакого,
+потому что он разделил бы источник истины.
 
-## Implementations
+## Реализации
 
-- `PostgresWriter` — the existing writer, extended to compute and store the chain
-  fields in the same transaction as the audited write.
-- `MemoryWriter` — an in-process writer for tests and demo; deterministic.
-- `HashChainVerifier` — walks a range, recomputes each `hash` from the record and
-  `prev_hash`, and reports the first inconsistency.
+- `PostgresWriter` — существующий писатель, расширенный для вычисления и хранения
+  полей цепочки в той же транзакции, что и аудируемая запись.
+- `MemoryWriter` — писатель в процессе для тестов и демо; детерминированный.
+- `HashChainVerifier` — проходит диапазон, пересчитывает каждый `hash` из записи и
+  `prev_hash` и сообщает о первом несоответствии.
 
-## Hash chain
+## Хеш-цепочка
 
-Each record's `hash = SHA-256(canonical(record) || prev_hash)`. `prev_hash` is the
-previous record's `hash`. The genesis record's `prev_hash` is a defined constant.
+`hash` каждой записи = `SHA-256(canonical(record) || prev_hash)`. `prev_hash` — это
+`hash` предыдущей записи. `prev_hash` у первой записи (генезис) — определённая
+константа.
 
-The verifier checks:
+Верификатор проверяет:
 
-- sequence continuity (no gap);
-- each record's `prev_hash` equals the previous record's `hash`;
-- each record's recomputed `hash` equals its stored `hash`;
-- `payload_hash` matches the payload;
-- the time range requested.
+- непрерывность последовательности (нет пропуска);
+- `prev_hash` каждой записи равен `hash` предыдущей;
+- пересчитанный `hash` каждой записи равен её сохранённому `hash`;
+- `payload_hash` соответствует payload;
+- запрошенный диапазон времени.
 
-A mismatch at any point identifies the first altered or reordered record.
+Несоответствие в любой точке идентифицирует первую изменённую или переупорядоченную
+запись.
 
-**Concurrency.** Parallel `Append` calls must not produce a fork. The chain is
-serialised — a per-organisation (or per-stream) lock, or a database-level
-serialising mechanism — so two writers cannot both extend the same `prev_hash`.
-The exact mechanism is an implementation decision, but it must be tested under
-`-race` with concurrent appends.
+**Параллелизм.** Параллельные вызовы `Append` не должны создавать разветвление.
+Цепочка сериализуется — блокировкой на организацию (или на поток) либо
+механизмом сериализации уровня базы, — чтобы два писателя не могли оба продлить один
+и тот же `prev_hash`. Точный механизм — решение реализации, но он должен быть
+протестирован под `-race` с одновременными добавлениями.
 
-## Limitation that must be documented in the code
+## Ограничение, которое должно быть задокументировано в коде
 
-A hash chain **does not make the log immutable**. An attacker with write access to
-the chain and its records can recompute the entire chain from the point of
-tampering onward, producing a chain that verifies. The chain detects an *isolated*
-edit; it does not defeat an attacker who can rewrite the whole chain.
+Хеш-цепочка **не делает журнал неизменяемым**. Атакующий с доступом на запись к
+цепочке и её записям может пересчитать всю цепочку от точки подмены и далее,
+получив цепочку, которая проходит проверку. Цепочка обнаруживает *изолированную*
+правку; она не побеждает атакующего, который может переписать всю цепочку.
 
-To strengthen this, **external checkpoints** are needed: the head `hash` published
-to a store the attacker does not control (a separate service, a signed
-timestamp, an append-only external log). This ADR **plans the seam for
-checkpoints but does not claim they are implemented.** The verifier should expose
-the head hash so a future checkpoint writer can consume it.
+Чтобы усилить это, нужны **внешние контрольные точки**: головной `hash`,
+публикуемый в хранилище, которое атакующий не контролирует (отдельный сервис,
+подписанная временная метка, внешний журнал «только добавление»). Этот ADR
+**планирует шов для контрольных точек, но не заявляет, что они реализованы.**
+Верификатор должен выставлять головной хеш, чтобы будущий писатель контрольных
+точек мог его потребить.
 
-## Required tests
+## Обязательные тесты
 
-- the first record (genesis) verifies;
-- several consecutive records verify;
-- an altered payload is detected;
-- an altered `hash` is detected;
-- a deleted record is detected (gap);
-- two reordered records are detected;
-- concurrent appends produce a single valid chain;
-- an empty range verifies as valid-and-empty, not as an error;
-- an inverted range (from > to) is an explicit error;
-- a transaction error leaves no partial chain entry.
+- первая запись (генезис) проверяется;
+- несколько последовательных записей проверяются;
+- изменённый payload обнаруживается;
+- изменённый `hash` обнаруживается;
+- удалённая запись обнаруживается (пропуск);
+- две переупорядоченные записи обнаруживаются;
+- одновременные добавления дают одну валидную цепочку;
+- пустой диапазон проверяется как валидный-и-пустой, а не как ошибка;
+- инвертированный диапазон (from > to) — явная ошибка;
+- ошибка транзакции не оставляет частичной записи цепочки.
 
-## Extract boundary
+## Граница выделения
 
-`Writer`, `Verifier`, `MemoryWriter` and `HashChainVerifier` move as a unit and
-build with no CRM dependency. `PostgresWriter` needs the `database` package and
-the `audit_log` schema. The extract-test builds the chain with `MemoryWriter` and
-runs the tamper tests without PostgreSQL.
+`Writer`, `Verifier`, `MemoryWriter` и `HashChainVerifier` переносятся как единица
+и собираются без зависимости от CRM. `PostgresWriter` нуждается в пакете `database`
+и схеме `audit_log`. Extract-тест собирает цепочку с `MemoryWriter` и прогоняет
+тесты подмены без PostgreSQL.
 
-## Revision trigger
+## Триггер пересмотра
 
-Revisit when external checkpoints are implemented, when the writer's transaction
-coupling with `database.WithTx` proves too tight for extraction, or if a second
-stream (security events) needs its own chain.
+Вернуться, когда будут реализованы внешние контрольные точки, когда связь писателя
+с транзакцией через `database.WithTx` окажется слишком тесной для выделения, или
+если второму потоку (события безопасности) понадобится своя цепочка.
