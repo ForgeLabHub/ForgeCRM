@@ -10,6 +10,22 @@ once it reaches 1.0.
 
 ### Added
 
+- **Storage reconciliation actually runs.** `storage.Service.Reconcile` repaired the
+  two ways the object store and the `documents` table can disagree — a row whose
+  object is gone (archived, so the API stops offering a broken download) and an
+  object no row references (removed after a grace period) — but nothing in
+  production ever called it. The method was tested and the roadmap called the
+  reconciler verified; in a running deployment an orphan object left by an
+  interrupted upload accumulated forever and a row whose object had been deleted
+  kept being offered for download. The worker now enqueues
+  `maintenance.storage_reconcile` on the hourly maintenance tick, next to the other
+  maintenance jobs. It is a no-op when storage is unconfigured, and it inherits the
+  retention engine's dry-run posture, so a deployment that has not opted into
+  deletion never loses an object to it. Covered by
+  `cmd/forgecrm-worker/storage_reconcile_test.go` against a real database and the
+  in-memory store, driving the worker's own handler so the test fails if the wiring
+  is removed.
+
 - **MySQL/MariaDB migration source.** The Import Center could read a migration
   from PostgreSQL, SQLite or a REST API, but a MySQL source was a recognised value
   that answered "not implemented" — so a customer whose data lived in MySQL had no

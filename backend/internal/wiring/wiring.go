@@ -145,7 +145,7 @@ func Build(cfg *config.Config, db *database.DB, keyring *secrets.Keyring, log *s
 		return nil, fmt.Errorf("initialise the agent service: %w", err)
 	}
 
-	storageSvc, err := buildStorage(cfg, db, auditLog, log)
+	storageSvc, err := BuildStorage(cfg, db, auditLog, log)
 	if err != nil {
 		return nil, fmt.Errorf("initialise object storage: %w", err)
 	}

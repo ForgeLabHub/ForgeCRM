@@ -36,7 +36,9 @@ import (
 	"github.com/geff1778/forgecrm/internal/rbac"
 	"github.com/geff1778/forgecrm/internal/retention"
 	"github.com/geff1778/forgecrm/internal/secrets"
+	"github.com/geff1778/forgecrm/internal/storage"
 	"github.com/geff1778/forgecrm/internal/tracectx"
+	"github.com/geff1778/forgecrm/internal/wiring"
 	"github.com/geff1778/forgecrm/internal/workflow"
 )
 
@@ -84,6 +86,16 @@ func run() error {
 	telegramSvc := notify.NewTelegramService(&cfg.Telegram, db, log, auditLog, keyring)
 	hub := integrations.NewHub(db, auditLog, keyring)
 
+	// The attachment store is optional and reports itself off when unconfigured, so the
+	// worker can build it unconditionally and the reconcile handler becomes a no-op on a
+	// deployment without object storage. Without this the reconcile pass had no caller
+	// outside a test, so an orphan object left by an interrupted upload accumulated
+	// forever and a row whose object was gone kept being offered for download.
+	storageSvc, err := wiring.BuildStorage(cfg, db, auditLog, log)
+	if err != nil {
+		return fmt.Errorf("initialise object storage: %w", err)
+	}
+
 	imports, err := importx.NewService(db, cfg, auditLog, outboxStore, crmSvc, queue, cfg.ImportStorageDir)
 	if err != nil {
 		return fmt.Errorf("initialise the import service: %w", err)
@@ -107,6 +119,7 @@ func run() error {
 		hub:        hub,
 		crm:        crmSvc,
 		retention:  retentionRunner,
+		storage:    storageSvc,
 	}
 	if cfg.Retention.Enabled {
 		mode := "delete"
@@ -258,6 +271,7 @@ type handlerRegistry struct {
 	agent      *agent.Service
 	workflows  *workflow.Engine
 	retention  *retention.Runner
+	storage    *storage.Service
 }
 
 // handle dispatches one job. An unknown kind is a hard failure rather than a
@@ -318,6 +332,9 @@ func (r *handlerRegistry) handle(ctx context.Context, queue *jobs.Queue, job *jo
 
 	case jobs.KindAgentSweep:
 		return r.agentSweep(ctx)
+
+	case jobs.KindStorageReconcile:
+		return r.storageReconcile(ctx)
 
 	default:
 		return fmt.Errorf("no handler is registered for job kind %q", job.Kind)
@@ -457,6 +474,34 @@ func (r *handlerRegistry) importFileReclaim(ctx context.Context) error {
 	r.log.Info("import file reclaim complete", "mode", mode,
 		"scanned", report.Scanned, "referenced", report.Referenced,
 		"orphans", report.Orphans, "removed", report.Removed, "bytes", report.Bytes)
+	return nil
+}
+
+// storageReconcile repairs the two ways the object store and the documents table can
+// disagree, so an object or a row left behind by an interrupted upload does not stay
+// wrong forever. It is a no-op when storage is not configured.
+//
+// It is a dry run whenever retention is: a deployment that has not opted into deletion
+// must not have an orphan object removed by a maintenance pass. The grace period is
+// larger than the job timeout, because an object younger than that may belong to an
+// upload whose row has not committed yet, and deleting it would break a live upload.
+func (r *handlerRegistry) storageReconcile(ctx context.Context) error {
+	if r.storage == nil || !r.storage.Enabled() {
+		return nil
+	}
+	dryRun := r.retention == nil || r.retention.DryRun()
+	report, err := r.storage.Reconcile(ctx, dryRun, 2*time.Hour)
+	if err != nil {
+		return fmt.Errorf("reconcile object storage: %w", err)
+	}
+	mode := "repaired"
+	if report.DryRun {
+		mode = "previewed"
+	}
+	r.log.Info("storage reconcile complete", "mode", mode,
+		"scanned_rows", report.ScannedRows, "missing_objects", len(report.MissingObjects),
+		"repaired_rows", report.RepairedRows, "scanned_objects", report.ScannedObjects,
+		"orphan_objects", len(report.OrphanObjects), "deleted_objects", report.DeletedObjects)
 	return nil
 }
 
@@ -713,6 +758,16 @@ func runMaintenanceLoop(ctx context.Context, log *slog.Logger, queue *jobs.Queue
 				log.Warn("could not enqueue the import file reclaim", "error", err)
 			} else if files != nil {
 				log.Info("enqueued the import file reclaim", "job_id", files.ID)
+			}
+			// The object store and the documents table can disagree in two ways after an
+			// interrupted upload: a row whose object is gone, and an object no row
+			// references. Neither is visible to a user, so without this pass both persist
+			// until an operator notices. It is a no-op when storage is not configured.
+			reconcile, err := queue.EnqueuePeriodic(ctx, jobs.KindStorageReconcile, map[string]any{})
+			if err != nil {
+				log.Warn("could not enqueue the storage reconcile", "error", err)
+			} else if reconcile != nil {
+				log.Info("enqueued the storage reconcile", "job_id", reconcile.ID)
 			}
 		}
 	}
