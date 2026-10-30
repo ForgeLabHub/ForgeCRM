@@ -229,7 +229,7 @@ func TestDatabaseURLFallbackAndPort(t *testing.T) {
 	t.Setenv("FORGECRM_DATABASE_URL", "")
 	t.Setenv("DATABASE_URL", "postgres://dbuser:pass@dbhost:5432/fallbackdb")
 	t.Setenv("PORT", "9090")
-	t.Setenv("FORGECRM_SECRET_KEY", "devsecretkey-devsecretkey-devsecretkey-devsecretkey")
+	t.Setenv("FORGECRM_SECRET_KEY", "")
 
 	cfg, err := Load()
 	if err != nil {

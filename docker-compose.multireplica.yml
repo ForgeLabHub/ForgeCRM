@@ -48,8 +48,7 @@ services:
   # safe, but serialising them keeps the startup log unambiguous.
   api-a:
     build:
-      context: .
-      dockerfile: backend/Dockerfile
+      context: ./backend
       args:
         VERSION: multireplica
         COMMIT: rehearsal
@@ -95,8 +94,7 @@ services:
 
   api-b:
     build:
-      context: .
-      dockerfile: backend/Dockerfile
+      context: ./backend
       args:
         VERSION: multireplica
         COMMIT: rehearsal

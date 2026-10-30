@@ -54,8 +54,7 @@ services:
 
   api:
     build:
-      context: .
-      dockerfile: backend/Dockerfile
+      context: ./backend
       args:
         VERSION: ${FORGECRM_VERSION:-dev}
         COMMIT: ${FORGECRM_COMMIT:-unknown}
@@ -82,8 +81,7 @@ services:
 
   worker:
     build:
-      context: .
-      dockerfile: backend/Dockerfile
+      context: ./backend
       args:
         VERSION: ${FORGECRM_VERSION:-dev}
         COMMIT: ${FORGECRM_COMMIT:-unknown}
