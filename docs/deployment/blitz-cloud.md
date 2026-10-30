@@ -1,86 +1,87 @@
-# Deploying ForgeCRM on blitz.cloud
+# Развёртывание ForgeCRM на blitz.cloud
 
-This guide deploys a working ForgeCRM (API + background worker + web interface)
-on blitz.cloud's free tier, and on any host that builds a repository root.
+Это руководство разворачивает работающий ForgeCRM (API + фоновый воркер +
+веб-интерфейс) на бесплатном тарифе blitz.cloud, а также на любом хосте, который
+собирает корень репозитория.
 
-## What runs where
+## Что где работает
 
-ForgeCRM is a single container build that contains three things:
+ForgeCRM — это одна сборка контейнера, которая содержит три вещи:
 
-1. **API** (`forgecrm-api`) — the HTTP server, and the web interface it serves.
-2. **Worker** (`forgecrm-worker`) — the background process: import/export jobs,
-   outbox dispatch, webhook deliveries, the workflow scheduler and retention.
-3. **Web interface** — the built React single-page app, served by the API from
-   `/app/public`. One address answers both the API and the UI, same-origin, so
-   the session cookie and the CSRF double-submit work without CORS.
+1. **API** (`forgecrm-api`) — HTTP-сервер и веб-интерфейс, который он обслуживает.
+2. **Воркер** (`forgecrm-worker`) — фоновый процесс: задания импорта/экспорта,
+   разбор outbox, доставка вебхуков, планировщик workflow и хранение.
+3. **Веб-интерфейс** — собранное React-приложение (SPA), обслуживаемое API из
+   `/app/public`. Один адрес отвечает и на API, и на UI, в одном источнике,
+   поэтому cookie сессии и двойная отправка CSRF работают без CORS.
 
-The image is built by the **root `Dockerfile`**. The root `docker-compose.yml`
-declares two parts, `api` and `worker`, which build that same image and run a
-different entrypoint. blitz.cloud reads the compose file, proposes the two parts
-and runs them as one app.
+Образ собирается **корневым `Dockerfile`**. Корневой `docker-compose.yml`
+объявляет две части, `api` и `worker`, которые собирают тот же образ и запускают
+разные точки входа. blitz.cloud читает compose-файл, предлагает эти две части и
+запускает их как одно приложение.
 
-## Deploying from GitHub
+## Развёртывание из GitHub
 
-1. Push this branch (or merge it) and connect the repository on
-   `dashboard.blitz.cloud` under **Host something new → My own code**.
-2. blitz.cloud finds the root `Dockerfile` and the compose file. Accept the two
-   parts it proposes: `api` (public, at `/`) and `worker` (background).
-3. Create a **PostgreSQL 17** database on the **Databases** page and connect it to
-   the app. blitz.cloud then sets `DATABASE_URL` for you.
+1. Отправьте эту ветку (или смёрджите её) и подключите репозиторий на
+   `dashboard.blitz.cloud` в разделе **Host something new → My own code**.
+2. blitz.cloud находит корневой `Dockerfile` и compose-файл. Примите две части,
+   которые он предлагает: `api` (публичная, на `/`) и `worker` (фоновая).
+3. Создайте базу **PostgreSQL 17** на странице **Databases** и подключите её к
+   приложению. blitz.cloud сам установит `DATABASE_URL`.
 
-## Environment variables
+## Переменные окружения
 
-Set these on the app's **Environment** tab. Values marked *injected* are provided
-by blitz.cloud and must not be set by hand.
+Задайте их на вкладке **Environment** приложения. Значения с пометкой
+*внедряется* предоставляет blitz.cloud, и задавать их вручную нельзя.
 
-| Variable | Value | Notes |
+| Переменная | Значение | Примечания |
 | --- | --- | --- |
-| `FORGECRM_ENV` | `production` | Required. |
-| `DATABASE_URL` | *injected* | The managed PostgreSQL connection string. The app reads `FORGECRM_DATABASE_URL` first and falls back to `DATABASE_URL`. |
-| `FORGECRM_SECRET_KEY` | `openssl rand -base64 48` | Required. Encrypts stored integration credentials; losing it makes them unrecoverable. |
-| `FORGECRM_BASE_URL` | `https://your-app.<you>.blitz.cloud` | Required. Used for absolute links. |
-| `FORGECRM_MIGRATE_ON_START` | `true` | Set on the **api** part. The API applies migrations before serving. |
-| `PORT` | *injected* | blitz.cloud sets it; the API binds `0.0.0.0:$PORT`. |
-| `FORGECRM_DATABASE_MAX_CONNS` | `6` (api), `4` (worker) | Free-tier memory is 512 MB; keep pools small. |
-| `FORGECRM_RATE_LIMIT_STORE` | `memory` | Single replica, so the in-process limiter is correct. |
+| `FORGECRM_ENV` | `production` | Обязательна. |
+| `DATABASE_URL` | *внедряется* | Строка подключения к управляемому PostgreSQL. Приложение читает сначала `FORGECRM_DATABASE_URL` и падает обратно на `DATABASE_URL`. |
+| `FORGECRM_SECRET_KEY` | `openssl rand -base64 48` | Обязательна. Шифрует сохранённые учётные данные интеграций; её потеря делает их невосстановимыми. |
+| `FORGECRM_BASE_URL` | `https://your-app.<you>.blitz.cloud` | Обязательна. Используется для абсолютных ссылок. |
+| `FORGECRM_MIGRATE_ON_START` | `true` | Задаётся на части **api**. API применяет миграции перед обслуживанием. |
+| `PORT` | *внедряется* | Его задаёт blitz.cloud; API слушает `0.0.0.0:$PORT`. |
+| `FORGECRM_DATABASE_MAX_CONNS` | `6` (api), `4` (worker) | Память на бесплатном тарифе — 512 МБ; держите пулы небольшими. |
+| `FORGECRM_RATE_LIMIT_STORE` | `memory` | Одна реплика, поэтому лимитер в процессе корректен. |
 
-The API binds to `PORT` when blitz.cloud sets it, otherwise to
-`FORGECRM_HTTP_ADDR` (default `:8080`). The worker waits for the schema the API
-applies before it starts claiming work.
+API слушает `PORT`, когда его задаёт blitz.cloud, иначе — `FORGECRM_HTTP_ADDR`
+(по умолчанию `:8080`). Воркер ждёт схему, которую применяет API, прежде чем
+начать забирать работу.
 
-## Creating the first administrator
+## Создание первого администратора
 
-The API has a one-off bootstrap command. On blitz.cloud, open the **api** part's
-terminal (or run a one-off command) and run:
+У API есть одноразовая команда bootstrap. На blitz.cloud откройте терминал части
+**api** (или выполните одноразовую команду) и запустите:
 
 ```sh
 FORGECRM_BOOTSTRAP_PASSWORD='choose-a-strong-password' \
   forgecrm-api -bootstrap-admin -bootstrap-email you@example.com
 ```
 
-The password is passed through the environment so it never lands in the process
-list. Sign in afterwards, then create the rest of the team from the admin pages.
+Пароль передаётся через окружение, поэтому он никогда не попадает в список
+процессов. Затем войдите и создайте остальную команду со страниц администрирования.
 
-## Free-tier behaviour
+## Поведение на бесплатном тарифе
 
-- The **api** part sleeps after 15 minutes without visitors and wakes on the next
-  request. The first request after a sleep is slower.
-- The **worker** part runs in the background and does not sleep while the account
-  is active. On the free plan it stops when nothing happens in the account for two
-  days (no sign-in, deploy or dashboard visit); press **Start** on the app's page
-  to resume. Nothing is lost: jobs, outbox events and scheduled workflows live in
-  PostgreSQL and resume where they left off.
-- One managed database is included on the free plan, backed up nightly.
+- Часть **api** засыпает после 15 минут без посетителей и просыпается на
+  следующем запросе. Первый запрос после сна медленнее.
+- Часть **worker** работает в фоне и не спит, пока аккаунт активен. На бесплатном
+  тарифе она останавливается, если в аккаунте ничего не происходит два дня (нет
+  входа, развёртывания или визита в панель); нажмите **Start** на странице
+  приложения, чтобы возобновить. Ничего не теряется: задания, события outbox и
+  запланированные workflow живут в PostgreSQL и продолжаются с места остановки.
+- Одна управляемая база включена в бесплатный тариф и копируется каждую ночь.
 
-## Verifying the deployment
+## Проверка развёртывания
 
 ```sh
 curl -fsS https://your-app.<you>.blitz.cloud/health   # -> {"status":"ok"}
 curl -fsS https://your-app.<you>.blitz.cloud/ready    # -> {"status":"ready"}
 curl -fsS -o /dev/null -w '%{http_code}\n' \
-  https://your-app.<you>.blitz.cloud/                 # -> 200 (the web interface)
+  https://your-app.<you>.blitz.cloud/                 # -> 200 (веб-интерфейс)
 ```
 
-`/health` is liveness (the process is up), `/ready` is readiness (the database is
-reachable). An unknown `/api/...` path stays a JSON 404; any other path returns the
-interface, so client-side routes survive a refresh.
+`/health` — это живость (процесс поднят), `/ready` — готовность (база доступна).
+Неизвестный путь `/api/...` остаётся JSON-ответом 404; любой другой путь отдаёт
+интерфейс, поэтому клиентские маршруты переживают обновление страницы.

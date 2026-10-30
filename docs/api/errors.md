@@ -1,10 +1,10 @@
-# Error responses
+# Ответы об ошибках
 
-Every failed request returns the same JSON shape, whatever the endpoint. It
-carries [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) Problem Details
-members at the top level, so a generic client, gateway or proxy can act on a
-failure without knowing this API, and repeats the machine-readable code under
-`error` for callers that predate that.
+Каждый неудачный запрос возвращает одну и ту же JSON-форму, независимо от
+эндпоинта. Она несёт на верхнем уровне члены Problem Details из
+[RFC 9457](https://www.rfc-editor.org/rfc/rfc9457), чтобы универсальный клиент,
+шлюз или прокси могли действовать при сбое, не зная этого API, и повторяет
+машиночитаемый код в поле `error` для вызывающих, которые предшествуют этому.
 
 ```json
 {
@@ -24,85 +24,87 @@ failure without knowing this API, and repeats the machine-readable code under
 }
 ```
 
-The top-level members and the `error` object are two views of one value, so they
-cannot disagree. `detail` always equals `error.message`, and `type` always ends
-with `error.code`.
+Члены верхнего уровня и объект `error` — это два представления одного значения,
+поэтому они не могут расходиться. `detail` всегда равен `error.message`, а `type`
+всегда заканчивается на `error.code`.
 
-## Members
+## Члены
 
-| Member | Meaning |
+| Член | Значение |
 |---|---|
-| `type` | Problem class, as `urn:forgecrm:error:<code>`. A URN rather than an https URL on purpose: no dereferenceable error catalogue is operated, and a link that 404s is worse than an identifier that never claimed to resolve. Branch on `error.code`, not on this. |
-| `title` | Short summary of the problem class, stable per code. |
-| `status` | The HTTP status, repeated as a number. |
-| `detail` | What went wrong, safe to show a user. Never contains SQL, file paths, hostnames or a stack trace. |
-| `instance` | The request path. The query string is removed, because it can carry tokens and personal data that must not be echoed into logs or client-side error reporting. |
-| `retryable` | Whether resending the identical request could succeed. See below. |
-| `request_id` | Correlation identifier, also returned in the `X-Request-Id` response header. |
-| `correlation_id` | The same value as `request_id`. Both names are emitted because the log pipeline and the frontend read different ones. |
-| `error.code` | The stable identifier to branch on. |
-| `error.message` | The message. Equal to `detail`. |
-| `error.details` | Field-level messages, present on validation failures. |
+| `type` | Класс проблемы, как `urn:forgecrm:error:<code>`. URN, а не https-URL, намеренно: разыменовываемого каталога ошибок не существует, а ссылка, отдающая 404, хуже идентификатора, который и не обещал разрешаться. Ветвитесь по `error.code`, а не по этому. |
+| `title` | Краткое описание класса проблемы, стабильное для кода. |
+| `status` | HTTP-статус, повторённый числом. |
+| `detail` | Что пошло не так, безопасно показывать пользователю. Никогда не содержит SQL, путей к файлам, имён хостов или трассировки стека. |
+| `instance` | Путь запроса. Строка запроса удаляется, потому что она может нести токены и персональные данные, которые нельзя отражать в логах или в клиентской отчётности об ошибках. |
+| `retryable` | Может ли повторная отправка идентичного запроса увенчаться успехом. См. ниже. |
+| `request_id` | Идентификатор корреляции, также возвращается в заголовке ответа `X-Request-Id`. |
+| `correlation_id` | То же значение, что и `request_id`. Оба имени выводятся, потому что конвейер логов и фронтенд читают разные. |
+| `error.code` | Стабильный идентификатор, по которому нужно ветвиться. |
+| `error.message` | Сообщение. Равно `detail`. |
+| `error.details` | Сообщения уровня полей, присутствуют при ошибках валидации. |
 
 ## `retryable`
 
-`retryable` answers one question: could resending this exact request succeed?
+`retryable` отвечает на один вопрос: может ли повторная отправка именно этого
+запроса увенчаться успехом?
 
-It is not derivable from the status code, which is why it is reported
-explicitly. A `500` may be a transient fault or a deterministic defect, and
-retrying a defect is how a small incident becomes a large one, so `500` reports
-`false`. Only `429`, `502`, `503` and `504` report `true`:
+Это не выводится из кода статуса, поэтому сообщается явно. `500` может быть
+преходящим сбоем или детерминированным дефектом, а повтор дефекта — это то, как
+маленький инцидент превращается в большой, поэтому `500` сообщает `false`. Только
+`429`, `502`, `503` и `504` сообщают `true`:
 
-| Status | `retryable` | Reasoning |
+| Статус | `retryable` | Обоснование |
 |---|---|---|
-| `429 Too Many Requests` | `true` | "Not now" — wait, then retry. |
-| `502 Bad Gateway` | `true` | An upstream hop failed; a different hop may succeed. |
-| `503 Service Unavailable` | `true` | A subsystem is disabled or restarting. |
-| `504 Gateway Timeout` | `true` | The upstream may have completed; retry with an idempotency key. |
-| `500 Internal Server Error` | `false` | Usually a defect. Retrying re-runs the defect. |
-| `4xx` other than 429 | `false` | The request must change. |
+| `429 Too Many Requests` | `true` | «Не сейчас» — подождите, затем повторите. |
+| `502 Bad Gateway` | `true` | Сбой на промежуточном узле; другой узел может сработать. |
+| `503 Service Unavailable` | `true` | Подсистема отключена или перезапускается. |
+| `504 Gateway Timeout` | `true` | Верхний узел мог завершить работу; повторите с ключом идемпотентности. |
+| `500 Internal Server Error` | `false` | Обычно дефект. Повтор запускает дефект заново. |
+| `4xx`, кроме 429 | `false` | Запрос нужно изменить. |
 
-A client that retries should still bound its attempts and use exponential
-backoff with jitter. Retrying a non-idempotent write without an idempotency key
-can duplicate the effect even where `retryable` is `true`.
+Клиент, который повторяет, всё равно должен ограничивать число попыток и
+использовать экспоненциальную задержку с джиттером. Повтор неидемпотентной записи
+без ключа идемпотентности может дублировать эффект даже там, где `retryable` равно
+`true`.
 
-## Codes
+## Коды
 
-| Code | Typical status | Meaning |
+| Код | Типичный статус | Значение |
 |---|---|---|
-| `bad_request` | 400 | The request is malformed. |
-| `validation_failed` | 422 | A field failed validation; see `error.details`. |
-| `unauthorized` | 401 | No session, or it expired or was revoked. Sign in again. |
-| `forbidden` | 403 | Authenticated but not permitted. Retrying will not help. |
-| `not_found` | 404 | No such resource, or none visible to this organization. |
-| `conflict` | 409 | The request conflicts with existing state, such as a duplicate. |
-| `rate_limited` | 429 | Too many requests. |
-| `payload_too_large` | 413 | The request body exceeds the endpoint's limit. |
-| `unsupported` | 400 | The operation is not supported for this resource. |
-| `internal_error` | 500 | An unexpected failure. The detail is deliberately generic. |
-| `disabled` | 503 | The subsystem is switched off by configuration. |
-| `mfa_required` | 401 | A second factor must be completed. |
+| `bad_request` | 400 | Запрос сформирован неверно. |
+| `validation_failed` | 422 | Поле не прошло валидацию; см. `error.details`. |
+| `unauthorized` | 401 | Нет сессии, либо она истекла или отозвана. Войдите снова. |
+| `forbidden` | 403 | Аутентифицирован, но нет прав. Повтор не поможет. |
+| `not_found` | 404 | Нет такого ресурса или ни один не виден этой организации. |
+| `conflict` | 409 | Запрос конфликтует с существующим состоянием, например дубликат. |
+| `rate_limited` | 429 | Слишком много запросов. |
+| `payload_too_large` | 413 | Тело запроса превышает лимит эндпоинта. |
+| `unsupported` | 400 | Операция не поддерживается для этого ресурса. |
+| `internal_error` | 500 | Непредвиденный сбой. Деталь намеренно общая. |
+| `disabled` | 503 | Подсистема выключена конфигурацией. |
+| `mfa_required` | 401 | Нужно пройти второй фактор. |
 
-A `403` from `POST /api/v1/agent/actions/{id}/decide` with the detail
-"a destructive action requires a second authentication factor" is the step-up
-requirement (ADR 0005), not a missing permission. The caller holds the approval
-right; the session has not presented a factor recently. Call
-`POST /api/v1/auth/step-up` with a code or password and retry the decision. The
-same response from any other endpoint is an ordinary permission failure.
+`403` от `POST /api/v1/agent/actions/{id}/decide` с деталью «a destructive action
+requires a second authentication factor» — это требование step-up (ADR 0005), а не
+отсутствие разрешения. Вызывающий держит право согласования; сессия просто недавно
+не предъявляла фактор. Вызовите `POST /api/v1/auth/step-up` с кодом или паролем и
+повторите решение. Тот же ответ от любого другого эндпоинта — это обычный отказ в
+правах.
 
-## What is never returned
+## Что никогда не возвращается
 
-Error responses do not contain stack traces, SQL, database or table names,
-internal IP addresses, filesystem paths, secret values, tokens, or the request
-body. An unrecognised error is reported as `internal_error` with a generic
-detail; the real cause is written to the server log against the same
-`request_id`, which is what to quote when reporting a problem.
+Ответы об ошибках не содержат трассировок стека, SQL, имён базы или таблиц,
+внутренних IP-адресов, путей файловой системы, значений секретов, токенов или тела
+запроса. Нераспознанная ошибка сообщается как `internal_error` с общей деталью;
+реальная причина пишется в лог сервера под тем же `request_id`, который и нужно
+указывать при сообщении о проблеме.
 
-## Frontend behaviour
+## Поведение фронтенда
 
-`ApiError` in `frontend/src/api/client.ts` exposes `status`, `code`, `details`,
-`requestId` and `retryable`. It prefers the nested `error` object, which carries
-field-level details, and falls back to the top-level `detail` so that a service
-returning bare Problem Details still produces a readable message rather than a
-generic one. `errorMessage()` and `fieldErrors()` are the helpers components use
-to turn a thrown value into text.
+`ApiError` в `frontend/src/api/client.ts` выставляет `status`, `code`, `details`,
+`requestId` и `retryable`. Он предпочитает вложенный объект `error`, который несёт
+детали уровня полей, и падает обратно на верхнеуровневый `detail`, чтобы сервис,
+возвращающий «голые» Problem Details, всё равно давал читаемое сообщение, а не
+общее. `errorMessage()` и `fieldErrors()` — помощники, которыми компоненты
+превращают выброшенное значение в текст.

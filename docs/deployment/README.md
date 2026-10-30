@@ -1,110 +1,115 @@
-# Deployment
+# Развёртывание
 
-ForgeCRM deploys as a small set of containers. This directory documents a single-host
-deployment with Docker Compose, which is the configuration that has been verified.
+ForgeCRM разворачивается как небольшой набор контейнеров. Этот каталог описывает
+развёртывание на одном хосте через Docker Compose — конфигурацию, которая была
+проверена.
 
-## Components
+## Компоненты
 
-| Service | Purpose | Required |
+| Сервис | Назначение | Обязателен |
 | --- | --- | --- |
-| `postgres` | PostgreSQL 17, all persistent state | yes |
-| `api` | HTTP API, applies migrations on start | yes |
-| `worker` | Background jobs and event dispatch | yes |
-| `nginx` | Reverse proxy, TLS termination | optional, profile `proxy` |
+| `postgres` | PostgreSQL 17, всё постоянное состояние | да |
+| `api` | HTTP API, применяет миграции при старте | да |
+| `worker` | Фоновые задания и доставка событий | да |
+| `nginx` | Обратный прокси, терминация TLS | опционально, профиль `proxy` |
 
-The API and worker share one image; only the entrypoint differs. Redis, a message
-broker and object storage are **not** used. The job queue, the outbox and event
-delivery are all backed by PostgreSQL, which keeps the operational surface small. Add a
-broker only when measured throughput requires it.
+API и воркер используют один образ; отличается только точка входа. Redis, брокер
+сообщений и объектное хранилище **не используются**. Очередь заданий, outbox и
+доставка событий опираются на PostgreSQL, что уменьшает эксплуатационную
+поверхность. Брокер добавляйте только тогда, когда измеренная пропускная
+способность этого требует.
 
-## First deployment
+## Первое развёртывание
 
 ```bash
 cp .env.example .env
 
-# Required: the key that encrypts stored integration credentials.
+# Обязательно: ключ, которым шифруются сохранённые учётные данные интеграций.
 printf 'FORGECRM_SECRET_KEY=%s\n' "$(openssl rand -base64 48)" >> .env
 
-./scripts/check-env.sh          # verify the host before starting anything
+./scripts/check-env.sh          # проверить хост до запуска чего-либо
 docker compose up -d
 
-FORGECRM_BOOTSTRAP_PASSWORD='<a strong password>' \
+FORGECRM_BOOTSTRAP_PASSWORD='<надёжный пароль>' \
   docker compose run --rm --no-deps -e FORGECRM_BOOTSTRAP_PASSWORD \
   api -bootstrap-admin -bootstrap-email you@example.com
 
 ./scripts/smoke-test.sh http://localhost:8080
 ```
 
-`scripts/setup.sh` performs these steps and is safe to re-run: it will not overwrite an
-existing `.env` and will not create a second administrator.
+`scripts/setup.sh` выполняет эти шаги и безопасен для повторного запуска: он не
+перезапишет существующий `.env` и не создаст второго администратора.
 
-## Configuration
+## Конфигурация
 
-All settings come from the environment. See [`.env.example`](../../.env.example) for the
-full annotated list. The settings that matter most:
+Все настройки берутся из окружения. Полный аннотированный список — в
+[`.env.example`](../../.env.example). Наиболее важные настройки:
 
-| Variable | Why it matters |
+| Переменная | Почему важна |
 | --- | --- |
-| `FORGECRM_ENV` | `development` returns password reset tokens in API responses. Use `production`. |
-| `FORGECRM_SECRET_KEY` | Encrypts integration credentials. Losing it makes them unrecoverable. |
-| `FORGECRM_BASE_URL` | Used in email links. Must be the public URL. |
-| `FORGECRM_COOKIE_SECURE` | Must be `true` when serving over HTTPS. |
-| `FORGECRM_METRICS_TOKEN` | Protects `/metrics`. Set it before exposing the port. |
-| `FORGECRM_IMPORT_MAX_UPLOAD_BYTES` | Must match `client_max_body_size` in the proxy. |
+| `FORGECRM_ENV` | `development` возвращает токены сброса пароля в ответах API. Используйте `production`. |
+| `FORGECRM_SECRET_KEY` | Шифрует учётные данные интеграций. Её потеря делает их невосстановимыми. |
+| `FORGECRM_BASE_URL` | Используется в ссылках в письмах. Должна быть публичным URL. |
+| `FORGECRM_COOKIE_SECURE` | Должна быть `true` при работе по HTTPS. |
+| `FORGECRM_METRICS_TOKEN` | Защищает `/metrics`. Задайте его до публикации порта. |
+| `FORGECRM_IMPORT_MAX_UPLOAD_BYTES` | Должна совпадать с `client_max_body_size` в прокси. |
 
-## Migrations
+## Миграции
 
-The API applies pending migrations at start when `FORGECRM_MIGRATE_ON_START=true`
-(the default). Migrations are idempotent: a second run reports no work.
+API применяет ожидающие миграции при старте, когда
+`FORGECRM_MIGRATE_ON_START=true` (значение по умолчанию). Миграции идемпотентны:
+повторный запуск сообщает об отсутствии работы.
 
 ```bash
-./scripts/migrate.sh          # apply pending migrations
-./scripts/migrate.sh status   # show the current version
+./scripts/migrate.sh          # применить ожидающие миграции
+./scripts/migrate.sh status   # показать текущую версию
 ```
 
-Apply migrations before starting a new API version, and never run two versions with
-different migration sets against the same database at once. The Compose file enforces
-this by making the worker wait for the API to be healthy.
+Применяйте миграции до запуска новой версии API и никогда не запускайте две версии
+с разными наборами миграций против одной базы одновременно. Compose-файл
+обеспечивает это, заставляя воркер ждать готовности API.
 
-## Production checklist
+## Чек-лист для production
 
 - [ ] `FORGECRM_ENV=production`
-- [ ] `FORGECRM_BASE_URL` is the public HTTPS URL
-- [ ] `FORGECRM_COOKIE_SECURE=true`, TLS terminated at the proxy
-- [ ] A unique `FORGECRM_SECRET_KEY`, stored in a secret manager, not in the image
-- [ ] `FORGECRM_METRICS_TOKEN` set
-- [ ] The database port is not published
-- [ ] Backups configured and a restore tested — see [../operations/](../operations/)
-- [ ] Resource limits set on the API and worker containers
+- [ ] `FORGECRM_BASE_URL` — публичный HTTPS-адрес
+- [ ] `FORGECRM_COOKIE_SECURE=true`, TLS терминируется на прокси
+- [ ] Уникальный `FORGECRM_SECRET_KEY`, хранится в менеджере секретов, не в образе
+- [ ] `FORGECRM_METRICS_TOKEN` задан
+- [ ] Порт базы данных не опубликован
+- [ ] Настроены резервные копии и проверено восстановление — см. [../operations/](../operations/)
+- [ ] На контейнеры API и воркера заданы ограничения ресурсов
 
-## Scaling
+## Масштабирование
 
-- The **API** is stateless. Run several replicas behind the proxy.
-- The **worker** is safe to run concurrently: jobs are claimed with `FOR UPDATE SKIP
-  LOCKED`, so two workers never take the same job. Set `FORGECRM_WORKER_CONCURRENCY` per
-  replica rather than scaling the replica count first.
-- **Rate limiting is per process.** With multiple API replicas, a limit applies per
-  replica, not globally. Move to a shared store before relying on it for protection.
+- **API** не хранит состояния. Запускайте несколько реплик за прокси.
+- **Воркер** безопасен при параллельном запуске: задания забираются через
+  `FOR UPDATE SKIP LOCKED`, поэтому два воркера никогда не возьмут одно задание.
+  Настраивайте `FORGECRM_WORKER_CONCURRENCY` на реплику, а не увеличивайте число
+  реплик в первую очередь.
+- **Ограничение частоты действует на процесс.** При нескольких репликах API лимит
+  применяется к каждой реплике, а не глобально. Перейдите на общее хранилище,
+  прежде чем полагаться на него как на защиту.
 
-## Other hosts
+## Другие хосты
 
-- **Platforms that build the repository root** (blitz.cloud and similar) use the
-  root `Dockerfile`, which builds the API, the worker and the web interface into
-  one image, and the root `docker-compose.yml`, whose two parts (`api`, `worker`)
-  run that image with different entrypoints. See
-  [blitz-cloud.md](blitz-cloud.md) for the free-tier walkthrough.
-- **Render** uses the Blueprint in [`render.yaml`](../../render.yaml) at the
-  repository root. It declares a web service, a worker and a managed PostgreSQL
-  database, all built from the root `Dockerfile`. See [render.md](render.md).
+- **Платформы, собирающие корень репозитория** (blitz.cloud и подобные),
+  используют корневой `Dockerfile`, который собирает API, воркер и веб-интерфейс
+  в один образ, и корневой `docker-compose.yml`, две части которого (`api`,
+  `worker`) запускают этот образ с разными точками входа. Пошаговое руководство для
+  бесплатного тарифа — в [blitz-cloud.md](blitz-cloud.md).
+- **Render** использует Blueprint в [`render.yaml`](../../render.yaml) в корне
+  репозитория. Он объявляет веб-сервис, воркер и управляемую базу PostgreSQL, все
+  собираются из корневого `Dockerfile`. См. [render.md](render.md).
 
-## Verified deployment
+## Проверенное развёртывание
 
-The stack in this repository was brought up and tested end to end: four containers
-started, health checks passed, migrations reached version 5, an administrator was
-bootstrapped, and the smoke test reported 9 of 9 checks passing, including a full
-archive import executed by the worker.
+Стек в этом репозитории был поднят и протестирован от начала до конца: четыре
+контейнера запущены, проверки работоспособности пройдены, миграции достигли
+версии 5, администратор создан, а smoke-тест сообщил о 9 из 9 пройденных проверок,
+включая полный импорт архива, выполненный воркером.
 
-The root build file was verified separately: the image built from the repository
-root, migrations reached version 25, `/health` and `/ready` answered 200, the web
-interface loaded at `/` and survived a refresh on a client-side route, and an
-administrator signed in through the browser.
+Корневой файл сборки проверен отдельно: образ собран из корня репозитория,
+миграции достигли версии 25, `/health` и `/ready` отвечали 200, веб-интерфейс
+загрузился на `/` и пережил обновление на клиентском маршруте, а администратор
+вошёл через браузер.

@@ -1,75 +1,76 @@
-# Deploying ForgeCRM on Render
+# Развёртывание ForgeCRM на Render
 
-This guide deploys a working ForgeCRM (API + background worker + web interface) on
-Render using the Blueprint in `render.yaml` at the repository root.
+Это руководство разворачивает работающий ForgeCRM (API + фоновый воркер +
+веб-интерфейс) на Render с помощью Blueprint в файле `render.yaml` в корне
+репозитория.
 
-## What runs where
+## Что где работает
 
-The root `Dockerfile` produces one image with three things:
+Корневой `Dockerfile` создаёт один образ с тремя вещами:
 
-1. **API** (`forgecrm-api`) — the HTTP server, and the web interface it serves.
-2. **Worker** (`forgecrm-worker`) — the background process: import/export jobs,
-   outbox dispatch, webhook deliveries, the workflow scheduler and retention.
-3. **Web interface** — the built React single-page app, served by the API from
-   `/app/public`. One address answers both the API and the UI, same-origin, so the
-   session cookie and the CSRF double-submit work without CORS.
+1. **API** (`forgecrm-api`) — HTTP-сервер и веб-интерфейс, который он обслуживает.
+2. **Воркер** (`forgecrm-worker`) — фоновый процесс: задания импорта/экспорта,
+   разбор outbox, доставка вебхуков, планировщик workflow и хранение.
+3. **Веб-интерфейс** — собранное React-приложение (SPA), обслуживаемое API из
+   `/app/public`. Один адрес отвечает и на API, и на UI, в одном источнике,
+   поэтому cookie сессии и двойная отправка CSRF работают без CORS.
 
-`render.yaml` declares two services that build that same image and run a different
-entrypoint, plus one managed PostgreSQL database. There is no separate static site:
-the API serves the interface, which keeps the two on one origin.
+`render.yaml` объявляет два сервиса, которые собирают тот же образ и запускают
+разные точки входа, плюс одну управляемую базу PostgreSQL. Отдельного статического
+сайта нет: интерфейс обслуживает API, что держит их в одном источнике.
 
-## Deploying
+## Развёртывание
 
-1. Push this branch (or merge it) and open the Render Dashboard.
-2. **New → Blueprint**, then pick the repository. Render reads `render.yaml`.
-3. Accept the plan it proposes: `forgecrm-api` (web), `forgecrm-worker` (worker)
-   and the `forgecrm-db` PostgreSQL database.
-4. Render injects `PORT` and `FORGECRM_DATABASE_URL` for the database. The
-   `FORGECRM_SECRET_KEY` is generated once on the web service and shared with the
-   worker.
+1. Отправьте эту ветку (или смёрджите её) и откройте панель Render.
+2. **New → Blueprint**, затем выберите репозиторий. Render прочитает `render.yaml`.
+3. Примите предложенный план: `forgecrm-api` (web), `forgecrm-worker` (worker) и
+   базу PostgreSQL `forgecrm-db`.
+4. Render внедрит `PORT` и `FORGECRM_DATABASE_URL` для базы. `FORGECRM_SECRET_KEY`
+   генерируется один раз на веб-сервисе и передаётся воркеру.
 
-## Environment variables
+## Переменные окружения
 
-Set these on the **forgecrm-api** service. Values marked *injected* are provided by
-Render and must not be set by hand.
+Задайте их на сервисе **forgecrm-api**. Значения с пометкой *внедряется*
+предоставляет Render, и задавать их вручную нельзя.
 
-| Variable | Value | Notes |
+| Переменная | Значение | Примечания |
 | --- | --- | --- |
-| `FORGECRM_ENV` | `production` | Required. |
-| `FORGECRM_DATABASE_URL` | *injected* | The managed PostgreSQL connection string. The app reads `FORGECRM_DATABASE_URL` first and falls back to `DATABASE_URL`. |
-| `FORGECRM_SECRET_KEY` | `generateValue: true` | Required. Encrypts stored integration credentials; losing it makes them unrecoverable. |
-| `FORGECRM_BASE_URL` | `https://your-app.onrender.com` | Required. Used for absolute links. |
-| `FORGECRM_MIGRATE_ON_START` | `true` | Set on the **forgecrm-api** service. The API applies migrations before serving. |
-| `PORT` | *injected* | Render sets it; the API binds `0.0.0.0:$PORT`. |
-| `FORGECRM_DATABASE_MAX_CONNS` | `6` (api), `4` (worker) | Keep pools small on the starter plan. |
-| `FORGECRM_RATE_LIMIT_STORE` | `memory` | Single replica, so the in-process limiter is correct. |
+| `FORGECRM_ENV` | `production` | Обязательна. |
+| `FORGECRM_DATABASE_URL` | *внедряется* | Строка подключения к управляемому PostgreSQL. Приложение читает сначала `FORGECRM_DATABASE_URL` и падает обратно на `DATABASE_URL`. |
+| `FORGECRM_SECRET_KEY` | `generateValue: true` | Обязательна. Шифрует сохранённые учётные данные интеграций; её потеря делает их невосстановимыми. |
+| `FORGECRM_BASE_URL` | `https://your-app.onrender.com` | Обязательна. Используется для абсолютных ссылок. |
+| `FORGECRM_MIGRATE_ON_START` | `true` | Задаётся на сервисе **forgecrm-api**. API применяет миграции перед обслуживанием. |
+| `PORT` | *внедряется* | Его задаёт Render; API слушает `0.0.0.0:$PORT`. |
+| `FORGECRM_DATABASE_MAX_CONNS` | `6` (api), `4` (worker) | Держите пулы небольшими на тарифе starter. |
+| `FORGECRM_RATE_LIMIT_STORE` | `memory` | Одна реплика, поэтому лимитер в процессе корректен. |
 
-The worker waits for the schema the API applies before it starts claiming work.
+Воркер ждёт схему, которую применяет API, прежде чем начать забирать работу.
 
-## Creating the first administrator
+## Создание первого администратора
 
-The API has a one-off bootstrap command. In the Render Dashboard, open the
-**forgecrm-api** service's **Shell** and run:
+У API есть одноразовая команда bootstrap. В панели Render откройте **Shell**
+сервиса **forgecrm-api** и выполните:
 
 ```sh
 FORGECRM_BOOTSTRAP_PASSWORD='choose-a-strong-password' \
   forgecrm-api -bootstrap-admin -bootstrap-email you@example.com
 ```
 
-The password is passed through the environment so it never lands in the process
-list. Sign in afterwards, then create the rest of the team from the admin pages.
+Пароль передаётся через окружение, поэтому он никогда не попадает в список
+процессов. Затем войдите и создайте остальную команду со страниц администрирования.
 
-## Verifying the deployment
+## Проверка развёртывания
 
 ```sh
 curl -fsS https://your-app.onrender.com/health   # -> {"status":"ok"}
 curl -fsS https://your-app.onrender.com/ready    # -> {"status":"ready"}
 curl -fsS -o /dev/null -w '%{http_code}\n' \
-  https://your-app.onrender.com/contacts         # -> 200 (SPA deep route)
+  https://your-app.onrender.com/contacts         # -> 200 (клиентский маршрут SPA)
 ```
 
-## Notes
+## Примечания
 
-- The Blueprint sets `FORGECRM_LOG_FORMAT=json`, which suits Render's log viewer.
-- If you deploy more than one API instance, set `FORGECRM_RATE_LIMIT_STORE=redis`
-  and `FORGECRM_REDIS_URL`, or the limit applies per instance.
+- Blueprint задаёт `FORGECRM_LOG_FORMAT=json`, что подходит просмотрщику логов Render.
+- Если вы разворачиваете больше одного экземпляра API, задайте
+  `FORGECRM_RATE_LIMIT_STORE=redis` и `FORGECRM_REDIS_URL`, иначе лимит действует
+  на каждый экземпляр отдельно.

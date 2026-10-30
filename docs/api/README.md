@@ -1,98 +1,100 @@
-# API reference
+# Справочник по API
 
-The API specification is generated from the running router. It cannot describe a
-route the server does not serve, and it cannot miss one the server does.
+Спецификация API генерируется из работающего роутера. Она не может описать
+маршрут, который сервер не обслуживает, и не может пропустить тот, который
+обслуживает.
 
-- **Browsable reference:** [`index.html`](./index.html) — a single self-contained
-  page, generated from the specification
-- **Machine-readable specification:** [`openapi.json`](./openapi.json) (OpenAPI 3.1)
-- **Error contract:** [`errors.md`](./errors.md)
-- **Permission reference:** `docs/security/permissions.md`
+- **Просматриваемый справочник:** [`index.html`](./index.html) — одна
+  самодостаточная страница, сгенерированная из спецификации
+- **Машиночитаемая спецификация:** [`openapi.json`](./openapi.json) (OpenAPI 3.1)
+- **Контракт ошибок:** [`errors.md`](./errors.md)
+- **Справочник разрешений:** `docs/security/permissions.md`
 
-## The browsable reference
+## Просматриваемый справочник
 
-`index.html` is generated from the same document as `openapi.json`, so it is a
-view of the specification rather than a second, hand-maintained description. It
-opens straight from disk — the stylesheet is inlined and the only script is a few
-lines of operation filter — so it needs no network, no CDN and no server. Every
-operation the document declares is rendered as its own anchored section, grouped
-by the document's tags, with its parameters, request body and responses.
+`index.html` генерируется из того же документа, что и `openapi.json`, поэтому это
+представление спецификации, а не второе описание, поддерживаемое руками. Он
+открывается прямо с диска — таблица стилей встроена, а единственный скрипт — это
+несколько строк фильтра операций — поэтому ему не нужны сеть, CDN или сервер.
+Каждая операция, объявленная в документе, отрисовывается отдельным разделом с
+якорем, сгруппированным по тегам документа, со своими параметрами, телом запроса и
+ответами.
 
-Because it is generated, it cannot drift: `go run ./cmd/openapi-gen -check` fails
-if `index.html` is out of date in the same way it fails for `openapi.json`. A
-route change means running the generator and committing both files.
+Поскольку он генерируется, он не может разойтись: `go run ./cmd/openapi-gen -check`
+падает, если `index.html` устарел, так же как и для `openapi.json`. Изменение
+маршрута означает запуск генератора и коммит обоих файлов.
 
-## Why the specification is generated
+## Почему спецификация генерируется
 
-A hand-written specification drifts on the first route addition. The drift is
-silent: the document still validates, clients still generate, and the difference
-only surfaces when a client calls an endpoint that has moved. Generating the
-document from the router removes that failure mode.
+Написанная руками спецификация расходится с кодом при первом же добавлении
+маршрута. Расхождение молчаливое: документ всё ещё валиден, клиенты всё ещё
+генерируются, а разница всплывает только когда клиент вызывает переместившийся
+эндпоинт. Генерация документа из роутера убирает этот режим отказа.
 
-The generator does three things:
+Генератор делает три вещи:
 
-1. **Walks the real router.** `cmd/openapi-gen` builds the same `chi.Router` the
-   server serves and enumerates every method and path with `chi.Walk`. Paths and
-   methods come from the router, never from a list someone maintains by hand.
-2. **Reads permissions from the route registrations.** `chi.Walk` exposes only the
-   innermost handler, so the permission middleware is not visible at runtime. The
-   generator parses the `mount*` functions in `internal/api` and resolves each
-   `rbac.Perm*` constant to its string value by reading `internal/rbac`. The
-   statement that installs the middleware is the statement that is parsed, so the
-   document and the enforcement cannot disagree.
-3. **Fails on an undeclared route.** A route that is neither permission-annotated
-   nor listed in `openapi.Public` with a reason makes generation fail. An
-   unauthenticated endpoint cannot appear by accident.
+1. **Обходит реальный роутер.** `cmd/openapi-gen` строит тот же `chi.Router`,
+   который обслуживает сервер, и перечисляет каждый метод и путь через `chi.Walk`.
+   Пути и методы берутся из роутера, а не из списка, который кто-то ведёт вручную.
+2. **Читает разрешения из регистраций маршрутов.** `chi.Walk` показывает только
+   самый внутренний обработчик, поэтому middleware разрешений не виден во время
+   исполнения. Генератор разбирает функции `mount*` в `internal/api` и сопоставляет
+   каждую константу `rbac.Perm*` её строковому значению, читая `internal/rbac`.
+   Разбирается именно то выражение, которое устанавливает middleware, поэтому
+   документ и проверка не могут разойтись.
+3. **Падает на необъявленном маршруте.** Маршрут, который ни аннотирован
+   разрешением, ни перечислен в `openapi.Public` с обоснованием, заставляет
+   генерацию упасть. Неаутентифицированный эндпоинт не может появиться случайно.
 
-## Regenerating
+## Перегенерация
 
 ```bash
 cd backend
 go run ./cmd/openapi-gen
 ```
 
-CI runs the check mode, which regenerates in memory and compares with the
-committed file:
+CI запускает режим проверки, который пересобирает документ в памяти и сравнивает с
+закоммиченным файлом:
 
 ```bash
 go run ./cmd/openapi-gen -check
 ```
 
-If the check fails, the API and the specification disagree. Run the generator and
-commit the result. Do not edit `openapi.json` by hand: the next run overwrites it,
-and the check will fail again.
+Если проверка падает, API и спецификация расходятся. Запустите генератор и
+закоммитьте результат. Не редактируйте `openapi.json` вручную: следующий запуск
+перезапишет его, и проверка снова упадёт.
 
-## Contract tests
+## Контрактные тесты
 
-`internal/openapi/openapi_test.go` is the contract. It asserts, against the live
-router:
+`internal/openapi/openapi_test.go` — это контракт. Он утверждает следующее
+относительно живого роутера:
 
-| Test | What it prevents |
+| Тест | От чего защищает |
 | --- | --- |
-| `TestCommittedSpecMatchesTheRouter` | A route change merged without regenerating the document. |
-| `TestEveryRouteIsDocumented` | The generator silently dropping routes. |
-| `TestNoRouteIsInvented` | The document promising an endpoint that returns 404. |
-| `TestEveryRouteDeclaresItsAccessRequirement` | An authenticated endpoint with no access statement. |
-| `TestPermissionsAreResolvedToStringValues` | A document that says `PermContactsRead` instead of `contacts.read`. |
-| `TestPublicRoutesDoNotInheritSessionSecurity` | A sign-in endpoint that tells clients to send a session cookie. |
-| `TestSessionRoutesInheritSecurity` | A protected endpoint that silently becomes anonymous. |
-| `TestPathParametersAreTyped` | Identifiers typed as `string`, so clients cannot validate them. |
-| `TestOperationIDsAreUnique` | Two endpoints collapsing into one generated SDK method. |
-| `TestGenerationIsDeterministic` | Output that churns on every run, so it can never be committed. |
-| `TestSpecIsValidJSON` | An encoding failure that breaks every client. |
-| `TestRoutesAreSorted` | Diff noise from unstable ordering. |
+| `TestCommittedSpecMatchesTheRouter` | Изменение маршрута, смёрдженное без перегенерации документа. |
+| `TestEveryRouteIsDocumented` | Молчаливую потерю маршрутов генератором. |
+| `TestNoRouteIsInvented` | Документ, обещающий эндпоинт, который возвращает 404. |
+| `TestEveryRouteDeclaresItsAccessRequirement` | Аутентифицированный эндпоинт без указания уровня доступа. |
+| `TestPermissionsAreResolvedToStringValues` | Документ, в котором написано `PermContactsRead` вместо `contacts.read`. |
+| `TestPublicRoutesDoNotInheritSessionSecurity` | Эндпоинт входа, который велит клиентам отправлять cookie сессии. |
+| `TestSessionRoutesInheritSecurity` | Защищённый эндпоинт, который молча становится анонимным. |
+| `TestPathParametersAreTyped` | Идентификаторы, типизированные как `string`, из-за чего клиенты не могут их валидировать. |
+| `TestOperationIDsAreUnique` | Два эндпоинта, сливающихся в один сгенерированный метод SDK. |
+| `TestGenerationIsDeterministic` | Вывод, который меняется при каждом запуске и потому не может быть закоммичен. |
+| `TestSpecIsValidJSON` | Ошибку кодирования, ломающую каждого клиента. |
+| `TestRoutesAreSorted` | Шум в диффах из-за нестабильного порядка. |
 
-## Document structure
+## Структура документа
 
-The document groups operations into tags derived from the path, so a new route is
-classified without anyone remembering to say so:
+Документ группирует операции в теги, выведенные из пути, поэтому новый маршрут
+классифицируется без чьего-либо напоминания:
 
-| Tag | Path prefix |
+| Тег | Префикс пути |
 | --- | --- |
 | `system` | `/health`, `/ready`, `/api/v1/system` |
 | `authentication` | `/api/v1/auth` |
 | `users-and-permissions` | `/api/v1/users`, `/roles`, `/permissions`, `/teams`, `/organizations` |
-| `crm` | The remaining `/api/v1` resources |
+| `crm` | Остальные ресурсы `/api/v1` |
 | `import-and-export` | `/api/v1/imports`, `/exports` |
 | `migrations` | `/api/v1/migrations` |
 | `integrations` | `/api/v1/integrations` |
@@ -102,26 +104,25 @@ classified without anyone remembering to say so:
 | `notifications` | `/api/v1/notifications` |
 | `ai-and-mcp` | `/api/v1/ai`, `/api/v1/mcp` |
 
-A route that lands in the `other` tag has a surprising path. Treat it as a signal
-to reconsider the path rather than a classification to fix by hand.
+Маршрут, попавший в тег `other`, имеет неожиданный путь. Считайте это сигналом
+пересмотреть путь, а не классификацией, которую нужно исправить руками.
 
-## Known limits
+## Известные ограничения
 
-The specification is generated, but two parts are still declared rather than
-derived, and both are listed here so the document is not read as more complete
-than it is:
+Спецификация генерируется, но две части всё ещё объявляются, а не выводятся, и обе
+перечислены здесь, чтобы документ не читался как более полный, чем он есть:
 
-- **Query parameters.** Collection operations declare the shared
-  `limit`/`offset`/`q`/`sort`/`order` set. Resource-specific filters are declared
-  for the routes that register them in `internal/api/contract.go`; a route whose
-  filters are not registered there is documented without them, so a filter the
-  server accepts may be missing from the document.
-- **Conditional validation rules.** A rule that cannot be expressed as a required
-  list — "at least one of these", "one of a fixed set" — is recorded in the
-  request body description rather than the `required` set. `contract_test.go`
-  fails if a rule the validator enforces is neither declared required nor recorded
-  as conditional.
+- **Параметры запроса.** Операции-коллекции объявляют общий набор
+  `limit`/`offset`/`q`/`sort`/`order`. Специфичные для ресурса фильтры объявлены
+  для маршрутов, которые регистрируют их в `internal/api/contract.go`; маршрут,
+  чьи фильтры там не зарегистрированы, документируется без них, поэтому фильтр,
+  который принимает сервер, может отсутствовать в документе.
+- **Условные правила валидации.** Правило, которое нельзя выразить списком
+  обязательных — «хотя бы одно из этих», «одно из фиксированного набора», —
+  записывается в описание тела запроса, а не в набор `required`. `contract_test.go`
+  падает, если правило, которое обеспечивает валидатор, не объявлено ни
+  обязательным, ни условным.
 
-Both gaps are tracked in `docs/ROADMAP.md`. Neither affects the guarantee that
-matters most: every route the server serves is listed, with the permission it
-requires.
+Оба пробела отслеживаются в `docs/ROADMAP.md`. Ни один не влияет на самую важную
+гарантию: каждый маршрут, который обслуживает сервер, перечислен вместе с
+требуемым для него разрешением.
