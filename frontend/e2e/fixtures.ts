@@ -44,6 +44,33 @@ export async function createAccount(page: Page, name: string) {
   return name
 }
 
+/**
+ * Creates a contact through the interface and returns its name and id.
+ *
+ * The id is read back from the API rather than the interface, because the consent
+ * tests address the contact by id and need the real one the server assigned.
+ */
+export async function createContact(page: Page, firstName: string) {
+  await page.goto('/contacts')
+  await page.getByRole('button', { name: 'New contact' }).click()
+
+  const dialog = page.getByRole('dialog')
+  await dialog.locator('#contact-first').fill(firstName)
+  // The display name carries spaces and case, which is not a valid local part;
+  // slug it so the server's email check passes.
+  const slug = firstName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  await dialog.locator('#contact-email').fill(`${slug}@e2e.test`)
+  await dialog.getByRole('button', { name: 'Create contact' }).click()
+  await expect(dialog).toBeHidden({ timeout: 15_000 })
+
+  const response = await page.request.get(`/api/v1/contacts/?search=${encodeURIComponent(firstName)}`)
+  const body = await response.json()
+  const items = (body.items ?? body.data ?? []) as { id: string; first_name?: string }[]
+  const match = items.find((c) => c.first_name === firstName)
+  if (!match) throw new Error(`contact ${firstName} was not readable through the API`)
+  return { name: firstName, id: match.id }
+}
+
 export const test = base.extend<{ authedPage: Page }>({
   // A page that is already signed in, for tests that are not about login.
   // The second parameter is named `provide` rather than Playwright's usual

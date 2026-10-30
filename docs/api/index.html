@@ -146,6 +146,12 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <li data-op><a href="#op-post-api-v1-agent-runs-id-tokens"><span class="m m-post">POST</span><span class="p">/api/v1/agent/runs/{id}/tokens</span></a></li>
 <li data-op><a href="#op-get-api-v1-comments"><span class="m m-get">GET</span><span class="p">/api/v1/comments</span></a></li>
 <li data-op><a href="#op-post-api-v1-comments"><span class="m m-post">POST</span><span class="p">/api/v1/comments</span></a></li>
+<li data-op><a href="#op-get-api-v1-consent"><span class="m m-get">GET</span><span class="p">/api/v1/consent</span></a></li>
+<li data-op><a href="#op-post-api-v1-consent"><span class="m m-post">POST</span><span class="p">/api/v1/consent</span></a></li>
+<li data-op><a href="#op-get-api-v1-consent-current"><span class="m m-get">GET</span><span class="p">/api/v1/consent/current</span></a></li>
+<li data-op><a href="#op-get-api-v1-consent-decide"><span class="m m-get">GET</span><span class="p">/api/v1/consent/decide</span></a></li>
+<li data-op><a href="#op-get-api-v1-consent-history"><span class="m m-get">GET</span><span class="p">/api/v1/consent/history</span></a></li>
+<li data-op><a href="#op-post-api-v1-consent-withdraw"><span class="m m-post">POST</span><span class="p">/api/v1/consent/withdraw</span></a></li>
 <li data-op><a href="#op-get-api-v1-contacts"><span class="m m-get">GET</span><span class="p">/api/v1/contacts</span></a></li>
 <li data-op><a href="#op-post-api-v1-contacts"><span class="m m-post">POST</span><span class="p">/api/v1/contacts</span></a></li>
 <li data-op><a href="#op-post-api-v1-contacts-bulk-archive"><span class="m m-post">POST</span><span class="p">/api/v1/contacts/bulk-archive</span></a></li>
@@ -346,6 +352,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <li data-op><a href="#schema-comparison">Comparison</a></li>
 <li data-op><a href="#schema-confidence">Confidence</a></li>
 <li data-op><a href="#schema-connectionconfig">ConnectionConfig</a></li>
+<li data-op><a href="#schema-consentinput">ConsentInput</a></li>
 <li data-op><a href="#schema-contact">Contact</a></li>
 <li data-op><a href="#schema-contactinput">ContactInput</a></li>
 <li data-op><a href="#schema-createaitaskrequest">CreateAITaskRequest</a></li>
@@ -370,6 +377,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <li data-op><a href="#schema-customfielddefinitioninput">CustomFieldDefinitionInput</a></li>
 <li data-op><a href="#schema-deal">Deal</a></li>
 <li data-op><a href="#schema-dealinput">DealInput</a></li>
+<li data-op><a href="#schema-decision">Decision</a></li>
 <li data-op><a href="#schema-disclosure">Disclosure</a></li>
 <li data-op><a href="#schema-document">Document</a></li>
 <li data-op><a href="#schema-documentresponse">DocumentResponse</a></li>
@@ -402,6 +410,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <li data-op><a href="#schema-leadinput">LeadInput</a></li>
 <li data-op><a href="#schema-listresponseapidocumentresponse">ListResponseApiDocumentResponse</a></li>
 <li data-op><a href="#schema-listresponseapiusersummary">ListResponseApiUserSummary</a></li>
+<li data-op><a href="#schema-listresponseconsentrecord">ListResponseConsentRecord</a></li>
 <li data-op><a href="#schema-listresponsecrmaccount">ListResponseCrmAccount</a></li>
 <li data-op><a href="#schema-listresponsecrmactivity">ListResponseCrmActivity</a></li>
 <li data-op><a href="#schema-listresponsecrmcomment">ListResponseCrmComment</a></li>
@@ -456,6 +465,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <li data-op><a href="#schema-readyresponse">ReadyResponse</a></li>
 <li data-op><a href="#schema-reconcilerequest">ReconcileRequest</a></li>
 <li data-op><a href="#schema-reconciliation">Reconciliation</a></li>
+<li data-op><a href="#schema-record">Record</a></li>
 <li data-op><a href="#schema-report">Report</a></li>
 <li data-op><a href="#schema-riskscanresponse">RiskScanResponse</a></li>
 <li data-op><a href="#schema-risksignallistresponse">RiskSignalListResponse</a></li>
@@ -503,6 +513,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <li data-op><a href="#schema-usersummary">UserSummary</a></li>
 <li data-op><a href="#schema-view">View</a></li>
 <li data-op><a href="#schema-webhookcreatedresponse">WebhookCreatedResponse</a></li>
+<li data-op><a href="#schema-withdrawconsentrequest">WithdrawConsentRequest</a></li>
 <li data-op><a href="#schema-workflow">Workflow</a></li>
 </ul>
 </nav>
@@ -2679,6 +2690,206 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="ref">See <a href="#schema-createcommentrequest"><code>CreateCommentRequest</code></a></p>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">201</span> Success.</div><p class="ref">See <a href="#schema-comment"><code>Comment</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">400</span> The request was malformed: bad JSON, an unknown field, or a missing required parameter.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">401</span> No valid session, or the session has expired. Sign in again.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">403</span> Authenticated, but the caller lacks the required permission.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">404</span> No such resource, or none visible to the caller&#39;s organization.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">409</span> The request conflicts with current state, such as a duplicate external identifier.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">422</span> A field failed validation. `error.details` names each field.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">429</span> Too many requests. Retry after the interval in `Retry-After`.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-server">500</span> Unexpected failure. The detail is deliberately generic; the cause is in the server log.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+</article>
+<article class="op" id="op-get-api-v1-consent" data-op>
+<h3><span class="m m-get">GET</span> <code class="path">/api/v1/consent</code></h3>
+<p class="summary">List consents</p>
+<div class="op-desc"><p>Requires the `consent.read` permission.</p>
+</div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>limit</code></td><td>query</td><td>integer — 1..200</td><td>no</td><td>Page size. Values above the server maximum are clamped, not rejected.</td></tr>
+<tr><td><code>offset</code></td><td>query</td><td>integer — ≥ 0</td><td>no</td><td></td></tr>
+<tr><td><code>q</code></td><td>query</td><td>string</td><td>no</td><td>Free-text filter.</td></tr>
+<tr><td><code>sort</code></td><td>query</td><td>string</td><td>no</td><td>Field to sort by. An unknown field is rejected.</td></tr>
+<tr><td><code>order</code></td><td>query</td><td>string — one of asc, desc</td><td>no</td><td></td></tr>
+<tr><td><code>contact_id</code></td><td>query</td><td><span class="muted">unspecified</span></td><td>no</td><td>The contact the decision is about. Pass this or `email`, not both.</td></tr>
+<tr><td><code>email</code></td><td>query</td><td><span class="muted">unspecified</span></td><td>no</td><td>The email address the decision is about, for a person not in the CRM.</td></tr>
+</tbody></table>
+<h4>Responses</h4>
+<div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success.</div><p class="ref">See <a href="#schema-listresponseconsentrecord"><code>ListResponseConsentRecord</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">400</span> The request was malformed: bad JSON, an unknown field, or a missing required parameter.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">401</span> No valid session, or the session has expired. Sign in again.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">403</span> Authenticated, but the caller lacks the required permission.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">404</span> No such resource, or none visible to the caller&#39;s organization.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">409</span> The request conflicts with current state, such as a duplicate external identifier.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">422</span> A field failed validation. `error.details` names each field.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">429</span> Too many requests. Retry after the interval in `Retry-After`.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-server">500</span> Unexpected failure. The detail is deliberately generic; the cause is in the server log.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+</article>
+<article class="op" id="op-post-api-v1-consent" data-op>
+<h3><span class="m m-post">POST</span> <code class="path">/api/v1/consent</code></h3>
+<p class="summary">Create a consent</p>
+<div class="op-desc"><p>Requires the `consent.manage` permission.</p>
+</div>
+<h4>Request body <span class="req">required</span></h4>
+<p>Records a consent decision. Exactly one of `contact_id` or `subject_email` names the person; passing both, or neither, is refused with 422. `state` is `granted`, `denied` or `withdrawn`; a missing record is never read as permission, so an absent decision blocks a send rather than allowing it. Recording a new decision supersedes the previous one for the same subject, purpose and channel without overwriting it, so the history is kept.</p>
+<p class="ref">See <a href="#schema-consentinput"><code>ConsentInput</code></a></p>
+<h4>Responses</h4>
+<div class="resp"><div class="resp-head"><span class="code c-ok">201</span> Success.</div><p class="ref">See <a href="#schema-record"><code>Record</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">400</span> The request was malformed: bad JSON, an unknown field, or a missing required parameter.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">401</span> No valid session, or the session has expired. Sign in again.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">403</span> Authenticated, but the caller lacks the required permission.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">404</span> No such resource, or none visible to the caller&#39;s organization.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">409</span> The request conflicts with current state, such as a duplicate external identifier.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">422</span> A field failed validation. `error.details` names each field.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">429</span> Too many requests. Retry after the interval in `Retry-After`.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-server">500</span> Unexpected failure. The detail is deliberately generic; the cause is in the server log.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+</article>
+<article class="op" id="op-get-api-v1-consent-current" data-op>
+<h3><span class="m m-get">GET</span> <code class="path">/api/v1/consent/current</code></h3>
+<p class="summary">List currents</p>
+<div class="op-desc"><p>Requires the `consent.read` permission.</p>
+</div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>limit</code></td><td>query</td><td>integer — 1..200</td><td>no</td><td>Page size. Values above the server maximum are clamped, not rejected.</td></tr>
+<tr><td><code>offset</code></td><td>query</td><td>integer — ≥ 0</td><td>no</td><td></td></tr>
+<tr><td><code>q</code></td><td>query</td><td>string</td><td>no</td><td>Free-text filter.</td></tr>
+<tr><td><code>sort</code></td><td>query</td><td>string</td><td>no</td><td>Field to sort by. An unknown field is rejected.</td></tr>
+<tr><td><code>order</code></td><td>query</td><td>string — one of asc, desc</td><td>no</td><td></td></tr>
+<tr><td><code>contact_id</code></td><td>query</td><td><span class="muted">unspecified</span></td><td>no</td><td>The contact the decision is about. Pass this or `email`, not both.</td></tr>
+<tr><td><code>email</code></td><td>query</td><td><span class="muted">unspecified</span></td><td>no</td><td>The email address the decision is about, for a person not in the CRM.</td></tr>
+</tbody></table>
+<h4>Responses</h4>
+<div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success.</div><p class="ref">See <a href="#schema-listresponseconsentrecord"><code>ListResponseConsentRecord</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">400</span> The request was malformed: bad JSON, an unknown field, or a missing required parameter.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">401</span> No valid session, or the session has expired. Sign in again.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">403</span> Authenticated, but the caller lacks the required permission.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">404</span> No such resource, or none visible to the caller&#39;s organization.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">409</span> The request conflicts with current state, such as a duplicate external identifier.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">422</span> A field failed validation. `error.details` names each field.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">429</span> Too many requests. Retry after the interval in `Retry-After`.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-server">500</span> Unexpected failure. The detail is deliberately generic; the cause is in the server log.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+</article>
+<article class="op" id="op-get-api-v1-consent-decide" data-op>
+<h3><span class="m m-get">GET</span> <code class="path">/api/v1/consent/decide</code></h3>
+<p class="summary">List decides</p>
+<div class="op-desc"><p>Requires the `consent.read` permission.</p>
+</div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>limit</code></td><td>query</td><td>integer — 1..200</td><td>no</td><td>Page size. Values above the server maximum are clamped, not rejected.</td></tr>
+<tr><td><code>offset</code></td><td>query</td><td>integer — ≥ 0</td><td>no</td><td></td></tr>
+<tr><td><code>q</code></td><td>query</td><td>string</td><td>no</td><td>Free-text filter.</td></tr>
+<tr><td><code>sort</code></td><td>query</td><td>string</td><td>no</td><td>Field to sort by. An unknown field is rejected.</td></tr>
+<tr><td><code>order</code></td><td>query</td><td>string — one of asc, desc</td><td>no</td><td></td></tr>
+<tr><td><code>contact_id</code></td><td>query</td><td><span class="muted">unspecified</span></td><td>no</td><td>The contact the decision is about. Pass this or `email`, not both.</td></tr>
+<tr><td><code>email</code></td><td>query</td><td><span class="muted">unspecified</span></td><td>no</td><td>The email address the decision is about, for a person not in the CRM.</td></tr>
+<tr><td><code>purpose</code></td><td>query</td><td>string — one of marketing, transactional, product_updates, research</td><td>yes</td><td>The purpose to decide for.</td></tr>
+<tr><td><code>channel</code></td><td>query</td><td>string — one of email, telegram, webhook</td><td>yes</td><td>The channel to decide for.</td></tr>
+</tbody></table>
+<h4>Responses</h4>
+<div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success.</div><p class="ref">See <a href="#schema-decision"><code>Decision</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">400</span> The request was malformed: bad JSON, an unknown field, or a missing required parameter.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">401</span> No valid session, or the session has expired. Sign in again.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">403</span> Authenticated, but the caller lacks the required permission.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">404</span> No such resource, or none visible to the caller&#39;s organization.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">409</span> The request conflicts with current state, such as a duplicate external identifier.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">422</span> A field failed validation. `error.details` names each field.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">429</span> Too many requests. Retry after the interval in `Retry-After`.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-server">500</span> Unexpected failure. The detail is deliberately generic; the cause is in the server log.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+</article>
+<article class="op" id="op-get-api-v1-consent-history" data-op>
+<h3><span class="m m-get">GET</span> <code class="path">/api/v1/consent/history</code></h3>
+<p class="summary">List histories</p>
+<div class="op-desc"><p>Requires the `consent.read` permission.</p>
+</div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>limit</code></td><td>query</td><td>integer — 1..200</td><td>no</td><td>Page size. Values above the server maximum are clamped, not rejected.</td></tr>
+<tr><td><code>offset</code></td><td>query</td><td>integer — ≥ 0</td><td>no</td><td></td></tr>
+<tr><td><code>q</code></td><td>query</td><td>string</td><td>no</td><td>Free-text filter.</td></tr>
+<tr><td><code>sort</code></td><td>query</td><td>string</td><td>no</td><td>Field to sort by. An unknown field is rejected.</td></tr>
+<tr><td><code>order</code></td><td>query</td><td>string — one of asc, desc</td><td>no</td><td></td></tr>
+<tr><td><code>contact_id</code></td><td>query</td><td><span class="muted">unspecified</span></td><td>no</td><td>The contact the decision is about. Pass this or `email`, not both.</td></tr>
+<tr><td><code>email</code></td><td>query</td><td><span class="muted">unspecified</span></td><td>no</td><td>The email address the decision is about, for a person not in the CRM.</td></tr>
+<tr><td><code>purpose</code></td><td>query</td><td>string — one of marketing, transactional, product_updates, research</td><td>yes</td><td>The purpose to show the history of.</td></tr>
+<tr><td><code>channel</code></td><td>query</td><td>string — one of email, telegram, webhook</td><td>yes</td><td>The channel to show the history of.</td></tr>
+</tbody></table>
+<h4>Responses</h4>
+<div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success.</div><p class="ref">See <a href="#schema-listresponseconsentrecord"><code>ListResponseConsentRecord</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">400</span> The request was malformed: bad JSON, an unknown field, or a missing required parameter.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">401</span> No valid session, or the session has expired. Sign in again.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">403</span> Authenticated, but the caller lacks the required permission.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">404</span> No such resource, or none visible to the caller&#39;s organization.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">409</span> The request conflicts with current state, such as a duplicate external identifier.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">422</span> A field failed validation. `error.details` names each field.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">429</span> Too many requests. Retry after the interval in `Retry-After`.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-server">500</span> Unexpected failure. The detail is deliberately generic; the cause is in the server log.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+</article>
+<article class="op" id="op-post-api-v1-consent-withdraw" data-op>
+<h3><span class="m m-post">POST</span> <code class="path">/api/v1/consent/withdraw</code></h3>
+<p class="summary">Create a withdraw</p>
+<div class="op-desc"><p>Requires the `consent.manage` permission.</p>
+</div>
+<h4>Request body <span class="req">required</span></h4>
+<p>Withdraws consent for one subject, purpose and channel. It is the same write as recording a decision with state `withdrawn`, named for the act.</p>
+<p class="ref">See <a href="#schema-withdrawconsentrequest"><code>WithdrawConsentRequest</code></a></p>
+<h4>Responses</h4>
+<div class="resp"><div class="resp-head"><span class="code c-ok">201</span> Success.</div><p class="ref">See <a href="#schema-record"><code>Record</code></a></p>
 </div>
 <div class="resp"><div class="resp-head"><span class="code c-client">400</span> The request was malformed: bad JSON, an unknown field, or a missing required parameter.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
 </div>
@@ -7564,6 +7775,21 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <tr><td><code>username</code></td><td>string</td><td></td></tr>
 </tbody></table>
 </article>
+<article class="op schema" id="schema-consentinput" data-op>
+<h3><code>ConsentInput</code></h3>
+<table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>basis</code></td><td>string</td><td></td></tr>
+<tr><td><code>channel</code> <span class="req">required</span></td><td>string</td><td></td></tr>
+<tr><td><code>contact_id</code></td><td>string, nullable</td><td></td></tr>
+<tr><td><code>decided_at</code></td><td>string, nullable</td><td></td></tr>
+<tr><td><code>evidence</code></td><td>string</td><td></td></tr>
+<tr><td><code>expires_at</code></td><td>string, nullable</td><td></td></tr>
+<tr><td><code>purpose</code> <span class="req">required</span></td><td>string</td><td></td></tr>
+<tr><td><code>source</code></td><td>string</td><td></td></tr>
+<tr><td><code>state</code> <span class="req">required</span></td><td>string</td><td></td></tr>
+<tr><td><code>subject_email</code></td><td>string</td><td></td></tr>
+</tbody></table>
+</article>
 <article class="op schema" id="schema-contact" data-op>
 <h3><code>Contact</code></h3>
 <table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
@@ -7850,6 +8076,17 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <tr><td><code>stage_id</code> <span class="req">required</span></td><td>string (uuid)</td><td></td></tr>
 <tr><td><code>team_id</code></td><td>string, nullable</td><td></td></tr>
 <tr><td><code>title</code> <span class="req">required</span></td><td>string</td><td></td></tr>
+</tbody></table>
+</article>
+<article class="op schema" id="schema-decision" data-op>
+<h3><code>Decision</code></h3>
+<table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>allowed</code> <span class="req">required</span></td><td>boolean</td><td></td></tr>
+<tr><td><code>decided_at</code></td><td>string, nullable</td><td></td></tr>
+<tr><td><code>expires_at</code></td><td>string, nullable</td><td></td></tr>
+<tr><td><code>reason</code> <span class="req">required</span></td><td>string</td><td></td></tr>
+<tr><td><code>record_id</code></td><td>string, nullable</td><td></td></tr>
+<tr><td><code>state</code></td><td>string</td><td></td></tr>
 </tbody></table>
 </article>
 <article class="op schema" id="schema-disclosure" data-op>
@@ -8255,6 +8492,15 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h3><code>ListResponseApiUserSummary</code></h3>
 <table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>items</code> <span class="req">required</span></td><td>array of <a href="#schema-usersummary"><code>UserSummary</code></a></td><td></td></tr>
+<tr><td><code>limit</code> <span class="req">required</span></td><td>integer</td><td></td></tr>
+<tr><td><code>offset</code> <span class="req">required</span></td><td>integer</td><td></td></tr>
+<tr><td><code>total</code> <span class="req">required</span></td><td>integer</td><td></td></tr>
+</tbody></table>
+</article>
+<article class="op schema" id="schema-listresponseconsentrecord" data-op>
+<h3><code>ListResponseConsentRecord</code></h3>
+<table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>items</code> <span class="req">required</span></td><td>array of <a href="#schema-record"><code>Record</code></a></td><td></td></tr>
 <tr><td><code>limit</code> <span class="req">required</span></td><td>integer</td><td></td></tr>
 <tr><td><code>offset</code> <span class="req">required</span></td><td>integer</td><td></td></tr>
 <tr><td><code>total</code> <span class="req">required</span></td><td>integer</td><td></td></tr>
@@ -8772,6 +9018,29 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <tr><td><code>target_entity</code> <span class="req">required</span></td><td>string</td><td></td></tr>
 </tbody></table>
 </article>
+<article class="op schema" id="schema-record" data-op>
+<h3><code>Record</code></h3>
+<table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>basis</code></td><td>string, nullable</td><td></td></tr>
+<tr><td><code>channel</code> <span class="req">required</span></td><td>string</td><td></td></tr>
+<tr><td><code>contact_id</code></td><td>string, nullable</td><td></td></tr>
+<tr><td><code>created_at</code> <span class="req">required</span></td><td>string (date-time)</td><td></td></tr>
+<tr><td><code>current</code> <span class="req">required</span></td><td>boolean</td><td></td></tr>
+<tr><td><code>decided_at</code> <span class="req">required</span></td><td>string (date-time)</td><td></td></tr>
+<tr><td><code>evidence</code></td><td>string, nullable</td><td></td></tr>
+<tr><td><code>expires_at</code></td><td>string, nullable</td><td></td></tr>
+<tr><td><code>id</code> <span class="req">required</span></td><td>string (uuid)</td><td></td></tr>
+<tr><td><code>organization_id</code> <span class="req">required</span></td><td>string (uuid)</td><td></td></tr>
+<tr><td><code>purpose</code> <span class="req">required</span></td><td>string</td><td></td></tr>
+<tr><td><code>recorded_by</code></td><td>string, nullable</td><td></td></tr>
+<tr><td><code>revision</code> <span class="req">required</span></td><td>integer</td><td></td></tr>
+<tr><td><code>source</code></td><td>string, nullable</td><td></td></tr>
+<tr><td><code>state</code> <span class="req">required</span></td><td>string</td><td></td></tr>
+<tr><td><code>subject_email</code></td><td>string, nullable</td><td></td></tr>
+<tr><td><code>superseded_by</code></td><td>string, nullable</td><td></td></tr>
+<tr><td><code>updated_at</code> <span class="req">required</span></td><td>string (date-time)</td><td></td></tr>
+</tbody></table>
+</article>
 <article class="op schema" id="schema-report" data-op>
 <h3><code>Report</code></h3>
 <table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
@@ -8968,6 +9237,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h3><code>SendEmailRequest</code></h3>
 <table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>body</code></td><td>string</td><td></td></tr>
+<tr><td><code>purpose</code></td><td>string</td><td></td></tr>
 <tr><td><code>subject</code> <span class="req">required</span></td><td>string</td><td></td></tr>
 <tr><td><code>to</code> <span class="req">required</span></td><td>array of string</td><td></td></tr>
 </tbody></table>
@@ -9280,6 +9550,16 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h3><code>WebhookCreatedResponse</code></h3>
 <table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>subscription</code> <span class="req">required</span></td><td>unspecified</td><td></td></tr>
+</tbody></table>
+</article>
+<article class="op schema" id="schema-withdrawconsentrequest" data-op>
+<h3><code>WithdrawConsentRequest</code></h3>
+<table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>channel</code></td><td>string</td><td></td></tr>
+<tr><td><code>contact_id</code></td><td>string, nullable</td><td></td></tr>
+<tr><td><code>email</code></td><td>string</td><td></td></tr>
+<tr><td><code>purpose</code></td><td>string</td><td></td></tr>
+<tr><td><code>reason</code></td><td>string</td><td></td></tr>
 </tbody></table>
 </article>
 <article class="op schema" id="schema-workflow" data-op>

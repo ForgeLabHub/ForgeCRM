@@ -27,6 +27,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/audit"
 	"github.com/geff1778/forgecrm/internal/authn"
 	"github.com/geff1778/forgecrm/internal/config"
+	"github.com/geff1778/forgecrm/internal/consent"
 	"github.com/geff1778/forgecrm/internal/crm"
 	"github.com/geff1778/forgecrm/internal/database"
 	"github.com/geff1778/forgecrm/internal/events"
@@ -99,6 +100,9 @@ type Deps struct {
 	// Views is the saved list-view service. It stores named filters per user and
 	// per screen; it never touches CRM data.
 	Views *views.Service
+	// Consent records what a person agreed to be contacted about and answers whether
+	// an outbound channel may contact them. It never touches CRM data.
+	Consent *consent.Service
 	// MCPCredentials is the scoped, revocable credential store for external MCP
 	// clients. It resolves a bearer token to a principal carrying only the
 	// credential's own permission list.
@@ -383,6 +387,7 @@ func (s *Server) buildRouter() chi.Router {
 			s.mountIntelligence(r)
 			s.mountDocuments(r)
 			s.mountViews(r)
+			s.mountConsent(r)
 			s.mountMCPCredentials(r)
 			s.mountNotifications(r)
 		})
@@ -750,6 +755,8 @@ func (s *Server) respondDomainError(w http.ResponseWriter, r *http.Request, err 
 		httpx.WriteError(w, r, httpx.ErrDisabled)
 	case errors.Is(err, views.ErrNotFound):
 		httpx.WriteError(w, r, httpx.ErrNotFound)
+	case errors.Is(err, consent.ErrNotFound):
+		httpx.WriteError(w, r, httpx.ErrNotFound)
 	case errors.Is(err, mcpcred.ErrNotFound):
 		httpx.WriteError(w, r, httpx.ErrNotFound)
 	case errors.Is(err, mcpcred.ErrEmptyScope), errors.Is(err, mcpcred.ErrUnknownScope):
@@ -773,6 +780,11 @@ func (s *Server) respondDomainError(w http.ResponseWriter, r *http.Request, err 
 		var mcpErr *mcpcred.ValidationError
 		if errors.As(err, &mcpErr) {
 			httpx.WriteError(w, r, httpx.ValidationError(mcpErr.Fields))
+			return
+		}
+		var consentErr *consent.ValidationError
+		if errors.As(err, &consentErr) {
+			httpx.WriteError(w, r, httpx.ValidationError(consentErr.Fields))
 			return
 		}
 		var apiErr *httpx.APIError

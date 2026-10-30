@@ -1,6 +1,6 @@
 # Схема данных
 
-PostgreSQL 17, схема `forgecrm`, **73 таблицы**, **26 миграций**. Полное описание
+PostgreSQL 17, схема `forgecrm`, **74 таблицы**, **27 миграций**. Полное описание
 столбцов — в SQL (`backend/internal/migrations/*.up.sql`); здесь — карта владения и
 связей, чтобы понять, кто за что отвечает.
 
@@ -18,6 +18,7 @@ PostgreSQL 17, схема `forgecrm`, **73 таблицы**, **26 миграци
 | Аналитика и симуляция | `simulation_scenarios`, `simulation_runs` | `simulate`; расчёты — `analytics` (без БД) |
 | Прогнозы и риски | `forecast_runs`, `risk_signals`, `risk_thresholds` | `analytics`; расчёты — `analytics/forecast.go`, `analytics/risk.go` |
 | Интеграции | `integrations`, `integration_runs`, `documents`, `telegram_links`, `email_log` | `integrations`, `storage`, `notify` |
+| Согласие | `consent_records` | `consent` |
 | Платформа | `jobs`, `audit_log`, `security_events`, `app_logs`, `app_settings`, `notifications`, `idempotency_keys` | `jobs`, `audit`, `logging`, `secrets` |
 
 Правило: **писать в таблицы домена может только его владелец.** Чужой модуль

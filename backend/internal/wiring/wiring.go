@@ -19,6 +19,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/audit"
 	"github.com/geff1778/forgecrm/internal/authn"
 	"github.com/geff1778/forgecrm/internal/config"
+	"github.com/geff1778/forgecrm/internal/consent"
 	"github.com/geff1778/forgecrm/internal/crm"
 	"github.com/geff1778/forgecrm/internal/database"
 	"github.com/geff1778/forgecrm/internal/events"
@@ -89,6 +90,9 @@ type Services struct {
 	// Views is the saved list-view service: named filters per user and per screen.
 	// It never touches CRM data, only the views table.
 	Views *views.Service
+	// Consent records what a person agreed to be contacted about and answers whether
+	// an outbound channel may contact them. It never touches CRM data.
+	Consent *consent.Service
 	// MCPCredentials mints and resolves the scoped, revocable credentials an external
 	// MCP client uses in place of a browser session.
 	MCPCredentials *mcpcred.Service
@@ -174,6 +178,7 @@ func Build(cfg *config.Config, db *database.DB, keyring *secrets.Keyring, log *s
 		Risk:           risk.NewService(db, crmSvc, auditLog),
 		OIDC:           oidc.NewService(db, cfg, keyring, auditLog, log),
 		Views:          views.NewService(db, auditLog),
+		Consent:        consent.NewService(db, auditLog),
 		MCPCredentials: mcpcred.NewService(db, auditLog),
 		Workflows: workflow.NewEngine(workflow.Config{
 			DB:     db,

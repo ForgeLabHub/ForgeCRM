@@ -173,6 +173,15 @@ const (
 	// that is the point of the split.
 	PermMCPCredentialsRead   Permission = "mcp.credentials.read"
 	PermMCPCredentialsManage Permission = "mcp.credentials.manage"
+
+	// Consent. A consent record is evidence about a person — what they agreed to,
+	// for what purpose, on what channel — and it decides whether an outbound channel
+	// may contact them. Reading it (read) is an audit and compliance activity;
+	// recording or withdrawing a decision (manage) changes whether a person can be
+	// contacted, so the two are separate rights. Neither is a CRM write: the record
+	// is about a person, not a change to their CRM record.
+	PermConsentRead   Permission = "consent.read"
+	PermConsentManage Permission = "consent.manage"
 )
 
 // All returns every permission in the catalog, sorted.
@@ -222,6 +231,7 @@ var catalog = map[Permission]struct{}{
 	PermSSORead: {}, PermSSOManage: {},
 	PermViewsRead: {}, PermViewsManage: {},
 	PermMCPCredentialsRead: {}, PermMCPCredentialsManage: {},
+	PermConsentRead: {}, PermConsentManage: {},
 }
 
 // Known reports whether p is part of the catalog.

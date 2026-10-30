@@ -11,6 +11,7 @@ import { AssistPanel } from '../components/AssistPanel'
 import { AttachmentPanel } from '../components/AttachmentPanel'
 import { RecordCollabPanel } from '../components/RecordCollabPanel'
 import { CustomFieldsPanel } from '../components/CustomFieldsPanel'
+import { ConsentPanel } from '../components/ConsentPanel'
 import { BulkArchiveButton } from '../components/BulkArchiveButton'
 import {
   Alert,
@@ -439,6 +440,8 @@ export function ContactDetailPage() {
         saving={saveCustomFields.isPending}
         onSave={(next) => saveCustomFields.mutateAsync(next)}
       />
+
+      <ConsentPanel contactId={id} email={data.email ?? undefined} />
 
       <AttachmentPanel entityType="contact" entityId={id} />
 

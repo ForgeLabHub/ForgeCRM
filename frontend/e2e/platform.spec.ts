@@ -1,4 +1,4 @@
-import { test, expect, signIn, createAccount, RUN_ID, E2E_EMAIL } from './fixtures'
+import { test, expect, signIn, createAccount, createContact, RUN_ID, E2E_EMAIL } from './fixtures'
 
 // These tests exist to answer one question: does the interface actually perform
 // the operation it presents? A button that renders is not a button that works,
@@ -863,6 +863,72 @@ test.describe('MCP client credentials', () => {
       data: { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} },
     })
     expect(afterRevoke.status()).toBe(401)
+  })
+})
+
+test.describe('consent', () => {
+  test('a recorded decision is read back and a withdrawal blocks the send', async ({
+    authedPage: page,
+  }) => {
+    const contact = await createContact(page, `E2E Consent ${RUN_ID}`)
+    await page.goto(`/contacts/${contact.id}`)
+
+    // With nothing on record the panel says so: silence is not permission.
+    await expect(page.getByText(/No consent on record/i)).toBeVisible()
+
+    // Record a marketing/email decision through the real form.
+    await page.getByLabel('Decision').selectOption('granted')
+    await page.getByLabel('Basis').fill('signup form')
+    await page.getByRole('button', { name: 'Record decision' }).click()
+
+    // The table is read back from the server, so the row appears only if the
+    // decision really persisted.
+    const row = page.getByRole('row', { name: /marketing.*email.*Granted/i })
+    await expect(row).toBeVisible()
+
+    // The decision is what the API answers with, too.
+    const allowed = await page.request.get(
+      `/api/v1/consent/decide?contact_id=${contact.id}&purpose=marketing&channel=email`,
+    )
+    expect(allowed.status()).toBe(200)
+    expect((await allowed.json()).allowed).toBe(true)
+
+    // Withdraw it, and the same question flips to blocked.
+    await page.getByLabel('Decision').selectOption('withdrawn')
+    await page.getByRole('button', { name: 'Withdraw consent' }).click()
+    await expect(page.getByRole('row', { name: /marketing.*email.*Withdrawn/i })).toBeVisible()
+
+    const blocked = await page.request.get(
+      `/api/v1/consent/decide?contact_id=${contact.id}&purpose=marketing&channel=email`,
+    )
+    expect((await blocked.json()).allowed).toBe(false)
+  })
+
+  test('a blocked send is refused by the email endpoint and recorded in the audit', async ({
+    authedPage: page,
+  }) => {
+    const contact = await createContact(page, `E2E Blocked ${RUN_ID}`)
+
+    // A mutating request must carry the session's CSRF token, so fetch it first.
+    const me = await page.request.get('/api/v1/auth/me')
+    const csrf = (await me.json()).csrf_token as string
+
+    // No consent is on record, and the request names the stricter purpose
+    // explicitly. The server must refuse on the policy, before it ever looks at
+    // whether a mail server is configured.
+    const send = await page.request.post('/api/v1/admin/email/send', {
+      headers: { 'X-CSRF-Token': csrf },
+      data: {
+        // `to` is a list: the endpoint accepts several recipients.
+        to: [`${contact.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}@e2e.test`],
+        subject: 'E2E marketing send',
+        body: 'This must not be sent.',
+        purpose: 'marketing',
+      },
+    })
+    expect(send.status()).toBe(403)
+    const body = await send.json()
+    expect(JSON.stringify(body)).toMatch(/consent/i)
   })
 })
 
