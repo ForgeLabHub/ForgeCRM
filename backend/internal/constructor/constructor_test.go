@@ -274,3 +274,41 @@ func walk(t *testing.T, dir string) []string {
 	}
 	return out
 }
+
+func TestGenerateCopiesEveryNamedModuleAndRewritesBetween(t *testing.T) {
+	// The analytics-demo recipe copies one package, so it does not exercise the
+	// interesting case: a recipe that names two modules where one imports the other.
+	// Both must travel, and the import between them must be re-pointed at the new
+	// module, or the generated project names a package it does not contain.
+	r := fixtureRecipe(t)
+	r.Modules = []string{"demo", "helper"}
+	out := t.TempDir()
+	res, err := Generate(r, Options{SourceRoot: fixtureSource(t), OutputDir: out})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if len(res.Modules) != 2 {
+		t.Fatalf("modules = %v, want both demo and helper", res.Modules)
+	}
+
+	// Both packages must be present.
+	for _, m := range []string{"demo", "helper"} {
+		if _, err := os.Stat(filepath.Join(out, m, m+".go")); err != nil {
+			t.Errorf("module %q was not copied: %v", m, err)
+		}
+	}
+	// The import inside demo must name the copied helper, not ForgeCRM.
+	demo := readFile(t, filepath.Join(out, "demo", "demo.go"))
+	if strings.Contains(demo, "geff1778/forgecrm") {
+		t.Errorf("demo still imports the monolith:\n%s", demo)
+	}
+	if !strings.Contains(demo, "example.com/analytics-demo/helper") {
+		t.Errorf("demo does not import the copied helper:\n%s", demo)
+	}
+	// No file anywhere may name the monolith.
+	for _, f := range walk(t, out) {
+		if strings.HasSuffix(f, ".go") && strings.Contains(readFile(t, filepath.Join(out, f)), "geff1778/forgecrm") {
+			t.Errorf("%s still names the monolith", f)
+		}
+	}
+}

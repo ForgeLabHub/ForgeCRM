@@ -29,6 +29,12 @@ once it reaches 1.0.
   a YAML parser — so it is a thirty-third module in the extraction harness and an
   archtest pin.
 
+- **The constructor's cross-module rewrite is tested, not assumed.** The bundled
+  `analytics-demo` recipe copies one package, so it never exercised the case that
+  matters for a real recipe: two modules where one imports the other. A unit test
+  now generates a project naming both and checks that each travels, that the import
+  between them is re-pointed at the new module, and that no file names the monolith.
+
 - **Thirteen more modules are extraction-proven, taking the harness to
   thirty-two.**
   The remaining backend packages that sit above the leaves now lift out on their
