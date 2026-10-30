@@ -318,6 +318,30 @@ when a service is missing, so the same mistake is legible next time
 
 ---
 
+## Cycle 15 — Saved list views
+
+| # | Item | Status |
+|---|---|---|
+| 15.1 | A view is a stored list filter/sort/column selection, not a new query language | **VERIFIED** — `internal/views`; the stored `filters` document is exactly the query-parameter set the CRM list endpoints accept, so applying a view replays those parameters to the same endpoint. A view cannot name a filter no list endpoint honours |
+| 15.2 | Owner-scoped visibility, one predicate in the query | **VERIFIED** — `List`/`Get` filter `owner_user_id = $3 OR shared = true` in SQL, so another user's private view is never loaded. `Update`/`Delete` are narrower: only the owner may change a view, and a shared view is readable by the organization but not editable by it. `missReason` answers 404 for "not there" and 403 for "not yours" |
+| 15.3 | Migration `0023` + permission seed | **VERIFIED** — `saved_views` with the entity-type CHECK, the partial unique name index per owner and screen, and the scope/owner indexes; `views.read`/`views.manage` seeded to the roles that work a CRM list. `TestSeedDataMatchesThePermissionCatalog` keeps the catalog and the seed in step |
+| 15.4 | API surface + OpenAPI | **VERIFIED** — `/api/v1/views` CRUD behind `views.read`/`views.manage` and a nil-service guard; contract rows in `internal/api/contract.go`; `go run ./cmd/openapi-gen -check` reports the spec current |
+| 15.5 | Frontend switcher | **VERIFIED** — `frontend/src/components/SavedViewsBar.tsx` and `frontend/src/api/views.ts`; the switcher is controlled by the screen, so applying a view is the same code path a hand-entered filter takes. It sits on the deals, leads, tasks and tickets list screens. A read-only user is offered no save or delete control |
+| 15.6 | Tests: unit, PostgreSQL integration, frontend, E2E | **VERIFIED** — `internal/views/views_test.go` (7 unit tests), `internal/testsupport/views_test.go` (7 PostgreSQL tests: owner scoping, shared read-only, cross-org isolation, name uniqueness, validation, archive-and-free-the-name, filter round-trip), `frontend/src/components/SavedViewsBar.test.tsx` (7 tests), and two Chromium cases in `e2e/platform.spec.ts` |
+
+### Evidence
+
+| Check | Command | Result |
+|---|---|---|
+| Formatting | `gofmt -l ./cmd ./internal` | clean |
+| Vet | `go vet ./...` | clean |
+| Unit tests | `go test -count=1 ./internal/views/... ./internal/api/... ./internal/openapi/... ./internal/archtest/...` | pass |
+| Integration tests | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration -count=1 -p 1 ./internal/testsupport/... ./internal/api/...` | pass against real PostgreSQL (`testsupport` 168s, `api` 128s) |
+| OpenAPI currency | `go run ./cmd/openapi-gen -check` | spec current |
+| Frontend | `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` | typecheck clean, lint 0 errors, 141 tests pass, build succeeds |
+
+---
+
 # Master plan phases
 
 The cycles above describe how the platform was built. The phases below describe

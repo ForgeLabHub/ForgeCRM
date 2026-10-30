@@ -649,6 +649,20 @@ tbody tr:last-child td { border-bottom: none; }
   max-width: 380px;
 }
 
+/* The saved-views switcher sits inline with a screen's other filters. */
+.saved-views {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.saved-views__select {
+  min-width: 180px;
+  max-width: 260px;
+  margin: 0;
+}
+
 .pagination {
   display: flex;
   align-items: center;

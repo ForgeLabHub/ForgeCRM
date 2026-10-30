@@ -4,9 +4,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { accountsApi, dealsApi, pipelinesApi } from '../api/crm'
 import { errorMessage, fieldErrors } from '../api/client'
+import type { ViewFilters } from '../api/views'
 import type { Deal, DealInput, Pipeline } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
 import { ResourceList, type Column } from '../components/ResourceList'
+import { SavedViewsBar } from '../components/SavedViewsBar'
 import { AssistPanel } from '../components/AssistPanel'
 import { AttachmentPanel } from '../components/AttachmentPanel'
 import { RecordCollabPanel } from '../components/RecordCollabPanel'
@@ -78,6 +80,8 @@ export function DealsPage() {
   const { can } = useAuth()
   const [creating, setCreating] = useState(false)
   const [view, setView] = useState<'table' | 'board'>('table')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [activeViewId, setActiveViewId] = useState<string | undefined>(undefined)
 
   return (
     <>
@@ -114,8 +118,8 @@ export function DealsPage() {
       {view === 'table' ? (
         <ResourceList
           title="All deals"
-          queryKey={['deals']}
-          fetchPage={(params) => dealsApi.list(params)}
+          queryKey={['deals', statusFilter]}
+          fetchPage={(params) => dealsApi.list({ ...params, status: statusFilter || undefined })}
           columns={columns}
           rowKey={(row) => row.id}
           onRowClick={(row) => navigate(`/deals/${row.id}`)}
@@ -123,6 +127,31 @@ export function DealsPage() {
           emptyText="Create a deal to track an opportunity through your pipeline."
           searchable
           searchPlaceholder="Search deals…"
+          filters={
+            <>
+              <SavedViewsBar
+                entityType="deals"
+                current={statusFilter ? { status: statusFilter } : {}}
+                onApply={(filters: ViewFilters) => setStatusFilter(filters.status ?? '')}
+                activeId={activeViewId}
+                onActiveChange={setActiveViewId}
+              />
+              <label className="field" style={{ maxWidth: 180 }}>
+                <span className="field__label">Status</span>
+                <select
+                  value={statusFilter}
+                  onChange={(event) => setStatusFilter(event.target.value)}
+                >
+                  <option value="">All statuses</option>
+                  {['open', 'won', 'lost'].map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          }
           bulkActions={
             can('deals.archive')
               ? (selected, clear) => (

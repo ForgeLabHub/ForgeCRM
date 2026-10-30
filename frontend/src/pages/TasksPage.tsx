@@ -3,11 +3,13 @@ import type { FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { accountsApi, contactsApi, dealsApi, tasksApi } from '../api/crm'
 import { errorMessage, fieldErrors } from '../api/client'
+import type { ViewFilters } from '../api/views'
 import type { Task, TaskInput } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
 import { AssistPanel } from '../components/AssistPanel'
 import { RecordCollabPanel } from '../components/RecordCollabPanel'
 import { ResourceList, type Column } from '../components/ResourceList'
+import { SavedViewsBar } from '../components/SavedViewsBar'
 import { Alert, Badge, Field, PageHeader, StatusBadge, Timestamp } from '../components/ui'
 
 const PRIORITIES = ['low', 'normal', 'high', 'urgent']
@@ -25,6 +27,7 @@ export function TasksPage() {
   const [editing, setEditing] = useState<Task | null>(null)
   const [statusFilter, setStatusFilter] = useState('')
   const [actionError, setActionError] = useState<string | null>(null)
+  const [activeViewId, setActiveViewId] = useState<string | undefined>(undefined)
 
   const complete = useMutation({
     mutationFn: (task: Task) =>
@@ -147,22 +150,31 @@ export function TasksPage() {
         searchable
         searchPlaceholder="Search tasks…"
         filters={
-          <label className="field" style={{ maxWidth: 180 }}>
-            <span className="field__label">Status</span>
-            <select
-              value={statusFilter}
-              onChange={(event) => {
-                setStatusFilter(event.target.value)
-              }}
-            >
-              <option value="">All statuses</option>
-              {STATUSES.map((status) => (
-                <option key={status} value={status}>
-                  {status.replace('_', ' ')}
-                </option>
-              ))}
-            </select>
-          </label>
+          <>
+            <SavedViewsBar
+              entityType="tasks"
+              current={statusFilter ? { status: statusFilter } : {}}
+              onApply={(filters: ViewFilters) => setStatusFilter(filters.status ?? '')}
+              activeId={activeViewId}
+              onActiveChange={setActiveViewId}
+            />
+            <label className="field" style={{ maxWidth: 180 }}>
+              <span className="field__label">Status</span>
+              <select
+                value={statusFilter}
+                onChange={(event) => {
+                  setStatusFilter(event.target.value)
+                }}
+              >
+                <option value="">All statuses</option>
+                {STATUSES.map((status) => (
+                  <option key={status} value={status}>
+                    {status.replace('_', ' ')}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </>
         }
         actions={
           can('tasks.create') ? (

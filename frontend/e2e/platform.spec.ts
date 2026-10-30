@@ -721,6 +721,51 @@ test.describe('export', () => {
   })
 })
 
+test.describe('saved views', () => {
+  test('a filter can be saved as a view and reapplied after a reload', async ({
+    authedPage: page,
+  }) => {
+    const viewName = `E2E view ${RUN_ID}`
+    await page.goto('/tasks')
+
+    // Filter the list, then save that exact filter as a named view.
+    await page.getByLabel('Status').selectOption('open')
+    await page.getByRole('button', { name: 'Save view' }).click()
+
+    const dialog = page.getByRole('dialog')
+    await dialog.getByLabel('Name').fill(viewName)
+    await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+
+    // The view is stored server-side, so a reload re-reads it rather than
+    // keeping it in client state.
+    await page.reload()
+    const select = page.getByRole('combobox', { name: 'View' })
+    await expect(select).toBeVisible()
+    await expect(select.locator('option', { hasText: viewName })).toHaveCount(1)
+
+    // Selecting it restores the stored filter, which the list reads back.
+    await select.selectOption({ label: viewName })
+    await expect(page.getByLabel('Status')).toHaveValue('open')
+  })
+
+  test('a view can be deleted and disappears from the switcher', async ({ authedPage: page }) => {
+    const viewName = `E2E delete ${RUN_ID}`
+    await page.goto('/tasks')
+
+    await page.getByRole('button', { name: 'Save view' }).click()
+    const dialog = page.getByRole('dialog')
+    await dialog.getByLabel('Name').fill(viewName)
+    await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+
+    const select = page.getByRole('combobox', { name: 'View' })
+    await select.selectOption({ label: viewName })
+    await page.getByRole('group', { name: 'Saved views' }).getByRole('button', { name: 'Delete' }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click()
+
+    await expect(select.locator('option', { hasText: viewName })).toHaveCount(0)
+  })
+})
+
 test.describe('health endpoints', () => {
   test('the API reports healthy and ready', async ({ request }) => {
     expect((await request.get('/health')).status()).toBe(200)

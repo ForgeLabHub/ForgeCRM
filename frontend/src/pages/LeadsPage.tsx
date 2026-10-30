@@ -3,9 +3,11 @@ import type { FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { leadsApi } from '../api/crm'
 import { errorMessage, fieldErrors } from '../api/client'
+import type { ViewFilters } from '../api/views'
 import type { Lead } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
 import { ResourceList, type Column } from '../components/ResourceList'
+import { SavedViewsBar } from '../components/SavedViewsBar'
 import { Alert, Field, PageHeader, StatusBadge, Timestamp } from '../components/ui'
 
 const LEAD_STATUSES = ['new', 'contacted', 'qualified', 'unqualified', 'converted']
@@ -41,20 +43,47 @@ export function LeadsPage() {
   const { can } = useAuth()
   const [creating, setCreating] = useState(false)
   const [converting, setConverting] = useState<Lead | null>(null)
+  const [statusFilter, setStatusFilter] = useState('')
+  const [activeViewId, setActiveViewId] = useState<string | undefined>(undefined)
 
   return (
     <>
       <PageHeader title="Leads" meta="Unqualified interest, before it becomes an account and a deal." />
       <ResourceList
         title="All leads"
-        queryKey={['leads']}
-        fetchPage={(params) => leadsApi.list(params)}
+        queryKey={['leads', statusFilter]}
+        fetchPage={(params) => leadsApi.list({ ...params, status: statusFilter || undefined })}
         columns={columns}
         rowKey={(row) => row.id}
         emptyTitle="No leads yet"
         emptyText="Capture interest here, then qualify and convert it into a deal."
         searchable
         searchPlaceholder="Search leads…"
+        filters={
+          <>
+            <SavedViewsBar
+              entityType="leads"
+              current={statusFilter ? { status: statusFilter } : {}}
+              onApply={(filters: ViewFilters) => setStatusFilter(filters.status ?? '')}
+              activeId={activeViewId}
+              onActiveChange={setActiveViewId}
+            />
+            <label className="field" style={{ maxWidth: 180 }}>
+              <span className="field__label">Status</span>
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+              >
+                <option value="">All statuses</option>
+                {LEAD_STATUSES.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </>
+        }
         actions={
           <div className="row">
             {can('leads.convert') ? (

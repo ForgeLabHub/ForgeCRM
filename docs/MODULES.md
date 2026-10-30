@@ -522,6 +522,21 @@ Two things this document deliberately does not do:
   extracted module.
 - **Cut lines:** moves with `audit`/`database`.
 
+### internal/views  — saved list views
+- **Responsibility:** named, reusable filter/sort/column selections for one CRM
+  list screen. The stored document is exactly the query-parameter set the list
+  endpoints accept, so a view cannot name a filter no endpoint honours.
+- **Public API:** `Service`, `NewService`, `Input`, `View`, `FilterSet`,
+  `EntityType`, `ValidationError`, `ErrNotFound`, `ErrForbidden`; methods
+  `Create`, `List`, `Get`, `Update`, `Delete`.
+- **Internal deps:** `audit, database, rbac`.
+- **External deps:** `github.com/google/uuid`.
+- **Fake:** none needed; visibility and ownership are SQL predicates.
+- **Tests:** `views_test.go` (unit) + `testsupport/views_test.go` (PostgreSQL).
+- **Extract:** `almost` — it has no CRM dependency, but reads the caller's
+  principal from `rbac` and writes the audit trail, so it moves with those.
+- **Cut lines:** moves with `audit`/`database`/`rbac`.
+
 ### internal/netguard  — outbound SSRF guard
 - **Responsibility:** the single place that decides whether an outbound request
   destination is safe: rejects loopback, private, link-local, multicast and
@@ -732,15 +747,17 @@ Two things this document deliberately does not do:
 | **Notifications page** | the inbox for workflow notifications | `pages/NotificationsPage.tsx` | `api/crm.ts` | `NotificationsPage.test.tsx` | `almost` |
 | **Admin pages** | audit, users, roles, orgs, teams, security, diagnostics (+ platform settings), email, telegram | `pages/admin/*.tsx`, `api/admin.ts` | `api/admin.ts` | `SecurityPage.test.tsx`, `DiagnosticsPage.test.tsx` | `no` |
 | **Attachments** | document upload/download | `components/AttachmentPanel.tsx`, `api/documents.ts` | `api/documents.ts` | `AttachmentPanel.test.tsx` | `almost` |
+| **Saved views** | named list filters per screen | `components/SavedViewsBar.tsx`, `api/views.ts` | `api/views.ts` | `SavedViewsBar.test.tsx`, E2E | `almost` |
 
-**Frontend totals:** 84 `.ts`/`.tsx` files; 18 unit test files (121 tests); E2E in
-`frontend/e2e/platform.spec.ts` (48 passing, 1 conditionally skipped).
+**Frontend totals:** 86 `.ts`/`.tsx` files; 20 unit test files (141 tests); E2E in
+`frontend/e2e/platform.spec.ts` (51 passing, 1 conditionally skipped).
 
 ---
 
 ## Summary
 
-- **Backend packages inventoried:** 33 (`internal/*`), plus 3 commands.
+- **Backend packages inventoried:** 38 (`internal/*` directories; `importx` carries two
+  subpackages, so `go list` reports 39), plus 3 commands.
 - **Frontend layers inventoried:** 16.
 - **Cycles:** none (verified by `go list` + DFS; see `DEPENDENCY_MAP.md`).
 - **Packages with ≥8 internal deps:** `api` (26), `wiring` (22), `importx` (10),

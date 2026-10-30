@@ -3,9 +3,11 @@ import type { FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ticketsApi } from '../api/crm'
 import { errorMessage, fieldErrors } from '../api/client'
+import type { ViewFilters } from '../api/views'
 import type { Ticket, TicketInput } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
 import { ResourceList, type Column } from '../components/ResourceList'
+import { SavedViewsBar } from '../components/SavedViewsBar'
 import { AssistPanel } from '../components/AssistPanel'
 import { AttachmentPanel } from '../components/AttachmentPanel'
 import { RecordCollabPanel } from '../components/RecordCollabPanel'
@@ -27,6 +29,8 @@ export function TicketsPage() {
   const { can } = useAuth()
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Ticket | null>(null)
+  const [statusFilter, setStatusFilter] = useState('')
+  const [activeViewId, setActiveViewId] = useState<string | undefined>(undefined)
 
   const columns: Column<Ticket>[] = [
     {
@@ -85,14 +89,39 @@ export function TicketsPage() {
       <PageHeader title="Support" meta="Customer requests, their priority and SLA position." />
       <ResourceList
         title="All tickets"
-        queryKey={['tickets']}
-        fetchPage={(params) => ticketsApi.list(params)}
+        queryKey={['tickets', statusFilter]}
+        fetchPage={(params) => ticketsApi.list({ ...params, status: statusFilter || undefined })}
         columns={columns}
         rowKey={(row) => row.id}
         emptyTitle="No tickets"
         emptyText="Tickets raised by customers or staff appear here."
         searchable
         searchPlaceholder="Search tickets…"
+        filters={
+          <>
+            <SavedViewsBar
+              entityType="tickets"
+              current={statusFilter ? { status: statusFilter } : {}}
+              onApply={(filters: ViewFilters) => setStatusFilter(filters.status ?? '')}
+              activeId={activeViewId}
+              onActiveChange={setActiveViewId}
+            />
+            <label className="field" style={{ maxWidth: 180 }}>
+              <span className="field__label">Status</span>
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+              >
+                <option value="">All statuses</option>
+                {STATUSES.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </>
+        }
         actions={
           can('tickets.create') ? (
             <button type="button" className="btn btn--primary btn--sm" onClick={() => setCreating(true)}>

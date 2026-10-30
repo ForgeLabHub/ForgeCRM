@@ -10,6 +10,24 @@ once it reaches 1.0.
 
 ### Added
 
+- **Saved list views.** A CRM list screen could be filtered by hand but not
+  remembered: "my open deals this quarter" had to be re-entered on every visit.
+  A view is now a named, reusable filter/sort selection for one screen
+  (`accounts`, `contacts`, `leads`, `deals`, `tasks`, `tickets`). The stored
+  document is exactly the query-parameter set the list endpoints already accept,
+  so applying a view hands those parameters back to the same endpoint the screen
+  would have called by hand — one definition of what a filter means, and a view
+  cannot name a filter no endpoint honours. Visibility is one predicate applied
+  in the query: a caller sees a view when they own it or it is shared, so another
+  user's private view is never loaded. Editing is narrower — a shared view is
+  readable by the organization but only its owner may rename, update or delete it.
+  The unique index is on `(owner_user_id, entity_type, lower(name))`, partial on
+  `archived_at IS NULL`, so two users may both name a view "Hot leads" and an
+  archived name is free for reuse. Adds migration `0023`, the `views.read` /
+  `views.manage` permissions, three audit actions, the API routes and contract
+  rows, the `SavedViewsBar` switcher on the CRM list screens, and unit,
+  integration and Chromium coverage.
+
 - **AI replies stream as they are generated.** The assistant could only answer in
   one piece: a user waited for the whole reply before seeing anything, and a long
   generation looked like a hang. Two new routes — `POST /api/v1/ai/stream/chat`
