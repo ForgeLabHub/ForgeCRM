@@ -284,6 +284,43 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*LoginResult, er
 	return &LoginResult{User: user, Session: sess, Token: token}, nil
 }
 
+// IssueSSOSession creates a session for an account that authenticated through an
+// external identity provider.
+//
+// The provider has already proven who the person is; this method is the single
+// place that turns that proof into a local session, so an SSO sign-in produces
+// exactly the same kind of session as a password sign-in. The account is
+// re-checked here rather than trusted from the callback, so a person blocked
+// between the provider's assertion and this call is refused.
+func (s *Service) IssueSSOSession(ctx context.Context, userID uuid.UUID, ip, userAgent string) (*Session, string, error) {
+	var status string
+	if err := s.db.Q(ctx).QueryRow(ctx,
+		`SELECT status FROM users WHERE id = $1`, userID).Scan(&status); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, "", ErrInvalidCredentials
+		}
+		return nil, "", fmt.Errorf("load the account for SSO: %w", err)
+	}
+	if status == "blocked" || status == "suspended" {
+		return nil, "", ErrAccountInactive
+	}
+
+	sess, token, err := s.createSession(ctx, userID, ip, userAgent, true)
+	if err != nil {
+		return nil, "", err
+	}
+	if _, err := s.db.Q(ctx).Exec(ctx,
+		`UPDATE users SET last_login_at = now(), failed_attempts = 0, locked_until = NULL WHERE id = $1`,
+		userID); err != nil {
+		return nil, "", fmt.Errorf("record last login: %w", err)
+	}
+	s.audit.RecordSecurityAsync(audit.SecurityEvent{
+		UserID: audit.UUIDPtr(userID), Type: "auth.login_succeeded", Severity: "info",
+		Message: "single sign-on login succeeded", IP: ip, UserAgent: userAgent,
+	})
+	return sess, token, nil
+}
+
 func (s *Service) recordLoginAttempt(ctx context.Context, email, ip string, success bool, reason string) {
 	const q = `
 		INSERT INTO login_attempts (email, ip, success, reason)

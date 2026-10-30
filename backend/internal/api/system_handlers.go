@@ -89,9 +89,12 @@ type capabilitiesResponse struct {
 	// which no MCP client speaks.
 	MCP bool `json:"mcp"`
 
-	// OIDCConfigured reports whether OIDC settings are present. It is deliberately
-	// not called "oidc": the sign-in flow is not implemented, so a client must not
-	// offer SSO on the strength of this flag. See docs/ROADMAP.md.
+	// OIDCConfigured reports whether the deployment-level OIDC settings are
+	// present. It is deliberately not called "oidc": settings alone do not mean a
+	// sign-in can succeed, because a provider must also be configured and enabled.
+	// A client that wants to offer single sign-on reads
+	// GET /api/v1/auth/oidc/providers, which reports the providers a signed-out
+	// visitor may actually choose from.
 	OIDCConfigured bool `json:"oidc_configured"`
 
 	Imports          []string `json:"import_formats"`

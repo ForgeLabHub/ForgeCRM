@@ -89,6 +89,41 @@ export const authApi = {
   },
 }
 
+/** Single sign-on. */
+export interface SSOProvider {
+  id: string
+  key: string
+  display_name: string
+  organization_id?: string
+  jit_provisioning: boolean
+}
+
+export interface SSOProvidersResponse {
+  enabled: boolean
+  providers: SSOProvider[]
+}
+
+export const ssoApi = {
+  /**
+   * Lists the providers the sign-in page may offer. Anonymous by design: the
+   * caller has no session yet.
+   */
+  providers: () => api.get<SSOProvidersResponse>('/api/v1/auth/oidc/providers'),
+
+  /**
+   * Starts the flow by navigating the browser to the provider. It is a full
+   * navigation, not a fetch, because the provider's own page must be shown.
+   */
+  start(providerKey: string, returnTo?: string): void {
+    const params = new URLSearchParams({ provider: providerKey })
+    if (returnTo) params.set('return_to', returnTo)
+    window.location.assign(`/api/v1/auth/oidc/start?${params.toString()}`)
+  },
+
+  /** The caller's own linked identities. */
+  identities: () => api.get<ListResponse<Record<string, unknown>>>('/api/v1/auth/identities'),
+}
+
 export const usersApi = {
   list: (params?: { q?: string; limit?: number; offset?: number }) =>
     api.get<ListResponse<User>>('/api/v1/users', params),

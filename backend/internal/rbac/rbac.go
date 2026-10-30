@@ -151,6 +151,12 @@ const (
 	PermForecastRun  Permission = "forecast.run"
 	PermRiskRead     Permission = "risk.read"
 	PermRiskManage   Permission = "risk.manage"
+
+	// Single sign-on. Viewing which identity providers exist (read) is separate
+	// from changing how people sign in (manage): reading the configuration is an
+	// audit activity, and a wrong change to it can lock every user out.
+	PermSSORead   Permission = "sso.read"
+	PermSSOManage Permission = "sso.manage"
 )
 
 // All returns every permission in the catalog, sorted.
@@ -197,6 +203,7 @@ var catalog = map[Permission]struct{}{
 	PermWorkflowsRead: {}, PermWorkflowsManage: {}, PermWorkflowsRun: {},
 	PermSimulationRead: {}, PermSimulationManage: {}, PermSimulationRun: {},
 	PermForecastRead: {}, PermForecastRun: {}, PermRiskRead: {}, PermRiskManage: {},
+	PermSSORead: {}, PermSSOManage: {},
 }
 
 // Known reports whether p is part of the catalog.

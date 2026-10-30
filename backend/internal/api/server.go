@@ -36,6 +36,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/logging"
 	"github.com/geff1778/forgecrm/internal/migratex"
 	"github.com/geff1778/forgecrm/internal/notify"
+	"github.com/geff1778/forgecrm/internal/oidc"
 	"github.com/geff1778/forgecrm/internal/outbox"
 	"github.com/geff1778/forgecrm/internal/ratelimit"
 	"github.com/geff1778/forgecrm/internal/rbac"
@@ -91,6 +92,9 @@ type Deps struct {
 	// Storage is the optional S3-compatible attachment store. A nil or disabled
 	// service reports itself off; the document routes answer 503 rather than 500.
 	Storage *storage.Service
+	// OIDC is the optional corporate single sign-on service. A nil or disabled
+	// service reports itself off; the SSO routes answer 503 rather than 500.
+	OIDC *oidc.Service
 	// StartedAt is used by the system info endpoint.
 	StartedAt time.Time
 	Version   string
@@ -292,6 +296,16 @@ func (s *Server) buildRouter() chi.Router {
 				r.Post("/mfa/verify", s.handleMFAVerify)
 				r.Post("/password/forgot", s.handlePasswordForgot)
 				r.Post("/password/reset", s.handlePasswordReset)
+				// Single sign-on. The start and callback are browser navigations, so they
+				// are anonymous: there is no session yet. The start route is rate-limited
+				// with the login limiter because it is the entry to the credential flow.
+				r.Get("/oidc/providers", s.handleListSSOProviders)
+				r.With(httpx.RateLimitMiddleware(httpx.RateLimitOptions{
+					Limiter: s.loginLimiter,
+					Subject: httpx.ClientIP,
+					Log:     s.deps.Log,
+				})).Get("/oidc/start", s.handleOIDCStart)
+				r.Get("/oidc/callback", s.handleOIDCCallback)
 			})
 			// The remaining auth endpoints require a session, and the
 			// state-changing ones also require a CSRF token.
@@ -300,6 +314,7 @@ func (s *Server) buildRouter() chi.Router {
 				r.Get("/me", s.handleMe)
 				r.Post("/logout", s.withCSRF(s.handleLogout))
 				r.Get("/sessions", s.handleListSessions)
+				r.Get("/identities", s.handleListMyIdentities)
 				r.Delete("/sessions/{id}", s.withCSRF(s.handleRevokeSession))
 				r.Post("/password/change", s.withCSRF(s.handlePasswordChange))
 				r.Post("/mfa/enroll", s.withCSRF(s.handleMFAEnroll))
@@ -642,6 +657,20 @@ func (s *Server) respondDomainError(w http.ResponseWriter, r *http.Request, err 
 	case errors.Is(err, ai.ErrDisabled), errors.Is(err, ai.ErrRateLimited),
 		errors.Is(err, ai.ErrProviderUnavailable):
 		httpx.WriteError(w, r, ai.HTTPErrorFrom(err))
+	case errors.Is(err, oidc.ErrDisabled):
+		httpx.WriteError(w, r, httpx.ErrDisabled)
+	case errors.Is(err, oidc.ErrUnknownProvider):
+		httpx.WriteError(w, r, httpx.NewError(404, httpx.CodeNotFound, err.Error()))
+	case errors.Is(err, oidc.ErrStateInvalid):
+		httpx.WriteError(w, r, httpx.NewError(400, httpx.CodeBadRequest, err.Error()))
+	case errors.Is(err, oidc.ErrTokenInvalid), errors.Is(err, oidc.ErrEmailNotAllowed):
+		httpx.WriteError(w, r, httpx.NewError(401, httpx.CodeUnauthorized, err.Error()))
+	case errors.Is(err, oidc.ErrNoAccount):
+		httpx.WriteError(w, r, httpx.NewError(403, httpx.CodeForbidden, err.Error()))
+	case errors.Is(err, oidc.ErrProviderUnreachable):
+		httpx.WriteError(w, r, httpx.NewError(502, httpx.CodeInternal, err.Error()))
+	case errors.Is(err, oidc.ErrInvalidProvider):
+		httpx.WriteError(w, r, httpx.NewError(422, httpx.CodeValidation, err.Error()))
 	case errors.Is(err, storage.ErrNotConfigured):
 		httpx.WriteError(w, r, httpx.ErrDisabled)
 	case errors.Is(err, storage.ErrObjectMissing):

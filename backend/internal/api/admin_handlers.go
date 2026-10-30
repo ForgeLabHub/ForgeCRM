@@ -74,6 +74,17 @@ func (s *Server) mountAdmin(r chi.Router) {
 	r.With(s.perm(rbac.PermMetricsRead)).Get("/admin/diagnostics", s.handleDiagnostics)
 	r.With(s.perm(rbac.PermSystemSettings)).Get("/admin/settings", s.handleListSettings)
 	r.With(s.perm(rbac.PermSystemSettings)).Put("/admin/settings", s.handleUpdateSetting)
+
+	// Single sign-on providers. Reading the configuration is an audit activity;
+	// changing it can lock every user out, so the two are separate permissions.
+	r.Route("/admin/sso/providers", func(r chi.Router) {
+		r.With(s.perm(rbac.PermSSORead)).Get("/", s.handleListOIDCProviders)
+		r.With(s.perm(rbac.PermSSOManage)).Post("/", s.handleCreateOIDCProvider)
+		r.Route("/{id}", func(r chi.Router) {
+			r.With(s.perm(rbac.PermSSOManage)).Put("/", s.handleUpdateOIDCProvider)
+			r.With(s.perm(rbac.PermSSOManage)).Delete("/", s.handleDeleteOIDCProvider)
+		})
+	})
 }
 
 // ---------------------------------------------------------------------------
