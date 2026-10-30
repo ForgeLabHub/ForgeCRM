@@ -106,8 +106,10 @@ docs-check: ## Проверить структуру документации, �
 ## --- Уровень C: интеграционная среда --------------------------------------
 
 test-integration: ## Тесты против реального PostgreSQL (нужен запущенный compose)
+	# -p 1 обязателен: интеграционные пакеты делят одну схему и сбрасывают её,
+	# поэтому параллельный запуск пакетов ломает друг другу базу.
 	cd $(BACKEND_DIR) && FORGECRM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' \
-	  go test -tags=integration -count=1 ./...
+	  go test -tags=integration -count=1 -p 1 ./...
 
 test-e2e: ## Playwright E2E (Chromium, реальный API и база)
 	cd $(FRONTEND_DIR) && npm run e2e

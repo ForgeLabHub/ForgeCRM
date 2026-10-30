@@ -8,6 +8,7 @@ import { useAuth } from '../hooks/useAuth'
 import { ResourceList, type Column } from '../components/ResourceList'
 import { AssistPanel } from '../components/AssistPanel'
 import { AttachmentPanel } from '../components/AttachmentPanel'
+import { RecordCollabPanel } from '../components/RecordCollabPanel'
 import { Alert, Badge, Field, PageHeader, StatusBadge, Timestamp } from '../components/ui'
 
 const STATUSES = ['new', 'open', 'pending', 'resolved', 'closed']
@@ -201,6 +202,7 @@ export function TicketFormDialog({
             {editing && ticket ? (
               <div style={{ marginBottom: 'var(--space-4)' }} className="stack">
                 <AssistPanel entityType="ticket" entityId={ticket.id} />
+                <RecordCollabPanel entityType="ticket" entityId={ticket.id} />
                 <AttachmentPanel entityType="ticket" entityId={ticket.id} />
               </div>
             ) : null}

@@ -6,6 +6,7 @@ import { errorMessage, fieldErrors } from '../api/client'
 import type { Task, TaskInput } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
 import { AssistPanel } from '../components/AssistPanel'
+import { RecordCollabPanel } from '../components/RecordCollabPanel'
 import { ResourceList, type Column } from '../components/ResourceList'
 import { Alert, Badge, Field, PageHeader, StatusBadge, Timestamp } from '../components/ui'
 
@@ -289,6 +290,7 @@ export function TaskFormDialog({
             {editing && task ? (
               <div style={{ marginBottom: 'var(--space-4)' }}>
                 <AssistPanel entityType="task" entityId={task.id} />
+                <RecordCollabPanel entityType="task" entityId={task.id} />
               </div>
             ) : null}
             <div className="form-grid">

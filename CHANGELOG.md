@@ -10,6 +10,22 @@ once it reaches 1.0.
 
 ### Added
 
+- **Tags and comments now have an interface.** The backend already implemented
+  both — routes, permissions, audit, an API client on the frontend — but
+  no component consumed them, so a capability the API advertised could not be
+  reached from the product. `RecordCollabPanel` is the missing consumer: it lists
+  the tags attached to a record and its comment thread, and lets a user attach an
+  existing tag, create-and-attach a new one, and post a comment. It is wired into
+  the account, contact, deal, task and ticket views. Two new reads back it: a
+  service method `ListEntityTags` and the route `GET /api/v1/tags/attached
+  ?entity_type=&entity_id=`, whose query joins on the tag's organization as well
+  as the link so a tag attached in one tenant cannot surface in another. The
+  controls are gated by the permissions the routes enforce (`tags.manage`,
+  `comments.create`) and the panel renders nothing without `contacts.read`.
+  Covered by `RecordCollabPanel.test.tsx`, `internal/api/tags_comments_test.go`
+  (round-trip, cross-tenant isolation, permission refusals) and an E2E scenario in
+  `e2e/platform.spec.ts`.
+
 - **A constructor that turns a recipe into a working, standalone project.** The
   extraction harness proves a single package *can* stand alone; the constructor is
   how someone actually does it for a chosen combination. `internal/constructor`

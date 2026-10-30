@@ -9,6 +9,7 @@ import { useAuth } from '../hooks/useAuth'
 import { ResourceList, type Column } from '../components/ResourceList'
 import { AssistPanel } from '../components/AssistPanel'
 import { AttachmentPanel } from '../components/AttachmentPanel'
+import { RecordCollabPanel } from '../components/RecordCollabPanel'
 import { BulkArchiveButton } from '../components/BulkArchiveButton'
 import {
   Alert,
@@ -586,6 +587,8 @@ export function AccountDetailPage() {
       </div>
 
       <AssistPanel entityType="account" entityId={id} />
+
+      <RecordCollabPanel entityType="account" entityId={id} />
 
       <AttachmentPanel entityType="account" entityId={id} />
 

@@ -325,21 +325,19 @@ export interface TicketInput {
 
 export interface Tag {
   id: string
-  organization_id: string
   name: string
-  color?: string
+  color: string
   created_at: string
 }
 
 export interface Comment {
   id: string
-  organization_id: string
   entity_type: string
   entity_id: string
   body: string
   author_user_id?: string
+  author_name?: string
   created_at: string
-  updated_at: string
 }
 
 export interface Notification {

@@ -219,6 +219,7 @@ func APIContract() openapi.Contract {
 	c.RequestBodies["POST /api/v1/tags/{id}/attach"] = reflect.TypeOf(attachTagRequest{})
 	c.RequiredBody["AttachTagRequest"] = []string{"entity_type", "entity_id"}
 	c.Responses["GET /api/v1/tags"] = reflect.TypeOf(tagListResponse{})
+	c.Responses["GET /api/v1/tags/attached"] = reflect.TypeOf(tagListResponse{})
 	c.Responses["POST /api/v1/tags"] = reflect.TypeOf(crm.Tag{})
 
 	c.RequestBodies["POST /api/v1/custom-fields"] = reflect.TypeOf(crm.CustomFieldDefinition{})

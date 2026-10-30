@@ -9,6 +9,7 @@ import { useAuth } from '../hooks/useAuth'
 import { ResourceList, type Column } from '../components/ResourceList'
 import { AssistPanel } from '../components/AssistPanel'
 import { AttachmentPanel } from '../components/AttachmentPanel'
+import { RecordCollabPanel } from '../components/RecordCollabPanel'
 import { BulkArchiveButton } from '../components/BulkArchiveButton'
 import {
   Alert,
@@ -703,6 +704,8 @@ export function DealDetailPage() {
       </div>
 
       <AssistPanel entityType="deal" entityId={id} />
+
+      <RecordCollabPanel entityType="deal" entityId={id} />
 
       <AttachmentPanel entityType="deal" entityId={id} />
 

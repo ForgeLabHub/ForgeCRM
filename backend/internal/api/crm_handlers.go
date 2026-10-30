@@ -109,6 +109,7 @@ func (s *Server) mountCRM(r chi.Router) {
 	r.Route("/tags", func(r chi.Router) {
 		r.With(s.perm(rbac.PermContactsRead)).Get("/", s.handleListTags)
 		r.With(s.perm(rbac.PermTagsManage)).Post("/", s.handleCreateTag)
+		r.With(s.perm(rbac.PermContactsRead)).Get("/attached", s.handleListEntityTags)
 		r.With(s.perm(rbac.PermTagsManage)).Post("/{id}/attach", s.handleAttachTag)
 	})
 	r.Route("/comments", func(r chi.Router) {
@@ -975,6 +976,28 @@ func (s *Server) handleAttachTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, map[string]any{"status": "tag attached"})
+}
+
+// handleListEntityTags returns the tags attached to one record. It reads the
+// entity type and id from the query string, mirroring the comments endpoint so a
+// single route serves every taggable type under one permission.
+func (s *Server) handleListEntityTags(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.mustPrincipal(w, r)
+	if !ok {
+		return
+	}
+	entityType := r.URL.Query().Get("entity_type")
+	entityID, ok := parseUUID(r.URL.Query().Get("entity_id"))
+	if !ok {
+		httpx.WriteError(w, r, httpx.ValidationError(map[string]string{"entity_id": "must be a UUID"}))
+		return
+	}
+	tags, err := s.deps.CRM.ListEntityTags(r.Context(), p, entityType, entityID)
+	if err != nil {
+		s.respondDomainError(w, r, err)
+		return
+	}
+	httpx.WriteJSONList(w, tags)
 }
 
 func (s *Server) handleListComments(w http.ResponseWriter, r *http.Request) {

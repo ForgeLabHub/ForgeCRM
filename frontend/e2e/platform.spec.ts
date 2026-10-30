@@ -525,6 +525,36 @@ test.describe('risk', () => {
   })
 })
 
+test.describe('tags and comments', () => {
+  test('a tag and a comment on an account survive a reload', async ({ authedPage: page }) => {
+    const name = `E2E Collab ${RUN_ID}`
+    const tagName = `Hot ${RUN_ID}`
+    const comment = `Called the buyer on ${RUN_ID}`
+
+    await createAccount(page, name)
+    await page.goto('/accounts')
+    await page.getByText(name).click()
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(name)
+
+    // Create a tag and attach it to this record in one step. The panel is the
+    // only consumer of the tags API, so a passing assertion here is the proof
+    // the missing wiring was added.
+    await page.getByLabel('New tag name').fill(tagName)
+    await page.getByRole('button', { name: 'Create & attach' }).click()
+    await expect(page.getByText(tagName)).toBeVisible({ timeout: 15_000 })
+
+    // Add a comment attributed to the signed-in user.
+    await page.getByLabel('Add a comment').fill(comment)
+    await page.getByRole('button', { name: 'Comment' }).click()
+    await expect(page.getByText(comment)).toBeVisible({ timeout: 15_000 })
+
+    // Both are stored server-side, not held in client state.
+    await page.reload()
+    await expect(page.getByText(tagName)).toBeVisible()
+    await expect(page.getByText(comment)).toBeVisible()
+  })
+})
+
 test.describe('health endpoints', () => {
   test('the API reports healthy and ready', async ({ request }) => {
     expect((await request.get('/health')).status()).toBe(200)

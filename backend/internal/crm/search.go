@@ -72,6 +72,35 @@ var validTaggableTypes = map[string]bool{
 	"account": true, "contact": true, "lead": true, "deal": true, "ticket": true, "task": true,
 }
 
+// ListEntityTags returns the tags attached to one record. It filters by the
+// caller's organization on both the tag and the link so a tag that was detached
+// from the record's tenant (or a link forged across tenants) cannot surface.
+func (s *Service) ListEntityTags(ctx context.Context, p *rbac.Principal, entityType string, entityID uuid.UUID) ([]Tag, error) {
+	if !validTaggableTypes[entityType] {
+		return nil, httpx.ValidationError(map[string]string{"entity_type": "unsupported entity type"})
+	}
+	const q = `
+		SELECT t.id, t.name, t.color, t.created_at
+		FROM taggables g
+		JOIN tags t ON t.id = g.tag_id
+		WHERE g.entity_type = $1 AND g.entity_id = $2 AND t.organization_id = $3
+		ORDER BY t.name`
+	rows, err := s.db.Q(ctx).Query(ctx, q, entityType, entityID, p.OrganizationID)
+	if err != nil {
+		return nil, fmt.Errorf("list entity tags: %w", err)
+	}
+	defer rows.Close()
+	var out []Tag
+	for rows.Next() {
+		var t Tag
+		if err := rows.Scan(&t.ID, &t.Name, &t.Color, &t.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
 // TagEntity attaches a tag to a record.
 func (s *Service) TagEntity(ctx context.Context, p *rbac.Principal, tagID uuid.UUID, entityType string, entityID uuid.UUID) error {
 	if !validTaggableTypes[entityType] {

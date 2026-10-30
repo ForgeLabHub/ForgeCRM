@@ -116,6 +116,11 @@ export const tagsApi = {
   create: (body: { name: string; color?: string }) => api.post<Tag>('/api/v1/tags', body),
   attach: (id: string, body: { entity_type: string; entity_id: string }) =>
     api.post(`/api/v1/tags/${id}/attach`, body),
+  attached: (entityType: string, entityId: string) =>
+    api.get<{ items: Tag[] }>('/api/v1/tags/attached', {
+      entity_type: entityType,
+      entity_id: entityId,
+    }),
 }
 
 export const commentsApi = {
