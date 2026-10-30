@@ -1,1220 +1,1181 @@
 # Changelog
 
-All notable changes to ForgeCRM are documented here.
+Все значимые изменения ForgeCRM документируются здесь.
 
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
-once it reaches 1.0.
+Формат следует [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+Проект придерживается [семантического версионирования](https://semver.org/spec/v2.0.0.html),
+как только достигнет 1.0.
 
 ## [Unreleased]
 
 ### Added
 
-- **Render deployment Blueprint.** `render.yaml` at the repository root declares a
-  web service, a worker and a managed PostgreSQL database, all built from the root
-  `Dockerfile`, so Render can deploy the whole application from one Blueprint. The
-  API serves the web interface, so there is no separate static site and the UI
-  stays on one origin with the API. `docs/deployment/render.md` documents the steps.
-- **Deployment on platforms that build the repository root, including blitz.cloud.**
-  The repository had no top-level build file, so a host that builds the root — as
-  blitz.cloud does — could not produce an image: the only Dockerfile lived under
-  `backend/` and expected that directory as its build context, while the compose
-  file it read named the root. A root `Dockerfile` now builds all three artefacts
-  in one image: the API binary, the worker binary and the built web interface,
-  which the API serves from `/app/public`. The root `docker-compose.yml` declares
-  the two parts (`api` and `worker`) that build that image and run a different
-  entrypoint, and its `env_file` entries are optional so a managed platform that
-  injects its own variables is not blocked by a missing `.env`. The API also binds
-  to `PORT` when the platform sets it, and falls back to `DATABASE_URL` when
-  `FORGECRM_DATABASE_URL` is absent, because that is the name a managed database
-  injects. `docs/deployment/blitz-cloud.md` documents the free-tier steps.
-- **The web interface is served by the API itself.** The API had a static handler,
-  but it was registered before the API routes and chi keeps only the last
-  `NotFound` handler, so the JSON 404 registered afterwards silently replaced it
-  and every page returned an error document. The handler now runs after the API
-  routes: a request for a real file returns it, any other non-API path returns
-  `index.html` so client-side routes survive a refresh, and an unknown `/api/...`
-  path stays a JSON 404.
+- **Blueprint развёртывания на Render.** `render.yaml` в корне репозитория объявляет
+  веб-сервис, воркер и управляемую базу PostgreSQL, все собираются из корневого
+  `Dockerfile`, поэтому Render может развернуть всё приложение из одного Blueprint.
+  API обслуживает веб-интерфейс, поэтому отдельного статического сайта нет и UI
+  остаётся в одном источнике с API. `docs/deployment/render.md` документирует шаги.
+- **Развёртывание на платформах, собирающих корень репозитория, включая blitz.cloud.**
+  В репозитории не было файла сборки верхнего уровня, поэтому хост, собирающий корень —
+  как это делает blitz.cloud, — не мог произвести образ: единственный Dockerfile жил
+  под `backend/` и ожидал этот каталог как контекст сборки, тогда как читаемый им
+  compose-файл называл корень. Корневой `Dockerfile` теперь собирает все три артефакта
+  в один образ: бинарник API, бинарник воркера и собранный веб-интерфейс, который API
+  обслуживает из `/app/public`. Корневой `docker-compose.yml` объявляет две части
+  (`api` и `worker`), которые собирают этот образ и запускают разные точки входа, а его
+  записи `env_file` опциональны, поэтому управляемая платформа, внедряющая собственные
+  переменные, не блокируется отсутствующим `.env`. API также слушает `PORT`, когда
+  платформа его задаёт, и падает обратно на `DATABASE_URL`, когда `FORGECRM_DATABASE_URL`
+  отсутствует, потому что именно это имя внедряет управляемая база.
+  `docs/deployment/blitz-cloud.md` документирует шаги бесплатного тарифа.
+- **Веб-интерфейс обслуживается самим API.** У API был статический обработчик, но он
+  был зарегистрирован до маршрутов API, а chi хранит только последний обработчик
+  `NotFound`, поэтому JSON 404, зарегистрированный позже, молча его заменил, и каждая
+  страница возвращала документ ошибки. Обработчик теперь работает после маршрутов API:
+  запрос реального файла возвращает его, любой другой не-API путь возвращает
+  `index.html`, чтобы клиентские маршруты переживали обновление страницы, а неизвестный
+  путь `/api/...` остаётся JSON 404.
 
-- **Retention for the migration reconciliation history.** `migratex.Reconcile`
-  writes one `migration_reconciliations` row per row-count comparison after an
-  import, and nothing pruned them: on a deployment that reconciles on a schedule
-  the table grew by one row per run without bound, exactly the leak the retention
-  engine exists to close for the other run histories (`workflow_runs`,
-  `integration_runs`). The registry now carries a `migration_reconciliations`
-  policy (180-day default, 30-day minimum, measured from `created_at`), and
-  migration `0026` adds the index the sweep needs. The sweep filters on the time
-  column alone and no organization, so it needs an index that leads with
-  `created_at`; the existing `migration_recon_job_idx` leads with `migration_job_id`
-  and cannot serve it, so without the new index the sweep would scan the table.
-  `TestRetentionSweepIndexesExist` now pins the new index, and
-  `TestRetentionSweepsMigrationReconciliations` proves against a real database that
-  an old comparison is removed and a fresh one is kept.
+- **Хранение истории сверки миграции.** `migratex.Reconcile` пишет одну строку
+  `migration_reconciliations` на сравнение числа строк после импорта, и ничто их не
+  чистило: на развёртывании, сверяющемся по расписанию, таблица росла на одну строку
+  за прогон безгранично — ровно та утечка, ради закрытия которой для других историй
+  прогонов (`workflow_runs`, `integration_runs`) и существует движок хранения. Реестр
+  теперь несёт политику `migration_reconciliations` (умолчание 180 дней, минимум 30
+  дней, измеряется от `created_at`), а миграция `0026` добавляет индекс, нужный обходу.
+  Обход фильтрует только по столбцу времени и без организации, поэтому ему нужен
+  индекс, ведущий с `created_at`; существующий `migration_recon_job_idx` ведёт с
+  `migration_job_id` и не может его обслужить, поэтому без нового индекса обход сканировал
+  бы таблицу. `TestRetentionSweepIndexesExist` теперь закрепляет новый индекс, а
+  `TestRetentionSweepsMigrationReconciliations` доказывает на реальной базе, что старое
+  сравнение удаляется, а свежее сохраняется.
 
-- **Storage reconciliation actually runs.** `storage.Service.Reconcile` repaired the
-  two ways the object store and the `documents` table can disagree — a row whose
-  object is gone (archived, so the API stops offering a broken download) and an
-  object no row references (removed after a grace period) — but nothing in
-  production ever called it. The method was tested and the roadmap called the
-  reconciler verified; in a running deployment an orphan object left by an
-  interrupted upload accumulated forever and a row whose object had been deleted
-  kept being offered for download. The worker now enqueues
-  `maintenance.storage_reconcile` on the hourly maintenance tick, next to the other
-  maintenance jobs. It is a no-op when storage is unconfigured, and it inherits the
-  retention engine's dry-run posture, so a deployment that has not opted into
-  deletion never loses an object to it. Covered by
-  `cmd/forgecrm-worker/storage_reconcile_test.go` against a real database and the
-  in-memory store, driving the worker's own handler so the test fails if the wiring
-  is removed.
+- **Сверка хранилища действительно выполняется.** `storage.Service.Reconcile` чинил два
+  способа, которыми объектное хранилище и таблица `documents` могут разойтись, — строку,
+  чей объект исчез (архивируется, поэтому API перестаёт предлагать сломанное
+  скачивание), и объект, на который не ссылается ни одна строка (удаляется после
+  льготного периода), — но в production его никто никогда не вызывал. Метод был
+  протестирован, а дорожная карта называла сверщик проверенным; в работающем
+  развёртывании осиротевший объект, оставленный прерванной загрузкой, накапливался
+  навсегда, а строка, чей объект был удалён, продолжала предлагаться для скачивания.
+  Воркер теперь ставит `maintenance.storage_reconcile` на ежечасном такте обслуживания,
+  рядом с другими заданиями обслуживания. Это no-op, когда хранилище не настроено, и он
+  наследует позу пробного прогона движка хранения, поэтому развёртывание, не давшее
+  согласия на удаление, никогда не теряет объект из-за него. Покрыто
+  `cmd/forgecrm-worker/storage_reconcile_test.go` против реальной базы и хранилища в
+  памяти, движущего собственный обработчик воркера, поэтому тест падает, если связывание
+  удалено.
 
-- **MySQL/MariaDB migration source.** The Import Center could read a migration
-  from PostgreSQL, SQLite or a REST API, but a MySQL source was a recognised value
-  that answered "not implemented" — so a customer whose data lived in MySQL had no
-  path in. `internal/migratex/mysql.go` adds the adapter through
-  `go-sql-driver/mysql`. The session is opened read-only with the server's
-  `transaction_read_only` variable and `TestConnection` reads it back rather than
-  trusting the DSN, so a write is refused by the database even if a query were
-  generated by mistake; identifiers are backtick-quoted after rejecting anything
-  that is not a plain identifier, so a table name cannot smuggle a second
-  statement; schema discovery reads `information_schema`; and the batch read is the
-  same bounded, watermarked read the other sources use. `migratex.ImplementedSources()`
-  is now the single source of truth for the `migration_sources` capability, and the
-  Migrations page builds its source picker from it — the local list had offered
-  `sqlserver` (refused at submit) and spelled REST `rest` while the server calls it
-  `rest_api`. Covered by `internal/migratex/mysql_integration_test.go` against a real
-  MariaDB 11 and `frontend/src/pages/MigrationsPage.test.tsx`.
+- **Источник миграции MySQL/MariaDB.** Центр импорта мог читать миграцию из PostgreSQL,
+  SQLite или REST API, но источник MySQL был распознанным значением, отвечавшим «не
+  реализовано», — поэтому клиент, чьи данные жили в MySQL, не имел пути внутрь.
+  `internal/migratex/mysql.go` добавляет адаптер через `go-sql-driver/mysql`. Сессия
+  открывается только для чтения переменной сервера `transaction_read_only`, и
+  `TestConnection` читает её обратно, а не доверяет DSN, поэтому запись отклоняется
+  базой, даже если запрос был бы сгенерирован по ошибке; идентификаторы заключаются в
+  бэктики после отклонения всего, что не является простым идентификатором, поэтому имя
+  таблицы не может протащить второе выражение; обнаружение схемы читает
+  `information_schema`; а пакетное чтение — то же ограниченное чтение по водяному знаку,
+  что используют другие источники. `migratex.ImplementedSources()` теперь единственный
+  источник истины для возможности `migration_sources`, и страница Migrations строит свой
+  выбор источника из него — локальный список предлагал `sqlserver` (отклоняется при
+  отправке) и писал REST как `rest`, тогда как сервер называет его `rest_api`. Покрыто
+  `internal/migratex/mysql_integration_test.go` против реального MariaDB 11 и
+  `frontend/src/pages/MigrationsPage.test.tsx`.
 
-- **Import file reclamation.** The retention engine swept `import_jobs` rows but
-  knew nothing about the private files those rows described, so every upload ever
-  made left its file on disk forever — the row sweep reclaimed the record, not the
-  disk. `importx.ReclaimStoredFiles` is the file-side counterpart, run on the same
-  maintenance tick as `maintenance.import_files`: it removes uploaded files no
-  `import_jobs` row references. It keeps a file younger than its age bound, because
-  a file is written before its row is inserted and a young one may belong to an
-  upload in flight, and it keeps any file a row still references. It is a dry run
-  whenever retention is, so a deployment that has not opted into deletion never
-  loses a file to it. Covered by `internal/testsupport/import_reclaim_test.go`
-  against a real database and a real storage directory, including the end-to-end
-  property that a row swept by the retention engine takes its file with it on the
-  next reclaim pass.
+- **Возврат файлов импорта.** Движок хранения обметал строки `import_jobs`, но ничего не
+  знал о приватных файлах, которые эти строки описывали, поэтому каждая когда-либо
+  сделанная загрузка навсегда оставляла свой файл на диске — обход строк возвращал
+  запись, а не диск. `importx.ReclaimStoredFiles` — файловая сторона, запускаемая на том
+  же такте обслуживания, что и `maintenance.import_files`: он удаляет загруженные файлы,
+  на которые не ссылается ни одна строка `import_jobs`. Он держит файл моложе своей
+  границы возраста, потому что файл пишется до вставки его строки и молодой может
+  принадлежать загрузке в полёте, и он держит любой файл, на который строка всё ещё
+  ссылается. Это пробный прогон всякий раз, когда хранение является им, поэтому
+  развёртывание, не давшее согласия на удаление, никогда не теряет файл из-за него.
+  Покрыто `internal/testsupport/import_reclaim_test.go` против реальной базы и реального
+  каталога хранилища, включая сквозное свойство, что строка, обметённая движком
+  хранения, забирает свой файл с собой на следующем проходе возврата.
 
-- **Browsable API reference.** The specification was machine-readable but had no
-  human view, so reading it meant a JSON file or a third-party viewer. The
-  generator now also writes `docs/api/index.html`: a single self-contained page,
-  grouped by the document's own tags, with each operation anchored and shown with
-  its parameters, request body and responses. Its stylesheet is inlined and its
-  only script is a few lines of operation filter, so it opens from disk with no
-  network, no CDN and no server. It is generated from the same document as
-  `openapi.json` and `go run ./cmd/openapi-gen -check` fails when it is stale, so
-  it cannot drift from the router the way a hand-written reference would.
+- **Просматриваемый справочник API.** Спецификация была машиночитаемой, но не имела
+  человеческого представления, поэтому её чтение означало JSON-файл или сторонний
+  просмотрщик. Генератор теперь также пишет `docs/api/index.html`: одну самодостаточную
+  страницу, сгруппированную по собственным тегам документа, где каждая операция
+  заякорена и показана со своими параметрами, телом запроса и ответами. Её таблица
+  стилей встроена, а единственный скрипт — несколько строк фильтра операций, поэтому она
+  открывается с диска без сети, CDN и сервера. Она генерируется из того же документа,
+  что `openapi.json`, и `go run ./cmd/openapi-gen -check` падает, когда она устарела,
+  поэтому она не может разойтись с роутером так, как разошлось бы написанное руками
+  справочное руководство.
 
-- **W3C Trace Context propagation.** A request id says which single request was
-  served; it cannot join the request to the background job or the webhook it
-  caused. A `traceparent` in the standard W3C format now travels through the
-  platform: `httpx.TraceMiddleware` continues an incoming trace or starts one,
-  echoes it on the response and records this hop as its own span; the access log
-  carries `trace_id`; and an outbound webhook delivery sends a `traceparent`
-  seeded from the delivery id, so the first attempt and every retry share one
-  trace id while each keeps its own span. `internal/tracectx` imports only the
-  standard library and exports no spans, so no tracing vendor is introduced — any
-  external tracing system can consume the id. A malformed header is replaced with
-  a fresh trace rather than rejected.
+- **Распространение W3C Trace Context.** Request id говорит, какой отдельный запрос был
+  обслужен; он не может связать запрос с фоновым заданием или вебхуком, который он
+  вызвал. `traceparent` стандартного формата W3C теперь путешествует через платформу:
+  `httpx.TraceMiddleware` продолжает входящую трассировку или начинает её, отражает её в
+  ответе и записывает этот узел как собственный спан; журнал доступа несёт `trace_id`; а
+  исходящая доставка вебхука отправляет `traceparent`, засеянный из id доставки, поэтому
+  первая попытка и каждый повтор делят один trace id, сохраняя каждый свой спан.
+  `internal/tracectx` импортирует только стандартную библиотеку и не экспортирует спанов,
+  поэтому вендор трассировки не вводится — любая внешняя система трассировки может
+  потребить id. Некорректный заголовок заменяется свежей трассировкой, а не отклоняется.
 
-- **Scoped, revocable MCP client credentials.** The MCP protocol endpoint
-  authenticated only with the browser session cookie, so a real MCP client could
-  not use it: a long-running client cannot hold an interactive session, and an
-  operator could not revoke an agent's access without ending the person's own
-  login. An external client can now authenticate with an
-  `Authorization: Bearer fcmcp_…` credential. A credential is bound to one
-  organization and one owner and carries an explicit permission list; a tool call
-  is authorized against that list, never the owner's roles, so a read-only
-  credential cannot mutate CRM data even when its owner is an administrator. The
-  scope must be a subset of what the caller holds, so a credential can narrow
-  authority but never widen it. Only the SHA-256 of the token is stored, so the
-  plaintext is shown once; the list reports a non-secret prefix. A credential
-  stops working immediately when it is revoked, when its expiry passes, when its
-  owner is blocked or suspended, or when the owner's membership is removed. A
-  per-credential rate limit (`FORGECRM_MCP_REQUESTS_PER_MIN`) bounds a noisy
-  client, and create/rotate/revoke are audited without recording the token.
-  Permissions `mcp.credentials.read` and `mcp.credentials.manage` and the table
-  are seeded by migration `0025`, which also adds a `created_at` index for the
-  retention sweep. A new administration page (`/admin/mcp-credentials`) lists
-  credentials, mints one with a permission picker, reveals the token exactly once,
-  and rotates or revokes it. `MCPCredentialsPage.test.tsx` pins the one-time
-  reveal, the request body and the read-only gate; `internal/mcpcred` and
-  `internal/api/mcp_credential_integration_test.go` cover scope escalation,
-  revocation, expiry and cross-organization isolation; a Playwright scenario mints
-  a credential in the browser, proves the token authenticates against the protocol
-  endpoint, and proves revocation makes the same request fail. The page also
-  generates a ready-to-paste client configuration (the endpoint, an `mcpServers`
-  JSON block and a curl example) with copy controls; every snippet carries a token
-  placeholder rather than a value, since the text is the kind of thing that ends up
-  pasted into a ticket.
+- **Ограниченные, отзываемые учётные данные MCP-клиента.** Эндпоинт протокола MCP
+  аутентифицировался только cookie сессии браузера, поэтому реальный MCP-клиент не мог им
+  пользоваться: долгоживущий клиент не может держать интерактивную сессию, а оператор не
+  мог отозвать доступ агента, не завершив вход самого человека. Внешний клиент теперь
+  может аутентифицироваться учётными данными `Authorization: Bearer fcmcp_…`. Учётные
+  данные привязаны к одной организации и одному владельцу и несут явный список
+  разрешений; вызов инструмента авторизуется по этому списку, никогда по ролям
+  владельца, поэтому учётные данные только для чтения не могут изменить данные CRM, даже
+  когда их владелец — администратор. Область должна быть подмножеством того, что держит
+  вызывающий, поэтому учётные данные могут сузить полномочия, но никогда расширить.
+  Хранится только SHA-256 токена, поэтому открытый текст показывается один раз; список
+  сообщает несекретный префикс. Учётные данные перестают работать немедленно, когда их
+  отзывают, когда проходит их срок, когда их владелец заблокирован или приостановлен или
+  когда участие владельца удалено. Ограничение частоты на учётные данные
+  (`FORGECRM_MCP_REQUESTS_PER_MIN`) ограничивает шумного клиента, а создание/ротация/отзыв
+  аудируются без записи токена. Разрешения `mcp.credentials.read` и
+  `mcp.credentials.manage` и таблица засеяны миграцией `0025`, которая также добавляет
+  индекс `created_at` для обхода хранения. Новая страница администрирования
+  (`/admin/mcp-credentials`) перечисляет учётные данные, выпускает одни с выбором
+  разрешений, раскрывает токен ровно один раз и ротирует или отзывает его.
+  `MCPCredentialsPage.test.tsx` закрепляет одноразовое раскрытие, тело запроса и шлюз
+  только для чтения; `internal/mcpcred` и
+  `internal/api/mcp_credential_integration_test.go` покрывают эскалацию области, отзыв,
+  истечение и изоляцию между организациями; сценарий Playwright выпускает учётные данные
+  в браузере, доказывает, что токен аутентифицируется против эндпоинта протокола, и
+  доказывает, что отзыв заставляет тот же запрос упасть. Страница также генерирует
+  готовую к вставке конфигурацию клиента (эндпоинт, блок JSON `mcpServers` и пример curl)
+  с элементами копирования; каждый сниппет несёт плейсхолдер токена, а не значение,
+  поскольку текст — это то, что обычно вставляют в тикет.
 
-- **Single sign-on over OpenID Connect, and the page that configures it.** A
-  deployment could only authenticate with a local password; an organization that
-  runs an identity provider had no way to use it. An operator can now register an
-  OpenID Connect provider and a user can sign in through it, end to end. The flow
-  is authorization code with PKCE and a nonce against a discovered provider, so
-  nothing is tied to one vendor. The ID token's signature, issuer, audience,
-  expiry and nonce are all verified before a claim is read; an email claim is only
-  used to find an existing account when the provider says the address is verified
-  and it falls inside the configured domains, and a local account is keyed by
-  `(provider, subject)` rather than email, because addresses change and providers
-  recycle them. The client secret is sealed with the platform keyring and never
-  returned by an API. Permissions `sso.read` and `sso.manage` are seeded by
-  migration `0022`. A new administration page (`/admin/sso`) lists the providers,
-  shows the exact redirect URL to register with each one, and creates, edits,
-  enables and deletes them; the client secret is write-only, so editing a provider
-  leaves the field blank and a blank field keeps the stored secret. `SSOPage.test.tsx`
-  pins the write-only secret and the permission gate; `internal/api/sso_integration_test.go`
-  drives the whole flow against PostgreSQL through an in-process provider that
-  publishes real discovery and JWKS documents and signs real ID tokens; an E2E
-  registers a provider through the page and reads it back from the API.
+- **Единый вход через OpenID Connect и страница, которая его настраивает.** Развёртывание
+  могло аутентифицироваться только локальным паролем; организация, использующая провайдера
+  идентичности, не имела способа его использовать. Оператор теперь может зарегистрировать
+  провайдера OpenID Connect, и пользователь может войти через него, от начала до конца.
+  Поток — authorization code с PKCE и nonce против обнаруженного провайдера, поэтому ничто
+  не привязано к одному вендору. Подпись ID-токена, издатель, аудитория, срок и nonce все
+  проверяются, прежде чем читается утверждение; утверждение email используется для поиска
+  существующего аккаунта, только когда провайдер говорит, что адрес подтверждён, и он
+  попадает в настроенные домены, а локальный аккаунт имеет ключ `(provider, subject)`, а не
+  email, потому что адреса меняются, а провайдеры их переиспользуют. Клиентский секрет
+  запечатывается кольцом ключей платформы и никогда не возвращается API. Разрешения
+  `sso.read` и `sso.manage` засеяны миграцией `0022`. Новая страница администрирования
+  (`/admin/sso`) перечисляет провайдеров, показывает точный URL перенаправления для
+  регистрации с каждым и создаёт, редактирует, включает и удаляет их; клиентский секрет
+  только для записи, поэтому правка провайдера оставляет поле пустым, а пустое поле
+  сохраняет записанный секрет. `SSOPage.test.tsx` закрепляет секрет только для записи и
+  шлюз по правам; `internal/api/sso_integration_test.go` доводит весь поток против
+  PostgreSQL через провайдер в процессе, публикующий реальные документы обнаружения и JWKS
+  и подписывающий реальные ID-токены; E2E регистрирует провайдера через страницу и читает
+  его обратно из API.
 
-- **Saved list views.** A CRM list screen could be filtered by hand but not
-  remembered: "my open deals this quarter" had to be re-entered on every visit.
-  A view is now a named, reusable filter/sort selection for one screen
-  (`accounts`, `contacts`, `leads`, `deals`, `tasks`, `tickets`). The stored
-  document is exactly the query-parameter set the list endpoints already accept,
-  so applying a view hands those parameters back to the same endpoint the screen
-  would have called by hand — one definition of what a filter means, and a view
-  cannot name a filter no endpoint honours. Visibility is one predicate applied
-  in the query: a caller sees a view when they own it or it is shared, so another
-  user's private view is never loaded. Editing is narrower — a shared view is
-  readable by the organization but only its owner may rename, update or delete it.
-  The unique index is on `(owner_user_id, entity_type, lower(name))`, partial on
-  `archived_at IS NULL`, so two users may both name a view "Hot leads" and an
-  archived name is free for reuse. Adds migration `0023`, the `views.read` /
-  `views.manage` permissions, three audit actions, the API routes and contract
-  rows, the `SavedViewsBar` switcher on the CRM list screens, and unit,
-  integration and Chromium coverage.
+- **Сохранённые представления списков.** Экран списка CRM можно было фильтровать вручную,
+  но нельзя запомнить: «мои открытые сделки этого квартала» приходилось вводить при каждом
+  визите. Представление теперь — именованный, переиспользуемый выбор фильтра/сортировки для
+  одного экрана (`accounts`, `contacts`, `leads`, `deals`, `tasks`, `tickets`). Сохранённый
+  документ — это ровно набор параметров запроса, которые эндпоинты списков уже принимают,
+  поэтому применение представления возвращает эти параметры на тот же эндпоинт, который
+  экран вызвал бы вручную, — одно определение того, что значит фильтр, и представление не
+  может назвать фильтр, которого не соблюдает ни один эндпоинт. Видимость — один предикат,
+  применяемый в запросе: вызывающий видит представление, когда владеет им или оно общее,
+  поэтому приватное представление другого пользователя никогда не загружается.
+  Редактирование узже — общее представление читаемо организацией, но только его владелец
+  может переименовать, обновить или удалить его. Уникальный индекс — по
+  `(owner_user_id, entity_type, lower(name))`, частичный по `archived_at IS NULL`, поэтому
+  два пользователя могут назвать представление «Hot leads», а архивированное имя свободно
+  для переиспользования. Добавляет миграцию `0023`, разрешения `views.read` /
+  `views.manage`, три действия аудита, маршруты API и строки контракта, переключатель
+  `SavedViewsBar` на экранах списков CRM и модульное, интеграционное и Chromium-покрытие.
 
-- **AI replies stream as they are generated.** The assistant could only answer in
-  one piece: a user waited for the whole reply before seeing anything, and a long
-  generation looked like a hang. Two new routes — `POST /api/v1/ai/stream/chat`
-  and `POST /api/v1/ai/stream/assist/{id}` — answer with server-sent events.
-  Each `delta` event carries a piece of the model's text, the closing `done`
-  event carries the same result the buffered route returns, and an `error` event
-  carries the same code the buffered route would have used, so a client handles
-  both transports the same way. Both routes run the same service call, so the
-  permission checks, the rate cap and the `ai_tasks` record are identical; only
-  the transport differs, and the buffered routes are unchanged. The assistant
-  panel uses the stream, shows the reply forming, offers Stop, and falls back to
-  the buffered request when a stream closes with no result — which is what a
-  proxy that swallows the body produces. A provider that implements only the base
-  interface is buffered and delivered as a single delta, so a new provider can be
-  added without a streaming implementation. `internal/ai/streaming_test.go` drives
-  both provider wire formats against a real server; `internal/api/ai_stream_test.go`
-  holds the frame shape and the error mapping; the client's SSE parser and the
-  panel are covered by frontend tests; and
-  `internal/testsupport/ai_stream_test.go` verifies the streamed path against
-  PostgreSQL, including that the entity permission and the tenant scope are
-  enforced before any provider call.
+- **Ответы ИИ стримятся по мере генерации.** Ассистент мог отвечать только целиком:
+  пользователь ждал весь ответ, прежде чем что-либо увидеть, а долгая генерация выглядела
+  как зависание. Два новых маршрута — `POST /api/v1/ai/stream/chat` и
+  `POST /api/v1/ai/stream/assist/{id}` — отвечают server-sent events. Каждое событие
+  `delta` несёт часть текста модели, закрывающее событие `done` несёт тот же результат,
+  что возвращает буферизованный маршрут, а событие `error` несёт тот же код, который
+  использовал бы буферизованный маршрут, поэтому клиент обрабатывает оба транспорта
+  одинаково. Оба маршрута выполняют тот же вызов сервиса, поэтому проверки прав,
+  ограничение частоты и запись `ai_tasks` идентичны; отличается только транспорт, а
+  буферизованные маршруты не изменены. Панель ассистента использует поток, показывает
+  формирующийся ответ, предлагает Stop и падает обратно на буферизованный запрос, когда
+  поток закрывается без результата — что и производит прокси, проглатывающий тело.
+  Провайдер, реализующий только базовый интерфейс, буферизуется и доставляется одним
+  дельтом, поэтому новый провайдер можно добавить без реализации стриминга.
+  `internal/ai/streaming_test.go` движет оба проводных формата провайдера против реального
+  сервера; `internal/api/ai_stream_test.go` держит форму кадра и отображение ошибок;
+  парсер SSE клиента и панель покрыты тестами фронтенда; а
+  `internal/testsupport/ai_stream_test.go` проверяет потоковый путь против PostgreSQL,
+  включая то, что права на сущность и область тенанта обеспечиваются до любого вызова
+  провайдера.
 
 ### Fixed
 
-- **The web interface was never copied into the image, and its handler was
-  unreachable.** The backend image created `/app/public` but left it empty, so a
-  container that was meant to serve the UI returned a 404 for every page even
-  though the directory existed. Separately, the static handler was registered
-  before the API routes and chi keeps only the last `NotFound` handler, so the
-  JSON 404 registered afterwards silently replaced it and even a populated
-  directory would not have been served. The handler now runs after the API routes.
+- **Веб-интерфейс никогда не копировался в образ, а его обработчик был недостижим.**
+  Образ бэкенда создавал `/app/public`, но оставлял его пустым, поэтому контейнер,
+  предназначенный обслуживать UI, возвращал 404 на каждую страницу, даже когда каталог
+  существовал. Отдельно: статический обработчик был зарегистрирован до маршрутов API, а
+  chi хранит только последний обработчик `NotFound`, поэтому JSON 404, зарегистрированный
+  позже, молча его заменил, и даже заполненный каталог не обслуживался бы. Обработчик
+  теперь работает после маршрутов API.
 
-- **The specification described two streaming endpoints as JSON.** `POST
-  /api/v1/exports` and `GET /api/v1/documents/{id}/download` write the CSV, JSONL
-  or file bytes straight to the response, but the generated OpenAPI document
-  described both as `application/json` objects — and the export as a `201`
-  created-resource, when the handler returns `200`. A client generated from the
-  document would have tried to parse a CSV export or a PNG download as JSON. The
-  generator gained a `StreamingSuccess` declaration: a route named there is
-  documented with the media types it really sets (`text/csv`,
-  `application/x-ndjson`, `application/octet-stream`) and a binary schema, with a
-  description of what the bytes are. `TestStreamingResponsesAreNotDescribedAsJSON`
-  fails if a declared stream is documented as JSON again, and
-  `TestEveryOperationNamesAComponentOrSaysWhyNot` now accepts a described byte
-  stream as an alternative to a JSON schema.
+- **Спецификация описывала два потоковых эндпоинта как JSON.** `POST /api/v1/exports` и
+  `GET /api/v1/documents/{id}/download` пишут байты CSV, JSONL или файла прямо в ответ, но
+  сгенерированный документ OpenAPI описывал оба как объекты `application/json` — а экспорт
+  как `201` созданный-ресурс, тогда как обработчик возвращает `200`. Клиент, сгенерированный
+  из документа, попытался бы разобрать экспорт CSV или скачивание PNG как JSON. Генератор
+  получил объявление `StreamingSuccess`: маршрут, названный там, документируется с
+  медиатипами, которые он действительно устанавливает (`text/csv`, `application/x-ndjson`,
+  `application/octet-stream`), и бинарной схемой, с описанием того, что это за байты.
+  `TestStreamingResponsesAreNotDescribedAsJSON` падает, если объявленный поток снова
+  документируется как JSON, а `TestEveryOperationNamesAComponentOrSaysWhyNot` теперь
+  принимает описанный поток байтов как альтернативу JSON-схеме.
 
-- **The platform-settings write could never succeed.** The route reads the
-  setting key from the `key` query parameter and the value from the body, but the
-  interface's client sent `key` inside the body — so every save was rejected as a
-  missing key, and nothing rendered the store at all. The client now sends the key
-  as a query parameter, and the Diagnostics page gained a Platform settings card
-  that lists the stored keys and values and, for a caller holding
-  `system.settings`, edits one in place. `DiagnosticsPage.test.tsx` pins the
-  query-parameter contract and the permission gate; `internal/api/settings_test.go`
-  holds the route to the same contract against PostgreSQL and checks the
-  permission and the credential-key refusal; an E2E edits a setting on the page and
-  reads the new value back through the API.
+- **Запись настроек платформы никогда не могла пройти.** Маршрут читает ключ настройки из
+  параметра запроса `key`, а значение из тела, но клиент интерфейса отправлял `key` внутри
+  тела — поэтому каждое сохранение отклонялось как отсутствующий ключ, и ничто вообще не
+  отрисовывало хранилище. Клиент теперь отправляет ключ как параметр запроса, а страница
+  Diagnostics получила карточку Platform settings, которая перечисляет сохранённые ключи и
+  значения и, для вызывающего, держащего `system.settings`, редактирует одно на месте.
+  `DiagnosticsPage.test.tsx` закрепляет контракт параметра запроса и шлюз по правам;
+  `internal/api/settings_test.go` держит маршрут к тому же контракту против PostgreSQL и
+  проверяет право и отказ от ключа учётных данных; E2E редактирует настройку на странице и
+  читает новое значение обратно через API.
 
 ### Added
 
-- **Exports are reachable from the interface.** The server streams a CSV or JSONL
-  export of an entity type from `POST /api/v1/exports` — scoped to the caller's
-  organization and gated on read access to the entity — but no page called it, and
-  the client method read a JSON `{id}` body the route never sends. The Import
-  Center gained an Export control (shown only to a caller holding
-  `exports.execute`) that fetches the file as a blob through a new
-  `ApiClient.download` and hands it to the browser with the server's filename.
-  `ImportCenterPage.test.tsx` and the client's download tests pin the request; an
-  E2E downloads a real CSV and checks its contents; `internal/api/export_test.go`
-  holds the route to tenant isolation, the format check, the entity read check and
-  the audit record against PostgreSQL.
+- **Экспорты достижимы из интерфейса.** Сервер стримит экспорт CSV или JSONL типа сущности
+  из `POST /api/v1/exports` — с областью организации вызывающего и за доступом на чтение
+  сущности, — но ни одна страница его не вызывала, а метод клиента читал JSON-тело `{id}`,
+  которое маршрут никогда не отправляет. Центр импорта получил элемент Export (показывается
+  только вызывающему, держащему `exports.execute`), который забирает файл как blob через
+  новый `ApiClient.download` и отдаёт его браузеру с именем файла от сервера.
+  `ImportCenterPage.test.tsx` и тесты скачивания клиента закрепляют запрос; E2E скачивает
+  реальный CSV и проверяет его содержимое; `internal/api/export_test.go` держит маршрут к
+  изоляции тенантов, проверке формата, проверке чтения сущности и записи аудита против
+  PostgreSQL.
 
-- **Notifications have an inbox.** The workflow `notify` action writes a
-  notification addressed to a single user, and the server implemented list and
-  mark-read — but no page consumed them, so a notification a workflow raised
-  could not be seen or cleared from the product. `NotificationsPage` is the
-  missing surface: it lists the signed-in user's notifications, filters to the
-  unread ones, shows the unread count, marks one read, and follows a row to the
-  record it names when the notification carries an `entity_type`/`entity_id`.
-  The read is scoped server-side to the notification's own user and
-  organization, not just the row id. `NotificationsPage.test.tsx` covers the
-  list, the unread filter, the mark-read write and the read-only state;
-  `internal/api/notifications_test.go` adds list/mark-read, per-user and
-  cross-tenant isolation and a 404 for an unknown id against PostgreSQL; an E2E
-  scenario seeds a notification by running a real notify workflow and then
-  clears it from the page.
+- **У уведомлений есть входящие.** Действие workflow `notify` пишет уведомление, адресованное
+  одному пользователю, и сервер реализовал список и отметку прочтения — но ни одна страница
+  их не потребляла, поэтому уведомление, поднятое workflow, нельзя было увидеть или очистить
+  из продукта. `NotificationsPage` — недостающая поверхность: она перечисляет уведомления
+  вошедшего пользователя, фильтрует непрочитанные, показывает счётчик непрочитанных,
+  отмечает одно прочитанным и переходит со строки к названной ею записи, когда уведомление
+  несёт `entity_type`/`entity_id`. Чтение ограничено на сервере собственным пользователем и
+  организацией уведомления, а не только id строки. `NotificationsPage.test.tsx` покрывает
+  список, фильтр непрочитанных, запись отметки прочтения и состояние только для чтения;
+  `internal/api/notifications_test.go` добавляет список/отметку прочтения, изоляцию по
+  пользователю и между тенантами и 404 для неизвестного id против PostgreSQL; сценарий E2E
+  засевает уведомление, запуская реальный workflow notify, и затем очищает его со страницы.
 
-- **Custom fields are visible and editable in the product.** A tenant could
-  already define extra fields per entity type and every record already carried
-  its values in a `custom_fields` map, but nothing rendered them: definitions
-  were reachable only over the raw API, and the edit dialog passed the value map
-  back untouched, so a field an operator defined could not be seen or set from the
-  interface. `CustomFieldsPanel` renders each defined field in the shape its type
-  asks for (text, number, boolean, date, select, multiselect), reads the value off
-  the record, and saves a change by handing the merged map back through the
-  record's own update — the value lives on the record, so it is the record's
-  permission (`accounts.update` and friends) that gates the write, not a new one.
-  A user holding `custom_fields.manage` also gets the inline form to define a
-  field. It is wired into the account, contact and deal detail views. Leads have
-  no detail view — they are created and edited in a dialog — so the lead entity
-  type is accepted by the API but has no panel yet; adding one needs a lead detail
-  view first.
-  `CustomFieldsPanel.test.tsx` covers value rendering, the merged-map write, the
-  read-only view and definition parsing; `internal/api/custom_fields_test.go`
-  adds round-trip, cross-tenant and permission tests against PostgreSQL, and an
-  E2E scenario defines a field, sets it and checks it survives a reload. This
-  also corrects `docs/ARCHITECTURE.md`, which listed a `custom_field_values` table
-  that has never existed — values are columns on the records themselves.
+- **Кастомные поля видны и редактируемы в продукте.** Тенант уже мог определять
+  дополнительные поля на тип сущности, и каждая запись уже несла свои значения в map
+  `custom_fields`, но ничто их не отрисовывало: определения были достижимы только через
+  сырой API, а диалог правки возвращал map значений нетронутым, поэтому поле, определённое
+  оператором, нельзя было увидеть или задать из интерфейса. `CustomFieldsPanel` отрисовывает
+  каждое определённое поле в форме, которую требует его тип (text, number, boolean, date,
+  select, multiselect), читает значение из записи и сохраняет изменение, возвращая
+  объединённый map через собственное обновление записи — значение живёт на записи, поэтому
+  запись гейтит право записи (`accounts.update` и подобные), а не новое право. Пользователь,
+  держащий `custom_fields.manage`, также получает встроенную форму определения поля. Он
+  подключён к представлениям деталей аккаунта, контакта и сделки. У лидов нет представления
+  детали — они создаются и редактируются в диалоге, — поэтому тип сущности lead принимается
+  API, но панели пока нет; для неё сначала нужно представление детали лида.
+  `CustomFieldsPanel.test.tsx` покрывает отрисовку значений, запись объединённого map,
+  представление только для чтения и разбор определений; `internal/api/custom_fields_test.go`
+  добавляет тесты кругового рейса, между тенантами и прав против PostgreSQL, а сценарий E2E
+  определяет поле, задаёт его и проверяет, что оно переживает перезагрузку. Это также
+  исправляет `docs/ARCHITECTURE.md`, который перечислял таблицу `custom_field_values`,
+  никогда не существовавшую — значения это столбцы на самих записях.
 
-- **Tags and comments now have an interface.** The backend already implemented
-  both — routes, permissions, audit, an API client on the frontend — but
-  no component consumed them, so a capability the API advertised could not be
-  reached from the product. `RecordCollabPanel` is the missing consumer: it lists
-  the tags attached to a record and its comment thread, and lets a user attach an
-  existing tag, create-and-attach a new one, and post a comment. It is wired into
-  the account, contact, deal, task and ticket views. Two new reads back it: a
-  service method `ListEntityTags` and the route `GET /api/v1/tags/attached
-  ?entity_type=&entity_id=`, whose query joins on the tag's organization as well
-  as the link so a tag attached in one tenant cannot surface in another. The
-  controls are gated by the permissions the routes enforce (`tags.manage`,
-  `comments.create`) and the panel renders nothing without `contacts.read`.
-  Covered by `RecordCollabPanel.test.tsx`, `internal/api/tags_comments_test.go`
-  (round-trip, cross-tenant isolation, permission refusals) and an E2E scenario in
-  `e2e/platform.spec.ts`.
+- **У тегов и комментариев теперь есть интерфейс.** Бэкенд уже реализовал и то и другое —
+  маршруты, права, аудит, API-клиент на фронтенде, — но ни один компонент их не потреблял,
+  поэтому возможность, которую API рекламировал, была недостижима из продукта.
+  `RecordCollabPanel` — недостающий потребитель: он перечисляет теги, привязанные к записи,
+  и её ветку комментариев и позволяет пользователю привязать существующий тег,
+  создать-и-привязать новый и опубликовать комментарий. Он подключён к представлениям
+  аккаунта, контакта, сделки, задачи и обращения. Два новых чтения поддерживают его: метод
+  сервиса `ListEntityTags` и маршрут `GET /api/v1/tags/attached?entity_type=&entity_id=`,
+  чей запрос соединяет по организации тега, а также по ссылке, поэтому тег, привязанный в
+  одном тенанте, не может всплыть в другом. Элементы управления гейтятся правами, которые
+  обеспечивают маршруты (`tags.manage`, `comments.create`), а панель не отрисовывает ничего
+  без `contacts.read`. Покрыто `RecordCollabPanel.test.tsx`,
+  `internal/api/tags_comments_test.go` (круговой рейс, изоляция между тенантами, отказы в
+  правах) и сценарием E2E в `e2e/platform.spec.ts`.
 
-- **A constructor that turns a recipe into a working, standalone project.** The
-  extraction harness proves a single package *can* stand alone; the constructor is
-  how someone actually does it for a chosen combination. `internal/constructor`
-  reads a recipe manifest (`recipe.yaml`), copies exactly the named modules out of
-  `backend/internal`, rewrites their imports to the new module path, renders the
-  recipe's templates and writes a README — then refuses to finish if any generated
-  file still names ForgeCRM. `cmd/forgecrm` is the CLI (`forgecrm recipes`,
-  `forgecrm scaffold <recipe> --output <dir>`). The first recipe,
-  `analytics-demo`, lifts the pure `analytics` core into a project with no
-  database, no external service and no secrets, and runs a demo that computes the
-  funnel, revenue and retention scenarios, a trend forecast and a stalled-deal scan
-  over a fixed snapshot, asserting every number. `scripts/constructor-test/run.sh`
-  runs `forgecrm scaffold` for each recipe, then builds, tests and runs the
-  generated project and checks the demo's deterministic output; it is a CI job
-  (`constructor`) and a `make test-constructor` target. The constructor is itself
-  proven extractable — it is a leaf that depends only on the standard library and
-  a YAML parser — so it is a thirty-third module in the extraction harness and an
-  archtest pin.
+- **Конструктор, превращающий рецепт в работающий, автономный проект.** Набор выделения
+  доказывает, что один пакет *может* стоять отдельно; конструктор — как кто-то действительно
+  делает это для выбранной комбинации. `internal/constructor` читает манифест рецепта
+  (`recipe.yaml`), копирует ровно названные модули из `backend/internal`, переписывает их
+  импорты на новый путь модуля, отрисовывает шаблоны рецепта и пишет README — затем
+  отказывается завершиться, если какой-либо сгенерированный файл всё ещё называет ForgeCRM.
+  `cmd/forgecrm` — CLI (`forgecrm recipes`, `forgecrm scaffold <recipe> --output <dir>`).
+  Первый рецепт, `analytics-demo`, поднимает чистое ядро `analytics` в проект без базы
+  данных, без внешнего сервиса и без секретов и запускает демо, которое вычисляет сценарии
+  воронки, выручки и удержания, прогноз тренда и скан застрявших сделок по фиксированному
+  снимку, утверждая каждое число. `scripts/constructor-test/run.sh` запускает
+  `forgecrm scaffold` для каждого рецепта, затем собирает, тестирует и запускает
+  сгенерированный проект и проверяет детерминированный вывод демо; это задание CI
+  (`constructor`) и цель `make test-constructor`. Конструктор сам доказан извлекаемым — это
+  лист, зависящий только от стандартной библиотеки и парсера YAML, — поэтому он
+  тридцать третий модуль в наборе выделения и закрепление в archtest.
 
-- **The constructor's cross-module rewrite is tested, not assumed.** The bundled
-  `analytics-demo` recipe copies one package, so it never exercised the case that
-  matters for a real recipe: two modules where one imports the other. A unit test
-  now generates a project naming both and checks that each travels, that the import
-  between them is re-pointed at the new module, and that no file names the monolith.
+- **Кросс-модульная перезапись конструктора тестируется, а не предполагается.** Встроенный
+  рецепт `analytics-demo` копирует один пакет, поэтому он никогда не упражнял случай,
+  важный для реального рецепта: два модуля, где один импортирует другой. Юнит-тест теперь
+  генерирует проект, называющий оба, и проверяет, что каждый путешествует, что импорт между
+  ними переуказан на новый модуль и что ни один файл не называет монолит.
 
-- **Thirteen more modules are extraction-proven, taking the harness to
-  thirty-two.**
-  The remaining backend packages that sit above the leaves now lift out on their
-  own, each with its dependencies proven in turn: `internal/config` (the
-  environment loader — the last shared piece most modules wait on),
-  `internal/workflow` (the automation engine: step document, cron, template
-  catalog, export/import), `internal/events` (the inbound webhook gateway),
-  `internal/migratex` (the cross-database migration service), `internal/simulate`,
-  `internal/forecast` and `internal/risk` (read-only computations over the pure
-  analytics core), `internal/notify` (the email and Telegram transports),
-  `internal/ai` (the contextual AI layer) and `internal/importx` (the Import
-  Center), `internal/migrations` and `internal/migrate` (the embedded SQL and its
-  runner) and `internal/authn` (authentication). Each gained a
-  `scripts/extract-test/<module>/` harness — a `setup.sh`
-  that copies the module and its proven dependencies into a clean Go module, and a
-  `cmd/smoke` program that exercises the real public API rather than merely
-  importing it. The smoke for `ai` proves a forged data fence is neutralised and
-  the tool risk tiers are the explicit mapping; the smoke for `workflow` registers
-  the live event vocabulary and validates the catalog; the smoke for `config`
-  proves the retention default is off and an empty DSN is refused. The pins in
-  `internal/archtest` name each module's allowed in-module dependencies, so a new
-  import outside that set fails `go test ./...` before the harness runs. Earlier
-  `docs/MODULES.md` rows marked these `no` on the reasoning that they bind to
-  `crm` or name every subsystem's config; those rows were wrong — a dependency on
-  a proven module is a dependency, not a blocker — and are corrected.
+- **Ещё тринадцать модулей доказаны на выделение, доводя набор до тридцати двух.**
+  Оставшиеся пакеты бэкенда, сидящие выше листьев, теперь поднимаются сами, каждый с
+  зависимостями, доказанными по очереди: `internal/config` (загрузчик окружения — последняя
+  общая часть, которой ждут большинство модулей), `internal/workflow` (движок автоматизации:
+  документ шагов, cron, каталог шаблонов, экспорт/импорт), `internal/events` (шлюз входящих
+  вебхуков), `internal/migratex` (сервис миграции между базами), `internal/simulate`,
+  `internal/forecast` и `internal/risk` (вычисления только для чтения над чистым ядром
+  аналитики), `internal/notify` (транспорты почты и Telegram), `internal/ai` (слой
+  контекстного ИИ) и `internal/importx` (Центр импорта), `internal/migrations` и
+  `internal/migrate` (встроенный SQL и его раннер) и `internal/authn` (аутентификация).
+  Каждый получил набор `scripts/extract-test/<module>/` — `setup.sh`, который копирует
+  модуль и его доказанные зависимости в чистый модуль Go, и программу `cmd/smoke`, которая
+  упражняет реальный публичный API, а не просто импортирует его. Smoke для `ai` доказывает,
+  что подделанное ограждение данных нейтрализуется, а уровни риска инструментов — это явное
+  отображение; smoke для `workflow` регистрирует живой словарь событий и валидирует каталог;
+  smoke для `config` доказывает, что умолчание хранения выключено, а пустой DSN отклоняется.
+  Закрепления в `internal/archtest` называют разрешённые внутренние зависимости каждого
+  модуля, поэтому новый импорт вне этого набора падает `go test ./...` до запуска набора.
+  Ранее строки `docs/MODULES.md` помечали их `no` на рассуждении, что они привязываются к
+  `crm` или называют конфигурацию каждой подсистемы; эти строки были неверными —
+  зависимость от доказанного модуля это зависимость, а не блокер — и исправлены.
 
-- **An extraction harness that proves a module stands alone.** "This module is
-  extraction-ready" was a claim nobody tested: a package builds inside the
-  monolith while depending on half of it, and that only fails when someone tries
-  to take it out. `scripts/extract-test/` now does the extraction for real — it
-  copies a module into a clean Go module without ForgeCRM, and builds, tests and
-  runs it there, so a reach back into the application layer is a compile error
-  rather than a discovery made months later. Four modules are proven today:
-  `netguard` (standard library only), `analytics` (no dependency at all),
-  `ratelimit` (with the Redis client) and `objectstore` (with `netguard`). The
-  module's own tests run in the extracted project, so the proof covers behaviour
-  and not just compilation, and a `cmd/smoke` program exercises the public API.
-  `scripts/extract-test/modules.txt` lists only modules whose extraction actually
-  passes. A CI job `extraction` runs the harness, and `TestExtractionBoundaryHolds`
-  in `internal/archtest` enforces the same boundary cheaply on every
-  `go test ./...`; the two are independent, so neither a stale check nor a skipped
-  job can hide a violation. Thirty-two modules are proven today: the four above plus
-  `secrets` and `logging` (which became provable once they gained their own tests),
-  `httpx`, `importx/safe`, `importx/parsers`, `database`, `rbac`, `audit`,
-  `outbox`, `retention`, `agent`, `jobs`, `crm`, `storage` and `integrations` (the
-  last ten added in the last two slices).
+- **Набор выделения, доказывающий, что модуль стоит отдельно.** «Этот модуль готов к
+  выделению» было утверждением, которое никто не проверял: пакет собирается внутри монолита,
+  завися от половины его, и это вскрывается только когда кто-то пытается его вынуть.
+  `scripts/extract-test/` теперь делает выделение по-настоящему — он копирует модуль в
+  чистый модуль Go без ForgeCRM и собирает, тестирует и запускает его там, поэтому тяга
+  обратно в прикладной слой становится ошибкой компиляции, а не открытием, сделанным месяцы
+  спустя. Четыре модуля доказаны сегодня: `netguard` (только стандартная библиотека),
+  `analytics` (без зависимостей вообще), `ratelimit` (с клиентом Redis) и `objectstore` (с
+  `netguard`). Собственные тесты модуля идут в выделенном проекте, поэтому доказательство
+  покрывает поведение, а не только компиляцию, а программа `cmd/smoke` упражняет публичный
+  API. `scripts/extract-test/modules.txt` перечисляет только модули, чьё выделение
+  действительно проходит. Задание CI `extraction` запускает набор, а
+  `TestExtractionBoundaryHolds` в `internal/archtest` обеспечивает ту же границу дёшево на
+  каждом `go test ./...`; они независимы, поэтому ни устаревшая проверка, ни пропущенное
+  задание не могут скрыть нарушение. Сегодня доказаны тридцать два модуля: четыре выше плюс
+  `secrets` и `logging` (которые стали доказуемыми, получив собственные тесты), `httpx`,
+  `importx/safe`, `importx/parsers`, `database`, `rbac`, `audit`, `outbox`, `retention`,
+  `agent`, `jobs`, `crm`, `storage` и `integrations` (последние десять добавлены в двух
+  последних срезах).
 
-- **The queue, the domain service, the object-store layer and the Integration Hub
-  are now extraction-proven.** Four more modules lift out, taking the harness to
-  nineteen. `internal/jobs` (the queue) depends only on `database`. `internal/crm`
-  (the domain service — accounts, contacts, deals, tasks, tickets, activities,
-  search, analytics) depends on `audit`, `database`, `httpx`, `outbox` and `rbac`.
-  `internal/storage` (the object-store application layer) on `audit`, `database`,
-  `httpx`, `objectstore`, `ratelimit` and `rbac`. `internal/integrations` (the
-  Integration Hub) on `audit`, `database`, `httpx`, `netguard`, `rbac` and
-  `secrets`. Every dependency was already proven, so none was friction; the docs'
-  claim that `crm`'s `httpx`/`outbox` imports were "the real friction" was wrong.
+- **Очередь, доменный сервис, слой объектного хранилища и Хаб интеграций теперь доказаны
+  на выделение.** Ещё четыре модуля поднимаются, доводя набор до девятнадцати.
+  `internal/jobs` (очередь) зависит только от `database`. `internal/crm` (доменный сервис —
+  аккаунты, контакты, сделки, задачи, обращения, активности, поиск, аналитика) зависит от
+  `audit`, `database`, `httpx`, `outbox` и `rbac`. `internal/storage` (прикладной слой
+  объектного хранилища) — от `audit`, `database`, `httpx`, `objectstore`, `ratelimit` и
+  `rbac`. `internal/integrations` (Хаб интеграций) — от `audit`, `database`, `httpx`,
+  `netguard`, `rbac` и `secrets`. Каждая зависимость была уже доказана, поэтому ни одна не
+  была трением; утверждение документов, что импорты `httpx`/`outbox` в `crm` были
+  «настоящим трением», было неверным.
 
-- **A latent retry bug in the job queue was found and fixed.** `backoffFor`
-  clamped the shift exponent at 10 before shifting, so the retry delay topped out
-  at `1<<10 s = 1024s` and the documented 30-minute ceiling was unreachable dead
-  code. Writing the first `jobs` tests surfaced it; the clamp is now 11, so the
-  ceiling is real and the test pins both the growth and the cap.
+- **Скрытый баг повторов в очереди заданий найден и исправлен.** `backoffFor` ограничивал
+  показатель сдвига на 10 до сдвига, поэтому задержка повтора упиралась в
+  `1<<10 s = 1024s`, а документированный потолок в 30 минут был недостижимым мёртвым кодом.
+  Написание первых тестов `jobs` вскрыло это; ограничение теперь 11, поэтому потолок реален
+  и тест закрепляет и рост, и предел.
 
-- **`internal/jobs` and `internal/crm` gained their first in-package tests.**
-  `jobs` had none: it now covers the status and kind vocabularies, the validation
-  that rejects a job with no kind before the database is touched, and the retry
-  backoff. `crm` had none: it now covers the validators that run before any
-  database access — the boundary an attacker's payload hits first — and the
-  `JSONMap` column codec.
+- **`internal/jobs` и `internal/crm` получили первые тесты внутри пакета.** У `jobs` их не
+  было: теперь он покрывает словари статуса и вида, валидацию, отклоняющую задание без вида
+  до обращения к базе, и задержку повтора. У `crm` их не было: теперь он покрывает
+  валидаторы, которые идут до любого доступа к базе, — граница, которую payload атакующего
+  бьёт первой, — и кодек столбца `JSONMap`.
 
-- **The retention engine and the human-in-the-loop layer are now
-  extraction-proven.** `internal/retention` — the data-retention engine with its
-  policy catalog, dry-run default and opt-in delete — depends only on `audit` and
-  `database`. `internal/agent` — the proposal queue with a signed approval — is the
-  widest proven set so far: `audit`, `database` and `httpx`, every one of them
-  proven in turn. Both lift out; the `Executor` seam travels with the agent
-  package, which is what lets a host supply the real tool path. Writing the
-  retention smoke surfaced a real invariant rather than a bug: an expiry-driven
-  policy legitimately carries a zero window, and a protected policy has no default
-  on purpose, so the smoke encodes both instead of assuming a positive window
-  everywhere.
+- **Движок хранения и слой human-in-the-loop теперь доказаны на выделение.**
+  `internal/retention` — движок хранения данных с его каталогом политик, умолчанием
+  пробного прогона и удалением по согласию — зависит только от `audit` и `database`.
+  `internal/agent` — очередь предложений с подписанным согласованием — самый широкий
+  доказанный набор до сих пор: `audit`, `database` и `httpx`, каждый доказан по очереди.
+  Оба поднимаются; шов `Executor` путешествует с пакетом агента, что и позволяет хосту
+  поставлять реальный путь инструментов. Написание smoke хранения вскрыло реальный
+  инвариант, а не баг: политика, движимая истечением, законно несёт нулевое окно, а у
+  защищённой политики намеренно нет значения по умолчанию, поэтому smoke кодирует оба, а не
+  предполагает положительное окно везде.
 
-- **The audit trail and the outbox are now extraction-proven.** `internal/audit`
-  (the append-only action trail and the security-event stream) and
-  `internal/outbox` (the transactional outbox and its event vocabulary) both
-  depend only on `database` and `logging`, so both lift out. `audit` had no
-  in-package tests before this slice; it now has tests for the action vocabulary,
-  the validation ordering that keeps an unattributable row out of the trail, and
-  the marshalling helpers, none of which needs a server. Its schema lives in
-  migration 0001 and is not part of the package — a real extraction would carry a
-  migration with it — and that is stated rather than hidden. The two boundaries
-  are pinned in `archtest`.
+- **Журнал аудита и outbox теперь доказаны на выделение.** `internal/audit` (журнал действий
+  «только добавление» и поток событий безопасности) и `internal/outbox` (транзакционный
+  outbox и его словарь событий) оба зависят только от `database` и `logging`, поэтому оба
+  поднимаются. У `audit` до этого среза не было тестов внутри пакета; теперь у него есть
+  тесты для словаря действий, порядка валидации, который держит неприписываемую строку вне
+  журнала, и помощников маршалинга, ни один из которых не нуждается в сервере. Его схема
+  живёт в миграции 0001 и не является частью пакета — реальное выделение понесло бы
+  миграцию с собой, — и это указано, а не скрыто. Обе границы закреплены в `archtest`.
 
-- **The database pool and the RBAC package are now extraction-proven.**
-  `internal/database` — the connection pool and the transaction helper every
-  repository is written against — is a leaf, so it lifts out with only the pgx
-  driver, and its pool-size guard is enforced before a connection is attempted, so
-  its tests need no server. It was marked `no` before on the reasoning that
-  everything sits on it; that is about desirability, not feasibility, and the
-  guarantee worth having is that nothing welds it to the application.
-  `internal/rbac` — the permission catalog, the request principal every handler
-  checks, and the resolution service — depends only on `database`, so it is
-  extracted with it. The docs once proposed splitting a pure catalog and
-  `Principal` from the DB-backed service before it could be extracted; that is not
-  what the code needs, because the three share the `Permission` type and already
-  lift out together, so the package is extracted whole and the boundary is pinned
-  in `archtest` (`rbac` may import `database` and nothing else).
+- **Пул базы данных и пакет RBAC теперь доказаны на выделение.** `internal/database` — пул
+  соединений и помощник транзакций, под который написан каждый репозиторий, — лист, поэтому
+  он поднимается только с драйвером pgx, и его защита размера пула обеспечивается до
+  попытки соединения, поэтому его тесты не нуждаются в сервере. Раньше он был помечен `no`
+  на рассуждении, что всё на нём сидит; это о желательности, а не о выполнимости, и
+  гарантия, которую стоит иметь, в том, что ничто не приваривает его к приложению.
+  `internal/rbac` — каталог разрешений, принципал запроса, который проверяет каждый
+  обработчик, и сервис определения — зависит только от `database`, поэтому выделяется с ним.
+  Документы однажды предлагали отделить чистый каталог и `Principal` от сервиса на базе до
+  выделения; это не то, что нужно коду, потому что трое делят тип `Permission` и уже
+  поднимаются вместе, поэтому пакет выделяется целиком, а граница закреплена в `archtest`
+  (`rbac` может импортировать `database` и ничего больше).
 
-- **The untrusted-archive extractor is now extraction-proven.** `internal/importx/safe`
-  is the single place in the codebase that writes bytes chosen by an uploader to
-  disk, and the guard against path traversal, symlinks, zip bombs, oversized
-  entries and deep nesting. It has no in-module dependency at all, so the whole
-  package moves: `scripts/extract-test/safe` builds it, runs its ~24 security
-  tests in a clean module and runs a smoke that round-trips a ZIP and then refuses
-  both a path traversal and a zip bomb. The security tests running in isolation is
-  the strongest form of this claim, and it is exactly where attacker-controlled
-  input is handled.
+- **Распаковщик недоверенных архивов теперь доказан на выделение.** `internal/importx/safe` —
+  единственное место в кодовой базе, которое пишет на диск байты, выбранные загружающим, и
+  защита от обхода пути, символических ссылок, zip-бомб, слишком больших записей и глубокой
+  вложенности. У него вообще нет внутренних зависимостей, поэтому весь пакет переезжает:
+  `scripts/extract-test/safe` собирает его, прогоняет его ~24 теста безопасности в чистом
+  модуле и запускает smoke, который прогоняет ZIP и затем отклоняет и обход пути, и
+  zip-бомбу. Тесты безопасности, идущие изолированно, — сильнейшая форма этого утверждения,
+  и именно там обрабатывается контролируемый атакующим ввод.
 
-- **The tabular parsers are now extraction-proven, and the extraction found two
-  real bugs in them.** `internal/importx/parsers` had **no tests of its own**, so
-  nothing pinned its behaviour. Writing them found:
-  - **XLSX could not be parsed at all.** `Parse` applied its UTF-8 text check to
-    every format, but XLSX is a zip of XML parts and is binary by construction, so
-    every workbook was rejected with "file is not valid UTF-8". The check is now
-    skipped for the one binary format it was never meant to see.
-  - **The XML parser split every record in two.** A record's attributes and its
-    nested elements were emitted as separate rows — `<contact id="1"><name>Ada
-    </name></contact>` came out as `{@id:1}` and `{name:Ada}` — and the record
-    element was inferred as the document root. The parser was rewritten to keep
-    one row per record, flatten nested elements to dotted keys (matching the JSON
-    parser) and infer the record element as the root's first child.
-  The package now has 19 tests, extracts, builds, tests and runs in a clean module.
+- **Табличные парсеры теперь доказаны на выделение, и выделение нашло в них два реальных
+  бага.** У `internal/importx/parsers` **не было собственных тестов**, поэтому ничто не
+  закрепляло его поведение. Их написание нашло:
+  - **XLSX вообще не разбирался.** `Parse` применял свою проверку текста UTF-8 к каждому
+    формату, но XLSX — это zip из XML-частей и по построению бинарный, поэтому каждая книга
+    отклонялась с «file is not valid UTF-8». Проверка теперь пропускается для единственного
+    бинарного формата, который она никогда не должна была видеть.
+  - **XML-парсер разбивал каждую запись надвое.** Атрибуты записи и её вложенные элементы
+    выдавались как отдельные строки — `<contact id="1"><name>Ada</name></contact>` выходил
+    как `{@id:1}` и `{name:Ada}` — а элемент записи выводился как корень документа. Парсер
+    был переписан, чтобы держать одну строку на запись, расплющивать вложенные элементы в
+    точечные ключи (как парсер JSON) и выводить элемент записи как первого ребёнка корня.
+  Пакет теперь имеет 19 тестов, выделяется, собирается, тестируется и запускается в чистом
+  модуле.
 
-- **The extraction-boundary archtest could silently check nothing for a nested
-  package.** `TestExtractionBoundaryHolds` keyed its cases on `internalPkg`, which
-  returns only the first path segment; a pinned module like `importx/safe` would
-  therefore never match its case and the test would pass while verifying nothing.
-  The check now keys on the full path relative to `internal/`, and fails loudly if
-  a pinned module is not in the graph at all — the no-op is itself caught.
+- **Archtest границы выделения мог молча не проверять ничего для вложенного пакета.**
+  `TestExtractionBoundaryHolds` ключевал свои случаи на `internalPkg`, который возвращает
+  только первый сегмент пути; закреплённый модуль вроде `importx/safe` поэтому никогда не
+  совпал бы со своим случаем, и тест прошёл бы, ничего не проверяя. Проверка теперь
+  ключуется на полном пути относительно `internal/` и громко падает, если закреплённого
+  модуля вообще нет в графе — no-op сам ловится.
 
-- **The HTTP layer is now extraction-proven.** `internal/httpx` — the error
-  envelope, the JSON writers, pagination and sort parsing, the access-log,
-  recovery, security-header and rate-limit middleware, and the trusted-proxy
-  client-address resolver — depends only on `internal/logging` and
-  `internal/ratelimit`, both already proven leaves, so the whole layer lifts out
-  of the monolith. `scripts/extract-test/httpx` copies it and its two
-  dependencies into a clean module, builds it, runs its own tests (including the
-  client-address trust tests) and runs a smoke that round-trips a JSON list
-  response, drives a rate-limited handler to a 429 with the limit header on the
-  allowed response, and resolves a client address. It was marked `almost` before
-  on the judgement that it *is* the shared HTTP substrate and so is rarely worth
-  extracting; that is about desirability, not feasibility, and the guarantee worth
-  having is that the layer *can* lift out, because that is what keeps a handler
-  from reaching into it and dragging the application layer back in.
+- **Слой HTTP теперь доказан на выделение.** `internal/httpx` — конверт ошибок, писатели
+  JSON, разбор пагинации и сортировки, middleware журнала доступа, восстановления,
+  заголовков безопасности и ограничения частоты и распознаватель адреса клиента за
+  доверенным прокси — зависит только от `internal/logging` и `internal/ratelimit`, оба уже
+  доказанные листья, поэтому весь слой поднимается из монолита. `scripts/extract-test/httpx`
+  копирует его и его две зависимости в чистый модуль, собирает его, прогоняет его
+  собственные тесты (включая тесты доверия адресу клиента) и запускает smoke, который
+  прогоняет JSON-ответ списка, доводит обработчик с ограничением до 429 с заголовком лимита
+  на разрешённом ответе и определяет адрес клиента. Раньше он был помечен `almost` на
+  суждении, что он *и есть* общий HTTP-субстрат и потому редко заслуживает выделения; это о
+  желательности, а не о выполнимости, и гарантия, которую стоит иметь, в том, что слой
+  *может* подняться, потому что именно это не даёт обработчику дотянуться в него и затащить
+  прикладной слой обратно.
 
-- **`secrets` and `logging` have their own tests, and are now extraction-proven.**
-  Both were standard-library-or-near leaves with no `_test.go` at all, so an
-  extraction reported `[no test files]` and their behaviour was covered only
-  indirectly through `authn` and the API — the "tests pass only in the monolith"
-  condition the Definition of Done forbids. `secrets_test.go` pins the properties
-  that matter for a credential path: hashing round-trips, a hash is salted, a
-  malformed stored hash is distinguished from a wrong password, the keyring uses a
-  fresh nonce per encryption, and a ciphertext is refused under the wrong key and
-  under tampering. `logging_test.go` pins the redaction control: a password or
-  token passed as a log field never reaches the output, including through `With`
-  and through a nested group, and a test asserts `New` still returns the redacting
-  handler. Both now extract, build, test and run in a clean module.
+- **У `secrets` и `logging` есть собственные тесты, и они теперь доказаны на выделение.**
+  Оба были листьями на стандартной библиотеке или около того вообще без `_test.go`, поэтому
+  выделение сообщало `[no test files]`, и их поведение покрывалось только косвенно через
+  `authn` и API — то условие «тесты проходят только в монолите», которое запрещает
+  определение готовности. `secrets_test.go` закрепляет свойства, важные для пути учётных
+  данных: круговой рейс хеширования, хеш с солью, искажённый сохранённый хеш отличается от
+  неверного пароля, кольцо ключей использует свежий nonce на каждое шифрование, а
+  шифротекст отклоняется под неверным ключом и при подмене. `logging_test.go` закрепляет
+  контроль сокрытия: пароль или токен, переданный как поле лога, никогда не достигает
+  вывода, в том числе через `With` и через вложенную группу, и тест утверждает, что `New`
+  всё ещё возвращает скрывающий обработчик. Оба теперь выделяются, собираются, тестируются и
+  запускаются в чистом модуле.
 
-- **The object-storage layer is now a module of its own.** `internal/objectstore`
-  holds the provider contract (`ObjectStore`), the in-process `Memory` and the
-  S3-compatible `S3`, plus the pure key and content-type helpers. It depends on
-  `internal/netguard` and third-party libraries, and on nothing from the
-  application layer — no database, no audit log, no RBAC, no HTTP error type.
-  `internal/storage` keeps authorization, the metadata rows and the reconciliation
-  between an object and its row, and depends on the new package; its public API is
-  unchanged, so no caller moved. The package's tests now include a shared
-  behaviour contract run against both providers, and the S3 run is a real S3 wire
-  protocol (via `gofakes3`) rather than an interface mock, so signing, path-style
-  addressing and the 404-to-`ErrObjectMissing` translation are exercised.
+- **Слой объектного хранилища теперь отдельный модуль.** `internal/objectstore` держит
+  контракт провайдера (`ObjectStore`), `Memory` в процессе и совместимый с S3 `S3`, плюс
+  чистые помощники ключей и типов содержимого. Он зависит от `internal/netguard` и сторонних
+  библиотек и ни от чего из прикладного слоя — ни базы, ни журнала аудита, ни RBAC, ни типа
+  ошибки HTTP. `internal/storage` сохраняет авторизацию, строки метаданных и сверку между
+  объектом и его строкой и зависит от нового пакета; его публичный API неизменен, поэтому
+  ни один вызывающий не переехал. Тесты пакета теперь включают общий контракт поведения,
+  идущий против обоих провайдеров, а прогон S3 — это реальный проводной протокол S3 (через
+  `gofakes3`), а не мок интерфейса, поэтому подпись, адресация path-style и перевод 404 в
+  `ErrObjectMissing` упражняются.
 
-- **The SSRF guard is a leaf package.** It moved from `internal/integrations` to
-  `internal/netguard`, where it depends on nothing but the standard library. The
-  object store needs exactly these rules — an S3 endpoint is an SSRF target — but
-  must not import the Integration Hub to get them. `integrations` re-exports the
-  names it always did (`GuardedClient`, `NewGuardedClient`, `ValidateOutboundURL`,
-  `IsBlockedIP`), so no call site changed.
+- **Защита SSRF — листовой пакет.** Она переехала из `internal/integrations` в
+  `internal/netguard`, где не зависит ни от чего, кроме стандартной библиотеки. Объектному
+  хранилищу нужны ровно эти правила — эндпоинт S3 является целью SSRF, — но нельзя
+  импортировать Хаб интеграций, чтобы их получить. `integrations` реэкспортирует имена,
+  которые всегда имел (`GuardedClient`, `NewGuardedClient`, `ValidateOutboundURL`,
+  `IsBlockedIP`), поэтому ни одно место вызова не изменилось.
 
-- **Sweep indexes for the intelligence history.** Migration
-  `0021_intelligence_retention_indexes` adds `simulation_runs_created_at_idx` and
-  `forecast_runs_created_at_idx`, following the rule migration `0017` set: a
-  retention sweep filters on its time column alone and no organization, so it
-  needs an index that leads with that column. The existing indexes on those tables
-  lead with `organization_id` for the per-org list views and cannot serve the
-  sweep, which would otherwise scan the table — the largest one the sweep touches
-  on a deployment that has used the labs. `risk_signals` needs none: migration
-  `0020` already created `risk_signals_terminal_idx` for exactly this sweep.
-  `TestRetentionSweepIndexesExist` asserts every sweep index is present after
-  migrations run, so a future migration cannot drop one unnoticed.
+- **Индексы обхода для истории интеллекта.** Миграция
+  `0021_intelligence_retention_indexes` добавляет `simulation_runs_created_at_idx` и
+  `forecast_runs_created_at_idx`, следуя правилу, установленному миграцией `0017`: обход
+  хранения фильтрует только по столбцу времени и без организации, поэтому ему нужен индекс,
+  ведущий с этого столбца. Существующие индексы на этих таблицах ведут с `organization_id`
+  для списковых представлений по организации и не могут обслужить обход, который иначе
+  сканировал бы таблицу — крупнейшую, которую обход трогает на развёртывании, использующем
+  лаборатории. `risk_signals` не нуждается ни в одном: миграция `0020` уже создала
+  `risk_signals_terminal_idx` именно для этого обхода. `TestRetentionSweepIndexesExist`
+  утверждает, что каждый индекс обхода присутствует после применения миграций, поэтому
+  будущая миграция не может незаметно удалить один.
 
-- **Retention now covers the intelligence history.** The Simulation and
-  Forecasting & Risk Labs write tables that grow with use and no policy pruned
-  them: `simulation_runs`, `forecast_runs` and `risk_signals`. Each is now a
-  configurable policy with a 180-day default. The two run tables have no status —
-  every stored run is finished when written — so they are swept by age; a
-  `risk_signals` row is swept only when it is terminal (`resolved` or
-  `dismissed`), because an `open` or `acknowledged` signal is a current condition,
-  not history, and a condition that still holds is re-detected by the next scan.
-  The `risk_signals_terminal_idx` index that migration `0020_forecasting_risk`
-  created for exactly this sweep is now used by it. Nothing is swept unless
-  retention is enabled, and a dry run still previews.
+- **Хранение теперь покрывает историю интеллекта.** Лаборатории Simulation и Forecasting &
+  Risk пишут таблицы, которые растут с использованием, и ни одна политика их не чистила:
+  `simulation_runs`, `forecast_runs` и `risk_signals`. Каждая теперь настраиваемая политика
+  с умолчанием 180 дней. У двух таблиц прогонов нет статуса — каждый сохранённый прогон
+  завершён, когда записан, — поэтому они обметаются по возрасту; строка `risk_signals`
+  обметается, только когда она терминальна (`resolved` или `dismissed`), потому что
+  `open` или `acknowledged` сигнал — это текущее условие, а не история, и условие, которое
+  всё ещё держится, будет снова обнаружено следующим сканом. Индекс
+  `risk_signals_terminal_idx`, который миграция `0020_forecasting_risk` создала именно для
+  этого обхода, теперь им и используется. Ничто не обметается, если хранение не включено, а
+  пробный прогон всё ещё предварительно просматривает.
 
 ### Added
 
-- **Calibrated confidence for contextual AI.** An `ai.Insight` now carries a `confidence` object: a level (`high`/`medium`/`low`), a score, and a `basis` list that names the signals behind it. It is not the model's self-reported confidence — that is a stylistic token, not a probability, and is high whether or not the answer is right. The server computes the score instead from what it can verify: whether the reply was structured, whether the figures in it appear in the CRM facts the model was given, and whether the context was complete (masked, truncated or omitted data lowers it). The `AssistPanel` shows the level and the reason, so the user sees why an answer was scored as it was rather than being handed a bare number. Unit tests in `internal/ai/confidence_test.go`; the cache integration test asserts the assessment is identical on a fresh and a cached answer.
+- **Калиброванная уверенность для контекстного ИИ.** `ai.Insight` теперь несёт объект
+  `confidence`: уровень (`high`/`medium`/`low`), балл и список `basis`, называющий сигналы за
+  ним. Это не самоотчётная уверенность модели — это стилистический токен, а не вероятность,
+  и она высока независимо от того, верен ответ или нет. Сервер вместо этого вычисляет балл из
+  того, что может проверить: был ли ответ структурированным, появляются ли цифры в нём среди
+  фактов CRM, которые дали модели, и был ли контекст полным (замаскированные, усечённые или
+  опущенные данные понижают его). `AssistPanel` показывает уровень и причину, поэтому
+  пользователь видит, почему ответ был оценён так, а не получает голое число. Юнит-тесты в
+  `internal/ai/confidence_test.go`; интеграционный тест кэша утверждает, что оценка идентична
+  на свежем и кэшированном ответе.
 
 ### Fixed
 
-- **The AI request limiter was racy and shared one bucket across all tenants.**
-  The limiter kept a slice of timestamps in the service and appended to it from
-  every request goroutine with no lock: a data race, and on a bad interleaving a
-  slice write that corrupts memory or panics, taking the process down under
-  ordinary concurrent use. It was also a single global bucket, so one busy
-  organization could spend the minute's budget and refuse the assistant to every
-  other tenant on the deployment. It now uses the shared `internal/ratelimit`
-  limiter, keyed by the caller's organization and derived server-side from the
-  authenticated principal. Because it is the same store as the API and login
-  limits, the AI budget is shared across replicas when Redis is configured
-  instead of being multiplied by the replica count. The policy fails open, as a
-  cost and fairness control should: an unreachable counter must not take the
-  assistant down. `TestAILimitIsPerOrganization` and
-  `TestAILimitIsConcurrencySafe` (run under `-race`) are the regressions. The
-  setting is validated at startup, so a negative
-  `FORGECRM_AI_MAX_REQUESTS_PER_MIN` is a startup error rather than a wiring
-  failure.
+- **Лимитер запросов ИИ был с гонкой и делил один бакет между всеми тенантами.**
+  Лимитер держал срез временных меток в сервисе и добавлял в него из каждой горутины
+  запроса без блокировки: гонка данных и при неудачном чередовании запись в срез,
+  которая повреждает память или паникует, роняя процесс при обычном параллельном
+  использовании. Это был также единый глобальный бакет, поэтому одна занятая
+  организация могла израсходовать бюджет минуты и отказать ассистенту всем другим
+  тенантам развёртывания. Теперь он использует общий лимитер `internal/ratelimit`, с
+  ключом по организации вызывающего, выведенным на сервере из аутентифицированного
+  принципала. Поскольку это то же хранилище, что лимиты API и входа, бюджет ИИ
+  разделяется между репликами, когда настроен Redis, а не умножается на число реплик.
+  Политика работает fail-open, как и должно управление стоимостью и справедливостью:
+  недостижимый счётчик не должен валить ассистента. `TestAILimitIsPerOrganization` и
+  `TestAILimitIsConcurrencySafe` (под `-race`) — регрессии. Настройка валидируется при
+  старте, поэтому отрицательный `FORGECRM_AI_MAX_REQUESTS_PER_MIN` — это ошибка старта,
+  а не сбой связывания.
 
-- **`scripts/docs-check.sh` reported 98 broken links that were not broken.** The
-  link scan walked into `frontend/node_modules` and read the READMEs of vendored
-  packages, so the CI job failed on links inside dependencies nobody maintains.
-  The scan now excludes `node_modules`, `.git`, `dist` and `coverage`. The script
-  also now checks that the table and migration counts in `docs/database/schema.md`
-  match the code, which is how the document had drifted to "65 tables, 19
-  migrations" three migrations after it was last true.
+- **`scripts/docs-check.sh` сообщал о 98 неработающих ссылках, которые не были
+  неработающими.** Сканирование ссылок заходило в `frontend/node_modules` и читало
+  README вендоренных пакетов, поэтому задание CI падало на ссылках внутри зависимостей,
+  которые никто не сопровождает. Сканирование теперь исключает `node_modules`, `.git`,
+  `dist` и `coverage`. Скрипт также теперь проверяет, что счётчики таблиц и миграций в
+  `docs/database/schema.md` совпадают с кодом, — именно так документ разошёлся до
+  «65 таблиц, 19 миграций» через три миграции после того, как это было верным.
 
-- **A mistyped retention window was accepted and silently ignored.** The
-  `RetentionConfig` documentation promised that a policy key the registry does not
-  know is refused at startup, but nothing enforced it: `parseRetentionWindows`
-  accepted any key, the runner looked it up, missed, and used the default window.
-  An operator who set `simulation_run=720h` instead of `simulation_runs=720h`
-  would believe they had shortened a window that was never changed. `Load` now
-  calls `retention.ValidateWindows`, which refuses an unknown key with a message
-  naming it and listing the known keys.
+- **Опечатанное окно хранения принималось и молча игнорировалось.** Документация
+  `RetentionConfig` обещала, что ключ политики, которого реестр не знает, отклоняется
+  при старте, но ничто это не обеспечивало: `parseRetentionWindows` принимал любой ключ,
+  runner искал его, не находил и использовал окно по умолчанию. Оператор, задавший
+  `simulation_run=720h` вместо `simulation_runs=720h`, поверил бы, что сократил окно,
+  которое никогда не менялось. `Load` теперь вызывает `retention.ValidateWindows`,
+  который отклоняет неизвестный ключ сообщением, называющим его и перечисляющим
+  известные ключи.
 
-- **The Forecasting & Risk Lab.** Two explainable intelligence surfaces built on
-  the same pure-core pattern as the Simulation Lab. The maths lives in
-  `internal/analytics` (`forecast-v1`): mean, moving-average and trend methods
-  over integer-minor-unit money, with the history window bounded by
-  `MinHistoryPeriods=3`, `MaxHistoryPeriods=240` and the horizon by
-  `MaxForecastHorizon=36`. The naive (last-value) projection is the baseline the
-  measured error is compared against, not a selectable method. `internal/forecast` reads the revenue history through
-  `crm.Service` under the caller's principal and persists a run to
-  `forecast_runs`, freezing its parameters, its history and the algorithm version
-  so a projection stays explainable after the CRM data moves on. A projection is
-  never shown alone: the observed series, the measured out-of-sample error (MAE)
-  and the naive baseline sit beside it, and a method that fails to beat the
-  baseline says so rather than presenting a number. Too-short history is an error,
-  not a fabricated figure. `internal/risk` scans the CRM for explainable
-  conditions (stalled deal, overdue task, account without contact, unusual deal
-  amount, conversion drop, stage concentration) and keeps a signal only while it
-  holds, with a partial unique index on the live signal per organization and type;
-  each signal cites the evidence rows behind it. Thresholds are stored per
-  organization in `risk_thresholds`, editable, and validated server-side so an
-  out-of-range value returns 422 with a reason rather than a raw constraint error.
-  Migration `0020_forecasting_risk` adds the three tables and the four
-  permissions (`forecast.read`, `forecast.run`, `risk.read`, `risk.manage`). The
-  API adds forecast runs and a session-only catalog, and risk signals, scan,
-  status transitions and thresholds; the frontend adds `Forecasting` and `Risk`
-  pages that state plainly when there is not enough history. `internal/testsupport/
-  intelligence_test.go` covers the reader SQL, scan reconciliation against real
-  rows, the partial unique index and the permission seeds on PostgreSQL, and the
-  Chromium suite covers compute → accuracy → observed series and scan → thresholds
-  against the real stack.
+- **Forecasting & Risk Lab.** Две объяснимые поверхности интеллекта, построенные на том
+  же паттерне чистого ядра, что Simulation Lab. Математика живёт в `internal/analytics`
+  (`forecast-v1`): методы среднего, скользящего среднего и тренда над деньгами в целых
+  минорных единицах, с окном истории, ограниченным `MinHistoryPeriods=3`,
+  `MaxHistoryPeriods=240`, и горизонтом, ограниченным `MaxForecastHorizon=36`. Наивная
+  (по последнему значению) проекция — это базовая линия, против которой сравнивается
+  измеренная ошибка, а не выбираемый метод. `internal/forecast` читает историю выручки
+  через `crm.Service` под принципалом вызывающего и сохраняет прогон в `forecast_runs`,
+  замораживая его параметры, его историю и версию алгоритма, чтобы проекция оставалась
+  объяснимой после того, как данные CRM уйдут вперёд. Проекция никогда не показывается
+  в одиночку: наблюдаемый ряд, измеренная ошибка вне выборки (MAE) и наивная базовая
+  линия стоят рядом, а метод, не побивающий базовую линию, говорит об этом, а не
+  предъявляет число. Слишком короткая история — это ошибка, а не выдуманная цифра.
+  `internal/risk` сканирует CRM на объяснимые условия (застрявшая сделка, просроченная
+  задача, аккаунт без контакта, необычная сумма сделки, падение конверсии, концентрация
+  стадий) и держит сигнал, только пока он держится, с частичным уникальным индексом по
+  живому сигналу на организацию и тип; каждый сигнал ссылается на строки-доказательства
+  за ним. Пороги хранятся по организации в `risk_thresholds`, редактируемы и
+  валидируются на сервере, поэтому значение вне диапазона возвращает 422 с причиной, а
+  не сырую ошибку ограничения. Миграция `0020_forecasting_risk` добавляет три таблицы и
+  четыре разрешения (`forecast.read`, `forecast.run`, `risk.read`, `risk.manage`). API
+  добавляет прогоны прогнозов и каталог только для сессии, а также сигналы риска, обход,
+  переходы статуса и пороги; фронтенд добавляет страницы `Forecasting` и `Risk`, которые
+  прямо сообщают, когда истории недостаточно. `internal/testsupport/intelligence_test.go`
+  покрывает SQL читателя, сверку обхода против реальных строк, частичный уникальный
+  индекс и сиды разрешений на PostgreSQL, а набор в Chromium покрывает compute →
+  accuracy → observed series и scan → thresholds против реального стека.
 
-- **The Simulation Lab.** A saved "what if" scenario is computed against the live
-  CRM and reported as a comparison, without ever modifying CRM data. Three
-  scenario kinds are real: a **funnel** walk over pipeline stages (change deal
-  inflow or a stage's conversion), a **revenue** model (change average ticket,
-  win rate or deal count), and a **retention** model (change the churn rate). The
-  maths lives in `internal/analytics`, a pure package that imports only the
-  standard library and never uses a float for money — amounts are integer minor
-  units, and every operation that can produce a fraction rounds once at a defined
-  boundary. `internal/simulate` reads the baseline through `crm.Service` under the
-  caller's principal and persists scenarios and runs in `simulation_scenarios` /
-  `simulation_runs` (migration `0019_simulation_lab`), with three seeded
-  permissions (`simulation.read`, `simulation.manage`, `simulation.run`). A run
-  freezes its parameters, its baseline and the algorithm version, so a result
-  computed months ago stays interpretable and reproducible after the CRM data and
-  the code move on. A scenario with too little history reports "insufficient data"
-  rather than a fabricated zero. The API adds scenario CRUD, run, preview and a
-  session-only catalog; the frontend adds a `Simulation Lab` page that shows the
-  observed CRM figures and the modelled figures in separate columns, with the
-  model's assumptions stated next to them.
+- **Simulation Lab.** Сохранённый сценарий «что если» вычисляется против живой CRM и
+  сообщается как сравнение, никогда не изменяя данные CRM. Три вида сценариев реальны:
+  **funnel** — проход по стадиям воронки (изменить приток сделок или конверсию стадии),
+  модель **revenue** (изменить средний чек, долю выигрышей или число сделок) и модель
+  **retention** (изменить долю оттока). Математика живёт в `internal/analytics`, чистом
+  пакете, который импортирует только стандартную библиотеку и никогда не использует
+  float для денег — суммы это целые минорные единицы, и каждая операция, способная
+  дать дробь, округляет один раз на определённой границе. `internal/simulate` читает
+  базовую линию через `crm.Service` под принципалом вызывающего и сохраняет сценарии и
+  прогоны в `simulation_scenarios` / `simulation_runs` (миграция `0019_simulation_lab`),
+  с тремя засеянными разрешениями (`simulation.read`, `simulation.manage`,
+  `simulation.run`). Прогон замораживает свои параметры, свою базовую линию и версию
+  алгоритма, поэтому результат, вычисленный месяцы назад, остаётся интерпретируемым и
+  воспроизводимым после того, как данные CRM и код уйдут вперёд. Сценарий со слишком
+  малой историей сообщает «недостаточно данных», а не выдуманный ноль. API добавляет CRUD
+  сценариев, прогон, предпросмотр и каталог только для сессии; фронтенд добавляет
+  страницу `Simulation Lab`, которая показывает наблюдаемые цифры CRM и смоделированные
+  цифры в отдельных столбцах с допущениями модели рядом.
 
-- **A real defect fixed in the baseline reader.** `avg(amount)` over
-  `numeric(18,2)` returns a much higher scale (`500.0000000000000000`), which the
-  exact money parser refuses rather than truncating. Every revenue and retention
-  scenario therefore failed at run time. The reader now rounds the average to the
-  money scale where it is produced. The parser is left strict: rounding there
-  would hide the same class of mistake everywhere else.
+- **Реальный дефект, исправленный в читателе базовой линии.** `avg(amount)` по
+  `numeric(18,2)` возвращает гораздо больший масштаб (`500.0000000000000000`), который
+  точный парсер денег отклоняет, а не усекает. Поэтому каждый сценарий выручки и
+  удержания падал во время прогона. Читатель теперь округляет среднее до масштаба денег
+  там, где оно производится. Парсер оставлен строгим: округление там скрыло бы тот же
+  класс ошибки везде ещё.
 
-- **Tests for the Simulation Lab.** `internal/testsupport/simulation_test.go`
-  covers scenario CRUD and archiving, the per-organization unique name, parameter
-  validation on save, tenant isolation, the permission check inside the service, a
-  hand-computed funnel result, preview not persisting, insufficient-data being
-  reported, reproducibility, the down migration, and the read-only property (no
-  deal, task, activity, job or outbox row changes across a run).
-  `frontend/src/pages/SimulationPage.test.tsx` covers the page, and the Chromium
-  suite covers create → save → run → history against the real stack.
+- **Тесты для Simulation Lab.** `internal/testsupport/simulation_test.go` покрывает CRUD
+  сценариев и архивирование, уникальное имя по организации, валидацию параметров при
+  сохранении, изоляцию тенантов, проверку прав внутри сервиса, вычисленный вручную
+  результат воронки, предпросмотр без сохранения, сообщение о недостатке данных,
+  воспроизводимость, down-миграцию и свойство «только чтение» (ни одна строка сделки,
+  задачи, активности, задания или outbox не меняется за прогон).
+  `frontend/src/pages/SimulationPage.test.tsx` покрывает страницу, а набор в Chromium
+  покрывает create → save → run → history против реального стека.
 
-- **Abandoned import extraction directories are now swept.** `CleanupTemp` removed
-  the directory for the import that produced it on the path that returns normally,
-  but a worker that died mid-import left its extraction root behind, and nothing
-  ever reclaimed it — the comment claiming a "periodic maintenance sweep" named one
-  that did not exist, and the function had no callers. A new `maintenance.import_temp`
-  job, enqueued on the same hourly tick as the other maintenance jobs, removes
-  `forgecrm-import-*` directories older than two hours. The age bound is larger than
-  the 30-minute job timeout on purpose: writing into a directory keeps its mtime
-  fresh, so an import still in flight cannot have its files deleted underneath it.
+- **Брошенные каталоги распаковки импорта теперь обметаются.** `CleanupTemp` удалял
+  каталог импорта, который его произвёл, на пути нормального возврата, но воркер,
+  умерший посреди импорта, оставлял свой корень распаковки позади, и ничто его никогда
+  не возвращало — комментарий, заявлявший о «периодическом обходе обслуживания», называл
+  тот, которого не существовало, а у функции не было вызывающих. Новое задание
+  `maintenance.import_temp`, ставящееся на том же ежечасном такте, что и другие задания
+  обслуживания, удаляет каталоги `forgecrm-import-*` старше двух часов. Граница возраста
+  намеренно больше 30-минутного тайм-аута задания: запись в каталог держит его mtime
+  свежим, поэтому у импорта, всё ещё находящегося в полёте, нельзя удалить файлы из-под
+  него.
 
-- **Retention now covers the run history that nothing pruned before.** Three tables
-  grew without bound on a busy deployment and no policy touched them: finished
-  workflow runs, finished agent runs, and processed inbound events. Each is now a
-  configurable policy (`workflow_runs`, `agent_runs`, `events_inbox`) with a
-  90/90/30-day default, and each is swept by *terminal status only* — a `paused`
-  workflow run can still resume, a `running` agent run is still in flight, and a
-  `received` or `failed` event has not been handled yet, so none of them is
-  eligible however old it is. A workflow run's step records and event claims
-  cascade when the run is removed, so there is deliberately no separate policy for
-  them; sweeping them by their own timestamp would delete the history of a run that
-  is still paused. Migration `0017_retention_sweep_indexes` adds the partial
-  indexes that let each sweep find its rows without scanning the table.
+- **Хранение теперь покрывает историю прогонов, которую ничто не чистило раньше.** Три
+  таблицы росли безгранично на занятом развёртывании, и ни одна политика их не трогала:
+  завершённые прогоны workflow, завершённые прогоны агента и обработанные входящие
+  события. Каждая теперь настраиваемая политика (`workflow_runs`, `agent_runs`,
+  `events_inbox`) с умолчанием 90/90/30 дней, и каждая обметается *только по
+  терминальному статусу* — приостановленный прогон workflow может ещё возобновиться,
+  `running`-прогон агента всё ещё в полёте, а `received` или `failed` событие ещё не
+  обработано, поэтому ни одно из них не годно, каким бы старым оно ни было. Записи шагов
+  и заявки событий прогона workflow каскадируются, когда прогон удаляется, поэтому для
+  них намеренно нет отдельной политики; обход их по собственной временной метке удалил бы
+  историю прогона, который всё ещё приостановлен. Миграция `0017_retention_sweep_indexes`
+  добавляет частичные индексы, позволяющие каждому обходу находить свои строки без
+  сканирования таблицы.
 
-- **Workflow template catalog.** `internal/workflow/templates.go` ships six ready
-  CRM scenarios — an overdue-deal owner notification, a follow-up task on a stage
-  change, an inactivity reminder, a new-ticket acknowledgement, a deal-won
-  onboarding task, and a ticket priority triage — each built from
-  a trigger and steps the engine already runs. The catalog is registered against
-  `outbox.EventTypes()` at startup, so a template whose trigger is not in the
-  platform's vocabulary fails construction rather than shipping enabled and silent.
-  `POST /api/v1/workflow-templates/{id}/create` builds and validates the
-  definition server-side, so a client never supplies it.
+- **Каталог шаблонов workflow.** `internal/workflow/templates.go` поставляет шесть готовых
+  CRM-сценариев — уведомление владельца о просроченной сделке, задача-продолжение при
+  смене стадии, напоминание о бездействии, подтверждение нового обращения, задача
+  онбординга при выигрыше сделки и сортировка обращения по приоритету, — каждый построен
+  из триггера и шагов, которые движок уже выполняет. Каталог регистрируется против
+  `outbox.EventTypes()` при старте, поэтому шаблон, чей триггер не в словаре платформы,
+  падает при построении, а не поставляется включённым и молчащим.
+  `POST /api/v1/workflow-templates/{id}/create` строит и валидирует определение на
+  сервере, поэтому клиент его никогда не поставляет.
 
-- **Workflow import and export.** A workflow is a portable document with a format
-  name and a version. Import checks both before applying anything, so a document
-  from another version is refused with a reason rather than partially applied.
+- **Импорт и экспорт workflow.** Workflow — переносимый документ с именем формата и
+  версией. Импорт проверяет и то и другое, прежде чем что-либо применить, поэтому
+  документ из другой версии отклоняется с причиной, а не применяется частично.
 
-- **A structured workflow editor.** `WorkflowEditor` reads and writes the same
-  `{steps: [...]}` JSON the engine parses; the raw-JSON view is that document
-  serialised, so there is no second definition format and an edit made in either
-  view is what is saved. Step types and condition operators come from lists that
-  mirror the engine, so the form cannot offer a step that does not exist. Structural
-  rules the parser enforces are checked before save and shown per error; the server
-  remains the authority.
+- **Структурированный редактор workflow.** `WorkflowEditor` читает и пишет тот же JSON
+  `{steps: [...]}`, который разбирает движок; представление с сырым JSON — это тот же
+  документ, сериализованный, поэтому второго формата определения нет, и правка, сделанная
+  в любом из представлений, и есть то, что сохраняется. Типы шагов и операторы условий
+  берутся из списков, отражающих движок, поэтому форма не может предложить
+  несуществующий шаг. Структурные правила, которые обеспечивает парсер, проверяются перед
+  сохранением и показываются по каждой ошибке; сервер остаётся авторитетом.
 
-- **`find_deals` and `foreach` workflow steps**, with bound date filters
-  (`expected_close_before`, `updated_before`, `no_activity_since`) on `ListDeals`.
-  Every new step type carries an entry in the engine's permission map, so a
-  workflow cannot use a step to exceed its author's rights.
+- **Шаги workflow `find_deals` и `foreach`**, со связанными фильтрами даты
+  (`expected_close_before`, `updated_before`, `no_activity_since`) на `ListDeals`. У
+  каждого нового типа шага есть запись в map разрешений движка, поэтому workflow не может
+  использовать шаг, чтобы превысить права автора.
 
-- **Attachments in the CRM.** `AttachmentPanel` lists, uploads and archives the
-  files bound to an account, contact, deal or ticket, and renders only when the
-  server reports storage on. `GET /api/v1/system/capabilities` now reports `storage`
-  and `max_upload_bytes`, so a deployment with no object store shows nothing rather
-  than an upload that would answer 503. The task screen gains the contextual-AI
-  panel the other entity screens already had.
+- **Вложения в CRM.** `AttachmentPanel` перечисляет, загружает и архивирует файлы,
+  привязанные к аккаунту, контакту, сделке или обращению, и отрисовывается, только когда
+  сервер сообщает, что хранилище включено. `GET /api/v1/system/capabilities` теперь
+  сообщает `storage` и `max_upload_bytes`, поэтому развёртывание без объектного хранилища
+  показывает ничего, а не загрузку, которая ответила бы 503. Экран задачи получает панель
+  контекстного ИИ, которая уже была на других экранах сущностей.
 
-- **S3-compatible file attachments.** Documents are stored through a single
-  provider-agnostic `ObjectStore` interface, implemented for any S3-compatible
-  server (AWS S3, MinIO, Ceph RGW, B2, Wasabi) with the S3 SDK, and for an
-  in-process memory store used by tests and by a deployment that wants to try
-  attachments before wiring a bucket. Metadata lives in the existing `documents`
-  table; the object key is `org/<org>/documents/<doc><ext>`, built server-side from
-  the organization and document ids, so a client filename never reaches the key and
-  a name containing `..` cannot escape its tenant prefix. Migration 0016 adds the
-  `ticket_id`, `lead_id` and `task_id` attachment columns.
+- **Файловые вложения, совместимые с S3.** Документы хранятся через единый независимый от
+  провайдера интерфейс `ObjectStore`, реализованный для любого сервера, совместимого с S3
+  (AWS S3, MinIO, Ceph RGW, B2, Wasabi), через S3 SDK и для хранилища в памяти в процессе,
+  используемого тестами и развёртыванием, которое хочет попробовать вложения до
+  подключения бакета. Метаданные живут в существующей таблице `documents`; ключ объекта —
+  `org/<org>/documents/<doc><ext>`, строится на сервере из id организации и документа,
+  поэтому имя файла клиента никогда не достигает ключа, а имя, содержащее `..`, не может
+  выйти за префикс своего тенанта. Миграция 0016 добавляет столбцы вложений `ticket_id`,
+  `lead_id` и `task_id`.
 
-  The properties that matter, and the tests that hold them:
+  Свойства, которые важны, и тесты, которые их держат:
 
-  - **A permission is checked on every route.** Upload, read, download, presign and
-    archive each check a `documents.*` permission, and a document attached to an
-    entity additionally requires the permission to read that entity, so a file
-    cannot be used to write into or read out of a record the caller cannot see.
-    `TestStorageUploadToUnreadableEntityIsRefused` and
-    `TestStorageReadIsOrganizationScoped` cover both directions.
-  - **The object and the row are reconciled.** An upload writes the object first and
-    then the row; if the insert fails the object is deleted, so a failed upload
-    leaves nothing behind (`TestStorageInsertFailureRemovesTheObject`). The reverse
-    state — a row whose object is missing, and an object no row references — is
-    repaired by `Reconcile`, which archives the broken row rather than deleting it
-    and removes an orphan only once it is older than a grace period, so it is safe to
-    run while uploads are in flight (`TestStorageReconcileRepairsBothDirections`,
+  - **Право проверяется на каждом маршруте.** Загрузка, чтение, скачивание, presign и
+    архивирование каждое проверяет право `documents.*`, а документ, привязанный к
+    сущности, дополнительно требует права на чтение этой сущности, поэтому файл нельзя
+    использовать для записи в запись или чтения из записи, которую вызывающий не видит.
+    `TestStorageUploadToUnreadableEntityIsRefused` и
+    `TestStorageReadIsOrganizationScoped` покрывают оба направления.
+  - **Объект и строка сверяются.** Загрузка пишет объект первым, затем строку; если
+    вставка падает, объект удаляется, поэтому неудачная загрузка не оставляет ничего
+    (`TestStorageInsertFailureRemovesTheObject`). Обратное состояние — строка, чей объект
+    отсутствует, и объект, на который не ссылается ни одна строка, — чинится `Reconcile`,
+    который архивирует сломанную строку, а не удаляет её, и удаляет осиротевший объект
+    только когда он старше льготного периода, поэтому его безопасно запускать, пока
+    загрузки в полёте (`TestStorageReconcileRepairsBothDirections`,
     `TestStorageReconcileKeepsFreshOrphans`).
-  - **The endpoint is an SSRF target and is guarded as one.** A private or loopback
-    endpoint is refused unless `FORGECRM_STORAGE_ALLOW_PRIVATE_ENDPOINT=true`, and
-    credentials are read from the environment and never logged or returned.
-  - **The S3 path is tested against a real S3 server.** `internal/testsupport`
-    drives the real client — signing, path-style addressing, paginated listing,
-    presigning, 404 translation — through an in-process S3 implementation, because a
-    mock of the interface would skip all of it (`storage_s3_test.go`).
-  - **Off is a state, not an error.** A deployment with no endpoint gets a service
-    that reports itself off; `/system/capabilities` reports `storage: false` and the
-    document routes answer 503 rather than 500, so the UI hides uploads instead of
-    showing a broken screen.
+  - **Эндпоинт — цель SSRF, и охраняется как таковая.** Приватный или loopback-эндпоинт
+    отклоняется, если не задано `FORGECRM_STORAGE_ALLOW_PRIVATE_ENDPOINT=true`, а учётные
+    данные читаются из окружения и никогда не логируются и не возвращаются.
+  - **Путь S3 тестируется против реального сервера S3.** `internal/testsupport` движет
+    реальный клиент — подпись, адресация path-style, постраничное перечисление, presign,
+    перевод 404 — через реализацию S3 в процессе, потому что мок интерфейса пропустил бы
+    всё это (`storage_s3_test.go`).
+  - **Выключено — это состояние, а не ошибка.** Развёртывание без эндпоинта получает
+    сервис, который сообщает о себе off; `/system/capabilities` сообщает `storage: false`,
+    а маршруты документов отвечают 503, а не 500, поэтому UI скрывает загрузки, а не
+    показывает сломанный экран.
 
-- **Workflow automation engine.** A workflow is a trigger plus an ordered list of
-  steps, defined as JSON and stored per organization. Three trigger types are
-  supported: an event committed through the outbox, a cron schedule, and a manual
-  run. Step types are `condition`, `branch`, `create_task`, `update_deal`,
-  `create_ticket`, `notify` and `delay`. Every action goes through the same
-  `crm.Service` the HTTP API uses, so a workflow can never do anything its author
-  could not do. See `docs/architecture/workflows.md` and
-  `docs/adr/0007-workflow-automation-engine.md`.
+- **Движок автоматизации workflow.** Workflow — это триггер плюс упорядоченный список
+  шагов, определённый как JSON и хранимый по организации. Поддерживаются три типа
+  триггеров: событие, закоммиченное через outbox, cron-расписание и ручной запуск. Типы
+  шагов: `condition`, `branch`, `create_task`, `update_deal`, `create_ticket`, `notify` и
+  `delay`. Каждое действие идёт через тот же `crm.Service`, что использует HTTP API,
+  поэтому workflow никогда не может сделать то, чего не мог бы сделать его автор. См.
+  `docs/architecture/workflows.md` и `docs/adr/0007-workflow-automation-engine.md`.
 
-  The design decisions that matter, and the tests that hold them:
+  Проектные решения, которые важны, и тесты, которые их держат:
 
-  - **A workflow acts as its author, with permissions resolved at execution time,
-    not authoring time.** If the author is blocked, removed from the organization,
-    or has a role revoked, the workflow loses that authority on its next run rather
-    than carrying a stale permission set. The engine enforces the coarse permission
-    itself (`tasks.create`, `deals.change_stage`, …) because it calls the service
-    directly: the API's middleware and the MCP tool registry both check it on their
-    own paths, and without the engine's own check a user holding only
-    `workflows.manage` could author a workflow to perform an action their role
-    forbids. `TestWorkflowPermissionIsRecheckedAtExecutionTime` revokes the
-    permission and asserts the next run fails without creating anything.
-  - **Event-triggered runs are de-duplicated on `(workflow_id, event_id)`.** The
-    outbox delivers at least once, so the same event can reach the engine twice. The
-    claim is a primary-key insert, and the run row is created in the same
-    transaction; a duplicate delivery commits nothing at all, so the history stays
-    one run per event rather than one per delivery.
-    `TestWorkflowEventTriggerIsDeDuplicated` delivers one event three times and
-    asserts one run and one task.
-  - **A delay does not block a worker.** A `delay` step writes a resume instant and
-    returns; the worker's scheduler resumes the run from the recorded step index.
-    `TestWorkflowDelayPausesAndResumes` asserts nothing runs before the instant and
-    the run completes after it.
-  - **A chain that a workflow causes is bounded.** Events emitted by a step inherit
-    the run's correlation id, and the chain depth is the number of runs already
-    recorded for it. A run at the workflow's `max_depth` is recorded as `skipped`
-    rather than executed, which stops two workflows that watch each other from
-    running forever. `TestWorkflowDepthLimitStopsLoops` drives a chained event and
-    asserts it is skipped.
+  - **Workflow действует как свой автор, с разрешениями, определёнными на момент
+    исполнения, а не авторинга.** Если автор заблокирован, удалён из организации или
+    лишён роли, workflow теряет эти полномочия на следующем прогоне, а не несёт
+    устаревший набор разрешений. Движок сам обеспечивает грубое разрешение
+    (`tasks.create`, `deals.change_stage`, …), потому что вызывает сервис напрямую:
+    middleware API и реестр инструментов MCP оба проверяют его на своих путях, и без
+    собственной проверки движка пользователь, держащий только `workflows.manage`, мог бы
+    создать workflow для выполнения действия, запрещённого его ролью.
+    `TestWorkflowPermissionIsRecheckedAtExecutionTime` отзывает разрешение и утверждает,
+    что следующий прогон падает, ничего не создавая.
+  - **Прогоны по событию дедуплицируются по `(workflow_id, event_id)`.** Outbox доставляет
+    минимум один раз, поэтому одно событие может достичь движка дважды. Заявка — это
+    вставка первичного ключа, а строка прогона создаётся в той же транзакции; дублирующая
+    доставка не коммитит вообще ничего, поэтому история остаётся один прогон на событие, а
+    не один на доставку. `TestWorkflowEventTriggerIsDeDuplicated` доставляет одно событие
+    три раза и утверждает один прогон и одну задачу.
+  - **Задержка не блокирует воркер.** Шаг `delay` пишет момент возобновления и
+    возвращает управление; планировщик воркера возобновляет прогон с записанного индекса
+    шага. `TestWorkflowDelayPausesAndResumes` утверждает, что до момента ничего не
+    выполняется, а прогон завершается после него.
+  - **Цепочка, вызванная workflow, ограничена.** События, порождённые шагом, наследуют
+    correlation id прогона, а глубина цепочки — число уже записанных для него прогонов.
+    Прогон на `max_depth` workflow записывается как `skipped`, а не исполняется, что
+    останавливает два workflow, следящих друг за другом, от бесконечного выполнения.
+    `TestWorkflowDepthLimitStopsLoops` движет цепное событие и утверждает, что оно
+    пропущено.
+  - **Уведомление может адресовать только участника той же организации.** Активное
+    участие получателя проверяется перед вставкой, поэтому угаданный id пользователя не
+    может писать в ленту другого тенанта. `TestWorkflowCannotNotifyAcrossOrganizations`
+    утверждает, что прогон падает и ничего не пишется.
 
-  - **A notification can only address a member of the same organization.** The
-    recipient's active membership is verified before the insert, so a guessed user
-    id cannot write into another tenant's feed.
-    `TestWorkflowCannotNotifyAcrossOrganizations` asserts the run fails and nothing
-    is written.
+  Планировщик заявляет каждый готовый workflow, продвигая его `next_run_at` внутри той же
+  транзакции, поэтому несколько реплик воркера могут крутить цикл без двойного срабатывания.
 
-  The scheduler claims each due workflow by advancing its `next_run_at` inside the
-  same transaction, so several worker replicas can run the loop without
-  double-firing.
-
-- **`/api/v1/workflows` and `/api/v1/workflow-runs`.** List, create, read, update,
-  enable, archive and run workflows, and read a run with its per-step outcome log.
-  Reading is gated by `workflows.read`, authoring by `workflows.manage`, running by
-  `workflows.run`. A manual run is synchronous and returns the run result; a run
-  that pauses on a delay returns `202` with the run id.
+- **`/api/v1/workflows` и `/api/v1/workflow-runs`.** Список, создание, чтение, обновление,
+  включение, архивирование и запуск workflow, и чтение прогона с журналом результатов по
+  шагам. Чтение гейтится `workflows.read`, авторинг — `workflows.manage`, запуск —
+  `workflows.run`. Ручной прогон синхронный и возвращает результат прогона; прогон,
+  приостановившийся на задержке, возвращает `202` с id прогона.
 
 ### Fixed
 
-- **The contextual-AI insight cache never worked.** `ai_insights` (migration 0014)
-  had no `recommendations` or `draft` column and typed `analysis` as `jsonb`, while
-  the service inserts and reads all three with `analysis` as plain text. Every
-  cache write therefore failed on a missing column, and the failure was swallowed
-  by design — a cache write is best effort so a failed store does not fail a
-  request the user already paid for — so the feature appeared to work while every
-  page view was a new billable model call. Migration `0018_ai_insights_columns`
-  adds the two columns and converts `analysis` to `text` (unwrapping any existing
-  value with `#>> '{}'`).
+- **Кэш инсайтов контекстного ИИ никогда не работал.** У `ai_insights` (миграция 0014) не
+  было столбца `recommendations` или `draft` и `analysis` был типизирован как `jsonb`,
+  тогда как сервис вставляет и читает все три, с `analysis` как обычный текст. Поэтому
+  каждая запись в кэш падала на отсутствующем столбце, а сбой проглатывался по замыслу —
+  запись в кэш best-effort, чтобы неудачное сохранение не валило запрос, за который
+  пользователь уже заплатил, — поэтому функция выглядела работающей, тогда как каждый
+  просмотр страницы был новым платным вызовом модели. Миграция `0018_ai_insights_columns`
+  добавляет два столбца и конвертирует `analysis` в `text` (разворачивая любое
+  существующее значение через `#>> '{}'`).
 
-- **A cached insight could be served for the wrong question.** The read filtered on
-  `(organization, entity, kind)` but not on `context_hash`, even though the table's
-  unique key includes it precisely because two requests of the same kind can carry
-  different input. Asking a second question about a record returned the first
-  question's cached reply and presented it as an answer to the new one. The read now
-  filters on `context_hash`, and the lookup index leads with it.
-  `TestAssistCacheIsKeyedByTheQuestion` drives the real provider client through a
-  fake endpoint and fails if either the hash filter or the columns regress.
+- **Кэшированный инсайт мог быть отдан на неверный вопрос.** Чтение фильтровало по
+  `(organization, entity, kind)`, но не по `context_hash`, хотя уникальный ключ таблицы
+  включает его именно потому, что два запроса одного вида могут нести разный ввод. Запрос
+  второго вопроса о записи возвращал кэшированный ответ первого вопроса и подавал его как
+  ответ на новый. Чтение теперь фильтрует по `context_hash`, и индекс поиска ведёт с него.
+  `TestAssistCacheIsKeyedByTheQuestion` движет реальный клиент провайдера через фейковый
+  эндпоинт и падает, если регрессирует либо фильтр хеша, либо столбцы.
 
-- **An attachment uploaded through the UI was stored unattached and untitled.** The
-  multipart handler returned as soon as it reached the `file` part, so every part
-  after it was discarded. The frontend appends `file` first and then `title` and
-  the entity id, so a document uploaded from a deal or contact card was written to
-  the store with no link to that record and no title — the request succeeded, the
-  bytes were saved, and the attachment silently belonged to nothing. The handler
-  now reads the whole body before uploading, so the result no longer depends on
-  part order; the file is spooled to a temporary file so a large upload is still
-  not held in memory. `TestUploadPartsKeepsMetadataAfterTheFile` fails against the
-  old handler and passes against this one.
+- **Вложение, загруженное через UI, сохранялось непривязанным и без заголовка.** Обработчик
+  multipart возвращался, как только достигал части `file`, поэтому каждая часть после неё
+  отбрасывалась. Фронтенд добавляет `file` первым, затем `title` и id сущности, поэтому
+  документ, загруженный с карточки сделки или контакта, записывался в хранилище без связи с
+  этой записью и без заголовка — запрос успешен, байты сохранены, а вложение молча
+  принадлежало ничему. Обработчик теперь читает всё тело перед загрузкой, поэтому результат
+  больше не зависит от порядка частей; файл буферизуется во временный файл, поэтому большая
+  загрузка всё ещё не держится в памяти. `TestUploadPartsKeepsMetadataAfterTheFile` падает
+  против старого обработчика и проходит против этого.
 
-- **The retention sweep could not remove an expired idempotency key.** The delete
-  statement selected a column called `id`, but `idempotency_keys` is keyed on
-  `(scope, key)` and has no `id` column, so the policy failed with
-  `column "id" does not exist` on every real run. The failure was invisible: it is
-  recorded in that policy's result and the worker only logs it, so the table grew
-  without bound while the sweep reported success for the policies beside it. The
-  delete now selects `ctid`, which is what the statement's own comment said it did
-  and which exists on every swept table regardless of its key.
-  `TestRetentionSweepsAKeylessTable` fails against the old statement and passes
-  against this one.
+- **Обход хранения не мог удалить истёкший ключ идемпотентности.** Выражение удаления
+  выбирало столбец `id`, но `idempotency_keys` имеет ключ `(scope, key)` и не имеет столбца
+  `id`, поэтому политика падала с `column "id" does not exist` на каждом реальном прогоне.
+  Сбой был невидим: он записан в результат этой политики, а воркер только логирует его,
+  поэтому таблица росла безгранично, тогда как обход сообщал об успехе для политик рядом.
+  Удаление теперь выбирает `ctid`, что и говорил собственный комментарий выражения и что
+  существует на каждой обметаемой таблице независимо от её ключа.
+  `TestRetentionSweepsAKeylessTable` падает против старого выражения и проходит против
+  этого.
 
-- **The worker aborted an in-flight job on shutdown instead of draining it.** Each
-  job's context derived from the signal context, so SIGTERM cancelled the job in
-  hand at the same instant it stopped the poll loops: a job that was mid-write was
-  killed with its row still `running` and its write lost, and the requeue sweep
-  only returned the row fifteen minutes later. The loops and the claim step now
-  watch a context cancelled on the signal, while job execution and the bookkeeping
-  that records its outcome watch a separate one cancelled only after
-  `FORGECRM_WORKER_SHUTDOWN_GRACE` (30s default) has elapsed.
-  `docker-compose.yml` sets `stop_grace_period: 45s` on the worker so Docker does
-  not SIGKILL it before the drain window closes. `TestWorkerDrainsInFlightJobOnShutdown`
-  fails against the old wiring and passes against this one.
+- **Воркер прерывал задание в полёте при завершении, а не сливал его.** Контекст каждого
+  задания происходил от контекста сигнала, поэтому SIGTERM отменял задание в руках в тот
+  же миг, когда останавливал циклы опроса: задание, бывшее посреди записи, убивалось с
+  его строкой всё ещё `running` и его запись терялась, а обход возврата возвращал строку
+  только пятнадцать минут спустя. Циклы и шаг заявки теперь следят за контекстом,
+  отменяемым по сигналу, тогда как исполнение задания и учёт, записывающий его результат,
+  следят за отдельным, отменяемым только после истечения `FORGECRM_WORKER_SHUTDOWN_GRACE`
+  (умолчание 30с). `docker-compose.yml` задаёт `stop_grace_period: 45s` на воркере, чтобы
+  Docker не убивал его SIGKILL до закрытия окна слива.
+  `TestWorkerDrainsInFlightJobOnShutdown` падает против старого связывания и проходит
+  против этого.
 
-- **A user could see their sessions but not end one.** The list endpoint, the
-  revoke endpoint and `sessionsApi.revoke` all existed, but nothing in the
-  interface called revoke, so a session left open on a lost device could only be
-  closed by a password change. The Security page's sessions tab now offers a
-  revoke control on every session but the current one.
+- **Пользователь мог видеть свои сессии, но не завершить одну.** Эндпоинт списка, эндпоинт
+  отзыва и `sessionsApi.revoke` все существовали, но ничто в интерфейсе не вызывало отзыв,
+  поэтому сессию, оставленную открытой на потерянном устройстве, можно было закрыть только
+  сменой пароля. Вкладка sessions страницы Security теперь предлагает элемент отзыва на
+  каждой сессии, кроме текущей.
 
-- **`expected_close_date` failed to scan.** The column is a PostgreSQL `date` and
-  was read into a `*string`, which pgx cannot encode in binary format, so any deal
-  that had a close date failed to load from `ListDeals`, `GetDeal` and the workflow
-  deal sweep. The column is cast to text, which is the ISO date the API already
-  promised.
+- **`expected_close_date` не сканировался.** Столбец — это PostgreSQL `date`, и он читался
+  в `*string`, что pgx не может закодировать в бинарном формате, поэтому любая сделка, у
+  которой была дата закрытия, не загружалась из `ListDeals`, `GetDeal` и обхода сделок
+  workflow. Столбец приводится к тексту, что и есть ISO-дата, которую API уже обещал.
 
-- **A redelivered event left an orphan run per delivery.** The event claim ran after
-  the run row was created, so every duplicate delivery of the same event wrote a
-  second `workflow_runs` row and marked it `skipped`. Under an outbox that retries,
-  this accumulated without bound and made "one run per event" false. The claim and
-  the run creation are now one transaction, and a duplicate commits nothing.
+- **Повторно доставленное событие оставляло осиротевший прогон на доставку.** Заявка
+  события выполнялась после создания строки прогона, поэтому каждая дублирующая доставка
+  одного события писала вторую строку `workflow_runs` и помечала её `skipped`. При outbox,
+  который повторяет, это накапливалось безгранично и делало «один прогон на событие»
+  ложным. Заявка и создание прогона теперь одна транзакция, а дубликат не коммитит ничего.
 
-- **A dead webhook delivery left no durable record.** When a subscriber's endpoint
-  kept failing, the delivery was marked `dead` and nothing else happened: no audit
-  entry, no counter. An operator reading the audit trail could not see that a
-  customer had stopped receiving events, and there was no value to alert on. The
-  terminal transition now writes exactly one `webhooks.delivery_dead_lettered`
-  audit entry and stamps `dead_lettered_at`. "Exactly one" is enforced in the
-  database: the transition and the `status <> 'dead'` guard are one `UPDATE`, so a
-  delivery several workers raced to fail produces one entry, not one per worker.
-  `TestDeliveryDeadLetterIsAuditedOnce` asserts the count is 1 and that the entry
-  is attributable to the owning organization.
-- **Replaying a dead delivery erased how many times it had failed.** `Replay` reset
-  `attempts` to zero and left nothing behind, so an operator could not tell a
-  delivery that had just died from one that had already exhausted two full budgets.
-  The per-window `attempts` is still reset — that is what grants the fresh retry
-  budget — but a new `replay_count`, never reset, records the lifetime number of
-  windows, and the frontend shows it next to the attempt count.
-- **A delivery could be replayed while it was being sent.** The replay guard refused
-  only `status = 'pending'`, but a delivery a worker has claimed is `delivering`. An
-  operator could therefore replay a delivery mid-send, granting a second retry window
-  that the attempt already in progress would consume, with the possibility of one
-  event producing two outbound POSTs. The guard now refuses both in-flight states
-  (`status NOT IN ('pending', 'delivering')`), which is what ADR 0004 already claimed
-  to do.
-- **A delivery could be replayed under a subscription it did not belong to.** The
-  replay route nests a delivery under its subscription
-  (`/webhooks/{id}/deliveries/{deliveryId}/replay`) and the OpenAPI document marks
-  both path parameters required, but the handler read only `deliveryId` and ignored
-  `{id}`. The mutating statement now filters on `subscription_id` as well as
-  `organization_id`, so the subscription named in the path is part of what identifies
-  the delivery and a mismatch is refused.
+- **Мёртвая доставка вебхука не оставляла долговечной записи.** Когда эндпоинт подписчика
+  продолжал падать, доставка помечалась `dead`, и больше ничего не происходило: ни записи
+  аудита, ни счётчика. Оператор, читающий журнал аудита, не мог увидеть, что клиент
+  перестал получать события, и не было значения, по которому алертить. Терминальный переход
+  теперь пишет ровно одну запись аудита `webhooks.delivery_dead_lettered` и ставит
+  `dead_lettered_at`. «Ровно одну» обеспечивается в базе: переход и защита
+  `status <> 'dead'` — один `UPDATE`, поэтому доставка, которую несколько воркеров
+  гонялись завалить, производит одну запись, а не одну на воркер.
+  `TestDeliveryDeadLetterIsAuditedOnce` утверждает, что счётчик равен 1, и что запись
+  приписывается владеющей организации.
+- **Повтор мёртвой доставки стирал, сколько раз она падала.** `Replay` сбрасывал `attempts`
+  в ноль и не оставлял ничего, поэтому оператор не мог отличить доставку, которая только
+  что умерла, от той, что уже исчерпала два полных бюджета. Пооконный `attempts` всё ещё
+  сбрасывается — именно это даёт свежий бюджет повторов, — но новый `replay_count`, никогда
+  не сбрасываемый, записывает число окон за всё время, и фронтенд показывает его рядом со
+  счётчиком попыток.
+- **Доставку можно было повторить, пока её отправляли.** Защита повтора отклоняла только
+  `status = 'pending'`, но забранная воркером доставка — это `delivering`. Оператор поэтому
+  мог повторить доставку посреди отправки, дав второе окно повторов, которое потребит уже
+  идущая попытка, с возможностью одного события, производящего два исходящих POST. Защита
+  теперь отклоняет оба состояния «в полёте» (`status NOT IN ('pending', 'delivering')`),
+  что ADR 0004 уже заявлял делать.
+- **Доставку можно было повторить под подпиской, которой она не принадлежала.** Маршрут
+  повтора вкладывает доставку в её подписку
+  (`/webhooks/{id}/deliveries/{deliveryId}/replay`), и документ OpenAPI помечает оба
+  параметра пути обязательными, но обработчик читал только `deliveryId` и игнорировал
+  `{id}`. Мутирующее выражение теперь фильтрует по `subscription_id`, а также
+  `organization_id`, поэтому подписка, названная в пути, — часть того, что идентифицирует
+  доставку, а несовпадение отклоняется.
 
 ### Added
 
-- **Human-in-the-loop agent approvals, with a second factor for destructive
-  decisions.** An agent proposes an action; a person decides it. Nothing the agent
-  proposes runs on its own. The decision carries the arguments hash the operator was
-  shown and the server refuses a decision whose hash does not match the stored one,
-  so approving cannot be redirected to a different payload. An action stored at the
-  `destructive` risk tier additionally requires the deciding session to have
-  presented a second factor within a short window: a lapsed window is refused with
-  `403` and a `urn:forgecrm:error:forbidden` reason, and `POST /api/v1/auth/step-up`
-  re-verifies the factor and refreshes the window. The factor is never read from the
-  request body, so it cannot be asserted by the caller. The approvals screen
-  (`/approvals`) shows the exact arguments, the binding hash and the risk tier, and
-  prompts for the factor inline when the server refuses. See
+- **Согласования агента с участием человека, со вторым фактором для опасных решений.**
+  Агент предлагает действие; человек решает его. Ничто предложенное агентом не выполняется
+  само. Решение несёт хеш аргументов, который видел оператор, и сервер отклоняет решение,
+  чей хеш не совпадает с сохранённым, поэтому одобрение нельзя перенаправить на другой
+  payload. Действие, сохранённое на уровне риска `destructive`, дополнительно требует,
+  чтобы решающая сессия предъявила второй фактор в течение короткого окна: истёкшее окно
+  отклоняется с `403` и причиной `urn:forgecrm:error:forbidden`, а
+  `POST /api/v1/auth/step-up` заново проверяет фактор и обновляет окно. Фактор никогда не
+  читается из тела запроса, поэтому его нельзя заявить вызывающим. Экран согласований
+  (`/approvals`) показывает точные аргументы, связывающий хеш и уровень риска и запрашивает
+  фактор встроенно, когда сервер отказывает. См.
   `docs/adr/0005-hitl-agent-execution-model.md`.
-- **Dead-letter metrics.** `GET /api/v1/admin/metrics` now reports
-  `webhook_deliveries_dead` (deliveries currently dead, which falls on a
-  successful replay; named without a `_total` suffix because it is a gauge, so
-  `rate()` over it would be meaningless), `webhook_deliveries_dead_lettered_total` (transitions ever,
-  read from the append-only audit trail, so it only rises and is the value to alert
-  on) and `webhook_deliveries_pending_total`. All three are unlabelled scalars: a
-  tenant id, target URL or event id in a metric label would multiply the series
-  without bound and leak a customer's endpoint into the monitoring system. They are
-  read from the database rather than held in a process, so they are correct when
-  several workers and API replicas run at once.
+- **Метрики dead-letter.** `GET /api/v1/admin/metrics` теперь сообщает
+  `webhook_deliveries_dead` (доставки, мёртвые сейчас, что падает при успешном повторе;
+  назван без суффикса `_total`, потому что это gauge, поэтому `rate()` по нему был бы
+  бессмысленным), `webhook_deliveries_dead_lettered_total` (переходы за всё время,
+  читается из журнала аудита «только добавление», поэтому только растёт и является
+  значением, по которому алертить) и `webhook_deliveries_pending_total`. Все три —
+  неразмеченные скаляры: id тенанта, целевой URL или id события в метке метрики умножал бы
+  ряды безгранично и утекал бы эндпоинт клиента в систему мониторинга. Они читаются из
+  базы, а не держатся в процессе, поэтому корректны, когда одновременно работают несколько
+  воркеров и реплик API.
 
 ### Fixed
 
-- **Outgoing webhooks were recorded but never sent.** The dispatcher created a
-  `webhook_deliveries` row for every subscription matching an event, and no code
-  ever read those rows back. A subscription could be created, verified with a
-  test, receive a green status — and the customer's endpoint was never called for
-  a real event. The row sat `pending` until the retention sweep deleted it. The
-  worker now runs a delivery loop that claims pending deliveries, signs the
-  payload and posts it, with exponential backoff and a bounded attempt count.
-  `TestOutboundWebhookIsActuallyDelivered` asserts a real HTTP server receives a
-  request whose signature verifies against the subscription's own secret.
-- **Two workers could send the same webhook twice.** Deliveries were selected
-  without being claimed, so two workers polling at the same moment both read the
-  same row and both POSTed it. The customer's endpoint saw two deliveries for one
-  domain change, which for a non-idempotent receiver is a duplicated side effect.
-  Claiming is now a single `UPDATE ... FOR UPDATE SKIP LOCKED`, and a unique
-  index on `(subscription_id, outbox_event_id)` rejects a duplicate delivery row
-  even if the dispatcher runs concurrently with itself.
-- **A failed outbox event was retried forever.** `MarkFailed` incremented the
-  attempt count and nothing ever acted on it, so a permanently broken event was
-  re-read by every drain until the end of the deployment. Retries are now bounded
-  and an exhausted event is dead-lettered, so the failure is terminal and
-  visible rather than an unbounded loop.
-- **Outbox draining could dispatch the same event twice.** The drain loop read
-  pending events without claiming them, so the scheduled drain and the queue job
-  could both process one event. Both paths now claim, and a claim abandoned by a
-  crashed worker is released on the next worker start instead of stranding the
-  event.
-- **The retention sweep never ran.** The handler existed and nothing enqueued
-  it, so delivered webhooks, finished jobs and application logs accumulated
-  without bound — a slow disk-filling defect rather than a theoretical one. The
-  worker now enqueues the sweep hourly, idempotently, so a slow sweep is never
-  doubled up by the next tick.
+- **Исходящие вебхуки записывались, но никогда не отправлялись.** Диспетчер создавал
+  строку `webhook_deliveries` для каждой подписки, совпадающей с событием, и никакой код
+  никогда не читал эти строки обратно. Подписку можно было создать, проверить тестом,
+  получить зелёный статус — а эндпоинт клиента никогда не вызывался для реального события.
+  Строка сидела `pending`, пока обход хранения её не удалял. Воркер теперь крутит цикл
+  доставки, который заявляет ожидающие доставки, подписывает payload и отправляет его, с
+  экспоненциальной задержкой и ограниченным числом попыток.
+  `TestOutboundWebhookIsActuallyDelivered` утверждает, что реальный HTTP-сервер получает
+  запрос, чья подпись проверяется против собственного секрета подписки.
+- **Два воркера могли отправить один вебхук дважды.** Доставки выбирались без заявки,
+  поэтому два воркера, опрашивающие в один момент, оба читали одну строку и оба отправляли
+  её POST. Эндпоинт клиента видел две доставки для одного изменения домена, что для
+  неидемпотентного получателя является дублированным побочным эффектом. Заявка теперь —
+  один `UPDATE ... FOR UPDATE SKIP LOCKED`, а уникальный индекс по
+  `(subscription_id, outbox_event_id)` отклоняет дублирующую строку доставки, даже если
+  диспетчер работает параллельно сам с собой.
+- **Проваленное событие outbox повторялось вечно.** `MarkFailed` увеличивал счётчик
+  попыток, и ничто никогда на него не реагировало, поэтому навсегда сломанное событие
+  перечитывалось каждым разбором до конца развёртывания. Повторы теперь ограничены, а
+  исчерпанное событие попадает в dead-letter, поэтому сбой терминален и видим, а не
+  бесконечный цикл.
+- **Разбор outbox мог доставить одно событие дважды.** Цикл разбора читал ожидающие
+  события без заявки, поэтому запланированный разбор и задание очереди могли оба
+  обработать одно событие. Оба пути теперь заявляют, а заявка, брошенная упавшим
+  воркером, освобождается при следующем старте воркера, а не маринует событие.
+- **Обход хранения никогда не выполнялся.** Обработчик существовал, и ничто не ставило
+  его в очередь, поэтому доставленные вебхуки, завершённые задания и логи приложения
+  накапливались безгранично — медленный дефект заполнения диска, а не теоретический.
+  Воркер теперь ставит обход ежечасно, идемпотентно, поэтому медленный обход никогда не
+  дублируется следующим тактом.
 
 ### Security
 
-- **`X-Forwarded-For` was believed from any caller.** `chi`'s
-  `middleware.RealIP` rewrote `RemoteAddr` from the forwarding header for every
-  request, so a client could choose the address it was rate limited and logged
-  under: rotating the header gave it an unlimited supply of fresh rate-limit
-  buckets, and a brute-force attempt was attributed to addresses the attacker
-  invented. The middleware is removed. The client address is now resolved once,
-  from the connection address unless the peer is listed in the new
-  `FORGECRM_TRUSTED_PROXIES` setting, and the proxy chain is read right-to-left
-  skipping trusted hops. See `docs/operations/README.md`.
+- **`X-Forwarded-For` принимался на веру от любого вызывающего.** `middleware.RealIP` из
+  `chi` переписывал `RemoteAddr` из заголовка перенаправления для каждого запроса, поэтому
+  клиент мог выбрать адрес, под которым его ограничивали и логировали: вращение заголовка
+  давало ему неограниченный запас свежих бакетов ограничения частоты, а попытка перебора
+  приписывалась адресам, выдуманным атакующим. Middleware удалён. Адрес клиента теперь
+  определяется один раз, из адреса соединения, если только узел не перечислен в новой
+  настройке `FORGECRM_TRUSTED_PROXIES`, а цепочка прокси читается справа налево, пропуская
+  доверенные узлы. См. `docs/operations/README.md`.
 
 ### Fixed
 
-- **Data race in the rate limiter, with a possible process-killing panic.** The
-  limiter kept its counters in a plain `map` that every request goroutine read
-  and wrote. `net/http` serves each request in its own goroutine, so this was a
-  live race rather than a theoretical one: `go test -race` reports it, and a
-  sufficiently unlucky interleaving of concurrent map writes is an unrecoverable
-  runtime panic. Counters now live behind a mutex in `internal/ratelimit`,
-  covered by a 64-goroutine test that asserts no increment is lost.
-- **The limiter's key map grew without bound.** `Sweep` existed but had no
-  caller, so expired windows were never reclaimed. Since the keys are client
-  addresses, anyone able to send a request could grow the map until the process
-  was killed. The store now sweeps on a timer and holds a maximum key count.
-- **`WriteError` panicked on a typed-nil error.** `errors.As` reports success for
-  an error interface holding a nil `*APIError`, leaving the target nil; the
-  following field access then panicked *inside the error path*, so a handler that
-  returned a typed nil turned a recoverable failure into a crash. Found by a test
-  written for the new envelope below, which is the kind of defect that a suite
-  covering only the happy path does not reach.
+- **Гонка данных в ограничителе частоты с возможной паникой, убивающей процесс.**
+  Лимитер держал счётчики в обычном `map`, который читала и писала каждая горутина запроса.
+  `net/http` обслуживает каждый запрос в своей горутине, поэтому это была живая гонка, а не
+  теоретическая: `go test -race` её сообщает, а достаточно неудачное чередование
+  параллельных записей в map — невосстановимая паника рантайма. Счётчики теперь живут за
+  мьютексом в `internal/ratelimit`, покрытые тестом на 64 горутины, утверждающим, что ни
+  один инкремент не потерян.
+- **Map ключей лимитера рос безгранично.** `Sweep` существовал, но у него не было
+  вызывающего, поэтому истёкшие окна никогда не возвращались. Поскольку ключи — адреса
+  клиентов, любой, способный отправить запрос, мог растить map, пока процесс не будет
+  убит. Хранилище теперь обметает по таймеру и держит максимальное число ключей.
+- **`WriteError` паниковал на типизированном nil-ошибке.** `errors.As` сообщает успех для
+  интерфейса ошибки, держащего nil `*APIError`, оставляя цель nil; последующий доступ к
+  полю затем паниковал *внутри пути ошибки*, поэтому обработчик, вернувший типизированный
+  nil, превращал восстановимый сбой в краш. Найдено тестом, написанным для нового конверта
+  ниже, — именно такой дефект набор, покрывающий только счастливый путь, не достигает.
 
 ### Added
 
-- **Distributed rate limiting.** `internal/ratelimit` separates the counter
-  store from the policy. `MemoryStore` is the default and keeps counters in the
-  process; `RedisStore` shares them across replicas using a single Lua script, so
-  the read-modify-write is atomic on the server rather than in the client. Select
-  it with `FORGECRM_RATE_LIMIT_STORE=redis` and `FORGECRM_REDIS_URL`. The failure
-  mode is per policy: general API traffic fails open, authentication fails closed,
-  and a store error is never reported as a `429`. Both decisions are marked
-  degraded and logged. Redis is opt-in through a compose profile, so the default
-  `docker compose up` starts nothing extra. See `docs/operations/README.md`.
-- **Rate-limit response headers.** `RateLimit-Limit`, `RateLimit-Remaining`,
-  `RateLimit-Reset` and `Retry-After` are emitted, along with the older
-  `X-RateLimit-*` names, so a client can see the budget instead of only
-  discovering it by being refused.
-- **Bulk archive for accounts, contacts and deals.** `POST
-  /api/v1/{accounts,contacts,deals}/bulk-archive` takes up to 200 ids and returns
-  which records were archived and which were not, with a reason for each. A
-  record that is missing or already archived is reported in `failed` rather than
-  failing the request, so one bad id cannot discard the rest of the batch. Every
-  record is archived through the same org-scoped path as the single-record
-  endpoint, so it emits the same events and writes the same audit entries. The
-  lists gained a checkbox column and a bulk action that keeps a partial result
-  visible instead of collapsing it into a success message.
+- **Распределённое ограничение частоты.** `internal/ratelimit` отделяет хранилище счётчиков
+  от политики. `MemoryStore` — умолчание и держит счётчики в процессе; `RedisStore` делит
+  их между репликами одним Lua-скриптом, поэтому чтение-изменение-запись атомарно на
+  сервере, а не в клиенте. Выберите его через `FORGECRM_RATE_LIMIT_STORE=redis` и
+  `FORGECRM_REDIS_URL`. Режим отказа — на политику: общий трафик API работает fail-open,
+  аутентификация fail-closed, а ошибка хранилища никогда не сообщается как `429`. Оба
+  решения помечаются деградированными и логируются. Redis включается по согласию через
+  профиль compose, поэтому `docker compose up` по умолчанию не запускает ничего лишнего.
+  См. `docs/operations/README.md`.
+- **Заголовки ответа ограничения частоты.** Выводятся `RateLimit-Limit`,
+  `RateLimit-Remaining`, `RateLimit-Reset` и `Retry-After`, вместе с более старыми именами
+  `X-RateLimit-*`, чтобы клиент видел бюджет, а не только обнаруживал его, получая отказ.
+- **Массовое архивирование для аккаунтов, контактов и сделок.** `POST
+  /api/v1/{accounts,contacts,deals}/bulk-archive` принимает до 200 id и возвращает, какие
+  записи архивированы, а какие нет, с причиной для каждой. Отсутствующая или уже
+  архивированная запись сообщается в `failed`, а не валит запрос, поэтому один плохой id не
+  может отбросить остальную часть пакета. Каждая запись архивируется через тот же путь с
+  областью организации, что и эндпоинт одной записи, поэтому он порождает те же события и
+  пишет те же записи аудита. Списки получили столбец флажка и массовое действие, которое
+  держит частичный результат видимым, а не сворачивает его в сообщение об успехе.
 
-- **RFC 9457 Problem Details in every error response.** The error envelope now
-  carries `type`, `title`, `status`, `detail` and `instance` alongside the
-  existing `error` object, so a generic client or gateway can consume a failure
-  without knowing this API. Both views are derived from one `APIError`, so they
-  cannot disagree, and `error.code` remains the value to branch on.
-  - `retryable` states whether resending the identical request could succeed. It
-    is not derivable from the status code: a 500 may be a transient fault or a
-    deterministic defect, and retrying a defect is how a small incident becomes a
-    large one, so 500 reports `false` while 429, 502, 503 and 504 report `true`.
-  - `instance` is the request path with the query string removed, because a query
-    string can carry tokens and personal data that must not be echoed into logs
-    or client-side error reporting.
-  - `correlation_id` is now emitted next to `request_id`; both carry the same
-    value, since the log pipeline and the frontend read different names.
-  - `type` is a URN, not an https URL: no dereferenceable error catalogue is
-    operated, and a link that 404s is worse than an identifier that never claimed
-    to resolve.
+- **Problem Details RFC 9457 в каждом ответе об ошибке.** Конверт ошибок теперь несёт
+  `type`, `title`, `status`, `detail` и `instance` рядом с существующим объектом `error`,
+  чтобы универсальный клиент или шлюз мог потребить сбой, не зная этого API. Оба
+  представления выводятся из одного `APIError`, поэтому не могут разойтись, а `error.code`
+  остаётся значением, по которому нужно ветвиться.
+  - `retryable` сообщает, может ли повторная отправка идентичного запроса увенчаться
+    успехом. Это не выводится из кода статуса: 500 может быть преходящим сбоем или
+    детерминированным дефектом, а повтор дефекта — это как маленький инцидент становится
+    большим, поэтому 500 сообщает `false`, тогда как 429, 502, 503 и 504 сообщают `true`.
+  - `instance` — это путь запроса с удалённой строкой запроса, потому что строка запроса
+    может нести токены и персональные данные, которые нельзя отражать в логах или в
+    клиентской отчётности об ошибках.
+  - `correlation_id` теперь выводится рядом с `request_id`; оба несут одно значение,
+    поскольку конвейер логов и фронтенд читают разные имена.
+  - `type` — это URN, а не https-URL: разыменовываемого каталога ошибок не существует, а
+    ссылка, отдающая 404, хуже идентификатора, который и не обещал разрешаться.
 
-- **Archive format coverage for bzip2 and xz.** `GET /api/v1/system/capabilities`
-  advertised `tar.bz2`, `tar.xz`, `bzip2` and `xz`, but the suite proved only
-  zip, tar, tar.gz and gzip — four advertised formats were reachable from the API
-  and exercised by no test. They are now covered by round-trip tests, corrupt-input
-  rejection, magic-byte detection and an assertion that every advertised format is
-  reported as supported. The bzip2 fixtures are embedded as base64 because the Go
-  standard library reads bzip2 but cannot write it; they are decoded back with an
-  independent reader so a fixture cannot drift into a false pass.
+- **Покрытие форматов архивов bzip2 и xz.** `GET /api/v1/system/capabilities` рекламировал
+  `tar.bz2`, `tar.xz`, `bzip2` и `xz`, но набор доказывал только zip, tar, tar.gz и gzip —
+  четыре рекламируемых формата были достижимы из API и не упражнялись ни одним тестом. Они
+  теперь покрыты тестами кругового рейса, отклонением повреждённого ввода, определением по
+  сигнатуре и утверждением, что каждый рекламируемый формат сообщается как поддерживаемый.
+  Фикстуры bzip2 встроены как base64, потому что стандартная библиотека Go читает bzip2,
+  но не может его писать; они декодируются обратно независимым читателем, чтобы фикстура не
+  могла сползти в ложный проход.
 
 ### Security
 
-- **Patched GO-2026-6809 (CVE-2026-111943) in the Go standard library.** The
-  vulnerability affects `crypto/x509.Certificate.Verify` and is reachable from
-  this codebase through the SMTP TLS handshake in `internal/notify/email.go`,
-  so it is a real exposure rather than an unused transitive finding. The
-  toolchain is now pinned to Go 1.26.10 (the first fixed 1.26 release) in
-  `go.mod`, the build image and CI.
+- **Пропатчен GO-2026-6809 (CVE-2026-111943) в стандартной библиотеке Go.** Уязвимость
+  затрагивает `crypto/x509.Certificate.Verify` и достижима из этой кодовой базы через
+  TLS-рукопожатие SMTP в `internal/notify/email.go`, поэтому это реальная подверженность, а
+  не неиспользуемая транзитивная находка. Toolchain теперь закреплён на Go 1.26.10 (первом
+  исправленном релизе 1.26) в `go.mod`, образе сборки и CI.
 
 ### Added
 
-- **Web interface.** React 19 + TypeScript single-page application built with Vite,
-  served by the same Nginx instance as the API so every request stays same-origin.
-  Covers sign-in with second-factor verification, the CRM workspace (accounts,
-  contacts, leads, deals, tasks, support tickets, reports), the Import Center with
-  the field-mapping wizard, integrations, migrations, events and webhooks,
-  background jobs, the AI and MCP status page, and the administration pages for
-  users, roles, organizations, teams, email, Telegram, audit, security and
-  diagnostics. Authorisation is enforced by the server on every request; the
-  interface only decides what to show.
-- **Frontend tests.** 31 Vitest tests covering the HTTP client (CSRF handling,
-  error envelopes, session expiry), the paginated list component and the
-  permission gate and sign-in flow. `fetch` is stubbed at the boundary so the
-  client, auth context and components all run for real.
-- **ESLint flat configuration** for the frontend, wired into the checks above.
+- **Веб-интерфейс.** Одностраничное приложение на React 19 + TypeScript, собранное Vite и
+  обслуживаемое тем же экземпляром Nginx, что и API, поэтому каждый запрос остаётся в одном
+  источнике. Покрывает вход с проверкой второго фактора, рабочее пространство CRM
+  (аккаунты, контакты, лиды, сделки, задачи, обращения в поддержку, отчёты), Центр импорта
+  с мастером сопоставления полей, интеграции, миграции, события и вебхуки, фоновые задания,
+  страницу статуса ИИ и MCP и страницы администрирования для пользователей, ролей,
+  организаций, команд, почты, Telegram, аудита, безопасности и диагностики. Авторизация
+  обеспечивается сервером на каждом запросе; интерфейс лишь решает, что показывать.
+- **Тесты фронтенда.** 31 тест Vitest, покрывающий HTTP-клиент (обработка CSRF, конверты
+  ошибок, истечение сессии), компонент постраничного списка и шлюз по правам и поток входа.
+  `fetch` заглушается на границе, поэтому клиент, контекст аутентификации и компоненты
+  работают по-настоящему.
+- **Flat-конфигурация ESLint** для фронтенда, подключённая к проверкам выше.
 
-- **Platform foundation.** Go API and worker with PostgreSQL, `chi` routing, `pgx`
-  connection pooling, structured logging, request correlation and graceful shutdown.
-- **Schema and migrations.** Five migrations covering platform, CRM, platform modules,
-  RBAC seed data and migration secrets. Applied automatically on start when
-  `FORGECRM_MIGRATE_ON_START` is set.
-- **Authentication.** Argon2id password hashing, server-side sessions with opaque
-  cookies, CSRF protection, TOTP enrolment and verification, login rate limiting,
-  account lockout, session listing and revocation, password reset, and OIDC.
-- **RBAC.** A permission catalog of 80 permissions, 14 default roles cloned per
-  organization, server-side enforcement on every route, and audit of role changes.
-- **CRM domain.** Accounts, contacts, leads, deals, pipelines and stages, tasks,
-  activities, tickets, tags, comments, custom fields, documents, notifications,
-  contracts, approvals, notes, search across permitted entities, and sales and support
-  reports. List endpoints support pagination, sorting, filtering and search.
-- **Import Center.** Staged wizard API with format detection by content and extension,
-  type inference, preview, field mapping, deduplication, dry run, background execution,
-  per-row error reporting, and idempotent re-runs. Formats: CSV, TSV, JSON, JSONL,
-  XLSX, XML, and the archives ZIP, TAR, TAR.GZ, GZIP, BZIP2 and XZ.
-- **Safe archive handling.** Entry count, total size, per-entry size, nesting depth and
-  compression-ratio limits; rejection of absolute paths, `..` traversal, backslash
-  traversal and symlinks; private extraction root; cleanup on every exit path.
-- **Data migration.** Schema discovery, chunked reads, field mapping and
-  reconciliation for PostgreSQL and SQLite sources, with read-only defaults.
-- **Integration Hub.** A consistent adapter lifecycle (validate, test, discover, read,
-  transform, write, status, close), SSRF-guarded outbound HTTP, retries, timeouts and
-  run history.
-- **Events and webhooks.** Inbound endpoints with signature verification and
-  idempotency keys, outbound subscriptions with signed delivery, retries with backoff,
-  delivery history and replay, and a transactional outbox.
-- **Background jobs.** A database-backed queue with attempts, backoff, cancellation and
-  retry, driven by a separate worker process.
-- **Audit and observability.** Append-only audit log, security event log, application
-  logs, and administrative diagnostics endpoints.
-- **Notifications.** An email module with SMTP configuration validation, templates,
-  queueing and a send log, plus a Telegram bot with webhook authentication and account
-  linking. Both are disabled unless configured.
-- **AI layer.** A provider-agnostic interface with cloud and local (Ollama) backends,
-  timeouts, request limits and metadata logging. Disabled by default.
-- **Deployment.** A multi-stage Dockerfile, Docker Compose stack with health checks and
-  named volumes, an optional Nginx reverse proxy, and scripts for environment checking,
-  setup, migrations, backup, restore and smoke testing.
-- **CI.** Formatting, vet, unit and integration tests against a real PostgreSQL,
-  builds, Docker build, secret scanning, dependency vulnerability scanning and a
-  documentation presence check.
+- **Фундамент платформы.** API и воркер на Go с PostgreSQL, маршрутизация `chi`, пул
+  соединений `pgx`, структурное логирование, корреляция запросов и плавное завершение.
+- **Схема и миграции.** Пять миграций, покрывающих платформу, CRM, модули платформы, сид
+  RBAC и секреты миграции. Применяются автоматически при старте, когда задано
+  `FORGECRM_MIGRATE_ON_START`.
+- **Аутентификация.** Хеширование паролей Argon2id, серверные сессии с непрозрачными
+  cookie, защита CSRF, зачисление и проверка TOTP, ограничение частоты входа, блокировка
+  аккаунта, список и отзыв сессий, сброс пароля и OIDC.
+- **RBAC.** Каталог разрешений из 80 разрешений, 14 ролей по умолчанию, клонируемых на
+  организацию, серверное обеспечение на каждом маршруте и аудит изменений ролей.
+- **Домен CRM.** Аккаунты, контакты, лиды, сделки, воронки и стадии, задачи, активности,
+  обращения, теги, комментарии, кастомные поля, документы, уведомления, контракты,
+  согласования, заметки, поиск по разрешённым сущностям и отчёты по продажам и поддержке.
+  Эндпоинты списков поддерживают пагинацию, сортировку, фильтрацию и поиск.
+- **Центр импорта.** Поэтапный API мастера с определением формата по содержимому и
+  расширению, выводом типов, предпросмотром, сопоставлением полей, дедупликацией, пробным
+  прогоном, фоновым исполнением, отчётностью по строкам и идемпотентными повторами.
+  Форматы: CSV, TSV, JSON, JSONL, XLSX, XML и архивы ZIP, TAR, TAR.GZ, GZIP, BZIP2 и XZ.
+- **Безопасная обработка архивов.** Лимиты числа записей, общего размера, размера на
+  запись, глубины вложенности и коэффициента сжатия; отклонение абсолютных путей, обхода
+  `..`, обхода через обратный слэш и символических ссылок; приватный корень распаковки;
+  очистка на каждом пути выхода.
+- **Миграция данных.** Обнаружение схемы, порционное чтение, сопоставление полей и сверка
+  для источников PostgreSQL и SQLite, с умолчаниями только для чтения.
+- **Хаб интеграций.** Согласованный жизненный цикл адаптера (validate, test, discover,
+  read, transform, write, status, close), исходящий HTTP с защитой SSRF, повторы,
+  тайм-ауты и история прогонов.
+- **События и вебхуки.** Входящие эндпоинты с проверкой подписи и ключами идемпотентности,
+  исходящие подписки с подписанной доставкой, повторы с задержкой, история доставок и
+  повтор и транзакционный outbox.
+- **Фоновые задания.** Очередь на базе данных с попытками, задержкой, отменой и повтором,
+  приводимая в действие отдельным процессом воркера.
+- **Аудит и наблюдаемость.** Журнал аудита «только добавление», журнал событий
+  безопасности, логи приложения и эндпоинты диагностики администрирования.
+- **Уведомления.** Модуль почты с валидацией конфигурации SMTP, шаблонами, очередью и
+  журналом отправок, плюс бот Telegram с аутентификацией вебхука и связью с аккаунтом. Оба
+  выключены, если не настроены.
+- **Слой ИИ.** Провайдеро-агностичный интерфейс с облачным и локальным (Ollama) бэкендами,
+  тайм-аутами, ограничениями запросов и логированием метаданных. Выключен по умолчанию.
+- **Развёртывание.** Многоступенчатый Dockerfile, стек Docker Compose с проверками
+  работоспособности и именованными томами, опциональный обратный прокси Nginx и скрипты
+  для проверки окружения, настройки, миграций, резервного копирования, восстановления и
+  smoke-тестирования.
+- **CI.** Форматирование, vet, модульные и интеграционные тесты против реального
+  PostgreSQL, сборки, сборка Docker, сканирование секретов, сканирование уязвимостей
+  зависимостей и проверка наличия документации.
 
 ### Fixed
 
-- **Outbox polling failed on a null correlation identifier.** `FetchPending` scanned a
-  nullable column into a non-pointer `string`, which made every poll fail and stopped
-  event dispatch.
-- **Uploaded files lost their format.** The format was not recorded when the file was
-  stored, so the worker rejected every import with `unsupported tabular format
-  "unknown"`.
-- **Background imports re-sniffed the storage path.** Stored uploads are named
-  `<uuid>.upload`, so extension-based detection found nothing. The resolved source now
-  carries the detected format.
-- **Archive extraction failed with a missing temporary directory.** The extraction
-  parent directory was assumed to exist; it is now created before use.
-- **Archives were misdetected as delimited text.** A binary archive header can contain
-  a delimiter byte, so content sniffing classified ZIP files as CSV and failed with a
-  misleading encoding error. An archive container now always clears the tabular format.
-- **Archive analysis only handled single-file containers.** Multi-file archives could
-  be imported but not analysed, so the preview and mapping steps were unavailable.
-- **Archive analysis leaked server filesystem paths.** The absolute extraction path was
-  serialised to clients; it is now excluded from the response.
-- **Search returned `null` instead of an empty array** when nothing matched, breaking
-  clients that iterate the result.
-- **`webhooks.manage` was never seeded.** The permission was added to the Go catalog
-  and guards six webhook endpoints, but migration 0004 did not insert it. No role could
-  hold it, so only a platform owner could create, list, test or replay webhooks, and
-  `integration_admin` was refused despite the role existing to manage integrations.
-  Migration 0006 seeds the permission and grants it to `platform_owner`,
-  `platform_admin`, `integration_admin` and `tenant_admin`, for platform role
-  templates and for every organization's existing clones.
+- **Опрос outbox падал на null-идентификаторе корреляции.** `FetchPending` сканировал
+  nullable-столбец в не-указательный `string`, что заставляло каждый опрос падать и
+  останавливало диспетчеризацию событий.
+- **Загруженные файлы теряли свой формат.** Формат не записывался при сохранении файла,
+  поэтому воркер отклонял каждый импорт с `unsupported tabular format "unknown"`.
+- **Фоновые импорты заново вынюхивали путь хранилища.** Сохранённые загрузки именуются
+  `<uuid>.upload`, поэтому определение по расширению не находило ничего. Разрешённый
+  источник теперь несёт определённый формат.
+- **Распаковка архива падала из-за отсутствующего временного каталога.** Предполагалось,
+  что родительский каталог распаковки существует; теперь он создаётся перед использованием.
+- **Архивы ошибочно определялись как разделённый текст.** Бинарный заголовок архива может
+  содержать байт-разделитель, поэтому вынюхивание содержимого классифицировало файлы ZIP
+  как CSV и падало с вводящей в заблуждение ошибкой кодировки. Контейнер архива теперь
+  всегда очищает табличный формат.
+- **Анализ архива обрабатывал только однофайловые контейнеры.** Многофайловые архивы можно
+  было импортировать, но не анализировать, поэтому шаги предпросмотра и сопоставления были
+  недоступны.
+- **Анализ архива утекал пути файловой системы сервера.** Абсолютный путь распаковки
+  сериализовался клиентам; теперь он исключён из ответа.
+- **Поиск возвращал `null` вместо пустого массива**, когда ничего не совпадало, ломая
+  клиентов, итерирующих результат.
+- **`webhooks.manage` никогда не был засеян.** Разрешение было добавлено в каталог Go и
+  охраняет шесть эндпоинтов вебхуков, но миграция 0004 его не вставила. Ни одна роль не
+  могла его держать, поэтому только владелец платформы мог создавать, перечислять,
+  тестировать или повторять вебхуки, и `integration_admin` получал отказ, несмотря на то
+  что роль существует для управления интеграциями. Миграция 0006 засевает разрешение и
+  выдаёт его `platform_owner`, `platform_admin`, `integration_admin` и `tenant_admin`, для
+  шаблонов ролей платформы и для существующих клонов каждой организации.
 
 ### Security
 
-- Uploaded archives are handled as hostile input, with dedicated tests for path
-  traversal, absolute paths, symlinks, archive bombs, truncation and cleanup.
-- SSRF protection blocks loopback, link-local, private and cloud metadata destinations.
-- Cross-organization access returns 404 rather than 403.
-- Blocking a user revokes their sessions immediately.
+- Загруженные архивы обрабатываются как враждебный ввод, с выделенными тестами для обхода
+  пути, абсолютных путей, символических ссылок, архивных бомб, усечения и очистки.
+- Защита SSRF блокирует loopback, link-local, приватные и облачные метаданные как
+  назначения.
+- Доступ между организациями возвращает 404, а не 403.
+- Блокировка пользователя немедленно отзывает его сессии.
 
 ### Added
 
-- **End-to-end test suite.** `frontend/e2e/platform.spec.ts` drives a real
-  Chromium browser against the real Go API and a real PostgreSQL database; the
-  network is never stubbed. It covers sign-in, sign-out, session revocation, the
-  account create/edit/archive lifecycle, cross-checks each write through the API
-  rather than the screen alone, and loads every workspace and administration
-  route asserting on the page's own heading so a route that silently falls
-  through to the overview is caught. `npm run e2e` runs it; the `e2e` job in CI
-  starts PostgreSQL, applies migrations, provisions the owner and runs the suite.
-- **`scripts/e2e-bootstrap.sh`** provisions the end-to-end platform owner through
-  the same `--bootstrap-admin` path an operator uses, so the suite has no
-  test-only back door. It is idempotent and safe to run before every suite.
-- **Regression tests for request throttling** in
-  `backend/internal/api/ratelimit_test.go`, covering the two defects below.
+- **Набор сквозных тестов.** `frontend/e2e/platform.spec.ts` управляет реальным браузером
+  Chromium против реального API на Go и реальной базы PostgreSQL; сеть никогда не
+  заглушается. Он покрывает вход, выход, отзыв сессии, жизненный цикл
+  создания/правки/архивирования аккаунта, перепроверяет каждую запись через API, а не
+  только через экран, и загружает каждый маршрут рабочего пространства и администрирования,
+  утверждая по собственному заголовку страницы, поэтому маршрут, молча проваливающийся в
+  обзор, ловится. `npm run e2e` его запускает; задание `e2e` в CI запускает PostgreSQL,
+  применяет миграции, создаёт владельца и запускает набор.
+- **`scripts/e2e-bootstrap.sh`** создаёт владельца платформы для сквозных тестов через тот
+  же путь `--bootstrap-admin`, которым пользуется оператор, поэтому у набора нет
+  тестовой чёрной двери. Он идемпотентен и безопасен для запуска перед каждым набором.
+- **Регрессионные тесты для троттлинга запросов** в `backend/internal/api/ratelimit_test.go`,
+  покрывающие два дефекта ниже.
 
 ### Fixed
 
-- **Health probes were rate limited, so a busy API reported the container as
-  unhealthy.** `/health` and `/ready` shared the API's request budget. Once the
-  budget was spent the probes answered 429, which an orchestrator reads as a
-  failed container and acts on by restarting it — turning a traffic spike into an
-  outage. The probes now sit outside the limiter while `/api/v1` stays inside it,
-  which `TestHealthEndpointsAreNotRateLimited` and `TestAPISubtreeIsRateLimited`
-  pin down.
-- **The login throttle was a hardcoded 20 requests per minute per client IP.**
-  Everyone behind one NAT gateway shares a single bucket, so an office of thirty
-  people would lock itself out after twenty sign-ins between them. The budget is
-  now the `FORGECRM_LOGIN_RATE_LIMIT_PER_MIN` setting (default 60) and is
-  documented in `.env.example`, because the correct value depends on how many
-  users share an address.
-- **Six lint errors and two warnings in the frontend** that would have failed the
-  CI lint step, including a Playwright fixture parameter named `use` that lint
-  read as React's `use` hook.
-- **The integration-test step ran the packages in parallel over one shared
-  database.** Each integration package resets the schema in its setup, so one
-  package could drop the tables another was still seeding, and the suite failed
-  with `relation "users" does not exist`. It passed in earlier runs by luck of
-  scheduling, which is the worst kind of flake: green until it is not. The step
-  now runs with `-p 1`.
-- **The end-to-end job could time out waiting for the Vite dev server.** Vite
-  binds `localhost` by default, which resolves to `::1` on some runners, while
-  Playwright polls `127.0.0.1`; the server started correctly and the wait still
-  expired. The config now pins the dev server to `127.0.0.1`.
+- **Проверки работоспособности ограничивались по частоте, поэтому занятый API сообщал
+  контейнер как нездоровый.** `/health` и `/ready` делили бюджет запросов API. Как только
+  бюджет был израсходован, пробы отвечали 429, что оркестратор читает как упавший контейнер
+  и действует, перезапуская его, — превращая всплеск трафика в отказ. Пробы теперь сидят вне
+  лимитера, тогда как `/api/v1` остаётся внутри, что закрепляют
+  `TestHealthEndpointsAreNotRateLimited` и `TestAPISubtreeIsRateLimited`.
+- **Троттлинг входа был зашитыми 20 запросами в минуту на IP клиента.** Все за одним
+  NAT-шлюзом делят один бакет, поэтому офис из тридцати человек заблокировал бы себя после
+  двадцати входов на всех. Бюджет теперь — настройка `FORGECRM_LOGIN_RATE_LIMIT_PER_MIN`
+  (умолчание 60) и документирован в `.env.example`, потому что верное значение зависит от
+  того, сколько пользователей делят адрес.
+- **Шесть ошибок линта и два предупреждения во фронтенде**, которые провалили бы шаг линта
+  CI, включая параметр фикстуры Playwright с именем `use`, который линт прочитал как хук
+  React `use`.
+- **Шаг интеграционных тестов запускал пакеты параллельно по одной общей базе.** Каждый
+  интеграционный пакет сбрасывает схему в своём setup, поэтому один пакет мог удалить
+  таблицы, которые другой всё ещё засевал, и набор падал с `relation "users" does not exist`.
+  В более ранних прогонах он проходил по удаче планирования — худший вид флейка: зелёный,
+  пока не станет нет. Шаг теперь запускается с `-p 1`.
+- **Задание сквозных тестов могло истечь в ожидании dev-сервера Vite.** Vite по умолчанию
+  слушает `localhost`, который на некоторых раннерах разрешается в `::1`, тогда как
+  Playwright опрашивает `127.0.0.1`; сервер стартовал корректно, а ожидание всё равно
+  истекало. Конфигурация теперь привязывает dev-сервер к `127.0.0.1`.
 
 ### Known gaps
 
-- No license file.
-- OIDC has not been exercised against a real identity provider.
-- Rate limiting is per process, not global. Behind more than one API replica the
-  effective budget is multiplied by the replica count, so a shared store
-  (Redis) is required before running more than one replica in production.
+- Нет файла лицензии.
+- OIDC не упражнялся против реального провайдера идентичности.
+- Ограничение частоты на процесс, а не глобальное. За более чем одной репликой API
+  действующий бюджет умножается на число реплик, поэтому общее хранилище (Redis) требуется
+  до запуска более одной реплики в production.
+
