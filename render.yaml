@@ -1,0 +1,77 @@
+# ForgeCRM on Render — Blueprint.
+#
+# Render builds the repository root, where the root Dockerfile produces one image
+# with the API, the worker and the built web interface. The API serves the
+# interface from /app/public, so a single web service answers both the API and the
+# UI on one origin; the session cookie and the CSRF double-submit therefore work
+# without CORS. There is no separate static site.
+#
+# Deploy: Render Dashboard -> New -> Blueprint -> pick this repository. Render
+# reads this file, creates the database and both services, and injects PORT and
+# the database connection string.
+
+services:
+  # API and web interface.
+  - type: web
+    name: forgecrm-api
+    runtime: docker
+    # The root build: API + worker + SPA in one image.
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    region: oregon
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: FORGECRM_ENV
+        value: production
+      - key: FORGECRM_LOG_LEVEL
+        value: info
+      - key: FORGECRM_LOG_FORMAT
+        value: json
+      # Render injects PORT; the API binds 0.0.0.0:$PORT.
+      - key: FORGECRM_MIGRATE_ON_START
+        value: "true"
+      - key: FORGECRM_DATABASE_URL
+        fromDatabase:
+          name: forgecrm-db
+          property: connectionString
+      - key: FORGECRM_SECRET_KEY
+        generateValue: true
+      # Keep the pool small on the starter plan.
+      - key: FORGECRM_DATABASE_MAX_CONNS
+        value: "6"
+
+  # Background worker: the same image, the other binary.
+  - type: worker
+    name: forgecrm-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: /usr/local/bin/forgecrm-worker
+    region: oregon
+    plan: starter
+    envVars:
+      - key: FORGECRM_ENV
+        value: production
+      - key: FORGECRM_LOG_LEVEL
+        value: info
+      - key: FORGECRM_LOG_FORMAT
+        value: json
+      - key: FORGECRM_DATABASE_URL
+        fromDatabase:
+          name: forgecrm-db
+          property: connectionString
+      - key: FORGECRM_SECRET_KEY
+        fromService:
+          type: web
+          name: forgecrm-api
+          envVarKey: FORGECRM_SECRET_KEY
+      - key: FORGECRM_DATABASE_MAX_CONNS
+        value: "4"
+
+databases:
+  - name: forgecrm-db
+    databaseName: forgecrm
+    user: forgecrm
+    region: oregon
+    plan: starter

@@ -93,6 +93,9 @@ this by making the worker wait for the API to be healthy.
   one image, and the root `docker-compose.yml`, whose two parts (`api`, `worker`)
   run that image with different entrypoints. See
   [blitz-cloud.md](blitz-cloud.md) for the free-tier walkthrough.
+- **Render** uses the Blueprint in [`render.yaml`](../../render.yaml) at the
+  repository root. It declares a web service, a worker and a managed PostgreSQL
+  database, all built from the root `Dockerfile`. See [render.md](render.md).
 
 ## Verified deployment
 

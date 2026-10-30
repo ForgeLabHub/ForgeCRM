@@ -10,6 +10,11 @@ once it reaches 1.0.
 
 ### Added
 
+- **Render deployment Blueprint.** `render.yaml` at the repository root declares a
+  web service, a worker and a managed PostgreSQL database, all built from the root
+  `Dockerfile`, so Render can deploy the whole application from one Blueprint. The
+  API serves the web interface, so there is no separate static site and the UI
+  stays on one origin with the API. `docs/deployment/render.md` documents the steps.
 - **Deployment on platforms that build the repository root, including blitz.cloud.**
   The repository had no top-level build file, so a host that builds the root — as
   blitz.cloud does — could not produce an image: the only Dockerfile lived under
