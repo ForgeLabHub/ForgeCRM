@@ -19,6 +19,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/geff1778/forgecrm/internal/logging"
+	"github.com/geff1778/forgecrm/internal/tracectx"
 )
 
 // ErrorCode is a stable, machine-readable error identifier.
@@ -258,6 +259,47 @@ func RequestIDMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// TraceMiddleware continues a W3C Trace Context, or starts one.
+//
+// A request id answers "which single request was this"; a trace answers "which
+// work, across services and background jobs, belongs to the same operation". The
+// two are carried side by side. An incoming `traceparent` is honoured so a caller
+// that already has a trace keeps it; otherwise a new trace is minted. The response
+// echoes a `traceparent` whose span id is fresh, marking this hop, and the trace id
+// is placed on the context so the access log and any outbound call can record or
+// continue it.
+//
+// An unparseable header is never rejected: a caller with a broken traceparent still
+// gets served, under a new trace, because tracing must not become a new way for a
+// request to fail.
+func TraceMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		incoming, ok := tracectx.Parse(r.Header.Get(tracectx.Header))
+		if !ok {
+			incoming = tracectx.NewTrace()
+		}
+		// This hop is its own span within the caller's trace: the trace id is
+		// preserved so the operation stays joined, and the span id is fresh so
+		// this server is distinguishable from the caller. Outbound calls made
+		// while handling the request then hang off this span.
+		hop := incoming.StartSpan()
+		ctx := tracectx.WithTrace(r.Context(), hop)
+		w.Header().Set(tracectx.Header, hop.Format())
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// OutboundTraceHeader returns the `traceparent` value to send on an outbound
+// request that continues the trace in ctx. It returns "" when no trace is present,
+// so a caller can set the header unconditionally.
+func OutboundTraceHeader(ctx context.Context) string {
+	t, ok := tracectx.FromContext(ctx)
+	if !ok {
+		return ""
+	}
+	return t.StartSpan().Format()
+}
+
 // ---------------------------------------------------------------------------
 // Logging and recovery
 // ---------------------------------------------------------------------------
@@ -299,6 +341,9 @@ func AccessLogMiddleware(log *slog.Logger) func(http.Handler) http.Handler {
 				"bytes", rec.bytes,
 				"duration_ms", time.Since(start).Milliseconds(),
 				"request_id", RequestID(r.Context()),
+			}
+			if tid := tracectx.TraceID(r.Context()); tid != "" {
+				attrs = append(attrs, tracectx.LogField, tid)
 			}
 			if uid := logging.Actor(r.Context()); uid != "" {
 				attrs = append(attrs, "actor_id", uid)

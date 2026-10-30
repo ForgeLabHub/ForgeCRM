@@ -330,16 +330,20 @@ func TestExtractionBoundaryHolds(t *testing.T) {
 		"importx/safe":    true,
 		"importx/parsers": true,
 		"database":        true,
+		// tracectx carries a W3C trace id through a context. It imports only the
+		// standard library — no database, no logger, no domain type — so any layer
+		// may depend on it without gaining a dependency on another layer.
+		"tracectx": true,
 		// constructor reads recipe manifests and the source tree; it copies modules
 		// by path and imports none of them, so it is a leaf. A recipe that needed to
 		// import a module to describe it would weld the constructor to that module.
 		"constructor": true,
 	}
 	allowedDeps := map[string]map[string]bool{
-		// httpx may depend only on its two proven leaves. A dependency on the
+		// httpx may depend only on its proven leaves. A dependency on the
 		// database, RBAC or a domain service is what would stop the HTTP layer
 		// from lifting out, and is the coupling the extraction harness catches.
-		"httpx": {"logging": true, "ratelimit": true},
+		"httpx": {"logging": true, "ratelimit": true, "tracectx": true},
 		// rbac may depend only on the database handle. Its catalog and Principal are
 		// pure, and the resolution service talks to the database and nothing else, so
 		// that is the whole boundary it has to keep to stay extractable.
@@ -382,7 +386,7 @@ func TestExtractionBoundaryHolds(t *testing.T) {
 		// events is the inbound webhook gateway: signature verification, the timestamp
 		// window, the payload cap and the dead-letter path, with the Integration Hub's
 		// secret handoff for the per-subscription key.
-		"events": {"audit": true, "database": true, "httpx": true, "integrations": true, "logging": true, "outbox": true, "rbac": true, "secrets": true},
+		"events": {"audit": true, "database": true, "httpx": true, "integrations": true, "logging": true, "outbox": true, "rbac": true, "secrets": true, "tracectx": true},
 		// migratex is the cross-database migration service: the source adapters and the
 		// reconciliation, over the Integration Hub's connection secrets.
 		"migratex": {"audit": true, "database": true, "httpx": true, "integrations": true, "rbac": true, "secrets": true},
