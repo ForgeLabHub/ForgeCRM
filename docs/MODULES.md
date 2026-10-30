@@ -1,205 +1,204 @@
-# Module inventory
+# Инвентаризация модулей
 
-This is the code-verified catalogue of every logical module in ForgeCRM, backend
-and frontend. It was produced at commit `7a6d67f` by reading the sources, the
-import graph (`go list`), the migrations and the tests — not by trusting the
-existing documents. Where a document and the code disagreed, the code won and the
-disagreement is recorded in the relevant row.
+Это проверенный по коду каталог каждого логического модуля в ForgeCRM, бэкенда и
+фронтенда. Он был получен на коммите `7a6d67f` чтением исходников, графа импортов
+(`go list`), миграций и тестов — а не доверием существующим документам. Там, где
+документ и код расходились, побеждал код, а расхождение записано в соответствующей
+строке.
 
-The unit of inventory is the **Go package** (and, for the frontend, the layer).
-A directory with a `go.mod`-level boundary is not automatically a module: a
-package is listed here because it owns behaviour, not because it has a folder.
+Единица инвентаризации — **пакет Go** (а для фронтенда — слой). Каталог с границей
+уровня `go.mod` не становится автоматически модулем: пакет перечислен здесь потому,
+что он владеет поведением, а не потому, что у него есть папка.
 
-Two things this document deliberately does not do:
+Две вещи, которые этот документ намеренно не делает:
 
-- It does not invent interfaces. Every type and function named below exists in
-  the package named beside it.
-- It does not claim `READY` extraction. See `EXTRACT_READY.md`; nothing is
-  extract-ready until it has been pulled into a clean project and built there.
+- Он не выдумывает интерфейсы. Каждый тип и функция, названные ниже, существуют в
+  пакете, названном рядом.
+- Он не заявляет `READY` о выделении. См. `EXTRACT_READY.md`; ничто не готово к
+  выделению, пока не поднято в чистый проект и не собрано там.
 
-## How to read a row
+## Как читать строку
 
-| Field | Meaning |
+| Поле | Значение |
 | --- | --- |
-| **Location** | Real paths. Everything under `backend/internal/<pkg>` unless stated. |
-| **Public API** | Exported types and functions actually present in the package. |
-| **Internal deps** | Other `internal/…` packages it imports (non-test). |
-| **External deps** | Third-party and stdlib-relevant dependencies. |
-| **Fake / test double** | An in-process substitute that ships in the non-test code, or a documented injection point. A `_test.go` helper is listed as "test-only". |
-| **Tests** | Real test files. Unit = no database; integration = `//go:build integration`. |
-| **Extract** | `no` / `almost` / `yes`, consistent with `EXTRACT_READY.md`. |
-| **Cut lines** | What moves with the module and what stays behind. |
+| **Location** | Реальные пути. Всё под `backend/internal/<pkg>`, если не указано иное. |
+| **Public API** | Экспортируемые типы и функции, реально присутствующие в пакете. |
+| **Internal deps** | Другие пакеты `internal/…`, которые он импортирует (не-тестовые). |
+| **External deps** | Сторонние и значимые для stdlib зависимости. |
+| **Fake / test double** | Замена в процессе, поставляемая в не-тестовом коде, или документированная точка внедрения. Помощник `_test.go` перечислен как «только тест». |
+| **Tests** | Реальные тестовые файлы. Unit = без базы данных; integration = `//go:build integration`. |
+| **Extract** | `no` / `almost` / `yes`, согласовано с `EXTRACT_READY.md`. |
+| **Cut lines** | Что переезжает с модулем и что остаётся. |
 
 ---
 
-## Backend — entrypoints (`backend/cmd`)
+## Бэкенд — точки входа (`backend/cmd`)
 
 ### cmd/forgecrm-api
-- **Responsibility:** HTTP server process. Builds config, connects the pool, wires
-  services through `internal/wiring`, mounts the router, runs migrations when
-  `-migrate`/`FORGECRM_MIGRATE_ON_START`, bootstraps the platform owner.
-- **Public API:** `main` only.
+- **Ответственность:** процесс HTTP-сервера. Строит конфигурацию, подключает пул,
+  связывает сервисы через `internal/wiring`, монтирует роутер, запускает миграции при
+  `-migrate`/`FORGECRM_MIGRATE_ON_START`, создаёт владельца платформы.
+- **Public API:** только `main`.
 - **Internal deps:** `api, audit, authn, config, database, httpx, logging, migrate,
   rbac, secrets, wiring`.
 - **External deps:** `github.com/google/uuid`.
-- **Fake:** none.
-- **Tests:** none (covered indirectly by `testsupport` integration tests, which
-  build the same `api.New`).
-- **Extract:** `no` — a composition root, not a component.
-- **Cut lines:** stays with the monolith; every extraction produces a *new*
-  entrypoint rather than moving this one.
+- **Fake:** нет.
+- **Tests:** нет (покрыт косвенно интеграционными тестами `testsupport`, которые
+  строят тот же `api.New`).
+- **Extract:** `no` — корень композиции, не компонент.
+- **Cut lines:** остаётся с монолитом; каждое выделение производит *новую* точку
+  входа, а не перемещает эту.
 
 ### cmd/forgecrm-worker
-- **Responsibility:** background process. Drives webhook delivery, workflow runs,
-  retention, the job queue, imports, outbox dispatch and notifications.
-- **Public API:** `main` only.
+- **Ответственность:** фоновый процесс. Движет доставку вебхуков, прогоны workflow,
+  хранение, очередь заданий, импорты, разбор outbox и уведомления.
+- **Public API:** только `main`.
 - **Internal deps:** `agent, ai, audit, config, crm, database, events, importx,
   integrations, jobs, logging, notify, outbox, rbac, retention, secrets, workflow`.
 - **External deps:** `github.com/google/uuid`.
-- **Fake:** none.
-- **Tests:** none directly; the components it drives are tested in `testsupport`.
-- **Extract:** `no` — composition root.
-- **Cut lines:** stays; a builder recipe that needs background work generates its
-  own worker entrypoint.
+- **Fake:** нет.
+- **Tests:** нет напрямую; компоненты, которыми он движет, тестируются в `testsupport`.
+- **Extract:** `no` — корень композиции.
+- **Cut lines:** остаётся; рецепт конструктора, которому нужна фоновая работа,
+  генерирует собственную точку входа воркера.
 
 ### cmd/openapi-gen
-- **Responsibility:** regenerate `docs/api/openapi.json` from the live router;
-  `-check` fails when the committed spec disagrees with the code.
-- **Public API:** `main` only.
+- **Ответственность:** перегенерировать `docs/api/openapi.json` из живого роутера;
+  `-check` падает, когда закоммиченная спецификация расходится с кодом.
+- **Public API:** только `main`.
 - **Internal deps:** `api, config, httpx, openapi, ratelimit`.
-- **External deps:** none beyond stdlib.
-- **Fake:** none.
-- **Tests:** covered by `internal/openapi` and `internal/api` contract tests.
+- **External deps:** нет сверх stdlib.
+- **Fake:** нет.
+- **Tests:** покрыт контрактными тестами `internal/openapi` и `internal/api`.
 - **Extract:** `no`.
-- **Cut lines:** stays; extraction does not regenerate a spec it does not own.
+- **Cut lines:** остаётся; выделение не перегенерирует спецификацию, которой не владеет.
 
 ---
 
-## Backend — domain core
+## Бэкенд — доменное ядро
 
-### internal/crm  — the core domain
-- **Responsibility:** entities and rules for contacts, accounts, leads, deals,
-  tasks, tickets, activities, comments, tags, custom fields, pipelines, search,
-  notifications and the read-only reporting/intelligence queries. Tenant-scoped;
-  checks record ownership; writes audit.
-- **Public API (types):** `Service`, `Account`, `Contact`, `Lead`, `Deal`, `Task`,
+### internal/crm  — ядро домена
+- **Ответственность:** сущности и правила для контактов, аккаунтов, лидов, сделок,
+  задач, обращений, активностей, комментариев, тегов, кастомных полей, воронок,
+  поиска, уведомлений и запросов отчётности/интеллекта только для чтения. С областью
+  тенанта; проверяет владение записью; пишет аудит.
+- **Public API (типы):** `Service`, `Account`, `Contact`, `Lead`, `Deal`, `Task`,
   `Ticket`, `Activity`, `Comment`, `Tag`, `CustomFieldDefinition`, `Notification`,
-  `Pipeline`, `PipelineStage`, `SearchResult`, and the `*Input` DTOs
+  `Pipeline`, `PipelineStage`, `SearchResult` и DTO `*Input`
   (`AccountInput`, `ContactInput`, `DealInput`, `TaskInput`, `TicketInput`,
-  `LeadInput`), plus observation/report types (`SalesSummaryReport`,
+  `LeadInput`), плюс типы наблюдений/отчётов (`SalesSummaryReport`,
   `PipelineReport`, `SupportSummaryReport`, `RevenueHistory`, `RiskObservationSet`,
   `BaselineData`, `StageBaseline`, `PeriodConversion`).
-- **Public API (funcs):** `NewService`, `MaxBulkArchiveIDs`; `ErrNotFound`,
+- **Public API (функции):** `NewService`, `MaxBulkArchiveIDs`; `ErrNotFound`,
   `ErrConflict`.
 - **Internal deps:** `audit, database, httpx, outbox, rbac`.
 - **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`.
-- **Fake:** none in-process. Tests drive a real PostgreSQL.
-- **Tests:** `crm_test.go` (the validators and the `JSONMap` column codec; the
-  first in-package tests) plus `internal/testsupport` integration tests and
-  `internal/api` handler tests, which drive a real PostgreSQL.
-- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/crm`,
-  with `audit`, `database`, `httpx`, `outbox` and `rbac` as its dependencies, all
-  of them proven. The "`httpx` and `outbox` are the real friction" claim was
-  wrong: both are proven leaves/scoped modules, so they travel with it.
-- **Cut lines:** the package moves whole. `database` (pool + `WithTx`), `rbac`
-  (Principal + permission catalog), `httpx` and `outbox` travel as declared
-  dependencies.
+- **Fake:** нет в процессе. Тесты движут реальный PostgreSQL.
+- **Tests:** `crm_test.go` (валидаторы и кодек столбца `JSONMap`; первые тесты внутри
+  пакета) плюс интеграционные тесты `internal/testsupport` и тесты обработчиков
+  `internal/api`, которые движут реальный PostgreSQL.
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/crm`, с `audit`,
+  `database`, `httpx`, `outbox` и `rbac` как зависимостями, все доказаны. Утверждение
+  «`httpx` и `outbox` — настоящее трение» было неверным: оба — доказанные листья/
+  модули с областью, поэтому путешествуют с ним.
+- **Cut lines:** пакет переезжает целиком. `database` (пул + `WithTx`), `rbac`
+  (Principal + каталог разрешений), `httpx` и `outbox` путешествуют как объявленные
+  зависимости.
 
-### internal/analytics  — pure computation
-- **Responsibility:** pure, deterministic arithmetic over money, ratios,
-  percentages, funnel/revenue/retention modelling, forecasting methods and risk
-  detection. **No database, no clock, no I/O.**
+### internal/analytics  — чистые вычисления
+- **Ответственность:** чистая, детерминированная арифметика над деньгами, долями,
+  процентами, моделированием воронки/выручки/удержания, методами прогнозирования и
+  обнаружением риска. **Без базы данных, без часов, без I/O.**
 - **Public API:** `Money`, `Ratio`, `Unit`, `Comparison`, `Evidence`,
   `RiskSignal`, `RiskSeverity`, `RiskSignalType`, `RiskThresholds`,
   `Forecast`, `ForecastMethod`, `ForecastPoint`, `ForecastParams`,
   `ForecastQuality`, `FunnelParams`, `RetentionParams`, `RevenueParams`,
   `StageSnapshot`, `Baseline`, `PeriodPoint`, `DealObservation`,
   `TaskObservation`, `AccountObservation`, `ConversionPeriodObservation`;
-  funcs `NewMoney`, `ParseMoney`, `NewRatioFrom*`, `FloatPercent`,
+  функции `NewMoney`, `ParseMoney`, `NewRatioFrom*`, `FloatPercent`,
   `PercentString`, `RunForecast`, `RunFunnel`, `RunRetention`, `RunRevenue`,
   `DetectStalledDeals`, `DetectOverdueTasks`, `DetectAccountsWithoutContact`,
   `DetectAmountSpikes`, `DetectConversionDrops`, `DetectStageConcentration`,
-  `SortSignals`, `SortPeriods`, `DefaultRiskThresholds`, and version consts.
-- **Internal deps:** none.
-- **External deps:** stdlib only (`math/big`, `math`, `sort`, …).
-- **Fake:** not applicable — it is already pure and deterministic.
-- **Tests:** `analytics_test.go` etc. (4 files), no database.
-- **Extract:** `yes` — **zero internal dependencies**, and it was actually
-  extracted, built, tested and run in a clean module. See `EXTRACT_READY.md`
-  (Candidate 1) and `EXTRACTION_TESTING.md`.
-- **Cut lines:** the whole package moves with nothing else. A consumer must
-  supply observations and read back results.
+  `SortSignals`, `SortPeriods`, `DefaultRiskThresholds` и константы версий.
+- **Internal deps:** нет.
+- **External deps:** только stdlib (`math/big`, `math`, `sort`, …).
+- **Fake:** неприменимо — он уже чистый и детерминированный.
+- **Tests:** `analytics_test.go` и др. (4 файла), без базы данных.
+- **Extract:** `yes` — **ноль внутренних зависимостей**, и он действительно выделен,
+  собран, протестирован и запущен в чистом модуле. См. `EXTRACT_READY.md` (Кандидат 1)
+  и `EXTRACTION_TESTING.md`.
+- **Cut lines:** весь пакет переезжает ни с чем больше. Потребитель должен поставить
+  наблюдения и прочитать обратно результаты.
 
 ---
 
-## Backend — application services
+## Бэкенд — прикладные сервисы
 
 ### internal/importx
-- **Responsibility:** Import Center: format detection, parsing (CSV/XLSX/JSON/
-  NDJSON/archives), mapping, validation, dry-run and execution against the CRM.
+- **Ответственность:** Центр импорта: определение формата, разбор (CSV/XLSX/JSON/
+  NDJSON/архивы), сопоставление, валидация, пробный прогон и исполнение против CRM.
 - **Public API:** `Service`, `Job`, `JobPayload`, `CreateRequest`, `Options`,
   `MappingEntry`, `AnalysisResult`, `ValidationReport`, `ValidationIssue`,
   `Report`, `RowError`, `FieldList`, `NewService`.
 - **Internal deps:** `audit, config, crm, database, httpx, importx/parsers,
-  importx/safe, jobs, outbox, rbac`. **10 internal deps** — see the 8+ note in
-  `DEPENDENCY_MAP.md`.
+  importx/safe, jobs, outbox, rbac`. **10 внутренних зависимостей** — см. примечание
+  о 8+ в `DEPENDENCY_MAP.md`.
 - **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`;
-  sub-package `parsers` adds `github.com/xuri/excelize/v2`, `safe` adds
+  подпакет `parsers` добавляет `github.com/xuri/excelize/v2`, `safe` добавляет
   `github.com/ulikunitz/xz`.
-- **Fake:** `safe` operates on local temp dirs (no external service). No in-process
-  fake of the CRM write path.
-- **Tests:** `importx` unit tests (2 files, incl. detection and temp cleanup);
-  integration via `testsupport`.
-- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/importx`,
-  with `audit`, `config`, `crm`, `database`, `httpx`, `importx/parsers`,
-  `importx/safe`, `jobs`, `outbox` and `rbac` as its dependencies, all proven. The
-  earlier `no` understated it: the write path into `crm` is a dependency, not a
-  blocker, and every dependency is proven.
-- **Cut lines:** `parsers/` and `safe/` are separable sub-packages; the service
-  itself is not.
+- **Fake:** `safe` работает с локальными временными каталогами (без внешнего сервиса).
+  Фейка пути записи в CRM в процессе нет.
+- **Tests:** модульные тесты `importx` (2 файла, включая определение и очистку
+  временных); интеграция через `testsupport`.
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/importx`, с
+  `audit`, `config`, `crm`, `database`, `httpx`, `importx/parsers`, `importx/safe`,
+  `jobs`, `outbox` и `rbac` как зависимостями, все доказаны. Прежнее `no` его
+  недооценивало: путь записи в `crm` — это зависимость, а не блокер, и каждая
+  зависимость доказана.
+- **Cut lines:** `parsers/` и `safe/` — отделяемые подпакеты; сам сервис — нет.
 
-### internal/importx/safe  — untrusted-archive extraction
-- **Responsibility:** the one place that writes bytes chosen by an uploader to
-  disk. It detects a container from its magic bytes and refuses a path traversal,
-  a symlink, an oversized entry, a zip bomb and excessive nesting, writing into a
-  private `0700` root it owns.
+### internal/importx/safe  — распаковка недоверенных архивов
+- **Ответственность:** единственное место, которое пишет на диск байты, выбранные
+  загружающим. Он определяет контейнер по сигнатуре и отклоняет обход пути,
+  символическую ссылку, слишком большую запись, zip-бомбу и чрезмерную вложенность,
+  записывая в приватный корень `0700`, которым владеет.
 - **Public API:** `Limits`, `DefaultLimits`, `Extractor`, `NewExtractor`,
   `Format`, `DetectFormat`, `ExtractedFile`, `ExtractResult`, `IsArchive`,
-  `IsSupported`, and the `Err*` rejections (`ErrTooManyEntries`, `ErrTooLarge`,
+  `IsSupported` и отказы `Err*` (`ErrTooManyEntries`, `ErrTooLarge`,
   `ErrEntryTooLarge`, `ErrTooDeep`, `ErrUnsafePath`, `ErrUnsupportedLink`,
   `ErrRatioExceeded`, `ErrUnsupportedType`).
-- **Internal deps:** none — it is a leaf.
-- **External deps:** `github.com/ulikunitz/xz` (standard library for zip/tar/gzip/bzip2).
-- **Fake:** operates on local temp directories; no external service.
-- **Tests:** 2 unit files (~24 tests) covering traversal, symlinks, zip bombs,
-  deep nesting, corrupt data and independent fixture decoding.
-- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/safe`.
-  Because it is the code that handles attacker-controlled input, "it can be lifted
-  out and its security tests run in isolation" is worth more here than anywhere
-  else.
-- **Cut lines:** moves on its own; nothing inside `importx` needs to move with it.
+- **Internal deps:** нет — это лист.
+- **External deps:** `github.com/ulikunitz/xz` (стандартная библиотека для zip/tar/gzip/bzip2).
+- **Fake:** работает с локальными временными каталогами; без внешнего сервиса.
+- **Tests:** 2 модульных файла (~24 теста), покрывающих обход, символические ссылки,
+  zip-бомбы, глубокую вложенность, повреждённые данные и независимое декодирование
+  фикстур.
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/safe`. Поскольку
+  это код, обрабатывающий контролируемый атакующим ввод, «его можно поднять и его
+  тесты безопасности идут изолированно» здесь стоит дороже, чем где-либо ещё.
+- **Cut lines:** переезжает сам; ничто внутри `importx` не должно переезжать с ним.
 
-### internal/importx/parsers  — tabular source parsing
-- **Responsibility:** convert CSV/TSV/JSON/JSONL/XLSX/XML into a common row model,
-  reporting the inferred column set, the detected types and any row-level problems
-  instead of guessing silently.
+### internal/importx/parsers  — разбор табличных источников
+- **Ответственность:** превращать CSV/TSV/JSON/JSONL/XLSX/XML в общую модель строки,
+  сообщая выведенный набор столбцов, определённые типы и любые проблемы уровня строки,
+  а не угадывая молча.
 - **Public API:** `Parse`, `Stream`, `Detect`, `ListSheets`, `Format`, `Row`,
   `Result`, `RowError`, `Options`, `StreamOptions`, `Batch`, `ParseDate`,
   `ParseBool`, `ParseNumber`.
-- **Internal deps:** none — it is a leaf.
+- **Internal deps:** нет — это лист.
 - **External deps:** `github.com/xuri/excelize/v2`.
-- **Tests:** added in this slice; pins header normalisation, row recovery, type
-  inference, XLSX sheet handling, XML records and encoding rejection. See the
-  bug note below.
-- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/parsers`.
-  Writing its tests found two real bugs, both fixed: XLSX was rejected by the
-  UTF-8 check applied to every format, and the XML parser split each record into
-  an attribute row and a field row.
-- **Cut lines:** moves on its own; nothing inside `importx` needs to move with it.
+- **Tests:** добавлены в этом срезе; закрепляют нормализацию заголовка, восстановление
+  строк, вывод типов, обработку листов XLSX, записи XML и отклонение кодировки. См.
+  примечание о багах ниже.
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/parsers`. Написание
+  его тестов нашло два реальных бага, оба исправлены: XLSX отклонялся проверкой
+  UTF-8, применённой ко всем форматам, а XML-парсер разбивал каждую запись на строку
+  атрибутов и строку полей.
+- **Cut lines:** переезжает сам; ничто внутри `importx` не должно переезжать с ним.
 
-### internal/migratex  — external data migration
-- **Responsibility:** move data from an external source (PostgreSQL, SQLite,
-  REST) into ForgeCRM, with reconciliation records.
+### internal/migratex  — миграция внешних данных
+- **Ответственность:** переносить данные из внешнего источника (PostgreSQL, SQLite,
+  REST) в ForgeCRM, с записями сверки.
 - **Public API:** `Service`, `Source`, `SourceKind`, `TableSchema`, `ColumnInfo`,
   `ConnectionConfig`, `CreateRequest`, `MigrationJob`, `Reconciliation`,
   `JSONMap`, `NewService`, `NewPostgresSource`, `NewSQLiteSource`,
@@ -207,615 +206,604 @@ Two things this document deliberately does not do:
 - **Internal deps:** `audit, database, httpx, integrations, rbac, secrets`.
 - **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`,
   `modernc.org/sqlite`.
-- **Fake:** `Source` is an interface (a documented seam); a REST source adapter is
-  included.
-- **Tests:** integration via `testsupport`.
-- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/migratex`,
-  with `audit`, `database`, `httpx`, `integrations`, `rbac` and `secrets` as its
-  dependencies, all proven. The `Source` interface is the boundary; sources stay
-  pluggable, and `Implemented` names the three that have a real adapter.
-- **Cut lines:** the `Source` interface is the boundary; sources are pluggable.
+- **Fake:** `Source` — интерфейс (документированный шов); адаптер источника REST включён.
+- **Tests:** интеграция через `testsupport`.
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/migratex`, с
+  `audit`, `database`, `httpx`, `integrations`, `rbac` и `secrets` как зависимостями,
+  все доказаны. Интерфейс `Source` — это граница; источники остаются подключаемыми, а
+  `Implemented` называет три, у которых есть реальный адаптер.
+- **Cut lines:** интерфейс `Source` — граница; источники подключаемы.
 
-### internal/ai  — provider abstraction, contextual assist, MCP, agent tools
-- **Responsibility:** model-provider abstraction (Ollama, OpenAI-compatible),
-  permission-checked + PII-masked context assembly, insight generation with a
-  server-computed grounding score, the MCP JSON-RPC transport, the tool registry
-  and the AI-backed agent executor.
-- **Public API:** `Provider` (interface), `Service`, `OllamaProvider`,
+### internal/ai  — абстракция провайдера, контекстный assist, MCP, инструменты агента
+- **Ответственность:** абстракция провайдера модели (Ollama, совместимые с OpenAI),
+  сборка контекста с проверкой прав + маскированием PII, генерация инсайтов с
+  вычисляемым сервером баллом обоснованности, транспорт MCP JSON-RPC, реестр
+  инструментов и исполнитель агента на базе ИИ.
+- **Public API:** `Provider` (интерфейс), `Service`, `OllamaProvider`,
   `OpenAICompatibleProvider`, `CompletionRequest`, `CompletionResponse`,
   `AssistRequest`, `Insight`, `Fact`, `Disclosure`, `Draft`, `Confidence`,
   `ContextBlock`, `EntityType`, `Kind`, `Trust`, `MCPServer`, `ToolRegistry`,
   `Tool`, `ToolDescriptor`, `AgentExecutor`, `PromptInput`, `Message`,
-  `RPCError`, `Request`, `Response`; funcs `NewService`, `NewMCPServer`,
+  `RPCError`, `Request`, `Response`; функции `NewService`, `NewMCPServer`,
   `NewToolRegistry`, `NewAgentExecutor`, `AssembleSystemPrompt`,
-  `DeniedToolNames`, `HTTPErrorFrom`, `RiskTier`; errors `ErrDisabled`,
+  `DeniedToolNames`, `HTTPErrorFrom`, `RiskTier`; ошибки `ErrDisabled`,
   `ErrRateLimited`, `ErrProviderUnavailable`, `ErrUnknownEntity`,
   `ErrInsightNotCached`.
 - **Internal deps:** `agent, audit, config, crm, database, httpx, logging,
-  ratelimit, rbac`. **9 internal deps.**
+  ratelimit, rbac`. **9 внутренних зависимостей.**
 - **External deps:** `github.com/google/uuid`, stdlib `net/http`.
-- **Fake:** `Provider` is an interface with **two real implementations** but **no
-  in-process fake**; tests use `httptest` servers or an unreachable address.
-- **Tests:** 7 unit files (prompt assembly, confidence/grounding, masking, MCP
-  protocol, provider error classification) + integration (`ai_assist_test.go`,
-  `ai_assist_cache_test.go`, `ai_provider_outage_test.go`).
-- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/ai`, with
+- **Fake:** `Provider` — интерфейс с **двумя реальными реализациями**, но **без
+  фейка в процессе**; тесты используют серверы `httptest` или недостижимый адрес.
+- **Tests:** 7 модульных файлов (сборка промпта, уверенность/обоснованность,
+  маскирование, протокол MCP, классификация ошибок провайдера) + интеграция
+  (`ai_assist_test.go`, `ai_assist_cache_test.go`, `ai_provider_outage_test.go`).
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/ai`, с
   `agent`, `audit`, `config`, `crm`, `database`, `httpx`, `logging`, `ratelimit`,
-  `rbac` and `retention` as its dependencies, all proven. The smoke proves the
-  context fence neutralises a forged record and the risk tiers are the explicit
-  mapping. The earlier `no` understated it: binding to `crm` is not a blocker when
-  `crm` is proven.
-- **Cut lines:** the `Provider` interface and prompt/confidence logic are the
-  portable part; the service binds to `crm`.
+  `rbac` и `retention` как зависимостями, все доказаны. Smoke доказывает, что
+  ограждение контекста нейтрализует подделанную запись, а уровни риска — это явное
+  отображение. Прежнее `no` его недооценивало: привязка к `crm` — не блокер, когда
+  `crm` доказан.
+- **Cut lines:** интерфейс `Provider` и логика промпта/уверенности — переносимая
+  часть; сервис привязывается к `crm`.
 
-### internal/agent  — human-in-the-loop execution
-- **Responsibility:** the approval state machine (ADR 0005). A proposed
-  destructive action is recorded, approved/denied, then executed through the same
-  permission-checked tool path.
-- **Public API:** `Service`, `Executor` (interface), `ExecutionFunc`, `Config`,
+### internal/agent  — исполнение с участием человека
+- **Ответственность:** конечный автомат согласования (ADR 0005). Предложенное опасное
+  действие записывается, одобряется/отклоняется, затем исполняется через тот же путь
+  инструментов с проверкой прав.
+- **Public API:** `Service`, `Executor` (интерфейс), `ExecutionFunc`, `Config`,
   `Action`, `Run`, `Proposal`, `Approval`, `Decision`, `Decider`, `RiskTier`;
-  funcs `NewService`, `ArgumentsHash`, `CanonicalArguments`.
+  функции `NewService`, `ArgumentsHash`, `CanonicalArguments`.
 - **Internal deps:** `audit, database, httpx`.
 - **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`.
-- **Fake:** `Executor` is the injection seam.
-- **Tests:** `agent_test.go` (unit) + `testsupport/agent_approvals_test.go`.
-- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/agent`,
-  with `audit`, `database` and `httpx` (and `httpx`'s own leaves) as its
-  dependencies. Its argument-hash test runs in the extracted module. The
-  `Executor` is supplied by the host application, so the seam travels with it.
-- **Cut lines:** moves with `audit`/`database`; the `Executor` is supplied by the
-  host application.
+- **Fake:** `Executor` — шов внедрения.
+- **Tests:** `agent_test.go` (модуль) + `testsupport/agent_approvals_test.go`.
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/agent`, с `audit`,
+  `database` и `httpx` (и собственными листьями `httpx`) как зависимостями. Его тест
+  хеша аргументов идёт в выделенном модуле. `Executor` поставляет хост-приложение,
+  поэтому шов путешествует с ним.
+- **Cut lines:** переезжает с `audit`/`database`; `Executor` поставляет хост-приложение.
 
-### internal/workflow  — automation engine
-- **Responsibility:** declarative workflows: triggers (event/schedule/manual),
-  steps (condition, branch, foreach, delay, actions), expression evaluation,
-  run/step history, template catalog, JSON import/export.
+### internal/workflow  — движок автоматизации
+- **Ответственность:** декларативные workflow: триггеры (event/schedule/manual),
+  шаги (condition, branch, foreach, delay, действия), вычисление выражений, история
+  прогонов/шагов, каталог шаблонов, импорт/экспорт JSON.
 - **Public API:** `Engine`, `Store`, `Config`, `Workflow`, `Definition`,
   `Step`, `Condition`, `Template`, `TemplateRef`, `CreateInput`, `Run`,
-  `RunResult`, `StepRun`, `EvalContext`, `ExportDocument`; funcs `NewEngine`,
+  `RunResult`, `StepRun`, `EvalContext`, `ExportDocument`; функции `NewEngine`,
   `NewStore`, `NewEvalContext`, `ParseDefinition`, `ExportWorkflow`,
   `ImportWorkflow`, `ValidateCatalog`, `ParseCron`, `RegisterKnownEvents`,
-  `Templates`, `TemplateByID`, `InputFromTemplate`; const
-  `DefinitionSchemaVersion`; trigger kinds `TriggerEvent`, `TriggerEventID`,
+  `Templates`, `TemplateByID`, `InputFromTemplate`; константа
+  `DefinitionSchemaVersion`; виды триггеров `TriggerEvent`, `TriggerEventID`,
   `TriggerManual`, `TriggerSchedule`.
 - **Internal deps:** `audit, crm, database, httpx, logging, outbox, rbac`.
 - **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`.
-- **Fake:** none in-process.
-- **Tests:** `workflow` unit tests (2 files: cron, definition) +
+- **Fake:** нет в процессе.
+- **Tests:** модульные тесты `workflow` (2 файла: cron, определение) +
   `testsupport/workflow_engine_test.go`, `workflow_templates_test.go`.
-- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/workflow`,
-  with `audit`, `crm`, `database`, `httpx`, `logging`, `outbox` and `rbac` as its
-  dependencies, all proven. The smoke registers the real event vocabulary and
-  validates the catalog. Calling `crm.Service` directly is not a blocker when `crm`
-  is proven.
-- **Cut lines:** the definition/parse/template layer is separable from the
-  execution engine.
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/workflow`, с
+  `audit`, `crm`, `database`, `httpx`, `logging`, `outbox` и `rbac` как
+  зависимостями, все доказаны. Smoke регистрирует реальный словарь событий и
+  валидирует каталог. Прямой вызов `crm.Service` — не блокер, когда `crm` доказан.
+- **Cut lines:** слой определения/разбора/шаблонов отделяем от движка исполнения.
 
 ### internal/simulate  — Simulation Lab
-- **Responsibility:** "what if" scenarios against a CRM baseline. **Read-only:**
-  preview and run never write CRM data, never enqueue jobs, never send webhooks.
+- **Ответственность:** сценарии «что если» против базовой линии CRM. **Только
+  чтение:** предпросмотр и прогон никогда не пишут данные CRM, не ставят задания, не
+  отправляют вебхуки.
 - **Public API:** `Service`, `Scenario`, `Run`, `CatalogEntry`, `ParamSpec`,
   `CreateScenarioInput`, `RunInput`, `PreviewInput`, `PreviewResult`, `Catalog`,
   `NewService`.
 - **Internal deps:** `analytics, audit, crm, database, rbac`.
 - **External deps:** `github.com/google/uuid`.
-- **Fake:** none; reads through `crm.Service`.
-- **Tests:** `testsupport/simulation_test.go` (integration) + frontend page tests.
-- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/simulate`,
-  with `analytics`, `audit`, `crm`, `database` and `rbac` as its dependencies, all
-  proven. Reading `crm` is not a blocker when `crm` is proven.
-- **Cut lines:** `analytics` is the portable core; `simulate` is the persistence +
-  service wrapper.
+- **Fake:** нет; читает через `crm.Service`.
+- **Tests:** `testsupport/simulation_test.go` (интеграция) + тесты страницы фронтенда.
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/simulate`, с
+  `analytics`, `audit`, `crm`, `database` и `rbac` как зависимостями, все доказаны.
+  Чтение `crm` — не блокер, когда `crm` доказан.
+- **Cut lines:** `analytics` — переносимое ядро; `simulate` — обёртка сохранения +
+  сервиса.
 
 ### internal/forecast
-- **Responsibility:** revenue forecasting from org history; freezes params,
-  history and algorithm version into a run row.
+- **Ответственность:** прогнозирование выручки по истории организации; замораживает
+  параметры, историю и версию алгоритма в строку прогона.
 - **Public API:** `Service`, `Run`, `RunInput`, `CatalogEntry`, `Catalog`,
   `NewService`.
 - **Internal deps:** `analytics, audit, crm, database, rbac`.
 - **External deps:** `github.com/google/uuid`.
 - **Tests:** `testsupport/intelligence_test.go`.
-- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/forecast`,
-  with `analytics`, `audit`, `crm`, `database` and `rbac` as its dependencies.
-- **Cut lines:** as `simulate`.
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/forecast`, с
+  `analytics`, `audit`, `crm`, `database` и `rbac` как зависимостями.
+- **Cut lines:** как у `simulate`.
 
 ### internal/risk
-- **Responsibility:** scan the CRM for explainable risk conditions; keep a live
-  signal per (org, type) with cited evidence; manage thresholds.
+- **Ответственность:** сканировать CRM на объяснимые условия риска; держать живой
+  сигнал на (организацию, тип) с цитируемыми доказательствами; управлять порогами.
 - **Public API:** `Service`, `Signal`, `ListFilter`, `ScanResult`, `Thresholds`,
   `NewService`.
 - **Internal deps:** `analytics, audit, crm, database, rbac`.
 - **External deps:** `github.com/google/uuid`.
 - **Tests:** `testsupport/intelligence_test.go`.
-- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/risk`,
-  with `analytics`, `audit`, `crm`, `database` and `rbac` as its dependencies.
-- **Cut lines:** as `simulate`.
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/risk`, с
+  `analytics`, `audit`, `crm`, `database` и `rbac` как зависимостями.
+- **Cut lines:** как у `simulate`.
 
-### internal/integrations  — adapter lifecycle
-- **Responsibility:** external integration adapters (REST, webhook-out, SMTP
-  probe, database descriptor). The outbound SSRF guard it used to own now lives in
-  `internal/netguard`; the names below are re-exported for existing callers.
-- **Public API:** `Hub`, `Adapter` (interface), `GuardedClient`, `Integration`,
+### internal/integrations  — жизненный цикл адаптера
+- **Ответственность:** адаптеры внешних интеграций (REST, webhook-out, проба SMTP,
+  дескриптор базы). Исходящая защита SSRF, которой он раньше владел, теперь живёт в
+  `internal/netguard`; имена ниже реэкспортируются для существующих вызывающих.
+- **Public API:** `Hub`, `Adapter` (интерфейс), `GuardedClient`, `Integration`,
   `Run`, `Schema`, `Table`, `Column`, `Record`, `ReadRequest`, `WriteResult`,
-  `Status`, `CreateRequest`; funcs `NewHub`, `NewGuardedClient`,
-  `ValidateOutboundURL`, `IsBlockedIP` (the last four re-export `netguard`);
+  `Status`, `CreateRequest`; функции `NewHub`, `NewGuardedClient`,
+  `ValidateOutboundURL`, `IsBlockedIP` (последние четыре реэкспортируют `netguard`);
   `ErrWriteNotSupported`.
 - **Internal deps:** `audit, database, httpx, netguard, rbac, secrets`.
 - **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`.
-- **Fake:** `Adapter` is the seam; `webhookOutAdapter`/`restAdapter` are real
-  implementations.
-- **Tests:** `integrations` unit tests (URL validation) + integration. The SSRF
-  tests moved to `netguard`.
-- **Extract:** **`yes`** — extracted and proven by
-  `scripts/extract-test/integrations`, with `audit`, `database`, `httpx`,
-  `netguard`, `rbac` and `secrets` as its dependencies, all of them proven. The
-  SSRF guard is already out to `netguard`; the rest lifts out with the keyring.
-  **was:** `almost` — the SSRF guard is already out; the rest needs `secrets`
-  and `audit`.
-- **Cut lines:** the guard moved to `netguard`; the persistence does not.
+- **Fake:** `Adapter` — шов; `webhookOutAdapter`/`restAdapter` — реальные реализации.
+- **Tests:** модульные тесты `integrations` (валидация URL) + интеграция. Тесты SSRF
+  переехали в `netguard`.
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/integrations`, с
+  `audit`, `database`, `httpx`, `netguard`, `rbac` и `secrets` как зависимостями, все
+  доказаны. Защита SSRF уже вынесена в `netguard`; остальное поднимается с кольцом
+  ключей. **было:** `almost` — защита SSRF уже вынесена; остальному нужны `secrets` и
+  `audit`.
+- **Cut lines:** защита переехала в `netguard`; сохранение — нет.
 
-### internal/events  — inbound events + webhook delivery
-- **Responsibility:** accept inbound events, verify signatures/timestamps, and
-  deliver outbound webhooks with retry budget, dead-letter and replay.
-- **Public API:** `Gateway`, `Dispatcher`, `DeliverySender`, `Poster` (interface),
+### internal/events  — входящие события + доставка вебхуков
+- **Ответственность:** принимать входящие события, проверять подписи/время и
+  доставлять исходящие вебхуки с бюджетом повторов, dead-letter и повтором.
+- **Public API:** `Gateway`, `Dispatcher`, `DeliverySender`, `Poster` (интерфейс),
   `Subscription`, `Delivery`, `InboundEvent`, `CreateSubscriptionRequest`;
-  funcs `NewGateway`, `NewDispatcher`, `NewDeliverySender`,
+  функции `NewGateway`, `NewDispatcher`, `NewDeliverySender`,
   `NewDeliverySenderWithPoster`, `NewPlainPoster`, `SignInboundForTest`,
-  `CorrelationIDFrom`; consts `MaxInboundPayloadBytes`, `TimestampTolerance`.
+  `CorrelationIDFrom`; константы `MaxInboundPayloadBytes`, `TimestampTolerance`.
 - **Internal deps:** `audit, database, httpx, integrations, logging, outbox,
-  rbac, secrets`. **8 internal deps.**
+  rbac, secrets`. **8 внутренних зависимостей.**
 - **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`.
-- **Fake:** `Poster` is the documented transport seam; `NewPlainPoster` is a
-  test-only unguarded poster.
+- **Fake:** `Poster` — документированный транспортный шов; `NewPlainPoster` —
+  неохраняемый постер только для теста.
 - **Tests:** `testsupport/webhook_sink_test.go`, `webhook_deadletter_test.go`.
-- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/events`,
-  with `audit`, `database`, `httpx`, `integrations`, `logging`, `outbox`, `rbac`
-  and `secrets` as its dependencies, all proven. The smoke pins the signature,
-  tolerance and payload-cap contract.
-- **Cut lines:** the `Poster` interface is the boundary.
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/events`, с
+  `audit`, `database`, `httpx`, `integrations`, `logging`, `outbox`, `rbac` и
+  `secrets` как зависимостями, все доказаны. Smoke закрепляет контракт подписи,
+  допуска и предела payload.
+- **Cut lines:** интерфейс `Poster` — граница.
 
-### internal/notify  — email + Telegram
-- **Responsibility:** SMTP email and Telegram delivery; link codes; command
-  handling.
+### internal/notify  — почта + Telegram
+- **Ответственность:** почта SMTP и доставка Telegram; коды связи; обработка команд.
 - **Public API:** `EmailService`, `TelegramService`, `Message`, `LinkRequest`,
-  `Update`; funcs `NewEmailService`, `NewTelegramService`; vars `ErrDisabled`,
-  `ErrTelegramDisabled`, `AllowedCommands`; const `LinkCodeTTL`.
+  `Update`; функции `NewEmailService`, `NewTelegramService`; переменные `ErrDisabled`,
+  `ErrTelegramDisabled`, `AllowedCommands`; константа `LinkCodeTTL`.
 - **Internal deps:** `audit, config, database, httpx, rbac, secrets`.
 - **External deps:** `github.com/google/uuid`, stdlib `net/smtp`.
-- **Fake:** `Enabled()` tolerates nil; when disabled it is a no-op. **No realistic
-  fake transport.**
-- **Tests:** none in-package (no `_test.go`). This is a gap.
-- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/notify`,
-  with `audit`, `config`, `database`, `httpx`, `rbac` and `secrets` as its
-  dependencies, all proven. The smoke proves a disabled transport reports off and
-  refuses to send. The earlier "would need a `Mailer` interface" was wrong: the
-  transports already tolerate a nil receiver and return `ErrDisabled`.
-- **Cut lines:** would need a `Mailer` interface to be extractable.
+- **Fake:** `Enabled()` терпит nil; когда выключено, это no-op. **Реалистичного
+  фейкового транспорта нет.**
+- **Tests:** нет в пакете (нет `_test.go`). Это пробел.
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/notify`, с
+  `audit`, `config`, `database`, `httpx`, `rbac` и `secrets` как зависимостями, все
+  доказаны. Smoke доказывает, что выключенный транспорт сообщает off и отказывается
+  отправлять. Прежнее «понадобится интерфейс `Mailer`» было неверным: транспорты уже
+  терпят nil-получатель и возвращают `ErrDisabled`.
+- **Cut lines:** для извлекаемости понадобился бы интерфейс `Mailer`.
 
-### internal/oidc  — single sign-on
-- **Responsibility:** the OpenID Connect authorization-code flow with PKCE and a
-  nonce, and the registry of identity providers. It begins a login (storing the
-  state, nonce and PKCE verifier server-side), completes it (verifying the ID
-  token's signature, issuer, audience, expiry and nonce before reading a claim),
-  resolves the identity to a local account and optionally provisions one. A local
-  account is keyed by `(provider, subject)`, never by email. The client secret is
-  sealed with the platform keyring and never returned by an API.
+### internal/oidc  — единый вход
+- **Ответственность:** поток authorization-code OpenID Connect с PKCE и nonce и
+  реестр провайдеров идентичности. Он начинает вход (сохраняя состояние, nonce и
+  PKCE-верификатор на сервере), завершает его (проверяя подпись, издателя, аудиторию,
+  срок и nonce ID-токена, прежде чем читать утверждение), разрешает идентичность в
+  локальный аккаунт и опционально провижинит его. Локальный аккаунт имеет ключ
+  `(provider, subject)`, никогда email. Клиентский секрет запечатывается кольцом
+  ключей платформы и никогда не возвращается API.
 - **Public API:** `Service`, `Provider`, `ProviderInput`, `PublicProvider`,
-  `Identity`; funcs `NewService`, `Enabled`, `List`, `EnabledProviders`,
+  `Identity`; функции `NewService`, `Enabled`, `List`, `EnabledProviders`,
   `Create`, `Update`, `Delete`, `Begin`, `Complete`, `ListIdentities`,
-  `RedirectURL`, `LoginURL`; vars `ErrUnknownProvider`, `ErrInvalidProvider`,
+  `RedirectURL`, `LoginURL`; переменные `ErrUnknownProvider`, `ErrInvalidProvider`,
   `ErrTokenInvalid`, `ErrDisabled`.
 - **Internal deps:** `audit, config, database, secrets`.
 - **External deps:** `github.com/coreos/go-oidc/v3/oidc`,
   `golang.org/x/oauth2`, `github.com/google/uuid`, `github.com/jackc/pgx/v5`.
-- **Fake:** none. The tests use an in-process provider that publishes real
-  discovery and JWKS documents and signs real ID tokens, rather than a mock.
-- **Tests:** `oidc_test.go` (provider input validation) plus
-  `api/sso_integration_test.go` — the whole flow over the real HTTP stack against
-  PostgreSQL, including wrong issuer, audience, nonce and an unverified email.
-- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/oidc` (with
-  `audit`, `config`, `database`, `secrets`, `logging`, `httpx`, `ratelimit` and
-  `retention`, each proven in turn); the smoke program drives `Public`,
-  `Enabled`, `RedirectURL` and `LoginURL` in a clean module. It holds no CRM data and
-  reads no principal, so it carries no application-layer dependency.
-- **Cut lines:** moves with `secrets`, `database`, `config`, `migrate`.
+- **Fake:** нет. Тесты используют провайдер в процессе, публикующий реальные документы
+  обнаружения и JWKS и подписывающий реальные ID-токены, а не мок.
+- **Tests:** `oidc_test.go` (валидация ввода провайдера) плюс
+  `api/sso_integration_test.go` — весь поток через реальный стек HTTP против
+  PostgreSQL, включая неверного издателя, аудиторию, nonce и неподтверждённый email.
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/oidc` (с `audit`,
+  `config`, `database`, `secrets`, `logging`, `httpx`, `ratelimit` и `retention`,
+  каждый доказан по очереди); программа smoke движет `Public`, `Enabled`,
+  `RedirectURL` и `LoginURL` в чистом модуле. Он не держит данных CRM и не читает
+  принципала, поэтому не несёт зависимости прикладного слоя.
+- **Cut lines:** переезжает с `secrets`, `database`, `config`, `migrate`.
 
-### internal/authn  — authentication
-- **Responsibility:** passwords (Argon2), sessions, TOTP MFA, recovery codes,
-  login attempts and lockout, OIDC config surface.
+### internal/authn  — аутентификация
+- **Ответственность:** пароли (Argon2), сессии, TOTP MFA, коды восстановления,
+  попытки входа и блокировка, поверхность конфигурации OIDC.
 - **Public API:** `Service`, `LoginRequest`, `LoginResult`, `Session`, `User`;
-  funcs `NewService`, `ValidatePassword`, `CorrelationContext`; consts
+  функции `NewService`, `ValidatePassword`, `CorrelationContext`; константы
   `MFATicketTTL`, `MinPasswordLength`, `ResetTokenTTL`, `StepUpWindow`.
 - **Internal deps:** `audit, config, database, logging, rbac, secrets`.
 - **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`,
   `github.com/pquerna/otp`, `.../totp`.
-- **Fake:** none.
-- **Tests:** `authn_test.go` (password policy) + `testsupport/concurrency_test.go`.
-- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/authn`,
-  with `audit`, `config`, `database`, `httpx`, `logging`, `migrate`, `migrations`,
-  `ratelimit`, `rbac`, `retention` and `secrets` as its dependencies, all proven.
-  The earlier `no` said extraction was not sensible "until those move first"; they
-  have all moved, so it now moves too. The smoke pins the password policy and the
-  step-up window.
-- **Cut lines:** moves with `rbac`, `secrets`, `database`, `config`, `migrate`.
+- **Fake:** нет.
+- **Tests:** `authn_test.go` (политика паролей) + `testsupport/concurrency_test.go`.
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/authn`, с `audit`,
+  `config`, `database`, `httpx`, `logging`, `migrate`, `migrations`, `ratelimit`,
+  `rbac`, `retention` и `secrets` как зависимостями, все доказаны. Прежнее `no`
+  говорило, что выделение неразумно «пока те не переедут первыми»; они все переехали,
+  поэтому теперь переезжает и он. Smoke закрепляет политику паролей и окно step-up.
+- **Cut lines:** переезжает с `rbac`, `secrets`, `database`, `config`, `migrate`.
 
 ---
 
-## Backend — platform / infrastructure
+## Бэкенд — платформа / инфраструктура
 
-### internal/rbac  — permission catalog
-- **Responsibility:** the permission catalog and `Principal` with `Has`/`HasAll`/
-  `HasAny`/`Require`. Must stay in sync with migration 0004.
-- **Public API:** `Permission`, `Principal`, `Role`, `Service`; funcs
+### internal/rbac  — каталог разрешений
+- **Ответственность:** каталог разрешений и `Principal` с `Has`/`HasAll`/`HasAny`/
+  `Require`. Должен оставаться в шаге с миграцией 0004.
+- **Public API:** `Permission`, `Principal`, `Role`, `Service`; функции
   `NewService`, `NewPrincipal`, `All`, `Known`; `ErrForbidden`.
 - **Internal deps:** `database`.
 - **External deps:** `github.com/google/uuid`.
-- **Fake:** `NewPrincipal` builds a principal from an explicit permission set —
-  usable as a fake principal in tests.
-- **Tests:** `principal_test.go` + `testsupport` (seed/catalog match).
-- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/rbac`,
-  with `database` as its one dependency. The package is extracted whole rather
-  than split: the docs once proposed splitting a pure catalog and `Principal` from
-  the DB-backed service, but the catalog, the principal and the service share the
-  permission type and already lift out together, so a split would be a change to
-  the code and not to the boundary. The boundary is pinned in `archtest`: `rbac`
-  may import `database` and nothing else in the module.
-- **Cut lines:** moves with `database`.
+- **Fake:** `NewPrincipal` строит принципала из явного набора разрешений — годится
+  как фейковый принципал в тестах.
+- **Tests:** `principal_test.go` + `testsupport` (совпадение сида/каталога).
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/rbac`, с
+  `database` как единственной зависимостью. Пакет выделяется целиком, а не раздельно:
+  документы однажды предлагали отделить чистый каталог и `Principal` от сервиса на
+  базе, но каталог, принципал и сервис делят тип разрешения и уже поднимаются вместе,
+  поэтому разделение было бы изменением кода, а не границы. Граница закреплена в
+  `archtest`: `rbac` может импортировать `database` и ничего больше в модуле.
+- **Cut lines:** переезжает с `database`.
 
 ### internal/audit
-- **Responsibility:** append-only action trail (`audit_log`, DB-trigger enforced)
-  and the security-event stream (`security_events`).
-- **Public API:** `Logger`, `Entry`, `Action`, `SecurityEvent`; funcs `New`,
+- **Ответственность:** журнал действий «только добавление» (`audit_log`,
+  обеспечиваемый триггером БД) и поток событий безопасности (`security_events`).
+- **Public API:** `Logger`, `Entry`, `Action`, `SecurityEvent`; функции `New`,
   `StrPtr`, `UUIDPtr`.
 - **Internal deps:** `database, logging`.
 - **External deps:** `github.com/google/uuid`.
-- **Fake:** none (writes to the DB). Uses the ambient transaction.
-- **Tests:** `audit_test.go` (the action vocabulary, the validation ordering that
-  keeps an unattributable row out of the trail, and the marshalling helpers) plus
-  integration via `testsupport`.
-- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/audit`,
-  with `database` and `logging` as its two dependencies. Its schema lives in
-  migration 0001, so a real extraction would carry a migration with it; that is
-  noted rather than hidden. What the harness proves is that the Go package has no
-  coupling to the application.
-- **Cut lines:** moves with `database` and `logging`.
+- **Fake:** нет (пишет в БД). Использует окружающую транзакцию.
+- **Tests:** `audit_test.go` (словарь действий, порядок валидации, который держит
+  неприписываемую строку вне журнала, и помощники маршалинга) плюс интеграция через
+  `testsupport`.
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/audit`, с
+  `database` и `logging` как двумя зависимостями. Его схема живёт в миграции 0001,
+  поэтому реальное выделение понесло бы миграцию с собой; это указано, а не скрыто.
+  Набор доказывает, что у Go-пакета нет связи с приложением.
+- **Cut lines:** переезжает с `database` и `logging`.
 
 ### internal/database
-- **Responsibility:** connection pool, `WithTx`, `TxFromContext`, error
-  classification (`IsNoRows`, `IsUniqueViolation`, …), `Querier`.
-- **Public API:** `DB`, `Tx`, `Querier` (interface), `Connect`, `ConnectWithPool`,
-  `WithTx`, `TxFromContext`, `Is*` helpers, `DefaultMaxConns`, `MaxAllowedConns`.
-- **Internal deps:** none.
+- **Ответственность:** пул соединений, `WithTx`, `TxFromContext`, классификация
+  ошибок (`IsNoRows`, `IsUniqueViolation`, …), `Querier`.
+- **Public API:** `DB`, `Tx`, `Querier` (интерфейс), `Connect`, `ConnectWithPool`,
+  `WithTx`, `TxFromContext`, помощники `Is*`, `DefaultMaxConns`, `MaxAllowedConns`.
+- **Internal deps:** нет.
 - **External deps:** `github.com/jackc/pgx/v5`, `.../pgconn`, `.../pgxpool`.
-- **Fake:** `Querier` is an interface (seam). No in-memory DB.
-- **Tests:** `pool_test.go` (no server needed: the pool bound is checked before a
-  connection is attempted).
-- **Extract:** **`yes`** — a leaf with no in-module dependency; extracted and
-  proven by `scripts/extract-test/database`. Its pool guard and transaction
-  contract are testable with no server, which is what makes the extraction cheap.
-  That it is the shared substrate is a fact about desirability, not feasibility,
-  and the guarantee worth having is that it *can* lift out.
-- **Cut lines:** it is the common infrastructure component.
+- **Fake:** `Querier` — интерфейс (шов). БД в памяти нет.
+- **Tests:** `pool_test.go` (сервер не нужен: граница пула проверяется до попытки
+  соединения).
+- **Extract:** **`yes`** — лист без внутренних зависимостей; выделен и доказан
+  `scripts/extract-test/database`. Его защита пула и контракт транзакции тестируемы
+  без сервера, что и делает выделение дешёвым. То, что это общий субстрат, — факт о
+  желательности, а не о выполнимости, и гарантия, которую стоит иметь, в том, что он
+  *может* подняться.
+- **Cut lines:** это общий компонент инфраструктуры.
 
-### internal/httpx  — HTTP primitives
-- **Responsibility:** RFC 9457 problem responses, list/pagination/sort, request
-  ID + access-log + recovery + security-header middleware, trusted-proxy client
-  IP resolution, the rate-limit middleware.
+### internal/httpx  — примитивы HTTP
+- **Ответственность:** проблемные ответы RFC 9457, список/пагинация/сортировка,
+  middleware request ID + журнала доступа + восстановления + заголовков безопасности,
+  определение адреса клиента за доверенным прокси, middleware ограничения частоты.
 - **Public API:** `APIError`, `ErrorCode`, `ListResponse`, `Pagination`,
-  `SortSpec`, `RateLimitOptions`, `SubjectFunc`, `TrustedProxies`; funcs
+  `SortSpec`, `RateLimitOptions`, `SubjectFunc`, `TrustedProxies`; функции
   `WriteError`, `WriteJSON`, `WriteJSONList`, `WriteJSONStatus`, `DecodeJSON`,
   `ParsePagination`, `ParseSort`, `NewError`, `NewListResponse`, `PathParam`,
-  `RequestID`, `ClientIP`, `ClientIPFrom`, `TrustedProxiesFrom`, and the
-  middleware constructors.
+  `RequestID`, `ClientIP`, `ClientIPFrom`, `TrustedProxiesFrom` и конструкторы
+  middleware.
 - **Internal deps:** `logging, ratelimit`.
 - **External deps:** `github.com/go-chi/chi/v5`, `github.com/google/uuid`.
-- **Fake:** `SubjectFunc` injects the rate-limit subject.
-- **Tests:** 4 unit files, including the client-address trust tests.
-- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/httpx`
-  together with `logging` and `ratelimit`. It is the shared HTTP substrate, so it
-  is not usually *desirable* to extract on its own, but it is now *possible*, and
-  that is what keeps a handler from reaching into it and dragging the application
-  layer back in.
-- **Cut lines:** moves with `logging` and `ratelimit`.
+- **Fake:** `SubjectFunc` внедряет субъект ограничения частоты.
+- **Tests:** 4 модульных файла, включая тесты доверия адресу клиента.
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/httpx` вместе с
+  `logging` и `ratelimit`. Это общий HTTP-субстрат, поэтому выделять его сам по себе
+  обычно не *желательно*, но теперь это *возможно*, и именно это не даёт обработчику
+  дотянуться в него и затащить прикладной слой обратно.
+- **Cut lines:** переезжает с `logging` и `ratelimit`.
 
-### internal/ratelimit  — pluggable limiter
-- **Responsibility:** fixed-window limiting with a `Store` abstraction.
-  `MemoryStore` (single process, swept, bounded) and `RedisStore` (atomic Lua,
-  multi-replica), plus fail-open/fail-closed policy.
-- **Public API:** `Store` (interface), `Limiter`, `Policy`, `Decision`, `FailMode`,
-  `MemoryStore`, `RedisStore`, `RedisOptions`; funcs `New`, `NewMemoryStore`,
+### internal/ratelimit  — подключаемый лимитер
+- **Ответственность:** ограничение с фиксированным окном через абстракцию `Store`.
+  `MemoryStore` (один процесс, с очисткой, ограниченный) и `RedisStore` (атомарный
+  Lua, несколько реплик), плюс политика fail-open/fail-closed.
+- **Public API:** `Store` (интерфейс), `Limiter`, `Policy`, `Decision`, `FailMode`,
+  `MemoryStore`, `RedisStore`, `RedisOptions`; функции `New`, `NewMemoryStore`,
   `NewRedisStore`; `ErrUnavailable`.
-- **Internal deps:** none.
+- **Internal deps:** нет.
 - **External deps:** `github.com/redis/go-redis/v9`.
-- **Fake:** `MemoryStore` is a real, usable in-process implementation — the
-  strongest existing "fake" in the codebase. No explicit `NoopStore`.
-- **Tests:** `ratelimit_test.go` (memory, policies) + `redis_integration_test.go`.
-- **Extract:** `yes` — **zero internal deps**; Redis is optional. The memory path
-  was extracted, built and unit-tested in a clean module (the Redis path compiled
-  but was not exercised there). See `EXTRACT_READY.md` (Candidate 2).
-- **Cut lines:** the whole package moves; Redis is a build-time dependency of the
-  file that constructs `RedisStore` only.
+- **Fake:** `MemoryStore` — реальная, годная реализация в процессе — самый сильный
+  существующий «фейк» в кодовой базе. Явного `NoopStore` нет.
+- **Tests:** `ratelimit_test.go` (память, политики) + `redis_integration_test.go`.
+- **Extract:** `yes` — **ноль внутренних зависимостей**; Redis опционален. Путь в
+  памяти был выделен, собран и модульно протестирован в чистом модуле (путь Redis
+  скомпилировался, но не был там упражнён). См. `EXTRACT_READY.md` (Кандидат 2).
+- **Cut lines:** весь пакет переезжает; Redis — зависимость времени сборки только у
+  файла, который строит `RedisStore`.
 
-### internal/retention  — data lifecycle
-- **Responsibility:** per-table retention windows, dry-run, batched delete,
-  protected tables, status predicates, expiry-driven policies.
-- **Public API:** `Runner`, `Policy`, `Options`, `Result`; funcs `New`,
+### internal/retention  — жизненный цикл данных
+- **Ответственность:** окна хранения по таблицам, пробный прогон, пакетное удаление,
+  защищённые таблицы, предикаты статуса, политики, движимые истечением.
+- **Public API:** `Runner`, `Policy`, `Options`, `Result`; функции `New`,
   `Policies`, `ValidateWindows`; `ErrDisabled`.
 - **Internal deps:** `audit, database`.
-- **External deps:** none beyond stdlib.
-- **Fake:** `DryRun` is the default posture; `Runner` is nil-safe.
+- **External deps:** нет сверх stdlib.
+- **Fake:** `DryRun` — поза по умолчанию; `Runner` nil-безопасен.
 - **Tests:** `retention_test.go` + `testsupport/retention_test.go`.
-- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/retention`,
-  with `audit` and `database` as its dependencies. Its safety tests run in the
-  extracted module.
-- **Cut lines:** moves with `audit`/`database`.
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/retention`, с
+  `audit` и `database` как зависимостями. Его тесты безопасности идут в выделенном
+  модуле.
+- **Cut lines:** переезжает с `audit`/`database`.
 
-### internal/views  — saved list views
-- **Responsibility:** named, reusable filter/sort/column selections for one CRM
-  list screen. The stored document is exactly the query-parameter set the list
-  endpoints accept, so a view cannot name a filter no endpoint honours.
+### internal/views  — сохранённые представления списков
+- **Ответственность:** именованные, переиспользуемые выборы фильтра/сортировки/
+  столбцов для одного экрана списка CRM. Сохранённый документ — это ровно набор
+  параметров запроса, которые принимают эндпоинты списков, поэтому представление не
+  может назвать фильтр, которого не соблюдает ни один эндпоинт.
 - **Public API:** `Service`, `NewService`, `Input`, `View`, `FilterSet`,
-  `EntityType`, `ValidationError`, `ErrNotFound`, `ErrForbidden`; methods
+  `EntityType`, `ValidationError`, `ErrNotFound`, `ErrForbidden`; методы
   `Create`, `List`, `Get`, `Update`, `Delete`.
 - **Internal deps:** `audit, database, rbac`.
 - **External deps:** `github.com/google/uuid`.
-- **Fake:** none needed; visibility and ownership are SQL predicates.
-- **Tests:** `views_test.go` (unit) + `testsupport/views_test.go` (PostgreSQL).
-- **Extract:** `almost` — it has no CRM dependency, but reads the caller's
-  principal from `rbac` and writes the audit trail, so it moves with those. Proven
-  by `scripts/extract-test/views`, which extracts it with `audit`, `database`,
-  `rbac` and `logging` and drives the entity-type set and the filter round-trip in
-  a clean module.
-- **Cut lines:** moves with `audit`/`database`/`rbac`.
+- **Fake:** не нужен; видимость и владение — предикаты SQL.
+- **Tests:** `views_test.go` (модуль) + `testsupport/views_test.go` (PostgreSQL).
+- **Extract:** `almost` — у него нет зависимости от CRM, но он читает принципала
+  вызывающего из `rbac` и пишет журнал аудита, поэтому переезжает с ними. Доказан
+  `scripts/extract-test/views`, который выделяет его с `audit`, `database`, `rbac` и
+  `logging` и движет набор типов сущностей и круговой рейс фильтра в чистом модуле.
+- **Cut lines:** переезжает с `audit`/`database`/`rbac`.
 
-### internal/netguard  — outbound SSRF guard
-- **Responsibility:** the single place that decides whether an outbound request
-  destination is safe: rejects loopback, private, link-local, multicast and
-  unspecified addresses, and non-`http(s)` schemes, for the URL itself and for
-  every resolved IP. Used by the Integration Hub and by the S3 object store.
+### internal/netguard  — исходящая защита SSRF
+- **Ответственность:** единственное место, которое решает, безопасно ли назначение
+  исходящего запроса: отклоняет loopback, приватные, link-local, multicast и
+  неопределённые адреса и схемы, отличные от `http(s)`, для самого URL и для каждого
+  разрешённого IP. Используется Хабом интеграций и объектным хранилищем S3.
 - **Public API:** `GuardedClient`, `NewGuardedClient`, `ValidateOutboundURL`,
   `IsBlockedIP`; `ErrBlocked`.
-- **Internal deps:** none — **standard library only.**
-- **External deps:** none beyond stdlib.
-- **Fake:** none needed; the decision is pure.
+- **Internal deps:** нет — **только стандартная библиотека.**
+- **External deps:** нет сверх stdlib.
+- **Fake:** не нужен; решение чистое.
 - **Tests:** `netguard_test.go`.
-- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/netguard`;
-  the setup also asserts the `go.mod` stays free of any `require`.
-- **Cut lines:** already cut. It is a leaf, so anything may depend on it and it
-  depends on nothing.
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/netguard`; setup
+  также утверждает, что `go.mod` остаётся свободным от любого `require`.
+- **Cut lines:** уже отрезан. Это лист, поэтому что угодно может зависеть от него, а
+  он не зависит ни от чего.
 
-### internal/objectstore  — object-storage provider layer
-- **Responsibility:** the storage *mechanism*: the `ObjectStore` contract, the
-  in-process `Memory` provider, the S3-compatible `S3` provider, and the pure
-  helpers for object keys and content types. It does **not** decide who may read or
-  write an object, and it does not touch the database — that is `storage.Service`.
-- **Public API:** `ObjectStore` (interface), `Memory`, `S3`, `ObjectInfo`,
-  `ObjectMeta`, `NormaliseContentType`, `IsAllowedContentType`; funcs `NewMemory`,
+### internal/objectstore  — слой провайдера объектного хранилища
+- **Ответственность:** *механизм* хранения: контракт `ObjectStore`, провайдер
+  `Memory` в процессе, провайдер `S3`, совместимый с S3, и чистые помощники для
+  ключей объектов и типов содержимого. Он **не** решает, кто может читать или писать
+  объект, и не трогает базу данных — это `storage.Service`.
+- **Public API:** `ObjectStore` (интерфейс), `Memory`, `S3`, `ObjectInfo`,
+  `ObjectMeta`, `NormaliseContentType`, `IsAllowedContentType`; функции `NewMemory`,
   `NewS3`; `ErrObjectMissing`.
 - **Internal deps:** `netguard`.
 - **External deps:** `github.com/google/uuid`, `github.com/minio/minio-go/v7`,
   `.../pkg/credentials`.
-- **Fake:** `Memory` (`NewMemory`) is a **real in-process `ObjectStore`**, used by
-  both tests and the local development profile.
-- **Tests:** `contract_test.go` (the shared behaviour contract, run against
-  `Memory`), `s3_contract_test.go` (the same contract against a real S3 wire
-  protocol via `gofakes3`), `helpers_test.go`.
-- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/objectstore`.
-- **Cut lines:** already cut, out of `internal/storage`. `storage.Service` depends
-  on it; the dependency does not point back.
+- **Fake:** `Memory` (`NewMemory`) — **реальный `ObjectStore` в процессе**,
+  используемый и тестами, и профилем локальной разработки.
+- **Tests:** `contract_test.go` (общий контракт поведения, идущий против `Memory`),
+  `s3_contract_test.go` (тот же контракт против реального протокола S3 через
+  `gofakes3`), `helpers_test.go`.
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/objectstore`.
+- **Cut lines:** уже отрезан, из `internal/storage`. `storage.Service` зависит от
+  него; зависимость не указывает обратно.
 
-### internal/storage  — attachment service (authorization + metadata)
-- **Responsibility:** attachments: upload/download orchestration, metadata rows,
-  entity binding, tenant/rights checks, size/type limits, orphan reconciliation.
-  Delegates the mechanism to `internal/objectstore`.
+### internal/storage  — сервис вложений (авторизация + метаданные)
+- **Ответственность:** вложения: оркестрация загрузки/скачивания, строки метаданных,
+  привязка к сущности, проверки тенанта/прав, лимиты размера/типа, сверка осиротевших.
+  Механизм делегирует `internal/objectstore`.
 - **Public API:** `Service`, `Config`, `Document`, `UploadInput`,
-  `ReconcileReport`; funcs `New`; `ErrNotConfigured`. The `ObjectStore`, `Memory`,
-  `S3`, `ObjectInfo` and `ObjectMeta` names are re-exported as aliases so existing
-  callers are unchanged.
+  `ReconcileReport`; функции `New`; `ErrNotConfigured`. Имена `ObjectStore`, `Memory`,
+  `S3`, `ObjectInfo` и `ObjectMeta` реэкспортируются как алиасы, поэтому существующие
+  вызывающие неизменны.
 - **Internal deps:** `audit, database, httpx, objectstore, rbac`.
 - **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`.
-- **Fake:** `objectstore.Memory` through the re-exported `NewMemory`.
-- **Tests:** `storage_test.go` (key/extension/entity rules) +
+- **Fake:** `objectstore.Memory` через реэкспортированный `NewMemory`.
+- **Tests:** `storage_test.go` (правила ключа/расширения/сущности) +
   `testsupport/storage_s3_test.go`.
-- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/storage`,
-  with `audit`, `database`, `httpx`, `objectstore` (and its `netguard`), `ratelimit`
-  and `rbac` as its dependencies, all of them proven. Binding to
-  `rbac`/`audit`/`database` by design is not a blocker when all three are proven.
-  **was:** `no` — `Service` binds to `rbac`/`audit`/`database` by design; the
-  portable half (`objectstore`) has already been lifted out.
-- **Cut lines:** the provider layer moved to `internal/objectstore`; `Service` stays.
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/storage`, с
+  `audit`, `database`, `httpx`, `objectstore` (и его `netguard`), `ratelimit` и
+  `rbac` как зависимостями, все доказаны. Привязка к `rbac`/`audit`/`database` по
+  дизайну — не блокер, когда все три доказаны. **было:** `no` — `Service` по дизайну
+  привязывается к `rbac`/`audit`/`database`; переносимая половина (`objectstore`) уже
+  вынесена.
+- **Cut lines:** слой провайдера переехал в `internal/objectstore`; `Service` остаётся.
 
 ### internal/jobs
-- **Responsibility:** the background job queue: enqueue, claim (`SKIP LOCKED`),
-  retry, dead-letter.
+- **Ответственность:** очередь фоновых заданий: постановка, заявка (`SKIP LOCKED`),
+  повтор, dead-letter.
 - **Public API:** `Queue`, `Job`, `EnqueueRequest`, `NewQueue`, `ErrNotRetryable`.
 - **Internal deps:** `database`.
 - **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`.
-- **Fake:** none.
-- **Tests:** `jobs_test.go` (status/kind vocabularies, the pre-write validation,
-  and the retry backoff; the first in-package tests).
-- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/jobs`,
-  with `database` as its dependency. Writing the backoff test found a real latent
-  bug: the shift was clamped at 10, so the delay topped out at 1024s and the
-  documented 30-minute ceiling was unreachable dead code; the clamp is now 11.
-- **Cut lines:** moves with `database`.
+- **Fake:** нет.
+- **Tests:** `jobs_test.go` (словари статуса/вида, валидация до записи и задержка
+  повтора; первые тесты внутри пакета).
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/jobs`, с
+  `database` как зависимостью. Написание теста задержки нашло реальный скрытый баг:
+  сдвиг был ограничен 10, поэтому задержка упиралась в 1024с, а документированный
+  потолок в 30 минут был недостижимым мёртвым кодом; ограничение теперь 11.
+- **Cut lines:** переезжает с `database`.
 
-### internal/outbox  — transactional outbox
-- **Responsibility:** write events in the same transaction as the change; the
-  worker drains them.
+### internal/outbox  — транзакционный outbox
+- **Ответственность:** писать события в той же транзакции, что и изменение; воркер их
+  разбирает.
 - **Public API:** `Store`, `Envelope`, `Event`, `NewStore`, `EventTypes`.
 - **Internal deps:** `database, logging`.
 - **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`.
-- **Fake:** none.
-- **Tests:** `outbox_test.go` (event vocabulary).
-- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/outbox`,
-  with `database` and `logging` as its two dependencies. Its own test runs in the
-  extracted module.
-- **Cut lines:** moves with `database`/`logging`.
+- **Fake:** нет.
+- **Tests:** `outbox_test.go` (словарь событий).
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/outbox`, с
+  `database` и `logging` как двумя зависимостями. Его собственный тест идёт в
+  выделенном модуле.
+- **Cut lines:** переезжает с `database`/`logging`.
 
 ### internal/secrets
-- **Responsibility:** Argon2 password hashing, token hashing, HMAC signing,
-  integration-secret encryption (keyring).
-- **Public API:** `Keyring`, `Argon2Params`; funcs `HashPassword`,
+- **Ответственность:** хеширование паролей Argon2, хеширование токенов, подпись HMAC,
+  шифрование секретов интеграций (кольцо ключей).
+- **Public API:** `Keyring`, `Argon2Params`; функции `HashPassword`,
   `HashPasswordWithParams`, `VerifyPassword`, `HashToken`, `SignPayload`,
   `VerifySignature`, `RandomToken`, `RandomNumericCode`, `ConstantTimeEqual`,
   `DefaultArgon2Params`, `NewKeyring`, `IsSensitiveKey`; `ErrInvalidHash`,
   `ErrPasswordMismatch`.
-- **Internal deps:** none.
+- **Internal deps:** нет.
 - **External deps:** `golang.org/x/crypto/argon2`.
-- **Fake:** not applicable (pure crypto).
-- **Tests:** `secrets_test.go` (20 tests: hashing, the malformed-hash path, the
-  keyring, CSRF and webhook signatures).
-- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/secrets`.
-- **Cut lines:** the whole package moves.
+- **Fake:** неприменимо (чистая криптография).
+- **Tests:** `secrets_test.go` (20 тестов: хеширование, путь искажённого хеша, кольцо
+  ключей, подписи CSRF и вебхука).
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/secrets`.
+- **Cut lines:** весь пакет переезжает.
 
 ### internal/config
-- **Responsibility:** environment parsing and validation for every subsystem.
+- **Ответственность:** разбор и валидация окружения для каждой подсистемы.
 - **Public API:** `Config`, `AIConfig`, `EmailConfig`, `OIDCConfig`,
   `RetentionConfig`, `StorageConfig`, `TelegramConfig`, `Load`.
 - **Internal deps:** `database, httpx, retention`.
-- **External deps:** none beyond stdlib.
-- **Fake:** not applicable.
+- **External deps:** нет сверх stdlib.
+- **Fake:** неприменимо.
 - **Tests:** `config_test.go`.
-- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/config`,
-  with `database`, `httpx` and `retention` as its dependencies, all proven. Naming
-  every subsystem's config is not a blocker when the packages it names are proven.
-- **Cut lines:** a recipe generates its own trimmed config.
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/config`, с
+  `database`, `httpx` и `retention` как зависимостями, все доказаны. Именование
+  конфигурации каждой подсистемы — не блокер, когда пакеты, которые он называет,
+  доказаны.
+- **Cut lines:** рецепт генерирует собственную урезанную конфигурацию.
 
 ### internal/logging
-- **Responsibility:** structured `slog` setup and redaction of sensitive keys;
-  request-scoped actor/org/correlation.
+- **Ответственность:** структурная настройка `slog` и сокрытие чувствительных ключей;
+  действующее лицо/организация/корреляция в области запроса.
 - **Public API:** `New`, `Redact`, `IsSensitiveKey`, `WithActor`,
   `WithCorrelationID`, `WithOrganization`, `Actor`, `CorrelationID`,
   `Organization`.
-- **Internal deps:** none.
+- **Internal deps:** нет.
 - **External deps:** stdlib `log/slog`.
-- **Fake:** not applicable.
-- **Tests:** `logging_test.go` (redaction through `New`, `With` and nested
-  groups; context helpers; level/format wiring).
-- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/logging`.
-- **Cut lines:** moves alone.
+- **Fake:** неприменимо.
+- **Tests:** `logging_test.go` (сокрытие через `New`, `With` и вложенные группы;
+  помощники контекста; связывание уровня/формата).
+- **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/logging`.
+- **Cut lines:** переезжает один.
 
 ### internal/migrate / internal/migrations
-- **Responsibility:** embedded SQL migrations and the migrate runner (`Up`/`Down`)
-  over `golang-migrate`; `migrations.FS` is the embedded FS.
+- **Ответственность:** встроенные SQL-миграции и раннер миграций (`Up`/`Down`) над
+  `golang-migrate`; `migrations.FS` — встроенная ФС.
 - **Public API:** `migrate.Up`, `migrate.Down`, `migrations.FS`.
 - **Internal deps:** `migrate -> migrations`.
 - **External deps:** `github.com/golang-migrate/migrate/v4` (+ postgres, iofs).
-- **Fake:** not applicable.
-- **Tests:** none in-package; applied in CI and integration.
-- **Extract:** **`yes`** — `migrations` and `migrate` are each extracted and proven
-  by `scripts/extract-test/migrations` and `scripts/extract-test/migrate`.
-  `migrations` is a leaf in code but carries data as well: the `//go:embed`
-  directive names `*.sql`, so the extraction must copy the SQL files — a Go-only
-  copy fails to build, and the harness does copy them. The earlier `no` ("schema is
-  application-wide") was wrong: the schema is data the binary embeds, not a
-  dependency on the application.
-- **Cut lines:** moves with the SQL it embeds.
+- **Fake:** неприменимо.
+- **Tests:** нет в пакете; применяются в CI и интеграции.
+- **Extract:** **`yes`** — `migrations` и `migrate` каждый выделены и доказаны
+  `scripts/extract-test/migrations` и `scripts/extract-test/migrate`. `migrations` —
+  лист в коде, но несёт и данные: директива `//go:embed` называет `*.sql`, поэтому
+  выделение должно скопировать SQL-файлы — копия только Go не собирается, и набор их
+  копирует. Прежнее `no` («схема общеприкладная») было неверным: схема — это данные,
+  которые бинарник встраивает, а не зависимость от приложения.
+- **Cut lines:** переезжает с SQL, который встраивает.
 
-### internal/openapi  — spec generation
-- **Responsibility:** build `docs/api/openapi.json` from the live router and the
-  `api.APIContract` table.
+### internal/openapi  — генерация спецификации
+- **Ответственность:** строить `docs/api/openapi.json` из живого роутера и таблицы
+  `api.APIContract`.
 - **Public API:** `Build`, `Report`, `Routes`, `Route`, `Contract`, `Info`,
   `Server`, `Group`, `QueryParam`, `PathParamSchema`, `Permissions`, `PrefixAPI`,
   `TagFor`, `DefaultDescription`, `Anonymous`, `SessionOnly`.
-- **Internal deps:** none (it is imported *by* `api` and `openapi-gen`).
+- **Internal deps:** нет (его импортируют *его* `api` и `openapi-gen`).
 - **External deps:** `github.com/go-chi/chi/v5`, `github.com/google/uuid`.
-- **Fake:** not applicable.
-- **Tests:** `openapi_test.go` (drift, access declarations).
-- **Extract:** `no` — it describes this application's routes.
-- **Cut lines:** a recipe gets its own generator or none.
+- **Fake:** неприменимо.
+- **Tests:** `openapi_test.go` (дрейф, объявления доступа).
+- **Extract:** `no` — он описывает маршруты этого приложения.
+- **Cut lines:** рецепт получает собственный генератор или ни одного.
 
-### internal/wiring  — composition root
-- **Responsibility:** the single place the dependency graph is assembled; returns
-  a `Services` struct.
+### internal/wiring  — корень композиции
+- **Ответственность:** единственное место сборки графа зависимостей; возвращает
+  структуру `Services`.
 - **Public API:** `Build`, `Services`.
-- **Internal deps:** 22 packages.
-- **Tests:** none; exercised by every integration test.
-- **Extract:** `no` — it is the opposite of a module.
-- **Cut lines:** a recipe replaces it.
+- **Internal deps:** 22 пакета.
+- **Tests:** нет; упражняется каждым интеграционным тестом.
+- **Extract:** `no` — он противоположность модулю.
+- **Cut lines:** рецепт его заменяет.
 
-### internal/archtest  — dependency rules
-- **Responsibility:** test-only enforcement of the layering rules (no package
-  imports `api`; production does not import `testsupport`; core does not import
-  composition/HTTP; every internal package is reachable from a command).
-- **Public API:** test functions only.
-- **Internal deps:** none.
-- **Tests:** 5 tests, all reading the real graph via `go list`.
-- **Extract:** `almost` (as a reusable governance tool).
-- **Cut lines:** portable as a template; the module path is hard-coded.
+### internal/archtest  — правила зависимостей
+- **Ответственность:** обеспечение правил слоистости только тестами (ни один пакет не
+  импортирует `api`; production не импортирует `testsupport`; ядро не импортирует
+  композицию/HTTP; каждый внутренний пакет достижим из команды).
+- **Public API:** только тестовые функции.
+- **Internal deps:** нет.
+- **Tests:** 5 тестов, все читают реальный граф через `go list`.
+- **Extract:** `almost` (как переиспользуемый инструмент управления).
+- **Cut lines:** переносим как шаблон; путь модуля зашит.
 
-### internal/testsupport  — test harness
-- **Responsibility:** integration-test scaffolding: opens a scratch database,
-  drops/rebuilds `public`, applies migrations.
-- **Public API:** test helpers only.
-- **Internal deps:** many (it composes the app).
-- **Tests:** 15 integration files (`//go:build integration`).
-- **Extract:** `no` — never ships in a binary.
+### internal/testsupport  — тестовый набор
+- **Ответственность:** каркас интеграционных тестов: открывает черновую базу,
+  удаляет/пересобирает `public`, применяет миграции.
+- **Public API:** только тестовые помощники.
+- **Internal deps:** много (он собирает приложение).
+- **Tests:** 15 интеграционных файлов (`//go:build integration`).
+- **Extract:** `no` — никогда не поставляется в бинарнике.
 
 ---
 
-## Frontend (`frontend/src`)
+## Фронтенд (`frontend/src`)
 
-| Module | Responsibility | Key files | Depends on | Tests | Extract |
+| Модуль | Ответственность | Ключевые файлы | Зависит от | Тесты | Extract |
 | --- | --- | --- | --- | --- | --- |
-| **API clients** | one module per backend area over a shared `client.ts` | `api/client.ts`, `api/{auth,crm,imports,integrations,workflows,simulation,intelligence,ai,assist,documents,notifications,agent,admin}.ts` | backend OpenAPI shapes; `types/api.ts` | `api/client.test.ts` | `almost` (the client core is generic) |
-| **Types** | hand-written response/request types | `types/api.ts` | — | typechecked | `almost` |
-| **Auth hook** | session, permission gate | `hooks/useAuth.tsx`, `components/RequirePermission.tsx` | `api/auth.ts` | `RequirePermission.test.tsx` | `no` |
-| **Search hook** | debounced global search | `hooks/useGlobalSearch.ts` | `api/*` | `GlobalSearch.test.tsx` | `almost` |
-| **UI kit** | shared primitives (Card, Alert, Table, …) | `components/ui.tsx` | — | `ui.test.ts` | `almost` |
-| **Shell/nav** | app frame and routing chrome | `components/AppShell.tsx`, `pages/ErrorPages.tsx` | auth | via E2E | `no` |
-| **ResourceList / BulkArchive** | generic list + bulk actions | `components/ResourceList.tsx`, `BulkArchiveButton.tsx` | `api/crm.ts` | `.test.tsx` (2) | `almost` |
-| **CRM pages** | accounts/contacts/leads/deals/tasks/tickets | `pages/{Accounts,Account,Contacts,Leads,Deals,Tasks,Tickets}Page.tsx` | `api/crm.ts` | E2E | `no` |
-| **Record panels** | custom fields + tags/comments on a detail page | `components/{CustomFieldsPanel,RecordCollabPanel}.tsx` | `api/crm.ts` | `.test.tsx` (2) | `almost` |
-| **AssistPanel** | contextual AI surface | `components/AssistPanel.tsx`, `api/assist.ts` | `api/assist.ts` | `AssistPanel.test.tsx` | `almost` |
-| **Workflow editor** | step editor + validation | `components/WorkflowEditor.tsx`, `pages/WorkflowsPage.tsx`, `api/workflows.ts` | `api/workflows.ts` | `WorkflowEditor.test.tsx` | `almost` |
-| **Simulation page** | Simulation Lab UI | `pages/SimulationPage.tsx`, `api/simulation.ts` | `api/simulation.ts` | `SimulationPage.test.tsx` | `almost` |
-| **Intelligence pages** | forecast + risk UI | `pages/{Forecast,Risk}Page.tsx`, `api/intelligence.ts` | `api/intelligence.ts` | `.test.tsx` (2) | `almost` |
-| **AI/MCP page** | provider status, tool catalogue | `pages/AiPage.tsx`, `api/ai.ts` | `api/ai.ts` | E2E | `almost` |
-| **Import pages** | Import Center UI, CSV/JSONL export | `pages/{ImportCenter,ImportDetail}Page.tsx`, `api/imports.ts` | `api/imports.ts` | `ImportCenterPage.test.tsx`, E2E | `no` |
-| **Integrations/Webhooks/Events/Jobs pages** | admin surfaces | `pages/{Integrations,Webhooks,Events,Jobs,Migrations}Page.tsx` + matching api clients | their api clients | E2E | `no` |
-| **Notifications page** | the inbox for workflow notifications | `pages/NotificationsPage.tsx` | `api/crm.ts` | `NotificationsPage.test.tsx` | `almost` |
-| **Admin pages** | audit, users, roles, orgs, teams, security, diagnostics (+ platform settings), email, telegram, SSO | `pages/admin/*.tsx`, `api/admin.ts` | `api/admin.ts` | `SecurityPage.test.tsx`, `DiagnosticsPage.test.tsx`, `SSOPage.test.tsx` | `no` |
-| **Attachments** | document upload/download | `components/AttachmentPanel.tsx`, `api/documents.ts` | `api/documents.ts` | `AttachmentPanel.test.tsx` | `almost` |
-| **Saved views** | named list filters per screen | `components/SavedViewsBar.tsx`, `api/views.ts` | `api/views.ts` | `SavedViewsBar.test.tsx`, E2E | `almost` |
+| **API clients** | по модулю на каждую область бэкенда над общим `client.ts` | `api/client.ts`, `api/{auth,crm,imports,integrations,workflows,simulation,intelligence,ai,assist,documents,notifications,agent,admin}.ts` | формы OpenAPI бэкенда; `types/api.ts` | `api/client.test.ts` | `almost` (ядро клиента общее) |
+| **Types** | написанные руками типы ответа/запроса | `types/api.ts` | — | проверяются типами | `almost` |
+| **Auth hook** | сессия, шлюз по правам | `hooks/useAuth.tsx`, `components/RequirePermission.tsx` | `api/auth.ts` | `RequirePermission.test.tsx` | `no` |
+| **Search hook** | глобальный поиск с задержкой | `hooks/useGlobalSearch.ts` | `api/*` | `GlobalSearch.test.tsx` | `almost` |
+| **UI kit** | общие примитивы (Card, Alert, Table, …) | `components/ui.tsx` | — | `ui.test.ts` | `almost` |
+| **Shell/nav** | каркас приложения и обвязка маршрутизации | `components/AppShell.tsx`, `pages/ErrorPages.tsx` | auth | через E2E | `no` |
+| **ResourceList / BulkArchive** | общий список + массовые действия | `components/ResourceList.tsx`, `BulkArchiveButton.tsx` | `api/crm.ts` | `.test.tsx` (2) | `almost` |
+| **CRM pages** | аккаунты/контакты/лиды/сделки/задачи/обращения | `pages/{Accounts,Account,Contacts,Leads,Deals,Tasks,Tickets}Page.tsx` | `api/crm.ts` | E2E | `no` |
+| **Record panels** | кастомные поля + теги/комментарии на странице детали | `components/{CustomFieldsPanel,RecordCollabPanel}.tsx` | `api/crm.ts` | `.test.tsx` (2) | `almost` |
+| **AssistPanel** | поверхность контекстного ИИ | `components/AssistPanel.tsx`, `api/assist.ts` | `api/assist.ts` | `AssistPanel.test.tsx` | `almost` |
+| **Workflow editor** | редактор шагов + валидация | `components/WorkflowEditor.tsx`, `pages/WorkflowsPage.tsx`, `api/workflows.ts` | `api/workflows.ts` | `WorkflowEditor.test.tsx` | `almost` |
+| **Simulation page** | UI Simulation Lab | `pages/SimulationPage.tsx`, `api/simulation.ts` | `api/simulation.ts` | `SimulationPage.test.tsx` | `almost` |
+| **Intelligence pages** | UI прогноза + риска | `pages/{Forecast,Risk}Page.tsx`, `api/intelligence.ts` | `api/intelligence.ts` | `.test.tsx` (2) | `almost` |
+| **AI/MCP page** | статус провайдера, каталог инструментов | `pages/AiPage.tsx`, `api/ai.ts` | `api/ai.ts` | E2E | `almost` |
+| **Import pages** | UI Центра импорта, экспорт CSV/JSONL | `pages/{ImportCenter,ImportDetail}Page.tsx`, `api/imports.ts` | `api/imports.ts` | `ImportCenterPage.test.tsx`, E2E | `no` |
+| **Integrations/Webhooks/Events/Jobs pages** | поверхности администрирования | `pages/{Integrations,Webhooks,Events,Jobs,Migrations}Page.tsx` + соответствующие клиенты api | их клиенты api | E2E | `no` |
+| **Notifications page** | входящие уведомления workflow | `pages/NotificationsPage.tsx` | `api/crm.ts` | `NotificationsPage.test.tsx` | `almost` |
+| **Admin pages** | аудит, пользователи, роли, организации, команды, безопасность, диагностика (+ настройки платформы), почта, telegram, SSO | `pages/admin/*.tsx`, `api/admin.ts` | `api/admin.ts` | `SecurityPage.test.tsx`, `DiagnosticsPage.test.tsx`, `SSOPage.test.tsx` | `no` |
+| **Attachments** | загрузка/скачивание документов | `components/AttachmentPanel.tsx`, `api/documents.ts` | `api/documents.ts` | `AttachmentPanel.test.tsx` | `almost` |
+| **Saved views** | именованные фильтры списка на экран | `components/SavedViewsBar.tsx`, `api/views.ts` | `api/views.ts` | `SavedViewsBar.test.tsx`, E2E | `almost` |
 
-**Frontend totals:** 90 `.ts`/`.tsx` files; 21 unit test files (144 tests); E2E in
-`frontend/e2e/platform.spec.ts` (52 passing, 1 conditionally skipped).
+**Итоги фронтенда:** 90 файлов `.ts`/`.tsx`; 21 файл модульных тестов (144 теста);
+E2E в `frontend/e2e/platform.spec.ts` (52 проходят, 1 условно пропущен).
 
 ---
 
-## Summary
+## Сводка
 
-- **Backend packages inventoried:** 38 (`internal/*` directories; `importx` carries two
-  subpackages, so `go list` reports 39), plus 3 commands.
-- **Frontend layers inventoried:** 20.
-- **Cycles:** none (verified by `go list` + DFS; see `DEPENDENCY_MAP.md`).
-- **Packages with ≥8 internal deps:** `api` (26), `wiring` (22), `importx` (10),
-  `ai` (9), `events` (8); `cmd/forgecrm-worker` (17) and `cmd/forgecrm-api` (11)
-  are composition roots, not modules.
-- **Real in-process fakes that exist today:** `objectstore.Memory` (`NewMemory`,
-  re-exported as `storage.NewMemory`), `ratelimit.MemoryStore`. Documented injection
-  seams without a shipped fake: `ai.Provider`, `events.Poster`,
-  `integrations.Adapter`, `migratex.Source`, `agent.Executor`,
+- **Пакетов бэкенда в инвентаризации:** 38 (каталоги `internal/*`; `importx` несёт два
+  подпакета, поэтому `go list` сообщает 39), плюс 3 команды.
+- **Слоёв фронтенда в инвентаризации:** 20.
+- **Циклы:** нет (проверено `go list` + DFS; см. `DEPENDENCY_MAP.md`).
+- **Пакеты с ≥8 внутренними зависимостями:** `api` (26), `wiring` (22), `importx` (10),
+  `ai` (9), `events` (8); `cmd/forgecrm-worker` (17) и `cmd/forgecrm-api` (11) —
+  корни композиции, не модули.
+- **Реальные фейки в процессе, существующие сегодня:** `objectstore.Memory`
+  (`NewMemory`, реэкспортированный как `storage.NewMemory`), `ratelimit.MemoryStore`.
+  Документированные швы внедрения без поставляемого фейка: `ai.Provider`,
+  `events.Poster`, `integrations.Adapter`, `migratex.Source`, `agent.Executor`,
   `database.Querier`, `objectstore.ObjectStore`, `ratelimit.Store`.
-- **Extract status:** thirty-three modules are `yes` — `analytics`, `ratelimit`,
+- **Статус Extract:** тридцать три модуля — `yes` — `analytics`, `ratelimit`,
   `netguard`, `objectstore`, `secrets`, `logging`, `httpx`, `importx/safe`,
   `importx/parsers`, `database`, `rbac`, `audit`, `outbox`, `retention`, `agent`,
   `jobs`, `crm`, `storage`, `integrations`, `config`, `workflow`, `events`,
   `migratex`, `simulate`, `forecast`, `risk`, `notify`, `ai`, `importx`,
-  `migrations`, `migrate`, `authn` and `constructor` —
-  because they were
-  actually extracted, built, tested and run in a clean module, now by the
-  automated harness in `scripts/extract-test/`. The statuses here match
-  `EXTRACT_READY.md` exactly.
-- **Gaps found:** the packages with **no `_test.go` at all** are `audit`, `crm`,
+  `migrations`, `migrate`, `authn` и `constructor` —
+  потому что они были
+  действительно выделены, собраны, протестированы и запущены в чистом модуле, теперь
+  автоматизированным набором в `scripts/extract-test/`. Статусы здесь в точности
+  совпадают с `EXTRACT_READY.md`.
+- **Найденные пробелы:** пакеты **без единого `_test.go`** — `audit`, `crm`,
   `events`, `forecast`, `jobs`, `migrate`, `migratex`, `migrations`, `notify`,
-  `risk`, `simulate`, `wiring`. Of these, `crm`, `events`, `forecast`, `risk` and
-  `simulate` have integration coverage through `internal/testsupport`; `audit`,
-  `jobs`, `notify` and `wiring` are covered only indirectly. `logging` and
-  `secrets` gained in-package tests in the extraction slice, which is what let
-  them be marked `READY`. `ai` has two real `Provider` implementations but no
-  in-process fake; there is no `NoopStore` in `ratelimit` and no `AllowAll`
-  authorizer anywhere (authorization is enforced inline in `api` middleware plus
-  `crm` ownership checks).
+  `risk`, `simulate`, `wiring`. Из них `crm`, `events`, `forecast`, `risk` и
+  `simulate` имеют интеграционное покрытие через `internal/testsupport`; `audit`,
+  `jobs`, `notify` и `wiring` покрыты только косвенно. `logging` и `secrets` получили
+  тесты внутри пакета в срезе выделения, что и позволило пометить их `READY`. У `ai`
+  две реальные реализации `Provider`, но нет фейка в процессе; в `ratelimit` нет
+  `NoopStore`, и нигде нет авторизатора `AllowAll` (авторизация обеспечивается
+  встроенно в middleware `api` плюс проверки владения в `crm`).
