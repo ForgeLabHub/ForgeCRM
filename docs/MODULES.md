@@ -733,7 +733,7 @@ Two things this document deliberately does not do:
 | **Admin pages** | audit, users, roles, orgs, teams, security, diagnostics (+ platform settings), email, telegram | `pages/admin/*.tsx`, `api/admin.ts` | `api/admin.ts` | `SecurityPage.test.tsx`, `DiagnosticsPage.test.tsx` | `no` |
 | **Attachments** | document upload/download | `components/AttachmentPanel.tsx`, `api/documents.ts` | `api/documents.ts` | `AttachmentPanel.test.tsx` | `almost` |
 
-**Frontend totals:** 84 `.ts`/`.tsx` files; 19 unit test files (121 tests); E2E in
+**Frontend totals:** 84 `.ts`/`.tsx` files; 18 unit test files (121 tests); E2E in
 `frontend/e2e/platform.spec.ts` (48 passing, 1 conditionally skipped).
 
 ---
