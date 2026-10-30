@@ -35,7 +35,11 @@ once it reaches 1.0.
   `internal/api/mcp_credential_integration_test.go` cover scope escalation,
   revocation, expiry and cross-organization isolation; a Playwright scenario mints
   a credential in the browser, proves the token authenticates against the protocol
-  endpoint, and proves revocation makes the same request fail.
+  endpoint, and proves revocation makes the same request fail. The page also
+  generates a ready-to-paste client configuration (the endpoint, an `mcpServers`
+  JSON block and a curl example) with copy controls; every snippet carries a token
+  placeholder rather than a value, since the text is the kind of thing that ends up
+  pasted into a ticket.
 
 - **Single sign-on over OpenID Connect, and the page that configures it.** A
   deployment could only authenticate with a local password; an organization that
