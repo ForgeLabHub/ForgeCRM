@@ -332,7 +332,8 @@ jobs:
       - name: Build the API image
         uses: docker/build-push-action@v6
         with:
-          context: ./backend
+          context: .
+          file: backend/Dockerfile
           push: false
           # BuildKit's cache backend avoids rebuilding dependencies each run.
           cache-from: type=gha

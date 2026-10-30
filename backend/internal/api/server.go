@@ -6,8 +6,6 @@
 package api
 
 import (
-	"path/filepath"
-	"os"
 	"context"
 	"encoding/json"
 	"errors"
@@ -15,6 +13,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -322,7 +322,6 @@ func (s *Server) buildRouter() chi.Router {
 			http.ServeFile(w, req, filepath.Join(staticDir, "index.html"))
 		})
 	}
-
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// The rate limiter covers the API subtree only. Health probes above are

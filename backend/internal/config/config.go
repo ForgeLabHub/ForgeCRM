@@ -280,8 +280,8 @@ func Load() (*Config, error) {
 	prod := envName == "production"
 
 	c := &Config{
-		Env:         envName,
-		HTTPAddr:    func() string {
+		Env: envName,
+		HTTPAddr: func() string {
 			if port := env("PORT", ""); port != "" {
 				if strings.HasPrefix(port, ":") {
 					return "0.0.0.0" + port
