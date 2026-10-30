@@ -65,7 +65,7 @@ func RateLimitMiddleware(opts RateLimitOptions) func(http.Handler) http.Handler 
 
 			decision := opts.Limiter.Allow(r.Context(), opts.Subject(r), now())
 
-			writeRateLimitHeaders(w, decision)
+			WriteRateLimitHeaders(w, decision)
 
 			if decision.Degraded && opts.Log != nil {
 				// Logged at warn, not error: the request still succeeded or was
@@ -112,11 +112,11 @@ func RateLimitMiddleware(opts RateLimitOptions) func(http.Handler) http.Handler 
 	}
 }
 
-// writeRateLimitHeaders emits the RFC 9331 RateLimit fields.
+// WriteRateLimitHeaders emits the RFC 9331 RateLimit fields.
 //
 // The draft field names are used alongside the long-standing X-RateLimit-* ones
 // because clients exist for both and the cost of emitting both is a few bytes.
-func writeRateLimitHeaders(w http.ResponseWriter, d ratelimit.Decision) {
+func WriteRateLimitHeaders(w http.ResponseWriter, d ratelimit.Decision) {
 	h := w.Header()
 	limit := strconv.Itoa(d.Limit)
 	remaining := strconv.Itoa(d.Remaining)

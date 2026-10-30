@@ -421,6 +421,53 @@ func TestRetentionSweepsExpiredAiInsights(t *testing.T) {
 	}
 }
 
+// TestRetentionSweepsOnlyInactiveMcpCredentials pins the MCP credential policy.
+//
+// The sweep must remove only rows that can never authenticate again — a revoked
+// credential or one whose expiry is well past — and must leave a live credential
+// and a not-yet-expired one alone. A policy that ignored status would delete the
+// live row, silently disconnecting a working client.
+func TestRetentionSweepsOnlyInactiveMcpCredentials(t *testing.T) {
+	db := connectOrSkip(t)
+	freshSchema(t, db)
+
+	ctx := context.Background()
+	org := uuid.MustParse(retentionOrg(t, db, "retention-mcp-credentials"))
+	userID := insertUser(t, db, org, "mcp-retention@example.com")
+
+	old := time.Now().Add(-365 * 24 * time.Hour)
+	insert := func(name string, expiresAt, revokedAt *time.Time) {
+		t.Helper()
+		if _, err := db.Pool().Exec(ctx, `
+            INSERT INTO mcp_credentials
+                (organization_id, owner_user_id, name, token_prefix, token_hash, permissions, expires_at, revoked_at, created_at)
+            VALUES ($1, $2, $3, 'fcmcp_test', $4, ARRAY['accounts.read'], $5, $6, $7)`,
+			org, userID, name, []byte(uuid.NewString()), expiresAt, revokedAt, old); err != nil {
+			t.Fatalf("insert credential %s: %v", name, err)
+		}
+	}
+	revoked := old
+	insert("revoked", nil, &revoked)
+	expired := old
+	insert("expired", &expired, nil)
+	insert("live", nil, nil)
+	future := time.Now().Add(24 * time.Hour)
+	insert("live-but-expires-soon", &future, nil)
+
+	runner := retention.New(db, audit.New(db), nil, retention.Options{Enabled: true, Delete: true})
+	if _, err := runner.Run(ctx); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	var remaining int64
+	if err := db.Pool().QueryRow(ctx, `SELECT count(*) FROM mcp_credentials`).Scan(&remaining); err != nil {
+		t.Fatalf("count credentials: %v", err)
+	}
+	if remaining != 2 {
+		t.Fatalf("mcp_credentials holds %d rows, want the live credential and the unexpired one", remaining)
+	}
+}
+
 // TestRetentionSweepsRunHistoryAndInboundEvents covers the three policies added
 // for tables that grow without bound: workflow runs, agent runs and the inbound
 // event inbox.
@@ -856,6 +903,8 @@ func TestRetentionSweepIndexesExist(t *testing.T) {
 		// 0024: the transient auth and delivery rows.
 		"password_reset_tokens_expires_idx",
 		"email_log_settled_idx",
+		// 0025: the MCP client credentials.
+		"mcp_credentials_created_at_idx",
 	}
 	for _, name := range want {
 		var exists bool

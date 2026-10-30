@@ -224,6 +224,15 @@ const (
 	ActionViewCreated Action = "views.created"
 	ActionViewUpdated Action = "views.updated"
 	ActionViewDeleted Action = "views.deleted"
+
+	// MCP client credentials. Minting a credential delegates a slice of the owner's
+	// authority to an external client, so the trail records that it happened, to whom
+	// and with which scope — but never the token itself, which is stored only as a
+	// hash. A use is recorded as an "api_key" actor so a credential's activity is
+	// distinguishable from the owner's own browser activity.
+	ActionMCPCredentialCreated Action = "mcp.credentials.created"
+	ActionMCPCredentialRevoked Action = "mcp.credentials.revoked"
+	ActionMCPCredentialRotated Action = "mcp.credentials.rotated"
 )
 
 func marshalJSONOrNil(v any) ([]byte, error) {

@@ -26,6 +26,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/importx"
 	"github.com/geff1778/forgecrm/internal/integrations"
 	"github.com/geff1778/forgecrm/internal/jobs"
+	"github.com/geff1778/forgecrm/internal/mcpcred"
 	"github.com/geff1778/forgecrm/internal/migratex"
 	"github.com/geff1778/forgecrm/internal/notify"
 	"github.com/geff1778/forgecrm/internal/oidc"
@@ -88,6 +89,9 @@ type Services struct {
 	// Views is the saved list-view service: named filters per user and per screen.
 	// It never touches CRM data, only the views table.
 	Views *views.Service
+	// MCPCredentials mints and resolves the scoped, revocable credentials an external
+	// MCP client uses in place of a browser session.
+	MCPCredentials *mcpcred.Service
 }
 
 // Build constructs every service from the given configuration and database.
@@ -147,29 +151,30 @@ func Build(cfg *config.Config, db *database.DB, keyring *secrets.Keyring, log *s
 	}
 
 	return &Services{
-		Storage:      storageSvc,
-		Audit:        auditLog,
-		Auth:         authn.NewService(db, cfg, keyring, auditLog, rbacSvc),
-		RBAC:         rbacSvc,
-		CRM:          crmSvc,
-		Jobs:         queue,
-		Outbox:       outbox.NewStore(db),
-		Imports:      imports,
-		Migrations:   migratex.NewService(db, auditLog, keyring),
-		Integrations: integrations.NewHub(db, auditLog, keyring),
-		Events:       events.NewGateway(db, auditLog),
-		Dispatcher:   events.NewDispatcher(db, auditLog),
-		Email:        notify.NewEmailService(&cfg.Email, db, log),
-		Telegram:     notify.NewTelegramService(&cfg.Telegram, db, log, auditLog, keyring),
-		AI:           ai.NewService(&cfg.AI, db, auditLog, crmSvc, log, aiLimiter),
-		Tools:        tools,
-		MCP:          ai.NewMCPServer(tools),
-		Agent:        agentSvc,
-		Simulation:   simulate.NewService(db, crmSvc, auditLog),
-		Forecast:     forecast.NewService(db, crmSvc, auditLog),
-		Risk:         risk.NewService(db, crmSvc, auditLog),
-		OIDC:         oidc.NewService(db, cfg, keyring, auditLog, log),
-		Views:        views.NewService(db, auditLog),
+		Storage:        storageSvc,
+		Audit:          auditLog,
+		Auth:           authn.NewService(db, cfg, keyring, auditLog, rbacSvc),
+		RBAC:           rbacSvc,
+		CRM:            crmSvc,
+		Jobs:           queue,
+		Outbox:         outbox.NewStore(db),
+		Imports:        imports,
+		Migrations:     migratex.NewService(db, auditLog, keyring),
+		Integrations:   integrations.NewHub(db, auditLog, keyring),
+		Events:         events.NewGateway(db, auditLog),
+		Dispatcher:     events.NewDispatcher(db, auditLog),
+		Email:          notify.NewEmailService(&cfg.Email, db, log),
+		Telegram:       notify.NewTelegramService(&cfg.Telegram, db, log, auditLog, keyring),
+		AI:             ai.NewService(&cfg.AI, db, auditLog, crmSvc, log, aiLimiter),
+		Tools:          tools,
+		MCP:            ai.NewMCPServer(tools),
+		Agent:          agentSvc,
+		Simulation:     simulate.NewService(db, crmSvc, auditLog),
+		Forecast:       forecast.NewService(db, crmSvc, auditLog),
+		Risk:           risk.NewService(db, crmSvc, auditLog),
+		OIDC:           oidc.NewService(db, cfg, keyring, auditLog, log),
+		Views:          views.NewService(db, auditLog),
+		MCPCredentials: mcpcred.NewService(db, auditLog),
 		Workflows: workflow.NewEngine(workflow.Config{
 			DB:     db,
 			CRM:    crmSvc,

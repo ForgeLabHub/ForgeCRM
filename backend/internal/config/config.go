@@ -97,6 +97,7 @@ type Config struct {
 	OIDC      OIDCConfig
 	Retention RetentionConfig
 	Storage   StorageConfig
+	MCP       MCPConfig
 
 	LogLevel     string
 	LogFormat    string
@@ -134,6 +135,15 @@ type AIConfig struct {
 	Model          string
 	Timeout        time.Duration
 	MaxRequestsMin int
+}
+
+// MCPConfig configures credentials for external MCP clients.
+type MCPConfig struct {
+	// RequestsPerMin bounds tool calls made through one credential, per minute. It is
+	// a per-credential budget rather than a per-process one, so a noisy client cannot
+	// spend another client's allowance, and the limit holds across replicas when a
+	// shared limiter store is configured.
+	RequestsPerMin int
 }
 
 // RetentionConfig configures the data-retention sweeps.
@@ -363,6 +373,10 @@ func Load() (*Config, error) {
 		c.AI.Enabled = false
 	}
 
+	c.MCP = MCPConfig{
+		RequestsPerMin: envIntOr("FORGECRM_MCP_REQUESTS_PER_MIN", 120),
+	}
+
 	c.Retention = RetentionConfig{
 		Enabled:    envBool("FORGECRM_RETENTION_ENABLED", false),
 		DryRun:     envBool("FORGECRM_RETENTION_DRY_RUN", true),
@@ -553,6 +567,9 @@ func (c *Config) Validate() error {
 	// value is a mistake, not a way to spell unlimited.
 	if c.AI.MaxRequestsMin < 0 {
 		return fmt.Errorf("FORGECRM_AI_MAX_REQUESTS_PER_MIN must not be negative, got %d", c.AI.MaxRequestsMin)
+	}
+	if c.MCP.RequestsPerMin < 0 {
+		return fmt.Errorf("FORGECRM_MCP_REQUESTS_PER_MIN must not be negative, got %d", c.MCP.RequestsPerMin)
 	}
 	if c.OIDC.Enabled && (c.OIDC.Issuer == "" || c.OIDC.ClientID == "") {
 		return fmt.Errorf("OIDC enabled but FORGECRM_OIDC_ISSUER or FORGECRM_OIDC_CLIENT_ID is empty")

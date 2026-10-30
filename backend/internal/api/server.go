@@ -34,6 +34,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/integrations"
 	"github.com/geff1778/forgecrm/internal/jobs"
 	"github.com/geff1778/forgecrm/internal/logging"
+	"github.com/geff1778/forgecrm/internal/mcpcred"
 	"github.com/geff1778/forgecrm/internal/migratex"
 	"github.com/geff1778/forgecrm/internal/notify"
 	"github.com/geff1778/forgecrm/internal/oidc"
@@ -96,6 +97,10 @@ type Deps struct {
 	// Views is the saved list-view service. It stores named filters per user and
 	// per screen; it never touches CRM data.
 	Views *views.Service
+	// MCPCredentials is the scoped, revocable credential store for external MCP
+	// clients. It resolves a bearer token to a principal carrying only the
+	// credential's own permission list.
+	MCPCredentials *mcpcred.Service
 	// OIDC is the optional corporate single sign-on service. A nil or disabled
 	// service reports itself off; the SSO routes answer 503 rather than 500.
 	OIDC *oidc.Service
@@ -112,6 +117,9 @@ type Server struct {
 	router       chi.Router
 	limiter      *ratelimit.Limiter
 	loginLimiter *ratelimit.Limiter
+	// mcpLimiter bounds tool calls made with one MCP credential. It is keyed by
+	// credential id, so one client cannot spend another's budget.
+	mcpLimiter *ratelimit.Limiter
 	// limiterStore is kept so Close can release it. A Redis-backed store holds a
 	// connection pool; leaving it open across a graceful shutdown leaks sockets
 	// until the process exits.
@@ -156,10 +164,25 @@ func New(deps *Deps, store ratelimit.Store, trusted httpx.TrustedProxies) (*Serv
 		return nil, err
 	}
 
+	// The MCP credential limit is per credential and fails open: it is a cost and
+	// fairness control on a client, and refusing every tool call because a counter is
+	// unreachable would turn a degraded cache into an outage of the integration.
+	mcpLimiter, err := ratelimit.New(store, ratelimit.Policy{
+		Name:      "mcp",
+		Limit:     deps.Config.MCP.RequestsPerMin,
+		Window:    time.Minute,
+		FailMode:  ratelimit.FailOpen,
+		KeyPrefix: "rl:mcp",
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	s := &Server{
 		deps:         deps,
 		limiter:      apiLimiter,
 		loginLimiter: loginLimiter,
+		mcpLimiter:   mcpLimiter,
 		limiterStore: store,
 		trusted:      trusted,
 	}
@@ -357,8 +380,20 @@ func (s *Server) buildRouter() chi.Router {
 			s.mountIntelligence(r)
 			s.mountDocuments(r)
 			s.mountViews(r)
-			s.mountMCP(r)
+			s.mountMCPCredentials(r)
 			s.mountNotifications(r)
+		})
+
+		// The MCP protocol endpoints accept either a session cookie (the admin UI) or
+		// an `Authorization: Bearer fcmcp_...` credential (an external client). They
+		// are outside the session-only group for that reason: a real MCP client has no
+		// browser session, and requiring one is what made the protocol unusable from
+		// anything but this application's own interface. The middleware still resolves
+		// a principal, and every tool call reaches the same permission check as the
+		// REST API.
+		r.Group(func(r chi.Router) {
+			r.Use(s.requireMCPAuth)
+			s.mountMCP(r)
 		})
 	})
 
@@ -681,6 +716,12 @@ func (s *Server) respondDomainError(w http.ResponseWriter, r *http.Request, err 
 		httpx.WriteError(w, r, httpx.ErrDisabled)
 	case errors.Is(err, views.ErrNotFound):
 		httpx.WriteError(w, r, httpx.ErrNotFound)
+	case errors.Is(err, mcpcred.ErrNotFound):
+		httpx.WriteError(w, r, httpx.ErrNotFound)
+	case errors.Is(err, mcpcred.ErrEmptyScope), errors.Is(err, mcpcred.ErrUnknownScope):
+		httpx.WriteError(w, r, httpx.NewError(422, httpx.CodeValidation, err.Error()))
+	case errors.Is(err, mcpcred.ErrTooBroad):
+		httpx.WriteError(w, r, httpx.NewError(403, httpx.CodeForbidden, err.Error()))
 	case errors.Is(err, views.ErrForbidden):
 		httpx.WriteError(w, r, httpx.NewError(403, httpx.CodeForbidden,
 			"this view belongs to another user and cannot be changed"))
@@ -693,6 +734,11 @@ func (s *Server) respondDomainError(w http.ResponseWriter, r *http.Request, err 
 		var viewErr *views.ValidationError
 		if errors.As(err, &viewErr) {
 			httpx.WriteError(w, r, httpx.ValidationError(viewErr.Fields))
+			return
+		}
+		var mcpErr *mcpcred.ValidationError
+		if errors.As(err, &mcpErr) {
+			httpx.WriteError(w, r, httpx.ValidationError(mcpErr.Fields))
 			return
 		}
 		var apiErr *httpx.APIError

@@ -12,6 +12,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/importx"
 	"github.com/geff1778/forgecrm/internal/integrations"
 	"github.com/geff1778/forgecrm/internal/jobs"
+	"github.com/geff1778/forgecrm/internal/mcpcred"
 	"github.com/geff1778/forgecrm/internal/migratex"
 	"github.com/geff1778/forgecrm/internal/openapi"
 	"github.com/geff1778/forgecrm/internal/views"
@@ -440,6 +441,24 @@ func APIContract() openapi.Contract {
 	c.BodyDescriptions["POST /api/v1/views"] = "A saved list view. `entity_type` and `name` are required; " +
 		"`filters` is the same parameter set the corresponding list endpoint accepts. A name the caller " +
 		"already uses for the same screen is refused with 422 rather than silently creating a second view."
+
+		// --- MCP client credentials ------------------------------------------------
+	// A credential is minted once and its token is returned exactly once; the list
+	// and every later read carry only the non-secret prefix. `permissions` is
+	// required in effect but is validated as a non-empty list rather than a presence
+	// check, so it is described in the body text rather than the required list.
+	c.RequestBodies["POST /api/v1/mcp/credentials"] = reflect.TypeOf(mcpcred.CreateInput{})
+	c.Responses["POST /api/v1/mcp/credentials"] = reflect.TypeOf(mcpcred.Created{})
+	c.SuccessStatus["POST /api/v1/mcp/credentials"] = 201
+	c.Responses["GET /api/v1/mcp/credentials"] = reflect.TypeOf(httpx.ListResponse[mcpcred.Credential]{})
+	c.Responses["POST /api/v1/mcp/credentials/{id}/rotate"] = reflect.TypeOf(mcpcred.Created{})
+	c.BodyNames["POST /api/v1/mcp/credentials"] = "CreateMCPCredentialInput"
+	c.TypeNames[reflect.TypeOf(mcpcred.CreateInput{})] = "CreateMCPCredentialInput"
+	c.BodyDescriptions["POST /api/v1/mcp/credentials"] = "Mints a scoped MCP client credential. " +
+		"`permissions` must be a non-empty subset of the permissions the caller holds — a credential narrows " +
+		"authority, it never widens it — and every entry must be a permission in the catalog. The response is " +
+		"the only time the token is returned; only its hash is stored, and a lost token is replaced by rotating " +
+		"the credential, not recovered."
 
 	c.BodyDescriptions["POST /api/v1/workflows/import"] = "A portable workflow document, as produced by " +
 		"`GET /api/v1/workflows/{id}/export`. The `definition` is the same document the workflow stores, so an " +

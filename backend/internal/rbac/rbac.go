@@ -164,6 +164,15 @@ const (
 	// distinct right could grant, because a private view is only ever the caller's own.
 	PermViewsRead   Permission = "views.read"
 	PermViewsManage Permission = "views.manage"
+
+	// MCP client credentials. A credential is a scoped, revocable token that lets an
+	// external MCP client reach the CRM without a browser session. Reading which
+	// credentials exist (read) is an audit activity; minting, rotating and revoking one
+	// (manage) changes who can reach the CRM, so the two are separate rights. A
+	// credential carries its own permission list, narrower than its owner's roles —
+	// that is the point of the split.
+	PermMCPCredentialsRead   Permission = "mcp.credentials.read"
+	PermMCPCredentialsManage Permission = "mcp.credentials.manage"
 )
 
 // All returns every permission in the catalog, sorted.
@@ -212,6 +221,7 @@ var catalog = map[Permission]struct{}{
 	PermForecastRead: {}, PermForecastRun: {}, PermRiskRead: {}, PermRiskManage: {},
 	PermSSORead: {}, PermSSOManage: {},
 	PermViewsRead: {}, PermViewsManage: {},
+	PermMCPCredentialsRead: {}, PermMCPCredentialsManage: {},
 }
 
 // Known reports whether p is part of the catalog.

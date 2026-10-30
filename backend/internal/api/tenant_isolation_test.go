@@ -126,10 +126,11 @@ func newHarnessWithStore(t *testing.T, cfg *config.Config, store ratelimit.Store
 		Migrations: svcs.Migrations, Integrations: svcs.Integrations,
 		Events: svcs.Events, Dispatcher: svcs.Dispatcher,
 		Email: svcs.Email, Telegram: svcs.Telegram, AI: svcs.AI, Tools: svcs.Tools,
-		MCP:     svcs.MCP,
-		Agent:   svcs.Agent,
-		OIDC:    svcs.OIDC,
-		Version: "test",
+		MCP:            svcs.MCP,
+		Agent:          svcs.Agent,
+		OIDC:           svcs.OIDC,
+		MCPCredentials: svcs.MCPCredentials,
+		Version:        "test",
 	}, store, trusted)
 	if err != nil {
 		t.Fatalf("build server: %v", err)

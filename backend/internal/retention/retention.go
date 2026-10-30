@@ -206,6 +206,15 @@ var policies = []Policy{
 	},
 
 	{
+		Key: "mcp_credentials_inactive", Table: "mcp_credentials", TimeColumn: "created_at",
+		StatusPredicate: "revoked_at IS NOT NULL OR (expires_at IS NOT NULL AND expires_at < now())",
+		Default:         180 * 24 * time.Hour, Min: 30 * 24 * time.Hour, BatchSize: 1000,
+		Reason: "a revoked or long-expired credential can never authenticate again, " +
+			"so its row is dead weight; it is kept for a generous window because " +
+			"the creation and revocation are also in the append-only audit log, " +
+			"and a live credential is never swept",
+	},
+	{
 		Key: "sessions_expired", Table: "sessions", TimeColumn: "expires_at",
 		Default: 30 * 24 * time.Hour, Min: 24 * time.Hour, BatchSize: 5000,
 		Reason: "an expired session is no longer accepted; it is kept briefly so an " +
