@@ -246,8 +246,10 @@ Two things this document deliberately does not do:
 - **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`.
 - **Fake:** `Executor` is the injection seam.
 - **Tests:** `agent_test.go` (unit) + `testsupport/agent_approvals_test.go`.
-- **Extract:** `almost` — 3 internal deps, an interface seam, and a bounded
-  responsibility.
+- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/agent`,
+  with `audit`, `database` and `httpx` (and `httpx`'s own leaves) as its
+  dependencies. Its argument-hash test runs in the extracted module. The
+  `Executor` is supplied by the host application, so the seam travels with it.
 - **Cut lines:** moves with `audit`/`database`; the `Executor` is supplied by the
   host application.
 
@@ -479,7 +481,9 @@ Two things this document deliberately does not do:
 - **External deps:** none beyond stdlib.
 - **Fake:** `DryRun` is the default posture; `Runner` is nil-safe.
 - **Tests:** `retention_test.go` + `testsupport/retention_test.go`.
-- **Extract:** `almost` — 2 internal deps, self-contained logic.
+- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/retention`,
+  with `audit` and `database` as its dependencies. Its safety tests run in the
+  extracted module.
 - **Cut lines:** moves with `audit`/`database`.
 
 ### internal/netguard  — outbound SSRF guard
@@ -694,9 +698,10 @@ Two things this document deliberately does not do:
   seams without a shipped fake: `ai.Provider`, `events.Poster`,
   `integrations.Adapter`, `migratex.Source`, `agent.Executor`,
   `database.Querier`, `objectstore.ObjectStore`, `ratelimit.Store`.
-- **Extract status:** thirteen modules are `yes` — `analytics`, `ratelimit`,
+- **Extract status:** fifteen modules are `yes` — `analytics`, `ratelimit`,
   `netguard`, `objectstore`, `secrets`, `logging`, `httpx`, `importx/safe`,
-  `importx/parsers`, `database`, `rbac`, `audit` and `outbox` — because they were
+  `importx/parsers`, `database`, `rbac`, `audit`, `outbox`, `retention` and
+  `agent` — because they were
   actually extracted, built, tested and run in a clean module, now by the
   automated harness in `scripts/extract-test/`. The statuses here match
   `EXTRACT_READY.md` exactly.

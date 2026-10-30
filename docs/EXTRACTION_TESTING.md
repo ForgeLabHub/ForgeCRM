@@ -219,6 +219,28 @@ Both are acceptable outcomes; silently importing half the monolith is not.
   extracted module.
 - **Hidden dependencies found:** none.
 
+### `retention` — READY
+
+- **Internal imports:** `audit`, `database` (extracted alongside it).
+- **Commands:** `scripts/extract-test/retention/setup.sh` — `go build`, `go test`
+  and a smoke that checks the 22-policy catalog and the safety posture.
+- **Result:** built, tested and ran standalone. The smoke caught a real fact
+  while it was written — an expiry-driven policy legitimately carries a zero
+  window, and a protected policy has no default on purpose — which the smoke now
+  encodes instead of assuming away.
+- **Hidden dependencies found:** none.
+
+### `agent` — READY
+
+- **Internal imports:** `audit`, `database`, `httpx` (and `httpx`'s leaves
+  `logging`, `ratelimit`), all extracted alongside it.
+- **Commands:** `scripts/extract-test/agent/setup.sh` — `go build`, `go test` and
+  a smoke that drives the argument hash, the risk tiers and the secret guard.
+- **Result:** built, tested and ran standalone; the argument-hash stability test —
+  the property the whole approval flow rests on — runs in the extracted module.
+- **Hidden dependencies found:** none. The `Executor` seam travels with the
+  package, which is what lets a host supply the real tool path.
+
 ### `secrets` — ALMOST (superseded by READY above)
 
 - **Source SHA:** `7a6d67f`
@@ -261,8 +283,9 @@ should notice. The harness was itself verified to fail: replacing `objectstore`'
 `netguard` import with `integrations` made both the harness and the archtest report
 the violation, and giving `logging` an in-module import made the archtest fail.
 
-`modules.txt` lists thirteen modules today: `netguard`, `analytics`, `ratelimit`,
+`modules.txt` lists fifteen modules today: `netguard`, `analytics`, `ratelimit`,
 `objectstore`, `secrets`, `logging`, `httpx`, `safe` (internal/importx/safe),
-`parsers` (internal/importx/parsers), `database`, `rbac`, `audit` and `outbox`.
+`parsers` (internal/importx/parsers), `database`, `rbac`, `audit`, `outbox`,
+`retention` and `agent`.
 
 See `scripts/extract-test/README.md` for how to add a module.

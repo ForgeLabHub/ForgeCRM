@@ -25,10 +25,22 @@ once it reaches 1.0.
   passes. A CI job `extraction` runs the harness, and `TestExtractionBoundaryHolds`
   in `internal/archtest` enforces the same boundary cheaply on every
   `go test ./...`; the two are independent, so neither a stale check nor a skipped
-  job can hide a violation. Thirteen modules are proven today: the four above plus
+  job can hide a violation. Fifteen modules are proven today: the four above plus
   `secrets` and `logging` (which became provable once they gained their own tests),
-  `httpx`, `importx/safe`, `importx/parsers`, `database`, `rbac`, `audit` and
-  `outbox` (the last four added in this slice).
+  `httpx`, `importx/safe`, `importx/parsers`, `database`, `rbac`, `audit`,
+  `outbox`, `retention` and `agent` (the last six added in this slice).
+
+- **The retention engine and the human-in-the-loop layer are now
+  extraction-proven.** `internal/retention` — the data-retention engine with its
+  policy catalog, dry-run default and opt-in delete — depends only on `audit` and
+  `database`. `internal/agent` — the proposal queue with a signed approval — is the
+  widest proven set so far: `audit`, `database` and `httpx`, every one of them
+  proven in turn. Both lift out; the `Executor` seam travels with the agent
+  package, which is what lets a host supply the real tool path. Writing the
+  retention smoke surfaced a real invariant rather than a bug: an expiry-driven
+  policy legitimately carries a zero window, and a protected policy has no default
+  on purpose, so the smoke encodes both instead of assuming a positive window
+  everywhere.
 
 - **The audit trail and the outbox are now extraction-proven.** `internal/audit`
   (the append-only action trail and the security-event stream) and

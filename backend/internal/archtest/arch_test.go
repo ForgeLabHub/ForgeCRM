@@ -213,7 +213,7 @@ func TestCoreDoesNotImportCompositionOrHTTP(t *testing.T) {
 // graph, so a regression is caught by `go test ./...` and not only by the heavier
 // extraction harness in scripts/extract-test.
 //
-// Thirteen modules are pinned:
+// Fifteen modules are pinned:
 //
 //   - netguard is the SSRF guard. It is a leaf: it must depend on nothing inside
 //     this module and nothing outside the standard library. That is what lets the
@@ -244,6 +244,13 @@ func TestCoreDoesNotImportCompositionOrHTTP(t *testing.T) {
 //     outbox is the transactional outbox with the event vocabulary. Both may
 //     depend only on the database handle and the logger, the two leaves they are
 //     built on; anything else would weld them to the application.
+//   - retention is the data-retention engine: a fixed policy catalog, a dry-run
+//     default and an opt-in delete. It may depend only on the audit trail and the
+//     database handle.
+//   - agent is the human-in-the-loop layer: a proposal queue with a signed
+//     approval. It may depend only on the audit trail, the database handle and the
+//     HTTP primitives — the widest set of any proven module, and every one of them
+//     is proven in turn.
 //
 // This is the cheap, always-on half of the check. The extraction harness is the
 // expensive half that actually compiles the module on its own; the two are
@@ -296,6 +303,14 @@ func TestExtractionBoundaryHolds(t *testing.T) {
 		// layer or RBAC is what would weld them to the application.
 		"audit":  {"database": true, "logging": true},
 		"outbox": {"database": true, "logging": true},
+		// retention is the data-retention engine. It is built on the audit trail and
+		// the database handle; a dependency on a domain service is what would weld it
+		// to the application.
+		"retention": {"database": true, "audit": true, "logging": true},
+		// agent is the human-in-the-loop layer, the widest set proven so far: the
+		// audit trail, the database handle and the HTTP primitives, all of them
+		// proven leaves or proven scoped modules themselves.
+		"agent": {"database": true, "audit": true, "logging": true, "httpx": true, "ratelimit": true},
 	}
 	forbiddenDeps := map[string]map[string]bool{
 		"objectstore": forbiddenForObjectstore,

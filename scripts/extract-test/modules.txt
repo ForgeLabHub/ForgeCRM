@@ -21,6 +21,8 @@
 # rbac          permission catalog, principal and resolution service
 # audit         append-only action trail and security events
 # outbox        transactional outbox with the event vocabulary
+# retention     data-retention engine: policy catalog, dry-run default, opt-in delete
+# agent         human-in-the-loop proposal queue with a signed approval
 
 netguard
 analytics
@@ -35,3 +37,5 @@ database
 rbac
 audit
 outbox
+retention
+agent

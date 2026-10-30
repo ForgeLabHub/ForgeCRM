@@ -244,12 +244,13 @@ An "extraction-ready" claim is **testable, not documentary**:
   the test passes while checking nothing. The archtest and the harness are
   independent, so neither a stale check nor a skipped CI job can hide a violation.
 
-Thirteen modules are proven today: `netguard`, `analytics`, `ratelimit`,
+Fifteen modules are proven today: `netguard`, `analytics`, `ratelimit`,
 `objectstore`, `secrets`, `logging`, `httpx`, the two `importx` leaves
 `importx/safe` (untrusted-archive extraction) and `importx/parsers` (tabular
-source parsing), and `database`, `rbac`, `audit` and `outbox` (each with
-`database` and, where needed, `logging` as its dependencies). `docs/MODULES.md`
-and `docs/EXTRACT_READY.md` record the status and must match the harness.
+source parsing), and `database`, `rbac`, `audit`, `outbox`, `retention` and
+`agent` (each with its proven dependencies: `database`, and where needed
+`logging`, `audit`, `httpx`). `docs/MODULES.md` and `docs/EXTRACT_READY.md` record
+the status and must match the harness.
 
 Writing a module's first tests is itself a bug-finding step: the `parsers`
 extraction is what surfaced that XLSX was rejected by the UTF-8 check applied to

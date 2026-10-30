@@ -340,4 +340,7 @@ is `database`, so it is extracted with it by `scripts/extract-test/rbac`; the
 archtest pins that `rbac` may import `database` and nothing else. `audit` and
 `outbox` are built on `database` and `logging` and on nothing else, and both are
 extracted and proven by `scripts/extract-test/audit` and
-`scripts/extract-test/outbox`; the archtest pins that boundary too.
+`scripts/extract-test/outbox`; the archtest pins that boundary too. `retention` is
+built on `audit` and `database`, and `agent` on `audit`, `database` and `httpx` —
+the widest proven set — and both are extracted and proven by
+`scripts/extract-test/retention` and `scripts/extract-test/agent`.
