@@ -36,6 +36,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/secrets"
 	"github.com/geff1778/forgecrm/internal/simulate"
 	"github.com/geff1778/forgecrm/internal/storage"
+	"github.com/geff1778/forgecrm/internal/views"
 	"github.com/geff1778/forgecrm/internal/workflow"
 )
 
@@ -84,6 +85,9 @@ type Services struct {
 	// mint a session; the API issues the session through authn, so there is one
 	// place that creates sessions.
 	OIDC *oidc.Service
+	// Views is the saved list-view service: named filters per user and per screen.
+	// It never touches CRM data, only the views table.
+	Views *views.Service
 }
 
 // Build constructs every service from the given configuration and database.
@@ -165,6 +169,7 @@ func Build(cfg *config.Config, db *database.DB, keyring *secrets.Keyring, log *s
 		Forecast:     forecast.NewService(db, crmSvc, auditLog),
 		Risk:         risk.NewService(db, crmSvc, auditLog),
 		OIDC:         oidc.NewService(db, cfg, keyring, auditLog, log),
+		Views:        views.NewService(db, auditLog),
 		Workflows: workflow.NewEngine(workflow.Config{
 			DB:     db,
 			CRM:    crmSvc,

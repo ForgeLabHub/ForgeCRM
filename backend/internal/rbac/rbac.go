@@ -157,6 +157,13 @@ const (
 	// audit activity, and a wrong change to it can lock every user out.
 	PermSSORead   Permission = "sso.read"
 	PermSSOManage Permission = "sso.manage"
+
+	// Saved list views. A view is a stored filter/sort for one CRM list screen,
+	// private to its owner or shared with the organization. One permission covers the
+	// lifecycle: there is no separate "read someone else's private view" that a
+	// distinct right could grant, because a private view is only ever the caller's own.
+	PermViewsRead   Permission = "views.read"
+	PermViewsManage Permission = "views.manage"
 )
 
 // All returns every permission in the catalog, sorted.
@@ -204,6 +211,7 @@ var catalog = map[Permission]struct{}{
 	PermSimulationRead: {}, PermSimulationManage: {}, PermSimulationRun: {},
 	PermForecastRead: {}, PermForecastRun: {}, PermRiskRead: {}, PermRiskManage: {},
 	PermSSORead: {}, PermSSOManage: {},
+	PermViewsRead: {}, PermViewsManage: {},
 }
 
 // Known reports whether p is part of the catalog.

@@ -402,6 +402,10 @@ func TestExtractionBoundaryHolds(t *testing.T) {
 		// two parser leaves it stands on. It enqueues its work and writes through the
 		// outbox in the same transaction.
 		"importx": {"audit": true, "config": true, "crm": true, "database": true, "httpx": true, "importx/parsers": true, "importx/safe": true, "jobs": true, "outbox": true, "rbac": true},
+		// views is the saved list-view service. It stores named filters over the
+		// database handle, writes to the audit trail and reads the caller's
+		// principal for visibility and ownership. It touches no CRM table.
+		"views": {"audit": true, "database": true, "rbac": true},
 	}
 	forbiddenDeps := map[string]map[string]bool{
 		"objectstore": forbiddenForObjectstore,

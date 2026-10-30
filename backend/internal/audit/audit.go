@@ -217,6 +217,13 @@ const (
 	// which record and what it cost. The analysis itself is not recorded: the
 	// trail shows that a model was consulted, not a second copy of its answer.
 	ActionAIInsightGenerated Action = "ai.insight_generated"
+
+	// Saved list views. A view is a stored filter, so the trail records who named
+	// one, what it was called and whether it was shared — enough to answer "who
+	// exposed this filter to the organization" without storing the filter twice.
+	ActionViewCreated Action = "views.created"
+	ActionViewUpdated Action = "views.updated"
+	ActionViewDeleted Action = "views.deleted"
 )
 
 func marshalJSONOrNil(v any) ([]byte, error) {

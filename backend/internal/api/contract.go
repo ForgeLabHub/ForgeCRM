@@ -14,6 +14,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/jobs"
 	"github.com/geff1778/forgecrm/internal/migratex"
 	"github.com/geff1778/forgecrm/internal/openapi"
+	"github.com/geff1778/forgecrm/internal/views"
 	"github.com/geff1778/forgecrm/internal/workflow"
 )
 
@@ -412,6 +413,33 @@ func APIContract() openapi.Contract {
 	c.Responses["GET /api/v1/workflow-templates"] = reflect.TypeOf(httpx.ListResponse[workflow.Template]{})
 	c.Responses["GET /api/v1/workflow-templates/{id}"] = reflect.TypeOf(workflow.Template{})
 	c.Responses["POST /api/v1/workflow-templates/{id}/create"] = reflect.TypeOf(workflow.Workflow{})
+
+	// --- Saved list views ------------------------------------------------------
+	// A view stores the same list-query parameters the CRM list endpoints parse, so
+	// its request and response are the view document itself. The request's required
+	// set names the fields validate() insists on; `filters` is optional because an
+	// empty filter is a valid view that shows everything.
+	c.RequestBodies["POST /api/v1/views"] = reflect.TypeOf(views.Input{})
+	c.Responses["POST /api/v1/views"] = reflect.TypeOf(views.View{})
+	c.Responses["GET /api/v1/views"] = reflect.TypeOf(httpx.ListResponse[views.View]{})
+	c.Responses["GET /api/v1/views/{id}"] = reflect.TypeOf(views.View{})
+	c.RequestBodies["PUT /api/v1/views/{id}"] = reflect.TypeOf(views.Input{})
+	c.Responses["PUT /api/v1/views/{id}"] = reflect.TypeOf(views.View{})
+	// `Input` is a bare name a second type could share, so the component is renamed
+	// the way the workflow and simulation request types are. The required set is
+	// keyed by that component name.
+	c.BodyNames["POST /api/v1/views"] = "SavedViewInput"
+	c.BodyNames["PUT /api/v1/views/{id}"] = "SavedViewInput"
+	c.TypeNames[reflect.TypeOf(views.Input{})] = "SavedViewInput"
+	c.RequiredBody["SavedViewInput"] = []string{"entity_type", "name"}
+	c.QueryParams["GET /api/v1/views"] = []openapi.QueryParam{
+		{Name: "entity_type", Required: true,
+			Schema:      map[string]any{"type": "string", "enum": []string{"accounts", "contacts", "leads", "deals", "tasks", "tickets"}},
+			Description: "The list screen to load views for."},
+	}
+	c.BodyDescriptions["POST /api/v1/views"] = "A saved list view. `entity_type` and `name` are required; " +
+		"`filters` is the same parameter set the corresponding list endpoint accepts. A name the caller " +
+		"already uses for the same screen is refused with 422 rather than silently creating a second view."
 
 	c.BodyDescriptions["POST /api/v1/workflows/import"] = "A portable workflow document, as produced by " +
 		"`GET /api/v1/workflows/{id}/export`. The `definition` is the same document the workflow stores, so an " +

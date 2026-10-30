@@ -44,6 +44,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/secrets"
 	"github.com/geff1778/forgecrm/internal/simulate"
 	"github.com/geff1778/forgecrm/internal/storage"
+	"github.com/geff1778/forgecrm/internal/views"
 	"github.com/geff1778/forgecrm/internal/workflow"
 )
 
@@ -92,6 +93,9 @@ type Deps struct {
 	// Storage is the optional S3-compatible attachment store. A nil or disabled
 	// service reports itself off; the document routes answer 503 rather than 500.
 	Storage *storage.Service
+	// Views is the saved list-view service. It stores named filters per user and
+	// per screen; it never touches CRM data.
+	Views *views.Service
 	// OIDC is the optional corporate single sign-on service. A nil or disabled
 	// service reports itself off; the SSO routes answer 503 rather than 500.
 	OIDC *oidc.Service
@@ -352,6 +356,7 @@ func (s *Server) buildRouter() chi.Router {
 			s.mountSimulation(r)
 			s.mountIntelligence(r)
 			s.mountDocuments(r)
+			s.mountViews(r)
 			s.mountMCP(r)
 			s.mountNotifications(r)
 		})
@@ -674,12 +679,22 @@ func (s *Server) respondDomainError(w http.ResponseWriter, r *http.Request, err 
 		httpx.WriteError(w, r, httpx.NewError(422, httpx.CodeValidation, err.Error()))
 	case errors.Is(err, storage.ErrNotConfigured):
 		httpx.WriteError(w, r, httpx.ErrDisabled)
+	case errors.Is(err, views.ErrNotFound):
+		httpx.WriteError(w, r, httpx.ErrNotFound)
+	case errors.Is(err, views.ErrForbidden):
+		httpx.WriteError(w, r, httpx.NewError(403, httpx.CodeForbidden,
+			"this view belongs to another user and cannot be changed"))
 	case errors.Is(err, storage.ErrObjectMissing):
 		// The row exists but the object is gone. Reported as not found rather than as a
 		// server error, because there is no object to serve and the client cannot fix
 		// it by retrying.
 		httpx.WriteError(w, r, httpx.ErrNotFound)
 	default:
+		var viewErr *views.ValidationError
+		if errors.As(err, &viewErr) {
+			httpx.WriteError(w, r, httpx.ValidationError(viewErr.Fields))
+			return
+		}
 		var apiErr *httpx.APIError
 		if errors.As(err, &apiErr) {
 			httpx.WriteError(w, r, apiErr)

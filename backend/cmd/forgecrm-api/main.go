@@ -178,6 +178,7 @@ func run() error {
 		Risk:         services.Risk,
 		Storage:      services.Storage,
 		OIDC:         services.OIDC,
+		Views:        services.Views,
 		StartedAt:    time.Now(),
 		Version:      version,
 		BuildCommit:  commit,
