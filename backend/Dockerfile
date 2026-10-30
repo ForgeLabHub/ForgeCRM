@@ -36,8 +36,8 @@ RUN apk add --no-cache ca-certificates tzdata \
 
 # Uploaded files and extracted archives live here. It is a volume in compose and
 # is never served over HTTP.
-RUN mkdir -p /var/lib/forgecrm/imports /var/lib/forgecrm/tmp \
-    && chown -R forgecrm:forgecrm /var/lib/forgecrm
+RUN mkdir -p /var/lib/forgecrm/imports /var/lib/forgecrm/tmp /app/public \
+    && chown -R forgecrm:forgecrm /var/lib/forgecrm /app
 
 COPY --from=build /out/forgecrm-api /usr/local/bin/forgecrm-api
 COPY --from=build /out/forgecrm-worker /usr/local/bin/forgecrm-worker

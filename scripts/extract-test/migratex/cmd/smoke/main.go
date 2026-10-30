@@ -13,13 +13,14 @@ import (
 func main() {
 	for _, k := range []migratex.SourceKind{
 		migratex.SourcePostgres, migratex.SourceSQLite, migratex.SourceREST,
+		migratex.SourceMySQL,
 	} {
 		if !migratex.Implemented(k) {
 			fail("source kind %q is not implemented", k)
 		}
 	}
 	for _, k := range []migratex.SourceKind{
-		migratex.SourceMySQL, migratex.SourceMSSQL, migratex.SourceOracle,
+		migratex.SourceMSSQL, migratex.SourceOracle,
 	} {
 		if migratex.Implemented(k) {
 			fail("source kind %q claims to be implemented", k)

@@ -72,6 +72,10 @@ func run() error {
 	}
 	defer db.Close()
 
+	if err := waitForSchema(ctx, db, log); err != nil {
+		return fmt.Errorf("schema readiness check: %w", err)
+	}
+
 	keyring, err := secrets.NewKeyring(cfg.SecretKey)
 	if err != nil {
 		return fmt.Errorf("initialise the encryption keyring: %w", err)
@@ -832,3 +836,30 @@ func min(a, b int) int {
 
 var _ = ai.ErrDisabled
 var _ = strings.TrimSpace
+
+// waitForSchema verifies that PostgreSQL is reachable and that migrations have been applied.
+// Worker processes do not run migrations themselves; they wait for the API process to do so.
+func waitForSchema(ctx context.Context, db *database.DB, log *slog.Logger) error {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		var count int
+		err := db.Pool().QueryRow(ctx, "SELECT count(*) FROM schema_migrations WHERE dirty = false").Scan(&count)
+		if err == nil && count > 0 {
+			log.Info("database schema readiness check passed", "migrations_count", count)
+			return nil
+		}
+		if err != nil {
+			log.Info("waiting for database schema to be ready", "error", err)
+		} else {
+			log.Info("waiting for migrations to be applied by API service")
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}

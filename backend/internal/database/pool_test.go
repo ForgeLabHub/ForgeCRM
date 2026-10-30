@@ -76,3 +76,24 @@ func TestConnectWithPoolReportsABadURL(t *testing.T) {
 		t.Errorf("a bad url should not be reported as a pool size problem: %v", err)
 	}
 }
+
+func TestRedactDSN(t *testing.T) {
+	tests := []struct {
+		name     string
+		raw      string
+		expected string
+	}{
+		{"empty", "", ""},
+		{"with password", "postgres://user:secret123@localhost:5432/mydb?sslmode=disable", "postgres://user:xxxxx@localhost:5432/mydb?sslmode=disable"},
+		{"without password", "postgres://user@localhost:5432/mydb", "postgres://user@localhost:5432/mydb"},
+		{"invalid url", "postgres://%80", "postgres://%80"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := RedactDSN(tt.raw)
+			if got != tt.expected {
+				t.Errorf("RedactDSN(%q) = %q, want %q", tt.raw, got, tt.expected)
+			}
+		})
+	}
+}

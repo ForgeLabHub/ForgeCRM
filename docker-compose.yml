@@ -54,7 +54,12 @@ services:
 
   api:
     build:
-      context: ./backend
+      # Built from the repository root so the image also contains the web
+      # interface (see the root Dockerfile). A platform that builds the repo root,
+      # such as blitz.cloud, reads this file to find the parts and builds the same
+      # image; the API serves the interface and the API from one container.
+      context: .
+      dockerfile: Dockerfile
       args:
         VERSION: ${FORGECRM_VERSION:-dev}
         COMMIT: ${FORGECRM_COMMIT:-unknown}
@@ -62,10 +67,15 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # .env is the local override; it is absent on a managed platform that injects
+    # its own variables, so a missing file is not an error.
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       FORGECRM_HTTP_ADDR: ":8080"
+      # The interface is copied here by the root Dockerfile.
+      FORGECRM_STATIC_DIR: "/app/public"
     volumes:
       # Uploads and extracted archives persist across restarts.
       - importdata:/var/lib/forgecrm
@@ -81,7 +91,8 @@ services:
 
   worker:
     build:
-      context: ./backend
+      context: .
+      dockerfile: Dockerfile
       args:
         VERSION: ${FORGECRM_VERSION:-dev}
         COMMIT: ${FORGECRM_COMMIT:-unknown}
@@ -99,7 +110,8 @@ services:
         # The API applies migrations, so the worker must not start first.
         condition: service_healthy
     env_file:
-      - .env
+      - path: .env
+        required: false
     volumes:
       - importdata:/var/lib/forgecrm
 

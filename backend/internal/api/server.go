@@ -13,6 +13,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -398,9 +400,40 @@ func (s *Server) buildRouter() chi.Router {
 		})
 	})
 
-	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
-		httpx.WriteError(w, r, httpx.ErrNotFound)
-	})
+	// The web interface is served from a static directory when one is present,
+	// so one container answers both the API and the UI. The catch-all must be
+	// registered after the API routes: chi keeps only the last NotFound handler,
+	// so a static fallback registered earlier would be silently replaced by the
+	// JSON one below and every page would return an error document.
+	//
+	// API paths are never served from the static directory — an unknown /api/...
+	// stays a JSON 404 — and a request for a real file returns that file; anything
+	// else falls back to index.html so client-side routes survive a refresh.
+	staticDir := os.Getenv("FORGECRM_STATIC_DIR")
+	if staticDir == "" {
+		staticDir = "public"
+	}
+	if info, err := os.Stat(staticDir); err == nil && info.IsDir() {
+		fileServer := http.FileServer(http.Dir(staticDir))
+		indexPath := filepath.Join(staticDir, "index.html")
+		r.NotFound(func(w http.ResponseWriter, req *http.Request) {
+			path := filepath.Clean(req.URL.Path)
+			if strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/mcp") {
+				httpx.WriteError(w, req, httpx.ErrNotFound)
+				return
+			}
+			fpath := filepath.Join(staticDir, path)
+			if finfo, err := os.Stat(fpath); err == nil && !finfo.IsDir() {
+				fileServer.ServeHTTP(w, req)
+				return
+			}
+			http.ServeFile(w, req, indexPath)
+		})
+	} else {
+		r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+			httpx.WriteError(w, r, httpx.ErrNotFound)
+		})
+	}
 	r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, httpx.NewError(405, httpx.CodeBadRequest, "method not allowed"))
 	})

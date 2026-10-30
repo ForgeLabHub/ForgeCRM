@@ -280,10 +280,18 @@ func Load() (*Config, error) {
 	prod := envName == "production"
 
 	c := &Config{
-		Env:         envName,
-		HTTPAddr:    env("FORGECRM_HTTP_ADDR", ":8080"),
+		Env: envName,
+		HTTPAddr: func() string {
+			if port := env("PORT", ""); port != "" {
+				if strings.HasPrefix(port, ":") {
+					return "0.0.0.0" + port
+				}
+				return "0.0.0.0:" + port
+			}
+			return env("FORGECRM_HTTP_ADDR", ":8080")
+		}(),
 		BaseURL:     strings.TrimRight(env("FORGECRM_BASE_URL", "http://localhost:8080"), "/"),
-		DatabaseURL: env("FORGECRM_DATABASE_URL", ""),
+		DatabaseURL: env("FORGECRM_DATABASE_URL", env("DATABASE_URL", "")),
 
 		DatabaseMaxConns: int32(envIntOr("FORGECRM_DATABASE_MAX_CONNS", int(database.DefaultMaxConns))),
 

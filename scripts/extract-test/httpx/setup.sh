@@ -23,6 +23,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 step "extract: httpx (with its logging and ratelimit dependencies)"
 WORK="$(fresh_work httpx)"
 extract_pkg "$WORK" httpx "" "example.com/httpx-extracted"
+extract_pkg "$WORK" tracectx "tracectx" "example.com/httpx-extracted/tracectx"
 # The two dependencies are copied into subdirectories; extract_pkg rewrites the
 # monolith import path across the whole working tree, so the httpx files that
 # reference them are re-pointed at the copies too.

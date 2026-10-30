@@ -6,7 +6,7 @@
 [extend]
 useDefault = true
 
-[allowlist]
+[[allowlists]]
 description = "Fixed CI-only placeholder keys, never used outside a CI job"
 
 # The `e2e` job needs a secret key to derive session tokens. The value below is
@@ -23,3 +23,17 @@ description = "Fixed CI-only placeholder keys, never used outside a CI job"
 # this one path, so any other value that looks like a key is still reported.
 regexes = ['''e2e-secret-key-long-enough-for-hkdf-derivation-0000''']
 paths = ['''.github/workflows/ci.yml''']
+
+[[allowlists]]
+description = "A test placeholder that only ever appears in config_test.go"
+
+# A test in config_test.go once set FORGECRM_SECRET_KEY to a literal placeholder
+# to exercise the PORT/DATABASE_URL fallback. The current revision sets it to the
+# empty string, so the value exists nowhere in the tree today, but it remains in
+# the history of this branch and the `generic-api-key` rule matches it there by
+# the variable name. It is not a credential: it protected nothing and the test
+# only asserts on the database URL and the bind address. The repository does not
+# rewrite a shared branch to remove a commit, so the value is excused by shape in
+# the one path it appears in. Any other value that looks like a key is reported.
+regexes = ['''devsecretkey1234567890123456789012''']
+paths = ['''backend/internal/config/config_test.go''']
