@@ -337,4 +337,7 @@ anything else in this module. `safe` (untrusted-archive extraction) and `parsers
 `database` is a leaf: it imports nothing else in this module, and it is extracted
 and proven by `scripts/extract-test/database`. `rbac`'s only in-module dependency
 is `database`, so it is extracted with it by `scripts/extract-test/rbac`; the
-archtest pins that `rbac` may import `database` and nothing else.
+archtest pins that `rbac` may import `database` and nothing else. `audit` and
+`outbox` are built on `database` and `logging` and on nothing else, and both are
+extracted and proven by `scripts/extract-test/audit` and
+`scripts/extract-test/outbox`; the archtest pins that boundary too.

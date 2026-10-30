@@ -326,6 +326,70 @@ scripts/extract-test/rbac/setup.sh
 
 ---
 
+## Candidate 10 — `internal/audit` — **READY**
+
+**Why:** the append-only action trail and the security-event stream. It has two
+in-module dependencies, `database` and `logging`, both proven, so the package
+lifts out. It had no in-package tests before this slice; it now has tests for the
+action vocabulary, the validation ordering that keeps an unattributable row out of
+the trail, and the marshalling helpers, none of which needs a server.
+
+**Blocker that was:** the docs listed "no in-package tests; schema lives in
+migration 0001" as the blocker. The schema genuinely is not part of the package —
+a real extraction would carry a migration with it, and that is stated rather than
+hidden — but the *Go* package has no coupling to the application, which is what
+the harness proves.
+
+**Evidence:**
+
+```bash
+scripts/extract-test/audit/setup.sh
+#   copied internal/audit -> . (2 files)
+#   copied internal/database -> database (2 files)
+#   copied internal/logging -> logging (2 files)
+#   ok    no import of the ForgeCRM monolith
+#   ok    go build ./...
+#   ok    go test ./...     # the new action-vocabulary and validation tests
+#   ok    go run ./cmd/smoke # validation runs before any write
+#   ok    audit extracts cleanly
+```
+
+**Files that move:** `internal/audit/*.go` (1 source + 1 test file),
+`internal/database` and `internal/logging` (its two dependencies), plus migration
+0001 for the schema.
+
+---
+
+## Candidate 11 — `internal/outbox` — **READY**
+
+**Why:** the transactional outbox — events written in the same transaction as the
+change that caused them, drained by the worker. Two in-module dependencies,
+`database` and `logging`, both proven.
+
+**Blocker that was:** the docs called it "substrate-bound" and proposed only
+documenting the dependency. That reasoning stops at documenting rather than
+proving; the package extracts cleanly, and its own vocabulary test runs in the
+extracted module.
+
+**Evidence:**
+
+```bash
+scripts/extract-test/outbox/setup.sh
+#   copied internal/outbox -> . (2 files)
+#   copied internal/database -> database (2 files)
+#   copied internal/logging -> logging (2 files)
+#   ok    no import of the ForgeCRM monolith
+#   ok    go build ./...
+#   ok    go test ./...
+#   ok    go run ./cmd/smoke # event types=25, envelope mapping checked
+#   ok    outbox extracts cleanly
+```
+
+**Files that move:** `internal/outbox/*.go` (1 source + 1 test file),
+`internal/database` and `internal/logging`.
+
+---
+
 ## Candidates assessed but not extracted
 
 These were evaluated from the dependency graph and marked without an extraction
@@ -334,9 +398,7 @@ run, because each has a concrete blocker that an extraction would only confirm.
 | Module | Status | Evidence | Blockers | Next actions |
 | --- | --- | --- | --- | --- |
 | `internal/storage` | **SPLIT — `objectstore` READY** | The provider layer was lifted into `internal/objectstore` and extracted: `go build`, the shared provider contract (Memory and real S3 wire protocol) and a smoke all pass in a clean module. `Service` keeps the authorization, metadata and reconciliation and stays behind. | `Service` still imports `audit, database, httpx, rbac`. That is correct — those are its job — and it is why only the provider layer was lifted. | None for `objectstore`. `Service` is not an extraction target; it is the application layer. |
-| `internal/outbox` | **ALMOST** | Small surface (`Store`, `Envelope`, `Event`, `EventTypes`); has a unit test. | Depends on `database`, `logging`; the outbox is meaningless without the app's transaction. | Document the `database` dependency; it is a substrate-bound module. |
 | `internal/retention` | **ALMOST** | Self-contained logic; unit + integration tests; dry-run by default. | Depends on `audit`, `database`; policy table is application-specific. | Extract the engine, inject a table catalog. |
-| `internal/audit` | **ALMOST** | Small surface (`Logger`, `Entry`, `Action`); append-only enforced by a DB trigger. | Depends on `database`, `logging`; no in-package tests; schema lives in migration 0001. | Move schema ownership with it or provide a migration. |
 | `internal/jobs` | **ALMOST** | One internal dep (`database`); clear responsibility. | Uses `FOR UPDATE … SKIP LOCKED`; PostgreSQL-specific. | Would need a dialect abstraction. |
 | `internal/agent` | **ALMOST** | `Executor` interface seam; unit + integration tests. | Depends on `audit, database, httpx`. | Fine to leave; it is small and cohesive. |
 | `internal/integrations` | **ALMOST** | `Adapter` interface; unit tests. | Depends on `audit, database, httpx, rbac, secrets`. | The SSRF guard alone was extracted: it now lives in `internal/netguard` (standard library only) and `integrations` re-exports it. |
@@ -367,6 +429,8 @@ run, because each has a concrete blocker that an extraction would only confirm.
 | `importx/parsers` | **READY** | A leaf; extracted, 19 tests added in this slice (they found and fixed two bugs), smoke ran. |
 | `database` | **READY** | A leaf; extracted, its pool-guard tests ran with no server, smoke refused an over-large pool. |
 | `rbac` | **READY** | Extracted whole with `database`; its `principal_test.go` and a catalog smoke ran. |
+| `audit` | **READY** | Extracted with `database` and `logging`; first tests added, smoke checked the validation ordering. |
+| `outbox` | **READY** | Extracted with `database` and `logging`; its vocabulary test and a smoke ran. |
 | everything else | **ALMOST** / **NOT READY** | Concrete blocker listed above. |
 
 **No module is marked `READY` without an extraction run recorded here**, and the
@@ -374,6 +438,6 @@ run is now automated: `scripts/extract-test/run.sh` performs it for every module
 `modules.txt` on each CI run. `analytics`, `ratelimit`, `netguard`, `objectstore`,
 `secrets`, `logging`, `httpx`, `importx/safe` and `importx/parsers` pass that bar today.
 
-The eleven `READY` modules are proven by the harness, not by this document. If the
+The thirteen `READY` modules are proven by the harness, not by this document. If the
 harness ever fails for one of them, the status here is wrong and the harness is
 right.

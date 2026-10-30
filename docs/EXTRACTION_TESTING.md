@@ -199,6 +199,26 @@ Both are acceptable outcomes; silently importing half the monolith is not.
   docs once proposed is a code change and not a boundary change.
 - **Hidden dependencies found:** none beyond `database`.
 
+### `audit` — READY
+
+- **Internal imports:** `database`, `logging` (extracted alongside it).
+- **Commands:** `scripts/extract-test/audit/setup.sh` — `go build`, `go test` and a
+  smoke that confirms the validation runs before any write.
+- **Result:** built, tested and ran standalone. Its first tests were added in this
+  slice (action vocabulary, validation ordering, marshalling helpers). Its schema
+  lives in migration 0001 and is not part of the package — a real extraction would
+  carry a migration with it.
+- **Hidden dependencies found:** none in the Go package.
+
+### `outbox` — READY
+
+- **Internal imports:** `database`, `logging` (extracted alongside it).
+- **Commands:** `scripts/extract-test/outbox/setup.sh` — `go build`, `go test` and a
+  smoke that drives the event vocabulary and the event-to-envelope mapping.
+- **Result:** built, tested and ran standalone; its vocabulary test runs in the
+  extracted module.
+- **Hidden dependencies found:** none.
+
 ### `secrets` — ALMOST (superseded by READY above)
 
 - **Source SHA:** `7a6d67f`
@@ -241,8 +261,8 @@ should notice. The harness was itself verified to fail: replacing `objectstore`'
 `netguard` import with `integrations` made both the harness and the archtest report
 the violation, and giving `logging` an in-module import made the archtest fail.
 
-`modules.txt` lists eleven modules today: `netguard`, `analytics`, `ratelimit`,
+`modules.txt` lists thirteen modules today: `netguard`, `analytics`, `ratelimit`,
 `objectstore`, `secrets`, `logging`, `httpx`, `safe` (internal/importx/safe),
-`parsers` (internal/importx/parsers), `database` and `rbac`.
+`parsers` (internal/importx/parsers), `database`, `rbac`, `audit` and `outbox`.
 
 See `scripts/extract-test/README.md` for how to add a module.

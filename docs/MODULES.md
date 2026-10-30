@@ -404,8 +404,14 @@ Two things this document deliberately does not do:
 - **Internal deps:** `database, logging`.
 - **External deps:** `github.com/google/uuid`.
 - **Fake:** none (writes to the DB). Uses the ambient transaction.
-- **Tests:** none in-package. Integration via `testsupport`.
-- **Extract:** `almost` — 2 internal deps, small surface.
+- **Tests:** `audit_test.go` (the action vocabulary, the validation ordering that
+  keeps an unattributable row out of the trail, and the marshalling helpers) plus
+  integration via `testsupport`.
+- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/audit`,
+  with `database` and `logging` as its two dependencies. Its schema lives in
+  migration 0001, so a real extraction would carry a migration with it; that is
+  noted rather than hidden. What the harness proves is that the Go package has no
+  coupling to the application.
 - **Cut lines:** moves with `database` and `logging`.
 
 ### internal/database
@@ -548,7 +554,9 @@ Two things this document deliberately does not do:
 - **External deps:** `github.com/google/uuid`, `github.com/jackc/pgx/v5`.
 - **Fake:** none.
 - **Tests:** `outbox_test.go` (event vocabulary).
-- **Extract:** `almost` — 2 internal deps.
+- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/outbox`,
+  with `database` and `logging` as its two dependencies. Its own test runs in the
+  extracted module.
 - **Cut lines:** moves with `database`/`logging`.
 
 ### internal/secrets
@@ -686,11 +694,12 @@ Two things this document deliberately does not do:
   seams without a shipped fake: `ai.Provider`, `events.Poster`,
   `integrations.Adapter`, `migratex.Source`, `agent.Executor`,
   `database.Querier`, `objectstore.ObjectStore`, `ratelimit.Store`.
-- **Extract status:** eleven modules are `yes` — `analytics`, `ratelimit`,
+- **Extract status:** thirteen modules are `yes` — `analytics`, `ratelimit`,
   `netguard`, `objectstore`, `secrets`, `logging`, `httpx`, `importx/safe`,
-  `importx/parsers`, `database` and `rbac` — because they were actually extracted,
-  built, tested and run in a clean module, now by the automated harness in
-  `scripts/extract-test/`. The statuses here match `EXTRACT_READY.md` exactly.
+  `importx/parsers`, `database`, `rbac`, `audit` and `outbox` — because they were
+  actually extracted, built, tested and run in a clean module, now by the
+  automated harness in `scripts/extract-test/`. The statuses here match
+  `EXTRACT_READY.md` exactly.
 - **Gaps found:** the packages with **no `_test.go` at all** are `audit`, `crm`,
   `events`, `forecast`, `jobs`, `migrate`, `migratex`, `migrations`, `notify`,
   `risk`, `simulate`, `wiring`. Of these, `crm`, `events`, `forecast`, `risk` and

@@ -19,6 +19,8 @@
 # parsers       tabular source parsing (internal/importx/parsers); a leaf
 # database      the PostgreSQL pool and transaction helper; a leaf
 # rbac          permission catalog, principal and resolution service
+# audit         append-only action trail and security events
+# outbox        transactional outbox with the event vocabulary
 
 netguard
 analytics
@@ -31,3 +33,5 @@ safe
 parsers
 database
 rbac
+audit
+outbox

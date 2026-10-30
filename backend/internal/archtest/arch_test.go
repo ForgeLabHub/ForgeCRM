@@ -213,7 +213,7 @@ func TestCoreDoesNotImportCompositionOrHTTP(t *testing.T) {
 // graph, so a regression is caught by `go test ./...` and not only by the heavier
 // extraction harness in scripts/extract-test.
 //
-// Nine modules are pinned:
+// Thirteen modules are pinned:
 //
 //   - netguard is the SSRF guard. It is a leaf: it must depend on nothing inside
 //     this module and nothing outside the standard library. That is what lets the
@@ -240,6 +240,10 @@ func TestCoreDoesNotImportCompositionOrHTTP(t *testing.T) {
 //   - rbac is the permission catalog, the request principal and the resolution
 //     service. It may depend only on the database handle: the catalog and the
 //     checks are pure, and the service talks to the database and nothing else.
+//   - audit is the append-only action trail and the security-event stream, and
+//     outbox is the transactional outbox with the event vocabulary. Both may
+//     depend only on the database handle and the logger, the two leaves they are
+//     built on; anything else would weld them to the application.
 //
 // This is the cheap, always-on half of the check. The extraction harness is the
 // expensive half that actually compiles the module on its own; the two are
@@ -287,6 +291,11 @@ func TestExtractionBoundaryHolds(t *testing.T) {
 		// pure, and the resolution service talks to the database and nothing else, so
 		// that is the whole boundary it has to keep to stay extractable.
 		"rbac": {"database": true},
+		// audit and outbox are built on the same two leaves — the database handle and
+		// the logger — and on nothing else. A dependency on a domain service, the HTTP
+		// layer or RBAC is what would weld them to the application.
+		"audit":  {"database": true, "logging": true},
+		"outbox": {"database": true, "logging": true},
 	}
 	forbiddenDeps := map[string]map[string]bool{
 		"objectstore": forbiddenForObjectstore,

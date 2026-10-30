@@ -25,10 +25,21 @@ once it reaches 1.0.
   passes. A CI job `extraction` runs the harness, and `TestExtractionBoundaryHolds`
   in `internal/archtest` enforces the same boundary cheaply on every
   `go test ./...`; the two are independent, so neither a stale check nor a skipped
-  job can hide a violation. Eleven modules are proven today: the four above plus
+  job can hide a violation. Thirteen modules are proven today: the four above plus
   `secrets` and `logging` (which became provable once they gained their own tests),
-  `httpx`, `importx/safe`, `importx/parsers`, `database` and `rbac` (added in this
-  slice).
+  `httpx`, `importx/safe`, `importx/parsers`, `database`, `rbac`, `audit` and
+  `outbox` (the last four added in this slice).
+
+- **The audit trail and the outbox are now extraction-proven.** `internal/audit`
+  (the append-only action trail and the security-event stream) and
+  `internal/outbox` (the transactional outbox and its event vocabulary) both
+  depend only on `database` and `logging`, so both lift out. `audit` had no
+  in-package tests before this slice; it now has tests for the action vocabulary,
+  the validation ordering that keeps an unattributable row out of the trail, and
+  the marshalling helpers, none of which needs a server. Its schema lives in
+  migration 0001 and is not part of the package — a real extraction would carry a
+  migration with it — and that is stated rather than hidden. The two boundaries
+  are pinned in `archtest`.
 
 - **The database pool and the RBAC package are now extraction-proven.**
   `internal/database` — the connection pool and the transaction helper every
