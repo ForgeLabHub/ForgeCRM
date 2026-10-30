@@ -7,7 +7,15 @@
  * component, and a mock of the client would test nothing.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiClient, ApiError, NetworkError, csrfTokenStore, errorMessage, fieldErrors } from './client'
+import {
+  ApiClient,
+  ApiError,
+  NetworkError,
+  csrfTokenStore,
+  errorMessage,
+  fieldErrors,
+  filenameFromDisposition,
+} from './client'
 
 /** Builds a client whose fetch returns one canned response. */
 function clientWithResponse(response: Response, onUnauthorized?: () => void) {
@@ -258,5 +266,55 @@ describe('ApiError classification', () => {
     expect(new ApiError(401, { code: 'unauthorized', message: 'x' }).isAuthFailure).toBe(true)
     expect(new ApiError(403, { code: 'forbidden', message: 'x' }).isPermissionFailure).toBe(true)
     expect(new ApiError(403, { code: 'forbidden', message: 'x' }).isAuthFailure).toBe(false)
+  })
+})
+
+describe('file downloads', () => {
+  it('reads a blob and the filename the server named', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response('id,name\n1,Acme\n', {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': 'attachment; filename="account-1712345678.csv"',
+        },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const client = new ApiClient()
+
+    const { blob, filename } = await client.download('/api/v1/exports', { entity_type: 'account' })
+
+    expect(filename).toBe('account-1712345678.csv')
+    expect(blob.size).toBeGreaterThan(0)
+    expect(blob.type).toContain('text/csv')
+
+    // The download is a POST that carries the CSRF header, which is why a plain
+    // link cannot be used.
+    const init = fetchMock.mock.calls[0][1] as RequestInit
+    expect(init.method).toBe('POST')
+    expect(init.credentials).toBe('same-origin')
+  })
+
+  it('raises the JSON error envelope when the export is refused', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(
+        { error: { code: 'forbidden', message: 'you do not have permission to read this entity type' } },
+        403,
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const client = new ApiClient()
+
+    await expect(client.download('/api/v1/exports', { entity_type: 'account' })).rejects.toThrow(
+      'you do not have permission',
+    )
+  })
+
+  it('parses the filename out of a Content-Disposition header', () => {
+    expect(filenameFromDisposition('attachment; filename="a.csv"')).toBe('a.csv')
+    expect(filenameFromDisposition('attachment; filename=b.jsonl')).toBe('b.jsonl')
+    expect(filenameFromDisposition(null)).toBeUndefined()
+    expect(filenameFromDisposition('inline')).toBeUndefined()
   })
 })

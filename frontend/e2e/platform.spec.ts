@@ -669,6 +669,31 @@ test.describe('platform settings', () => {
   })
 })
 
+test.describe('export', () => {
+  test('downloads a CSV export of an entity from the Import Center', async ({
+    authedPage: page,
+  }) => {
+    // Create an account so the export has something to include.
+    const name = `E2E Export ${RUN_ID}`
+    await createAccount(page, name)
+
+    await page.goto('/imports')
+    await page.getByRole('button', { name: 'Export' }).click()
+
+    const download = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'Download' }).click()
+    const file = await download
+
+    // The suggested filename comes from the server's Content-Disposition.
+    expect(file.suggestedFilename()).toMatch(/^account-.*\.csv$/)
+    const stream = await file.createReadStream()
+    const chunks: Buffer[] = []
+    for await (const chunk of stream) chunks.push(chunk as Buffer)
+    const body = Buffer.concat(chunks).toString('utf8')
+    expect(body).toContain(name)
+  })
+})
+
 test.describe('health endpoints', () => {
   test('the API reports healthy and ready', async ({ request }) => {
     expect((await request.get('/health')).status()).toBe(200)

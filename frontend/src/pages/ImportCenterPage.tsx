@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { importsApi } from '../api/imports'
+import { exportsApi, importsApi } from '../api/imports'
 import { errorMessage, fieldErrors } from '../api/client'
 import { IMPORT_ENTITY_TYPES } from '../types/api'
 import type { ImportJob } from '../types/api'
@@ -56,6 +56,7 @@ export function ImportCenterPage() {
   const navigate = useNavigate()
   const { can } = useAuth()
   const [creating, setCreating] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   return (
     <>
@@ -75,11 +76,18 @@ export function ImportCenterPage() {
         searchable
         searchPlaceholder="Search imports…"
         actions={
-          can('imports.create') ? (
-            <button type="button" className="btn btn--primary btn--sm" onClick={() => setCreating(true)}>
-              New import
-            </button>
-          ) : null
+          <div className="row" style={{ gap: 'var(--space-2)' }}>
+            {can('exports.execute') ? (
+              <button type="button" className="btn btn--secondary btn--sm" onClick={() => setExporting(true)}>
+                Export
+              </button>
+            ) : null}
+            {can('imports.create') ? (
+              <button type="button" className="btn btn--primary btn--sm" onClick={() => setCreating(true)}>
+                New import
+              </button>
+            ) : null}
+          </div>
         }
       />
       <NewImportDialog
@@ -90,7 +98,117 @@ export function ImportCenterPage() {
           navigate(`/imports/${job.id}`)
         }}
       />
+      <ExportDialog open={exporting} onClose={() => setExporting(false)} />
     </>
+  )
+}
+
+/**
+ * Downloads an export of one entity type.
+ *
+ * The server streams the file in the response, so the result is a blob the page
+ * hands to the browser as a download. The export permission is checked here for
+ * the button and again on the server; read access to the chosen entity is a
+ * second server-side check, so an entity the user cannot read is refused rather
+ * than silently exported.
+ */
+function ExportDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [entityType, setEntityType] = useState<string>(IMPORT_ENTITY_TYPES[0])
+  const [format, setFormat] = useState<'csv' | 'jsonl'>('csv')
+  const [error, setError] = useState<string | null>(null)
+
+  const mutation = useMutation({
+    mutationFn: () => exportsApi.download({ entity_type: entityType, format }),
+    onSuccess: ({ blob, filename }) => {
+      setError(null)
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = filename ?? `${entityType}.${format}`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      URL.revokeObjectURL(url)
+      onClose()
+    },
+    onError: (err) => setError(errorMessage(err)),
+  })
+
+  if (!open) return null
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="export-title"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(16, 24, 40, 0.45)',
+        zIndex: 60,
+        overflowY: 'auto',
+        padding: 'var(--space-5)',
+      }}
+      onClick={onClose}
+    >
+      <div
+        className="card"
+        style={{ maxWidth: 480, margin: '0 auto' }}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="card__header">
+          <h2 id="export-title">Export records</h2>
+        </div>
+        <form
+          onSubmit={(event: FormEvent) => {
+            event.preventDefault()
+            setError(null)
+            mutation.mutate()
+          }}
+        >
+          <div className="card__body">
+            {error ? (
+              <div style={{ marginBottom: 'var(--space-4)' }}>
+                <Alert tone="error">{error}</Alert>
+              </div>
+            ) : null}
+            <div className="form-grid">
+              <Field label="Entity" htmlFor="export-entity">
+                <select
+                  id="export-entity"
+                  value={entityType}
+                  onChange={(event) => setEntityType(event.target.value)}
+                >
+                  {IMPORT_ENTITY_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Format" htmlFor="export-format">
+                <select
+                  id="export-format"
+                  value={format}
+                  onChange={(event) => setFormat(event.target.value as 'csv' | 'jsonl')}
+                >
+                  <option value="csv">CSV</option>
+                  <option value="jsonl">JSONL</option>
+                </select>
+              </Field>
+            </div>
+          </div>
+          <div className="form-actions">
+            <button type="button" className="btn btn--secondary" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
+              {mutation.isPending ? 'Preparing…' : 'Download'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   )
 }
 

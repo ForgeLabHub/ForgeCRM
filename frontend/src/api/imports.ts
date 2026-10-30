@@ -70,6 +70,14 @@ export const importsApi = {
 }
 
 export const exportsApi = {
-  create: (body: { entity_type: string; format?: string; filters?: Record<string, unknown> }) =>
-    api.post<{ id: string }>('/api/v1/exports', body),
+  /**
+   * Streams an export of one entity type.
+   *
+   * The server answers with the file itself, not a job id: it writes the CSV or
+   * JSONL straight to the response, so the client must read a blob rather than
+   * JSON. The route also requires read access to the entity, so a caller who may
+   * export but not read the type is refused with 403.
+   */
+  download: (body: { entity_type: string; format?: 'csv' | 'jsonl' }) =>
+    api.download('/api/v1/exports', body),
 }

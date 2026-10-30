@@ -263,6 +263,61 @@ export class ApiClient {
     return this.request<T>(path, { method: 'GET', query, signal })
   }
 
+  /**
+   * Fetches a response whose body is a file rather than JSON.
+   *
+   * A plain link or `window.open` cannot be used for an export: the request is a
+   * POST and it needs the CSRF header, which only a fetch we make ourselves can
+   * set. The caller turns the returned blob into a download.
+   */
+  async download(path: string, body?: unknown): Promise<{ blob: Blob; filename?: string }> {
+    const headers: Record<string, string> = { Accept: '*/*' }
+    const token = csrfTokenStore.get()
+    if (token) headers['X-CSRF-Token'] = token
+    let response: Response
+    try {
+      response = await fetch(`${this.baseUrl}${path}`, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json',
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+        credentials: 'same-origin',
+      })
+    } catch (error) {
+      throw new NetworkError('Could not reach the server.', error)
+    }
+
+    if (response.status === 401) {
+      csrfTokenStore.clear()
+      this.onUnauthorized?.()
+    }
+
+    if (!response.ok) {
+      // A failed export answers with the JSON error envelope, not a file.
+      const text = await response.text()
+      let envelope: ApiErrorEnvelope | undefined
+      try {
+        envelope = JSON.parse(text) as ApiErrorEnvelope
+      } catch {
+        envelope = undefined
+      }
+      const errBody: ApiErrorBody = envelope?.error ?? {
+        code: 'internal_error',
+        message: envelope?.detail ?? `Request failed (HTTP ${response.status}).`,
+      }
+      throw new ApiError(
+        response.status,
+        errBody,
+        envelope?.request_id ?? response.headers.get('X-Request-ID') ?? undefined,
+        envelope?.retryable ?? false,
+      )
+    }
+
+    return { blob: await response.blob(), filename: filenameFromDisposition(response.headers.get('Content-Disposition')) }
+  }
+
   post<T>(path: string, body?: unknown, options: { skipCSRF?: boolean } = {}): Promise<T> {
     return this.request<T>(path, { method: 'POST', body, skipCSRF: options.skipCSRF })
   }
@@ -296,4 +351,19 @@ export function errorMessage(error: unknown): string {
 export function fieldErrors(error: unknown): Record<string, string> {
   if (error instanceof ApiError) return error.details
   return {}
+}
+
+/**
+ * Reads the filename out of a Content-Disposition header.
+ *
+ * The server writes `attachment; filename="accounts-1712345678.csv"`. The value is
+ * returned bare so the caller can name the downloaded file; an absent or
+ * unparseable header yields undefined and the caller falls back to its own name.
+ */
+export function filenameFromDisposition(header: string | null): string | undefined {
+  if (!header) return undefined
+  const quoted = /filename="([^"]+)"/i.exec(header)
+  if (quoted) return quoted[1]
+  const bare = /filename=([^;]+)/i.exec(header)
+  return bare ? bare[1].trim() : undefined
 }

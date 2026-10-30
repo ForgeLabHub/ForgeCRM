@@ -24,6 +24,18 @@ once it reaches 1.0.
 
 ### Added
 
+- **Exports are reachable from the interface.** The server streams a CSV or JSONL
+  export of an entity type from `POST /api/v1/exports` — scoped to the caller's
+  organization and gated on read access to the entity — but no page called it, and
+  the client method read a JSON `{id}` body the route never sends. The Import
+  Center gained an Export control (shown only to a caller holding
+  `exports.execute`) that fetches the file as a blob through a new
+  `ApiClient.download` and hands it to the browser with the server's filename.
+  `ImportCenterPage.test.tsx` and the client's download tests pin the request; an
+  E2E downloads a real CSV and checks its contents; `internal/api/export_test.go`
+  holds the route to tenant isolation, the format check, the entity read check and
+  the audit record against PostgreSQL.
+
 - **Notifications have an inbox.** The workflow `notify` action writes a
   notification addressed to a single user, and the server implemented list and
   mark-read — but no page consumed them, so a notification a workflow raised

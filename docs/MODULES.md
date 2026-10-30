@@ -727,14 +727,14 @@ Two things this document deliberately does not do:
 | **Simulation page** | Simulation Lab UI | `pages/SimulationPage.tsx`, `api/simulation.ts` | `api/simulation.ts` | `SimulationPage.test.tsx` | `almost` |
 | **Intelligence pages** | forecast + risk UI | `pages/{Forecast,Risk}Page.tsx`, `api/intelligence.ts` | `api/intelligence.ts` | `.test.tsx` (2) | `almost` |
 | **AI/MCP page** | provider status, tool catalogue | `pages/AiPage.tsx`, `api/ai.ts` | `api/ai.ts` | E2E | `almost` |
-| **Import pages** | Import Center UI | `pages/{ImportCenter,ImportDetail}Page.tsx`, `api/imports.ts` | `api/imports.ts` | E2E | `no` |
+| **Import pages** | Import Center UI, CSV/JSONL export | `pages/{ImportCenter,ImportDetail}Page.tsx`, `api/imports.ts` | `api/imports.ts` | `ImportCenterPage.test.tsx`, E2E | `no` |
 | **Integrations/Webhooks/Events/Jobs pages** | admin surfaces | `pages/{Integrations,Webhooks,Events,Jobs,Migrations}Page.tsx` + matching api clients | their api clients | E2E | `no` |
 | **Notifications page** | the inbox for workflow notifications | `pages/NotificationsPage.tsx` | `api/crm.ts` | `NotificationsPage.test.tsx` | `almost` |
 | **Admin pages** | audit, users, roles, orgs, teams, security, diagnostics (+ platform settings), email, telegram | `pages/admin/*.tsx`, `api/admin.ts` | `api/admin.ts` | `SecurityPage.test.tsx`, `DiagnosticsPage.test.tsx` | `no` |
 | **Attachments** | document upload/download | `components/AttachmentPanel.tsx`, `api/documents.ts` | `api/documents.ts` | `AttachmentPanel.test.tsx` | `almost` |
 
-**Frontend totals:** 83 `.ts`/`.tsx` files; 17 unit test files (115 tests); E2E in
-`frontend/e2e/platform.spec.ts` (47 passing, 1 conditionally skipped).
+**Frontend totals:** 84 `.ts`/`.tsx` files; 19 unit test files (121 tests); E2E in
+`frontend/e2e/platform.spec.ts` (48 passing, 1 conditionally skipped).
 
 ---
 
