@@ -555,6 +555,35 @@ test.describe('tags and comments', () => {
   })
 })
 
+test.describe('custom fields', () => {
+  test('a defined field is set on a record and survives a reload', async ({ authedPage: page }) => {
+    const name = `E2E Custom ${RUN_ID}`
+    const key = `tier${RUN_ID.replace(/[^a-z0-9]/g, '')}`
+    const label = `Account tier ${RUN_ID}`
+
+    await createAccount(page, name)
+    await page.goto('/accounts')
+    await page.getByText(name).click()
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(name)
+
+    // Define a text field, then set it on this record. The label carries the run
+    // id because definitions are tenant-scoped and persist across runs, so a
+    // fixed label would resolve to a field a previous run left behind.
+    await page.getByLabel('Field key').fill(key)
+    await page.getByLabel('Field label').fill(label)
+    await page.getByRole('button', { name: 'Add field' }).click()
+
+    const input = page.getByLabel(label)
+    await expect(input).toBeVisible({ timeout: 15_000 })
+    await input.fill('Gold')
+    await input.blur()
+
+    // The value is on the record, so it must still be there after a reload.
+    await page.reload()
+    await expect(page.getByLabel(label)).toHaveValue('Gold', { timeout: 15_000 })
+  })
+})
+
 test.describe('health endpoints', () => {
   test('the API reports healthy and ready', async ({ request }) => {
     expect((await request.get('/health')).status()).toBe(200)

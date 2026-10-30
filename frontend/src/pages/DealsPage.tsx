@@ -10,6 +10,7 @@ import { ResourceList, type Column } from '../components/ResourceList'
 import { AssistPanel } from '../components/AssistPanel'
 import { AttachmentPanel } from '../components/AttachmentPanel'
 import { RecordCollabPanel } from '../components/RecordCollabPanel'
+import { CustomFieldsPanel } from '../components/CustomFieldsPanel'
 import { BulkArchiveButton } from '../components/BulkArchiveButton'
 import {
   Alert,
@@ -595,6 +596,15 @@ export function DealDetailPage() {
     },
   })
 
+  const saveCustomFields = useMutation({
+    mutationFn: (next: Deal['custom_fields']) =>
+      dealsApi.update(id, { ...toInput(data), custom_fields: next }),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(['deal', id], saved)
+      void queryClient.invalidateQueries({ queryKey: ['deals'] })
+    },
+  })
+
   if (deal.isError) {
     return (
       <Card title="Deal">
@@ -706,6 +716,14 @@ export function DealDetailPage() {
       <AssistPanel entityType="deal" entityId={id} />
 
       <RecordCollabPanel entityType="deal" entityId={id} />
+
+      <CustomFieldsPanel
+        entityType="deal"
+        values={data.custom_fields ?? {}}
+        canEdit={can('deals.update')}
+        saving={saveCustomFields.isPending}
+        onSave={(next) => saveCustomFields.mutateAsync(next)}
+      />
 
       <AttachmentPanel entityType="deal" entityId={id} />
 

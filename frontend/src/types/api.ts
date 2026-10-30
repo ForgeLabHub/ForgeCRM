@@ -340,6 +340,36 @@ export interface Comment {
   created_at: string
 }
 
+/** The field types the server accepts on a custom field definition. */
+export type CustomFieldType = 'text' | 'number' | 'boolean' | 'date' | 'select' | 'multiselect'
+
+/**
+ * A tenant-defined field. Values are not stored here — a record holds them in
+ * its own `custom_fields` map, keyed by this definition's `key`.
+ */
+export interface CustomFieldDefinition {
+  id: string
+  entity_type: string
+  key: string
+  label: string
+  field_type: CustomFieldType
+  /** Free-form metadata; for select fields it holds `{ choices: string[] }`. */
+  options?: Record<string, unknown>
+  required: boolean
+  position: number
+  created_at: string
+}
+
+export interface CustomFieldDefinitionInput {
+  entity_type: string
+  key: string
+  label: string
+  field_type: CustomFieldType
+  options?: Record<string, unknown>
+  required?: boolean
+  position?: number
+}
+
 export interface Notification {
   id: string
   organization_id: string

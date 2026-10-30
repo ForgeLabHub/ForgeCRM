@@ -10,6 +10,25 @@ once it reaches 1.0.
 
 ### Added
 
+- **Custom fields are visible and editable in the product.** A tenant could
+  already define extra fields per entity type and every record already carried
+  its values in a `custom_fields` map, but nothing rendered them: definitions
+  were reachable only over the raw API, and the edit dialog passed the value map
+  back untouched, so a field an operator defined could not be seen or set from the
+  interface. `CustomFieldsPanel` renders each defined field in the shape its type
+  asks for (text, number, boolean, date, select, multiselect), reads the value off
+  the record, and saves a change by handing the merged map back through the
+  record's own update — the value lives on the record, so it is the record's
+  permission (`accounts.update` and friends) that gates the write, not a new one.
+  A user holding `custom_fields.manage` also gets the inline form to define a
+  field. It is wired into the account, contact, deal and lead detail views.
+  `CustomFieldsPanel.test.tsx` covers value rendering, the merged-map write, the
+  read-only view and definition parsing; `internal/api/custom_fields_test.go`
+  adds round-trip, cross-tenant and permission tests against PostgreSQL, and an
+  E2E scenario defines a field, sets it and checks it survives a reload. This
+  also corrects `docs/ARCHITECTURE.md`, which listed a `custom_field_values` table
+  that has never existed — values are columns on the records themselves.
+
 - **Tags and comments now have an interface.** The backend already implemented
   both — routes, permissions, audit, an API client on the frontend — but
   no component consumed them, so a capability the API advertised could not be

@@ -115,7 +115,7 @@ Core: `organizations`, `users`, `memberships`, `teams`, `team_members`, `roles`,
 
 CRM: `accounts`, `contacts`, `leads`, `pipelines`, `pipeline_stages`, `deals`,
 `deal_stage_history`, `tasks`, `activities`, `tickets`, `sla_policies`, `contracts`,
-`documents`, `tags`, `taggables`, `custom_field_definitions`, `custom_field_values`,
+`documents`, `tags`, `taggables`, `custom_field_definitions`,
 `comments`, `notifications`, `approvals`.
 
 Platform: `audit_log`, `jobs`, `outbox_events`, `events_inbox`, `webhook_subscriptions`,

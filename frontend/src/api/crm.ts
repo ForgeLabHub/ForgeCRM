@@ -18,6 +18,8 @@ import type {
   SupportSummaryReport,
   SalesSummaryReport,
   BulkArchiveResult,
+  CustomFieldDefinition,
+  CustomFieldDefinitionInput,
   Tag,
   Task,
   TaskInput,
@@ -131,6 +133,15 @@ export const commentsApi = {
     }),
   create: (body: { entity_type: string; entity_id: string; body: string }) =>
     api.post<Comment>('/api/v1/comments', body),
+}
+
+export const customFieldsApi = {
+  list: (entityType: string) =>
+    api.get<{ items: CustomFieldDefinition[] }>('/api/v1/custom-fields', {
+      entity_type: entityType,
+    }),
+  create: (body: CustomFieldDefinitionInput) =>
+    api.post<CustomFieldDefinition>('/api/v1/custom-fields', body),
 }
 
 export const notificationsApi = {

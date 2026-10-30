@@ -10,6 +10,7 @@ import { ResourceList, type Column } from '../components/ResourceList'
 import { AssistPanel } from '../components/AssistPanel'
 import { AttachmentPanel } from '../components/AttachmentPanel'
 import { RecordCollabPanel } from '../components/RecordCollabPanel'
+import { CustomFieldsPanel } from '../components/CustomFieldsPanel'
 import { BulkArchiveButton } from '../components/BulkArchiveButton'
 import {
   Alert,
@@ -342,6 +343,15 @@ export function ContactDetailPage() {
     },
   })
 
+  const saveCustomFields = useMutation({
+    mutationFn: (next: Contact['custom_fields']) =>
+      contactsApi.update(id, { ...toInput(data), custom_fields: next }),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(['contact', id], saved)
+      void queryClient.invalidateQueries({ queryKey: ['contacts'] })
+    },
+  })
+
   if (contact.isError) {
     return (
       <Card title="Contact">
@@ -421,6 +431,14 @@ export function ContactDetailPage() {
       <AssistPanel entityType="contact" entityId={id} />
 
       <RecordCollabPanel entityType="contact" entityId={id} />
+
+      <CustomFieldsPanel
+        entityType="contact"
+        values={data.custom_fields ?? {}}
+        canEdit={can('contacts.update')}
+        saving={saveCustomFields.isPending}
+        onSave={(next) => saveCustomFields.mutateAsync(next)}
+      />
 
       <AttachmentPanel entityType="contact" entityId={id} />
 

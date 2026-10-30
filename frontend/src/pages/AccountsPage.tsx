@@ -10,6 +10,7 @@ import { ResourceList, type Column } from '../components/ResourceList'
 import { AssistPanel } from '../components/AssistPanel'
 import { AttachmentPanel } from '../components/AttachmentPanel'
 import { RecordCollabPanel } from '../components/RecordCollabPanel'
+import { CustomFieldsPanel } from '../components/CustomFieldsPanel'
 import { BulkArchiveButton } from '../components/BulkArchiveButton'
 import {
   Alert,
@@ -390,6 +391,18 @@ export function AccountDetailPage() {
     },
   })
 
+  // A custom-field value lives on the record, so saving it is the same update
+  // the edit dialog performs: the whole record is sent, with only custom_fields
+  // changed. The server enforces accounts.update either way.
+  const saveCustomFields = useMutation({
+    mutationFn: (next: Account['custom_fields']) =>
+      accountsApi.update(id, { ...toInput(data), custom_fields: next }),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(['account', id], saved)
+      void queryClient.invalidateQueries({ queryKey: ['accounts'] })
+    },
+  })
+
   if (account.isError) {
     return (
       <Card title="Account">
@@ -589,6 +602,14 @@ export function AccountDetailPage() {
       <AssistPanel entityType="account" entityId={id} />
 
       <RecordCollabPanel entityType="account" entityId={id} />
+
+      <CustomFieldsPanel
+        entityType="account"
+        values={data.custom_fields ?? {}}
+        canEdit={can('accounts.update')}
+        saving={saveCustomFields.isPending}
+        onSave={(next) => saveCustomFields.mutateAsync(next)}
+      />
 
       <AttachmentPanel entityType="account" entityId={id} />
 
