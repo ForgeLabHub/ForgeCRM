@@ -107,9 +107,13 @@ than not supporting the datastore at all.
 
 ## Consequences
 
-- The `migratex` *source* side already treats MySQL as a recognised-but-unimplemented
-  source kind and returns a clear error rather than a silent no-op. That is the
-  correct posture for this direction too: honest refusal, not partial support.
+- The `migratex` *source* side is a separate question from running ForgeCRM *on*
+  MySQL, and it is now implemented: `internal/migratex/mysql.go` reads from a MySQL
+  or MariaDB database, so a customer can migrate *from* MySQL. That does not move
+  this ADR's decision — reading a foreign database over `database/sql` exercises
+  none of the blockers below, which are all about ForgeCRM's *own* schema, queries
+  and queue running on the datastore. The datastore direction keeps the posture of
+  honest refusal, not partial support.
 - A future MySQL/MariaDB stage must, in order: (1) introduce a `database/sql`
   seam with a per-dialect statement builder and a `database.ErrNoRows` sentinel to
   replace the pgx one; (2) replace the COPY importer path; (3) author and verify a
@@ -122,6 +126,8 @@ than not supporting the datastore at all.
 
 ## Status of the code
 
-No MySQL/MariaDB code is added by this ADR. It records the measured blockers so
-that a later stage starts from facts, and so that the roadmap does not carry the
-direction as "nearly done" when it is not started.
+No MySQL/MariaDB *datastore* code is added by this ADR. It records the measured
+blockers so that a later stage starts from facts, and so that the roadmap does not
+carry the direction as "nearly done" when it is not started. The MySQL/MariaDB
+*migration source* (`internal/migratex/mysql.go`) is a distinct, verified
+capability — see roadmap row 2.6 — and does not depend on any of the blockers here.

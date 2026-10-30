@@ -17,6 +17,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/database"
 	"github.com/geff1778/forgecrm/internal/integrations"
 	"github.com/geff1778/forgecrm/internal/secrets"
+	"github.com/geff1778/forgecrm/internal/tracectx"
 )
 
 // Poster performs the outbound POST for a delivery. It is an interface so the
@@ -179,6 +180,16 @@ func (s *DeliverySender) SendDelivery(ctx context.Context, deliveryID uuid.UUID)
 		"X-Signature-256":       "sha256=" + signature,
 		"X-Signature-Timestamp": timestamp,
 		"X-ForgeCRM-Delivery":   id.String(),
+	}
+	// Continue the trace across the boundary. The delivery id is the seed, so the
+	// first attempt and every retry share one trace id and a subscriber that logs
+	// traceparent can be correlated with our own history of the same delivery. The
+	// value is a child span of any trace already on the context, so a delivery
+	// triggered inside a request stays part of that request's trace.
+	if trace, ok := tracectx.FromContext(ctx); ok {
+		headers[tracectx.Header] = trace.StartSpan().Format()
+	} else {
+		headers[tracectx.Header] = tracectx.FromSeed(id.String()).Format()
 	}
 
 	status, body, err := s.poster.PostJSON(ctx, targetURL, payload, headers)

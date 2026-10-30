@@ -153,6 +153,15 @@ var policies = []Policy{
 			"only as a record that the export happened",
 	},
 	{
+		Key: "migration_reconciliations", Table: "migration_reconciliations",
+		TimeColumn: "created_at",
+		Default:    180 * 24 * time.Hour, Min: 30 * 24 * time.Hour, BatchSize: 1000,
+		Reason: "a reconciliation is a row-count comparison recorded after an import; it " +
+			"grows by one row per run and nothing prunes it, and the counts it holds are " +
+			"recomputable from the source and the target at any time, so an old comparison " +
+			"is history rather than evidence",
+	},
+	{
 		Key: "notifications", Table: "notifications", TimeColumn: "created_at",
 		StatusPredicate: "read_at IS NOT NULL",
 		Default:         90 * 24 * time.Hour, Min: 7 * 24 * time.Hour, BatchSize: 5000,

@@ -48,6 +48,18 @@ const (
 	// directories accumulate without bound, because the in-process cleanup only
 	// runs on the path that returns normally.
 	KindImportTempSweep = "maintenance.import_temp"
+	// KindImportFileReclaim removes uploaded files no import_jobs row references.
+	// The retention engine sweeps the rows, but it knows nothing about the private
+	// files those rows describe, so without this pass the storage directory grows by
+	// the size of every upload ever made.
+	KindImportFileReclaim = "maintenance.import_files"
+	// KindStorageReconcile repairs the two ways the object store and the documents
+	// table can disagree: a row whose object is gone (a broken download, marked
+	// archived) and an object no row references (an orphan left by an interrupted
+	// upload, removed after a grace period). The service method existed and was
+	// tested but nothing ever called it, so an orphan accumulated forever and a
+	// broken row kept being offered for download.
+	KindStorageReconcile = "maintenance.storage_reconcile"
 	// KindAgentSweep expires approval requests that were never decided, and fails
 	// the runs that were waiting on them. It is the bound that keeps "waiting for
 	// approval" from becoming "waiting forever" (ADR 0005).

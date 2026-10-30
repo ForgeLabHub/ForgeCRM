@@ -5,15 +5,19 @@
 // registrations in internal/api. The output therefore cannot describe a route
 // that does not exist, and cannot omit one that does.
 //
+// It also renders a self-contained HTML reference from the same document, so the
+// browsable reference is a view of the specification rather than a second,
+// hand-maintained description of the API.
+//
 // Usage:
 //
-//	go run ./cmd/openapi-gen              # write docs/api/openapi.json
-//	go run ./cmd/openapi-gen -check       # fail if the file is out of date
-//	go run ./cmd/openapi-gen -out FILE    # write elsewhere
+//	go run ./cmd/openapi-gen              # write docs/api/openapi.json and docs/api/index.html
+//	go run ./cmd/openapi-gen -check       # fail if either file is out of date
+//	go run ./cmd/openapi-gen -out FILE    # write the specification elsewhere
 //
 // -check is what CI runs: it regenerates in memory and compares with the
-// committed file, so a route added without regenerating the specification fails
-// the build rather than shipping a stale document.
+// committed files, so a route added without regenerating the specification fails
+// the build rather than shipping a stale document or a stale reference page.
 package main
 
 import (
@@ -41,8 +45,10 @@ func main() {
 
 func run() error {
 	out := flag.String("out", "",
-		"output path; defaults to docs/api/openapi.json at the repository root")
-	check := flag.Bool("check", false, "verify the file is current instead of writing it")
+		"output path for the specification; defaults to docs/api/openapi.json at the repository root")
+	siteOut := flag.String("site", "",
+		"output path for the HTML reference; defaults to docs/api/index.html next to the specification")
+	check := flag.Bool("check", false, "verify the files are current instead of writing them")
 	version := flag.String("version", "", "version string for the document; defaults to 0.1.0")
 	flag.Parse()
 
@@ -51,40 +57,67 @@ func run() error {
 	// backend/ is an easy mistake, and without this it would quietly write to
 	// /docs instead of failing.
 	outPath := *out
-	if outPath == "" {
+	sitePath := *siteOut
+	if outPath == "" || sitePath == "" {
 		root, err := repoRoot()
 		if err != nil {
 			return err
 		}
-		outPath = filepath.Join(root, "docs", "api", "openapi.json")
+		if outPath == "" {
+			outPath = filepath.Join(root, "docs", "api", "openapi.json")
+		}
+		if sitePath == "" {
+			sitePath = filepath.Join(root, "docs", "api", "index.html")
+		}
 	}
 
 	doc, err := generate(*version)
 	if err != nil {
 		return err
 	}
+	site, err := openapi.Site(doc)
+	if err != nil {
+		return err
+	}
 
 	if *check {
-		existing, err := os.ReadFile(outPath)
-		if err != nil {
-			return fmt.Errorf("read %s: %w (run `go run ./cmd/openapi-gen` and commit the result)", outPath, err)
+		if err := checkCurrent(outPath, doc, "specification"); err != nil {
+			return err
 		}
-		if !bytes.Equal(bytes.TrimSpace(existing), bytes.TrimSpace(doc)) {
-			return fmt.Errorf(
-				"%s is out of date: the API and the specification disagree.\n"+
-					"Run `go run ./cmd/openapi-gen` and commit the result.", outPath)
+		if err := checkCurrent(sitePath, site, "reference page"); err != nil {
+			return err
 		}
-		fmt.Printf("openapi: %s is current\n", outPath)
+		fmt.Printf("openapi: %s and %s are current\n", outPath, sitePath)
 		return nil
 	}
 
-	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
-		return err
+	for _, f := range []struct {
+		path string
+		data []byte
+	}{{outPath, doc}, {sitePath, site}} {
+		if err := os.MkdirAll(filepath.Dir(f.path), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(f.path, f.data, 0o644); err != nil {
+			return err
+		}
+		fmt.Printf("openapi: wrote %s (%d bytes)\n", f.path, len(f.data))
 	}
-	if err := os.WriteFile(outPath, doc, 0o644); err != nil {
-		return err
+	return nil
+}
+
+// checkCurrent fails when a generated file on disk differs from what the
+// generator would write, naming the file and the command that fixes it.
+func checkCurrent(path string, want []byte, what string) error {
+	existing, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read %s: %w (run `go run ./cmd/openapi-gen` and commit the result)", path, err)
 	}
-	fmt.Printf("openapi: wrote %s (%d bytes)\n", outPath, len(doc))
+	if !bytes.Equal(bytes.TrimSpace(existing), bytes.TrimSpace(want)) {
+		return fmt.Errorf(
+			"%s is out of date: the API and the %s disagree.\n"+
+				"Run `go run ./cmd/openapi-gen` and commit the result.", path, what)
+	}
 	return nil
 }
 
