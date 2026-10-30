@@ -2,13 +2,32 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { migrationsApi } from '../api/integrations'
+import { systemApi } from '../api/admin'
 import { errorMessage, fieldErrors } from '../api/client'
 import type { MigrationJob } from '../api/integrations'
 import { useAuth } from '../hooks/useAuth'
 import { ResourceList, type Column } from '../components/ResourceList'
 import { Alert, Field, PageHeader, StatusBadge, Timestamp } from '../components/ui'
 
-const SOURCE_TYPES = ['postgres', 'mysql', 'sqlite', 'sqlserver', 'rest']
+/**
+ * The source vocabulary is read from the server, never hard-coded.
+ *
+ * `migration_sources` on `/system/capabilities` is `migratex.ImplementedSources()`,
+ * so a kind appears exactly when the server can build a source for it. A local
+ * list once offered `sqlserver` (recognised but refused with "not implemented") and
+ * spelled the REST source `rest` while the server calls it `rest_api`, so a
+ * migration created from the interface would have been rejected at submit — the
+ * same silent-mismatch failure the webhook and workflow pickers once had.
+ */
+function useMigrationSources() {
+  const query = useQuery({
+    queryKey: ['system', 'capabilities'],
+    queryFn: systemApi.capabilities,
+    staleTime: 5 * 60 * 1000,
+  })
+  return { sourceTypes: query.data?.migration_sources ?? [], isLoading: query.isLoading }
+}
+
 const STRATEGIES = ['one_time', 'periodic', 'incremental', 'cdc']
 
 const columns: Column<MigrationJob>[] = [
@@ -167,7 +186,8 @@ function NewMigrationDialog({
   onCreated: () => void
 }) {
   const [name, setName] = useState('')
-  const [sourceType, setSourceType] = useState('postgres')
+  const { sourceTypes, isLoading: sourcesLoading } = useMigrationSources()
+  const [sourceType, setSourceType] = useState('')
   const [strategy, setStrategy] = useState('one_time')
   const [configText, setConfigText] = useState('{\n  "host": "",\n  "port": 5432,\n  "database": "",\n  "user": "",\n  "password": ""\n}')
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -181,7 +201,8 @@ function NewMigrationDialog({
       } catch {
         throw new Error('Connection configuration must be valid JSON.')
       }
-      return migrationsApi.create({ name, source_type: sourceType, config, strategy })
+      const kind = sourceType || sourceTypes[0] || ''
+      return migrationsApi.create({ name, source_type: kind, config, strategy })
     },
     onSuccess: onCreated,
     onError: (error) => {
@@ -235,10 +256,11 @@ function NewMigrationDialog({
               <Field label="Source type" htmlFor="migration-source" required>
                 <select
                   id="migration-source"
-                  value={sourceType}
+                  value={sourceType || sourceTypes[0] || ''}
                   onChange={(event) => setSourceType(event.target.value)}
+                  disabled={sourcesLoading || sourceTypes.length === 0}
                 >
-                  {SOURCE_TYPES.map((type) => (
+                  {sourceTypes.map((type) => (
                     <option key={type} value={type}>
                       {type}
                     </option>
