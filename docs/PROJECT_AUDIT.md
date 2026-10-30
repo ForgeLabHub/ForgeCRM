@@ -1,53 +1,54 @@
-# ForgeCRM — Project Audit
+# ForgeCRM — Аудит проекта
 
-- **Audit date:** 2026-10-28
-- **Auditor:** engineering agent (OpenHands)
-- **Commit audited:** `main` @ `3b1ce12`
-- **Repository:** https://github.com/geff1778/ForgeCRM
+- **Дата аудита:** 2026-10-28
+- **Аудитор:** инженерный агент (OpenHands)
+- **Аудируемый коммит:** `main` @ `3b1ce12`
+- **Репозиторий:** https://github.com/geff1778/ForgeCRM
 
-> **Refresh note (2026-10-28, later).** The body of this audit reflects the
-> repository at `3b1ce12`. Since then `main` has advanced to `27caac0` (PRs #6–#9:
-> permission-filtered search, bulk archive, distributed rate limiting with a trusted
-> proxy list, multi-replica safety) and two further bodies of work are open for
-> review on `feat/webhook-lifecycle-and-hitl`: the outgoing webhook delivery
-> lifecycle (migrations `0007`–`0008`) and the human-in-the-loop agent approval path
-> (migrations `0009`–`0011`). Where this document and the code disagree, the code
-> and `docs/ROADMAP.md` win. The per-claim evidence below has not been re-run against
-> the newer commits except where a later section says so.
+> **Примечание об обновлении (2026-10-28, позже).** Тело этого аудита отражает
+> репозиторий на `3b1ce12`. С тех пор `main` продвинулся до `27caac0` (PR #6–#9:
+> поиск с фильтрацией по правам, массовое архивирование, распределённое ограничение
+> частоты со списком доверенных прокси, безопасность при нескольких репликах), и два
+> дальнейших блока работы открыты для ревью на `feat/webhook-lifecycle-and-hitl`:
+> жизненный цикл исходящей доставки вебхуков (миграции `0007`–`0008`) и путь
+> согласования агента с участием человека (миграции `0009`–`0011`). Там, где этот
+> документ и код расходятся, побеждают код и `docs/ROADMAP.md`. Постатейные
+> доказательства ниже не перезапускались против более новых коммитов, кроме тех
+> мест, где более поздний раздел говорит об обратном.
 
-This records the **verified** state of the repository. It separates confirmed
-facts from risks and proposals. Every claim below was checked against the code at
-the audited commit; commands and results are recorded.
+Это фиксирует **проверенное** состояние репозитория. Оно разделяет подтверждённые
+факты, риски и предложения. Каждое утверждение ниже проверено против кода на
+аудируемом коммите; команды и результаты записаны.
 
-An earlier version of this document described the repository when it contained a
-single 10-byte `README.md`. That state is superseded. The current document
-describes what exists now.
+Более ранняя версия этого документа описывала репозиторий, когда он содержал один
+`README.md` на 10 байт. То состояние заменено. Текущий документ описывает то, что
+существует сейчас.
 
 ---
 
-## 1. Verified state
+## 1. Проверенное состояние
 
-### 1.1 Repository and toolchain
+### 1.1 Репозиторий и toolchain
 
-| Item | Verified state | Evidence |
+| Пункт | Проверенное состояние | Доказательство |
 |---|---|---|
-| Branch | `main`, direct push permitted | `git push origin main` succeeded |
+| Ветка | `main`, прямой push разрешён | `git push origin main` успешен |
 | Go | 1.26.10 | `backend/go.mod` |
-| Frontend | React 19, TypeScript, Vite 6 | `frontend/package.json` |
-| Database | PostgreSQL 17 | `docker-compose.yml`, CI services |
-| Migrations | 6 up / 6 down | `backend/internal/migrations/` |
-| Backend test functions | 69 | `grep -c "^func Test"` |
-| Frontend unit tests | 33 passing | `npx vitest run` |
-| E2E scenarios | 11 declared, 22 assertions passing in Chromium | `npx playwright test` |
-| CI jobs | 6, all green on `ff83452` and `3b1ce12` | GitHub Actions |
+| Фронтенд | React 19, TypeScript, Vite 6 | `frontend/package.json` |
+| База данных | PostgreSQL 17 | `docker-compose.yml`, сервисы CI |
+| Миграции | 6 up / 6 down | `backend/internal/migrations/` |
+| Тестовые функции бэкенда | 69 | `grep -c "^func Test"` |
+| Модульные тесты фронтенда | 33 проходят | `npx vitest run` |
+| Сценарии E2E | 11 объявлено, 22 утверждения проходят в Chromium | `npx playwright test` |
+| Задания CI | 6, все зелёные на `ff83452` и `3b1ce12` | GitHub Actions |
 
-### 1.2 API surface
+### 1.2 Поверхность API
 
-73 unique route paths across 144 registrations, mounted under `/api/v1` plus
-`/health` and `/ready`. Groups: auth, system, CRM, admin, imports, migrations,
+73 уникальных пути маршрутов среди 144 регистраций, смонтированных под `/api/v1`
+плюс `/health` и `/ready`. Группы: auth, system, CRM, admin, imports, migrations,
 integrations, events, jobs, AI/MCP, notifications.
 
-Verified by enumerating the router rather than reading documentation:
+Проверено перечислением роутера, а не чтением документации:
 
 ```
 grep -rhoE '\b(Get|Post|Put|Patch|Delete)\("(/[^"]*)"' backend/internal/api/*.go | sort -u | wc -l
@@ -56,267 +57,270 @@ grep -rhoE '\b(Get|Post|Put|Patch|Delete)\("(/[^"]*)"' backend/internal/api/*.go
 
 ### 1.3 RBAC
 
-- **83 permissions** declared in `backend/internal/rbac` (the catalog in `rbac.go`; migration 0004 seeds them).
-- **14 default roles**, seeded in `0004_rbac_seed.up.sql`: `platform_owner`,
+- **83 разрешения** объявлены в `backend/internal/rbac` (каталог в `rbac.go`;
+  миграция 0004 их засевает).
+- **14 ролей по умолчанию**, засеянных в `0004_rbac_seed.up.sql`: `platform_owner`,
   `platform_admin`, `tenant_admin`, `security_auditor`, `integration_admin`,
   `data_steward`, `executive`, `sales_manager`, `sales_representative`,
   `support_manager`, `support_agent`, `analyst`, `employee`, `readonly_auditor`.
-- Roles are permission sets in the database, not conditions scattered through the
-  code.
-- Server-side enforcement via `requirePermission` middleware; `api` handlers call
-  `s.perm(rbac.PermX)`.
+- Роли — это наборы разрешений в базе, а не условия, разбросанные по коду.
+- Серверное обеспечение через middleware `requirePermission`; обработчики `api`
+  вызывают `s.perm(rbac.PermX)`.
 
-### 1.4 Domain packages
+### 1.4 Доменные пакеты
 
-| Package | Role |
+| Пакет | Роль |
 |---|---|
-| `crm` | Core: contacts, accounts, leads, deals, pipelines, tasks, activities, tickets, tags, custom fields, search, reports |
-| `importx` | Parsers, safe archive extraction, mapping, execution |
-| `migratex` | Source adapters (PostgreSQL, SQLite, REST), reconciliation |
-| `integrations` | Adapter interface, hub, SSRF guard |
-| `events` | Event gateway, webhook subscriptions and delivery |
-| `notify` | SMTP and Telegram adapters, templates, send log |
-| `ai` | Provider interface, Ollama and OpenAI-compatible, MCP tool registry |
+| `crm` | Ядро: контакты, аккаунты, лиды, сделки, воронки, задачи, активности, обращения, теги, кастомные поля, поиск, отчёты |
+| `importx` | Парсеры, безопасная распаковка архивов, сопоставление, исполнение |
+| `migratex` | Адаптеры источников (PostgreSQL, SQLite, REST), сверка |
+| `integrations` | Интерфейс адаптера, хаб, защита SSRF |
+| `events` | Шлюз событий, подписки на вебхуки и доставка |
+| `notify` | Адаптеры SMTP и Telegram, шаблоны, журнал отправок |
+| `ai` | Интерфейс провайдера, Ollama и совместимые с OpenAI, реестр инструментов MCP |
 
-Layering verified by `internal/archtest`: the core does not import an application
-service; nothing imports `api`.
+Слоистость проверена `internal/archtest`: ядро не импортирует прикладной сервис;
+ничто не импортирует `api`.
 
 ### 1.5 MCP
 
-`internal/ai/mcp.go` implements **8 tools**: `search_accounts`,
+`internal/ai/mcp.go` реализует **8 инструментов**: `search_accounts`,
 `account_summary`, `list_tasks`, `pipeline_overview`, `create_task`,
 `create_ticket`, `update_deal_stage`, `get_report`.
 
-Tools call `crm.Service` methods directly — the same code path as HTTP, so
-permissions and validation are not reimplemented. Mutating tools require
-`confirm=true`.
+Инструменты вызывают методы `crm.Service` напрямую — тот же путь кода, что и HTTP,
+поэтому права и валидация не переписаны. Мутирующие инструменты требуют `confirm=true`.
 
-### 1.6 Import and archive formats
+### 1.6 Форматы импорта и архивов
 
-Advertised by `/system/capabilities` and **covered by tests**:
+Объявляются `/system/capabilities` и **покрыты тестами**:
 
-| Category | Formats | Test status |
+| Категория | Форматы | Статус тестов |
 |---|---|---|
-| Tabular | csv, tsv, json, jsonl, xlsx, xml | Tested |
-| Archive | zip, tar, tar.gz, gzip | Tested |
-| Archive | tar.bz2, tar.xz, bzip2, xz | Tested (added this cycle) |
+| Табличные | csv, tsv, json, jsonl, xlsx, xml | Тестируется |
+| Архивы | zip, tar, tar.gz, gzip | Тестируется |
+| Архивы | tar.bz2, tar.xz, bzip2, xz | Тестируется (добавлено в этом цикле) |
 
-`internal/importx/safe` enforces entry count, total bytes, per-entry bytes, nesting
-depth and compression ratio, and rejects path traversal and absolute paths.
+`internal/importx/safe` обеспечивает число записей, общий объём, объём на запись,
+глубину вложенности и коэффициент сжатия и отклоняет обход пути и абсолютные пути.
 
-### 1.7 Error contract
+### 1.7 Контракт ошибок
 
-Every error response carries RFC 9457 Problem Details members (`type`, `title`,
-`status`, `detail`, `instance`, `retryable`) alongside the nested
-`error: {code, message, details}` object. Both views derive from one `APIError`.
-Documented in `docs/api/errors.md`.
+Каждый ответ об ошибке несёт члены Problem Details RFC 9457 (`type`, `title`,
+`status`, `detail`, `instance`, `retryable`) вместе с вложенным объектом
+`error: {code, message, details}`. Оба представления выводятся из одного `APIError`.
+Документировано в `docs/api/errors.md`.
 
 ---
 
-## 2. What the previous cycle's report claimed — verified or corrected
+## 2. Что заявлял отчёт предыдущего цикла — проверено или исправлено
 
-The prior report is treated as a list of hypotheses. Each was checked:
+Предыдущий отчёт рассматривается как список гипотез. Каждая была проверена:
 
-| Claim | Verdict | Evidence |
+| Утверждение | Вердикт | Доказательство |
 |---|---|---|
-| `main` was at `7cf51de` | **Correct at the time** | Superseded; `main` is now `3b1ce12` |
-| `feat/platform-foundation` at `386ffb7` | **Correct** | Branch exists at that SHA |
-| PRs #1, #2, #3 open | **Correct** | All three open, base `main` |
-| PR #2 contains RFC 9457 handling | **Correct** | `httpx.go` emits the members |
-| PR #3 contains configurable pool | **Correct** | `FORGECRM_DATABASE_MAX_CONNS` |
-| CI green on those commits | **Correct** | Runs confirmed for each SHA |
-| No full OIDC Authorization Code Flow | **Correct, and worse than stated** | See finding A |
-| No OpenAPI specification | **Correct** | No OpenAPI, Swagger or equivalent file exists |
-| No distributed rate limiter | **Correct** | `httpx.RateLimiter` holds `hits map[string]*window` in process memory; no Redis in `go.mod` |
-| API and worker share codebase and DB | **Correct** | Both import `internal/crm` and connect to one database |
-| No license chosen | **Correct** | No `LICENSE` file |
+| `main` был на `7cf51de` | **Верно на тот момент** | Заменено; `main` теперь `3b1ce12` |
+| `feat/platform-foundation` на `386ffb7` | **Верно** | Ветка существует на этом SHA |
+| PR #1, #2, #3 открыты | **Верно** | Все три открыты, база `main` |
+| PR #2 содержит обработку RFC 9457 | **Верно** | `httpx.go` выводит члены |
+| PR #3 содержит настраиваемый пул | **Верно** | `FORGECRM_DATABASE_MAX_CONNS` |
+| CI зелёный на тех коммитах | **Верно** | Прогоны подтверждены для каждого SHA |
+| Нет полного OIDC Authorization Code Flow | **Верно, и хуже, чем заявлено** | См. находку A |
+| Нет спецификации OpenAPI | **Верно** | Файла OpenAPI, Swagger или эквивалента не существует |
+| Нет распределённого ограничителя частоты | **Верно** | `httpx.RateLimiter` держит `hits map[string]*window` в памяти процесса; Redis в `go.mod` нет |
+| API и воркер делят кодовую базу и БД | **Верно** | Оба импортируют `internal/crm` и подключаются к одной базе |
+| Лицензия не выбрана | **Верно** | Файла `LICENSE` нет |
 
-**Corrections to the prior report's framing:**
+**Исправления к рамке предыдущего отчёта:**
 
-- The report described the MCP surface as a "server". It was then an HTTP endpoint
-  speaking a custom JSON shape, not the MCP protocol. Finding B records the fix;
-  the endpoint now speaks the protocol, and the admin UI's own shape is a separate
-  endpoint.
-- The report listed three PRs as containing "unique changes". They are one linear
-  stack, so all three were integrated by a single fast-forward. See §3.
-
----
-
-## 3. Findings
-
-### A. `/system/capabilities` reports `oidc: true` when no OIDC flow exists — **Medium**
-
-`backend/internal/api/system_handlers.go:80` sets `OIDC: s.deps.Config.OIDC.Enabled`,
-which reflects the `FORGECRM_OIDC_ENABLED` environment variable. No authorization
-code flow exists: there is no `golang.org/x/oauth2` or `coreos/go-oidc` dependency,
-and no route handles a callback.
-
-A client reading `capabilities` would conclude that corporate SSO is available. It
-is not. This is exactly the failure mode the mission's rule 14 warns about.
-
-**Status:** Fixed. The field is renamed `oidc_configured` and reports exactly what
-it tests: that OIDC settings are present. `capabilities_test.go` fails if the field
-is renamed back to `oidc`, so the misleading name cannot return. The
-authorisation-code flow is still not implemented (Phase 2, item 2.1); the fix makes
-the report honest, it does not add SSO.
-
-### B. MCP is a custom JSON shape, not the MCP protocol — **Medium**
-
-`POST /api/v1/mcp` accepts `{method, params, confirm}` and dispatches `tools/list`
-and `tools/call`. It does not speak JSON-RPC 2.0, has no `initialize` handshake,
-negotiates no `protocolVersion`, and is not reachable by any standard MCP client.
-
-The tool registry, permission checks and audit are real and reused from the domain
-layer, so the *logic* is sound. The *transport* is not MCP.
-
-**Status:** Fixed. `POST /api/v1/mcp` now speaks JSON-RPC 2.0: `initialize` with
-`protocolVersion` negotiation, `notifications/initialized`, `ping`, `tools/list`
-and `tools/call`, with the specification's error codes for a parse failure, an
-invalid request, an unknown method and invalid parameters. Notifications are
-answered with an empty `202`. The protocol view publishes `inputSchema`; the
-admin view keeps `input_schema`. `internal/ai/mcp_protocol.go` implements the
-transport and `internal/api/ai_handlers.go` wires it. Verified by
-`internal/ai/mcp_protocol_test.go` and, over the real HTTP stack with a real
-session and database, by `internal/api/mcp_integration_test.go`. What remains is a
-dedicated MCP credential (Phase 3, item 3.3): the transport authenticates with the
-caller's browser session, so there is no separate revocable key with its own
-read/write scope. See `docs/mcp/`.
-
-### C. Rate limiting is per process — **Medium**
-
-`httpx.RateLimiter` keeps counters in a `map[string]*window` guarded by a mutex,
-in process memory. With N replicas the effective limit is N times the configured
-value. Login, API, import and AI budgets all scale the same way.
-
-There is no Redis dependency. This is the same multiplication problem as the
-database pool, and it is the last thing preventing safe horizontal scaling.
-
-**Status:** Open. Tracked as Phase 1 work.
-
-### D. No OpenAPI specification — **High**
-
-73 routes are described in prose only. The mission's target of a typed SDK,
-generated clients and a contract test all depend on a machine-readable contract.
-Without it, an API change cannot be detected as breaking.
-
-**Status:** Open. Tracked as Phase 1 work; highest-value single item.
-
-### E. `crm` imports `httpx` for error types — **Low**
-
-29 uses of `httpx.APIError`, `httpx.Pagination` and `httpx.SortSpec` in the core
-domain. A domain error type does not belong in a package named for HTTP.
-
-The dependency is one-directional, so it is not a cycle and the rules are still
-written once. It is a layering smell, not a defect.
-
-**Status:** Open, bounded. `TestCoreDoesNotImportCompositionOrHTTP` pins the two
-properties that must hold while the debt exists (`api` is never imported; `httpx`
-never imports `crm`). Fixing it means extracting the error types to a neutral
-package, which is a mechanical change with a large diff and no behavioural
-benefit; it is deferred deliberately.
-
-### F. No `LICENSE` file — **Blocker (owner decision)**
-
-The distribution model is the owner's decision, not an engineering one. CI
-deliberately does not require the file.
-
-**Status:** Blocked on the owner.
-
-### G. No consent model — **Medium**
-
-`grep -ri consent backend/internal` returns nothing. No entity, no policy service,
-no enforcement point. Any channel — email, Telegram, webhook — can send without
-consulting a consent record.
-
-**Status:** Open. Tracked as Phase 2 work.
-
-### H. No tenant configuration mechanism — **Medium**
-
-Tenant settings are not centralized. There is no versioned config schema, no
-preview, no audit of configuration changes, no bootstrap beyond migrations.
-
-**Status:** Open. Tracked as Phase 5 work.
-
-### I. Webhook event vocabulary drifted between the form and the dispatcher — **High**
-
-Found and fixed in the current cycle. `WebhooksPage.tsx` held a hard-coded event
-list with bare names (`contact.created`, `deal.created`). The dispatcher matches
-the namespaced names the outbox emits (`crm.contact.created`, `crm.deal.created`).
-A subscription created through the form therefore selected events that never
-occurred: it was accepted, listed, and enabled, and delivered nothing. The failure
-presents as a network problem on the customer's side and is invisible in the UI,
-which is what makes it worth a written finding rather than a quiet fix.
-
-The list now has a single source of truth, `outbox.EventTypes()`, published as
-`event_types` on `GET /api/v1/system/capabilities`; the form renders its picker
-from that response. `TestWebhookEventVocabularyMatchesTheDispatcher` emits and
-dispatches every advertised type and asserts one delivery each, so the two halves
-cannot drift again — it was confirmed to fail against the shortened list.
-
-**Status:** Fixed. See `docs/ROADMAP.md` cycle 8.
+- Отчёт описывал поверхность MCP как «сервер». Тогда это был HTTP-эндпоинт, говорящий
+  на собственном JSON-формате, а не протокол MCP. Находка B фиксирует исправление;
+  эндпоинт теперь говорит на протоколе, а собственная форма админ-UI — отдельный
+  эндпоинт.
+- Отчёт перечислял три PR как содержащие «уникальные изменения». Это один линейный
+  стек, поэтому все три были интегрированы одним fast-forward. См. §3.
 
 ---
 
-## 4. Verified baseline results
+## 3. Находки
 
-Run at `3b1ce12` on the audit machine.
+### A. `/system/capabilities` сообщает `oidc: true`, когда потока OIDC не существует — **Средне**
 
-| Check | Command | Result |
+`backend/internal/api/system_handlers.go:80` устанавливает
+`OIDC: s.deps.Config.OIDC.Enabled`, что отражает переменную окружения
+`FORGECRM_OIDC_ENABLED`. Потока authorization code не существует: нет зависимости
+`golang.org/x/oauth2` или `coreos/go-oidc`, и ни один маршрут не обрабатывает callback.
+
+Клиент, читающий `capabilities`, заключил бы, что корпоративный SSO доступен. Это не
+так. Это ровно тот режим отказа, о котором предупреждает правило 14 задачи.
+
+**Статус:** Исправлено. Поле переименовано в `oidc_configured` и сообщает ровно то,
+что проверяет: что настройки OIDC присутствуют. `capabilities_test.go` падает, если
+поле переименовать обратно в `oidc`, поэтому вводящее в заблуждение имя не может
+вернуться. Поток authorization-code всё ещё не реализован (Фаза 2, пункт 2.1);
+исправление делает отчёт честным, оно не добавляет SSO.
+
+### B. MCP — это собственная JSON-форма, а не протокол MCP — **Средне**
+
+`POST /api/v1/mcp` принимает `{method, params, confirm}` и диспетчеризует
+`tools/list` и `tools/call`. Он не говорит на JSON-RPC 2.0, не имеет рукопожатия
+`initialize`, не согласует `protocolVersion` и недостижим ни для одного стандартного
+MCP-клиента.
+
+Реестр инструментов, проверки прав и аудит реальны и переиспользованы из доменного
+слоя, поэтому *логика* здорова. *Транспорт* — не MCP.
+
+**Статус:** Исправлено. `POST /api/v1/mcp` теперь говорит на JSON-RPC 2.0:
+`initialize` с согласованием `protocolVersion`, `notifications/initialized`, `ping`,
+`tools/list` и `tools/call`, с кодами ошибок спецификации для сбоя разбора,
+неверного запроса, неизвестного метода и неверных параметров. Уведомления
+получают пустой `202`. Представление протокола публикует `inputSchema`;
+админ-представление сохраняет `input_schema`. `internal/ai/mcp_protocol.go`
+реализует транспорт, а `internal/api/ai_handlers.go` его связывает. Проверено
+`internal/ai/mcp_protocol_test.go` и, через реальный стек HTTP с реальной сессией и
+базой, `internal/api/mcp_integration_test.go`. Что остаётся — выделенные учётные
+данные MCP (Фаза 3, пункт 3.3): транспорт аутентифицируется сессией браузера
+вызывающего, поэтому нет отдельного отзываемого ключа с собственной областью
+чтения/записи. См. `docs/mcp/`.
+
+### C. Ограничение частоты на процесс — **Средне**
+
+`httpx.RateLimiter` держит счётчики в `map[string]*window` под мьютексом, в памяти
+процесса. При N репликах действующий лимит — N раз настроенного значения. Бюджеты
+входа, API, импорта и ИИ масштабируются так же.
+
+Зависимости Redis нет. Это та же проблема умножения, что и с пулом базы, и это
+последнее, что мешает безопасному горизонтальному масштабированию.
+
+**Статус:** Открыто. Отслеживается как работа Фазы 1.
+
+### D. Нет спецификации OpenAPI — **Высоко**
+
+73 маршрута описаны только прозой. Цель задачи — типизированный SDK, сгенерированные
+клиенты и контрактный тест — всё зависит от машиночитаемого контракта. Без него
+изменение API нельзя обнаружить как ломающее.
+
+**Статус:** Открыто. Отслеживается как работа Фазы 1; самый ценный отдельный пункт.
+
+### E. `crm` импортирует `httpx` ради типов ошибок — **Низко**
+
+29 использований `httpx.APIError`, `httpx.Pagination` и `httpx.SortSpec` в доменном
+ядре. Тип доменной ошибки не место в пакете, названном по HTTP.
+
+Зависимость односторонняя, поэтому это не цикл и правила всё ещё написаны один раз.
+Это запах слоистости, а не дефект.
+
+**Статус:** Открыто, ограничено. `TestCoreDoesNotImportCompositionOrHTTP` закрепляет
+два свойства, которые должны держаться, пока долг существует (`api` никогда не
+импортируется; `httpx` никогда не импортирует `crm`). Исправление означает выделение
+типов ошибок в нейтральный пакет, что является механическим изменением с большим
+диффом и без поведенческой выгоды; оно отложено намеренно.
+
+### F. Нет файла `LICENSE` — **Блокер (решение владельца)**
+
+Модель распространения — решение владельца, а не инженерное. CI намеренно не требует
+файла.
+
+**Статус:** Заблокировано на владельце.
+
+### G. Нет модели согласия — **Средне**
+
+`grep -ri consent backend/internal` не возвращает ничего. Ни сущности, ни сервиса
+политик, ни точки обеспечения. Любой канал — почта, Telegram, вебхук — может
+отправить, не спросив записи согласия.
+
+**Статус:** Открыто. Отслеживается как работа Фазы 2.
+
+### H. Нет механизма конфигурации тенанта — **Средне**
+
+Настройки тенанта не централизованы. Нет версионированной схемы конфигурации, нет
+предпросмотра, нет аудита изменений конфигурации, нет bootstrap сверх миграций.
+
+**Статус:** Открыто. Отслеживается как работа Фазы 5.
+
+### I. Словарь событий вебхуков разошёлся между формой и диспетчером — **Высоко**
+
+Найдено и исправлено в текущем цикле. `WebhooksPage.tsx` держал зашитый список
+событий с голыми именами (`contact.created`, `deal.created`). Диспетчер сопоставляет
+имена с пространством имён, которые порождает outbox (`crm.contact.created`,
+`crm.deal.created`). Подписка, созданная через форму, поэтому выбирала события,
+которые никогда не происходили: она была принята, перечислена и включена и не
+доставляла ничего. Сбой представляется как сетевая проблема на стороне клиента и
+невидим в UI, что и делает его достойным письменной находки, а не тихого исправления.
+
+Список теперь имеет единственный источник истины, `outbox.EventTypes()`, публикуемый
+как `event_types` на `GET /api/v1/system/capabilities`; форма отрисовывает свой выбор
+из этого ответа. `TestWebhookEventVocabularyMatchesTheDispatcher` порождает и
+доставляет каждый объявленный тип и утверждает по одной доставке на каждый, поэтому
+две половины не могут снова разойтись — он был подтверждён как падающий против
+сокращённого списка.
+
+**Статус:** Исправлено. См. `docs/ROADMAP.md` цикл 8.
+
+---
+
+## 4. Проверенные базовые результаты
+
+Прогон на `3b1ce12` на машине аудита.
+
+| Проверка | Команда | Результат |
 |---|---|---|
-| Backend format | `gofmt -l ./cmd ./internal` | 0 files |
-| Backend vet | `go vet ./...` | clean |
-| Backend build | `go build ./...` | ok |
-| Backend unit | `go test -count=1 ./...` | all pass |
-| Backend integration | `go test -count=1 -p 1 -tags=integration ./...` | all pass against PostgreSQL 17 |
-| Frontend lint | `npx eslint .` | 0 errors, 4 pre-existing warnings |
-| Frontend types | `npx tsc --noEmit` | clean |
-| Frontend unit | `npx vitest run` | 33 pass |
-| E2E | `npx playwright test` | 22 pass in real Chromium |
-| CI | GitHub Actions on `ff83452`, `3b1ce12` | 6/6 jobs green |
+| Формат бэкенда | `gofmt -l ./cmd ./internal` | 0 файлов |
+| Vet бэкенда | `go vet ./...` | чисто |
+| Сборка бэкенда | `go build ./...` | ok |
+| Модульные бэкенда | `go test -count=1 ./...` | всё проходит |
+| Интеграционные бэкенда | `go test -count=1 -p 1 -tags=integration ./...` | всё проходит против PostgreSQL 17 |
+| Линт фронтенда | `npx eslint .` | 0 ошибок, 4 ранее существовавших предупреждения |
+| Типы фронтенда | `npx tsc --noEmit` | чисто |
+| Модульные фронтенда | `npx vitest run` | 33 проходят |
+| E2E | `npx playwright test` | 22 проходят в реальном Chromium |
+| CI | GitHub Actions на `ff83452`, `3b1ce12` | 6/6 заданий зелёные |
 
-### Known non-blocking issues
+### Известные неблокирующие проблемы
 
-- 4 ESLint warnings about fast-refresh exports in files that export both a
-  component and a helper. Cosmetic; fixing them means splitting those modules.
-- Integration tests must run with `-p 1` because they share one test database.
+- 4 предупреждения ESLint о быстрых обновлениях в файлах, экспортирующих и
+  компонент, и помощник. Косметика; их исправление означает разделение этих модулей.
+- Интеграционные тесты должны запускаться с `-p 1`, потому что они делят одну тестовую
+  базу.
 
 ---
 
-## 5. Technical debt register
+## 5. Реестр технического долга
 
-| # | Debt | Severity | Cost to fix | Status |
+| # | Долг | Серьёзность | Стоимость исправления | Статус |
 |---|---|---|---|---|
-| 1 | No OpenAPI contract | High | Medium | Planned, Phase 1 |
-| 2 | Per-process rate limiting | Medium | Medium | Planned, Phase 1 |
-| 3 | MCP is not the MCP protocol | Medium | Medium | Planned, Phase 3 |
-| 4 | `capabilities.oidc` misreports | Medium | Low | Planned, Phase 2 |
-| 5 | No consent model | Medium | High | Planned, Phase 2 |
-| 6 | No tenant configuration | Medium | High | Planned, Phase 5 |
-| 7 | `crm` → `httpx` layering | Low | Medium | Deferred, bounded by test |
-| 8 | 4 ESLint fast-refresh warnings | Low | Low | Deferred |
-| 9 | No `LICENSE` | — | None | Blocked on owner |
+| 1 | Нет контракта OpenAPI | Высоко | Средне | Запланировано, Фаза 1 |
+| 2 | Ограничение частоты на процесс | Средне | Средне | Запланировано, Фаза 1 |
+| 3 | MCP — не протокол MCP | Средне | Средне | Запланировано, Фаза 3 |
+| 4 | `capabilities.oidc` сообщает неверно | Средне | Низко | Запланировано, Фаза 2 |
+| 5 | Нет модели согласия | Средне | Высоко | Запланировано, Фаза 2 |
+| 6 | Нет конфигурации тенанта | Средне | Высоко | Запланировано, Фаза 5 |
+| 7 | Слоистость `crm` → `httpx` | Низко | Средне | Отложено, ограничено тестом |
+| 8 | 4 предупреждения ESLint fast-refresh | Низко | Низко | Отложено |
+| 9 | Нет `LICENSE` | — | Нет | Заблокировано на владельце |
 
 ---
 
-## 6. Risks
+## 6. Риски
 
-| Risk | Impact | Mitigation in place |
+| Риск | Влияние | Мера в наличии |
 |---|---|---|
-| Horizontal scaling multiplies rate limits | Login and AI abuse limits are weaker than configured | Documented; Redis limiter is Phase 1 |
-| API contract drift | A breaking change ships undetected | None yet; OpenAPI + contract test is Phase 1 |
-| Client believes SSO is available | Integration effort wasted, security expectation unmet | Documented here; Phase 2 implements the flow |
-| Consent absent | Messages can be sent without a lawful basis | Documented; Phase 2 |
-| Archive handling is the main untrusted-input surface | A parsing flaw is remotely reachable | Limits, traversal rejection, ratio cap, and round-trip plus corrupt-input tests for all 8 formats |
-| `crm` → `httpx` becomes a cycle | Module stops building | Pinned by `TestCoreDoesNotImportCompositionOrHTTP` |
+| Горизонтальное масштабирование умножает лимиты частоты | Лимиты злоупотребления входом и ИИ слабее настроенных | Задокументировано; лимитер на Redis — Фаза 1 |
+| Дрейф контракта API | Ломающее изменение выходит незамеченным | Пока нет; OpenAPI + контрактный тест — Фаза 1 |
+| Клиент считает, что SSO доступен | Усилия интеграции потрачены зря, ожидание безопасности не выполнено | Задокументировано здесь; Фаза 2 реализует поток |
+| Согласие отсутствует | Сообщения могут отправляться без законного основания | Задокументировано; Фаза 2 |
+| Обработка архивов — основная поверхность недоверенного ввода | Изъян разбора достижим удалённо | Лимиты, отклонение обхода, ограничение коэффициента и тесты кругового рейса плюс повреждённого ввода для всех 8 форматов |
+| `crm` → `httpx` становится циклом | Модуль перестаёт собираться | Закреплено `TestCoreDoesNotImportCompositionOrHTTP` |
 
 ---
 
-## 7. Next priorities
+## 7. Следующие приоритеты
 
-1. **OpenAPI 3.1 from the real routes** plus a contract test and CI validation
-   (finding D). Unblocks SDK, MCP and integrations.
-2. **Distributed rate limiting** (finding C). The last scaling blocker.
-3. **Real OIDC Authorization Code Flow with PKCE** and a test IdP (finding A).
+1. **OpenAPI 3.1 из реальных маршрутов** плюс контрактный тест и валидация в CI
+   (находка D). Разблокирует SDK, MCP и интеграции.
+2. **Распределённое ограничение частоты** (находка C). Последний блокер
+   масштабирования.
+3. **Реальный OIDC Authorization Code Flow с PKCE** и тестовый IdP (находка A).
 
-Findings 1 and 2 are independent and touch different files, so they can proceed
-in parallel. Finding 3 needs a test IdP first.
+Находки 1 и 2 независимы и трогают разные файлы, поэтому могут идти параллельно.
+Находке 3 сначала нужен тестовый IdP.

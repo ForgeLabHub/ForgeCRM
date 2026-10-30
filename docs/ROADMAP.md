@@ -1,431 +1,428 @@
-# ForgeCRM — Roadmap & Status
+# ForgeCRM — Дорожная карта и статус
 
-Statuses: `NOT_STARTED` · `IN_PROGRESS` · `IMPLEMENTED` · `TESTED` · `VERIFIED` · `BLOCKED`
+Статусы: `NOT_STARTED` · `IN_PROGRESS` · `IMPLEMENTED` · `TESTED` · `VERIFIED` · `BLOCKED`
 
-`VERIFIED` requires recorded evidence (command + result). `IMPLEMENTED` means code exists
-and compiles but is not yet covered by passing tests.
+`VERIFIED` требует записанного доказательства (команда + результат). `IMPLEMENTED`
+означает, что код существует и компилируется, но ещё не покрыт проходящими тестами.
 
-## Cycle 1 — Foundation + Import vertical slice
+## Цикл 1 — Фундамент + вертикальный срез импорта
 
-| # | Item | Status |
+| # | Пункт | Статус |
 |---|---|---|
-| 0.1 | Repository audit | **VERIFIED** — `docs/PROJECT_AUDIT.md` |
-| 0.2 | Target architecture | **VERIFIED** — `docs/ARCHITECTURE.md` |
-| 0.3 | Roadmap + acceptance criteria | **VERIFIED** — this file, `ACCEPTANCE_CRITERIA.md` |
-| 1.1 | Go modular monolith scaffold, config, structured logging, graceful shutdown | **VERIFIED** |
-| 1.2 | PostgreSQL schema + embedded migrations | **VERIFIED** |
-| 1.3 | Job queue (Postgres `SKIP LOCKED`) + worker process | **VERIFIED** |
-| 1.4 | Auth: Argon2id, opaque sessions, CSRF, lockout, TOTP MFA, bootstrap admin | **VERIFIED** |
-| 1.5 | RBAC: permission catalog, 14 default roles, server-side enforcement, org scoping | **VERIFIED** |
-| 1.6 | Audit trail + auth/security log | **VERIFIED** |
-| 1.7 | CRM core: accounts, contacts, leads, pipelines/stages, deals, tasks, activities, tickets, tags, comments, notifications, custom fields, search, reports | **VERIFIED** |
-| 1.8 | Admin API: users, roles, organizations, teams, jobs, audit, diagnostics, system | **VERIFIED** |
-| 1.9 | Import Center: CSV/TSV/JSON/JSONL/XLSX/XML parsing | **VERIFIED** |
-| 1.10 | Safe archive handling: ZIP, TAR, TAR.GZ/TGZ, TAR.BZ2, TAR.XZ, GZIP, BZIP2, XZ | **VERIFIED** |
-| 1.11 | Import wizard backend: upload → preview → mapping → validate → dry-run → execute → report → errors → rerun | **VERIFIED** |
-| 1.12 | Frontend admin panel (React + TS + Vite) wired to the real API | **VERIFIED** — 21 pages under `frontend/src/pages/` (CRM workspace, Import Center + wizard, Migrations, Integrations, Webhooks, Events, Background jobs, Agent approvals, and 9 admin pages) across 34 routes, all calling the real API; 6 unit-test files and 13 Playwright E2E cases |
-| 1.13 | Tests: unit, integration (real PostgreSQL), API, security, import edge cases | **IN_PROGRESS** — backend unit + integration packages (`importx`, `importx/safe`, `internal/api` under the `integration` tag, `authn`, `ratelimit`, `openapi`, `archtest`), frontend unit tests and Playwright E2E; some areas are still verified manually rather than by automated tests |
-| 1.14 | Docker Compose, scripts, CI, docs | **VERIFIED** — stack brought up end to end, smoke test 9/9; CI workflow runs on GitHub Actions (fmt, vet, unit, integration against a real PostgreSQL, frontend lint/type/test/build, Docker build, migrations, dependency + secret + security scan, docs presence) |
+| 0.1 | Аудит репозитория | **VERIFIED** — `docs/PROJECT_AUDIT.md` |
+| 0.2 | Целевая архитектура | **VERIFIED** — `docs/ARCHITECTURE.md` |
+| 0.3 | Дорожная карта + критерии приёмки | **VERIFIED** — этот файл, `ACCEPTANCE_CRITERIA.md` |
+| 1.1 | Каркас модульного монолита на Go, конфигурация, структурное логирование, плавное завершение | **VERIFIED** |
+| 1.2 | Схема PostgreSQL + встроенные миграции | **VERIFIED** |
+| 1.3 | Очередь заданий (Postgres `SKIP LOCKED`) + процесс воркера | **VERIFIED** |
+| 1.4 | Аутентификация: Argon2id, непрозрачные сессии, CSRF, блокировка, TOTP MFA, bootstrap администратора | **VERIFIED** |
+| 1.5 | RBAC: каталог разрешений, 14 ролей по умолчанию, серверное обеспечение, ограничение организацией | **VERIFIED** |
+| 1.6 | Журнал аудита + лог аутентификации/безопасности | **VERIFIED** |
+| 1.7 | Ядро CRM: аккаунты, контакты, лиды, воронки/стадии, сделки, задачи, активности, обращения, теги, комментарии, уведомления, кастомные поля, поиск, отчёты | **VERIFIED** |
+| 1.8 | API администрирования: пользователи, роли, организации, команды, задания, аудит, диагностика, система | **VERIFIED** |
+| 1.9 | Центр импорта: разбор CSV/TSV/JSON/JSONL/XLSX/XML | **VERIFIED** |
+| 1.10 | Безопасная обработка архивов: ZIP, TAR, TAR.GZ/TGZ, TAR.BZ2, TAR.XZ, GZIP, BZIP2, XZ | **VERIFIED** |
+| 1.11 | Бэкенд мастера импорта: загрузка → предпросмотр → сопоставление → валидация → пробный прогон → исполнение → отчёт → ошибки → повтор | **VERIFIED** |
+| 1.12 | Панель администрирования фронтенда (React + TS + Vite), связанная с реальным API | **VERIFIED** — 21 страница под `frontend/src/pages/` (рабочее пространство CRM, Центр импорта + мастер, Миграции, Интеграции, Вебхуки, События, Фоновые задания, Согласования агента и 9 страниц администрирования) среди 34 маршрутов, все вызывают реальный API; 6 файлов модульных тестов и 13 случаев Playwright E2E |
+| 1.13 | Тесты: модульные, интеграционные (реальный PostgreSQL), API, безопасность, граничные случаи импорта | **IN_PROGRESS** — пакеты модульных + интеграционных тестов бэкенда (`importx`, `importx/safe`, `internal/api` под тегом `integration`, `authn`, `ratelimit`, `openapi`, `archtest`), модульные тесты фронтенда и Playwright E2E; некоторые области всё ещё проверяются вручную, а не автоматическими тестами |
+| 1.14 | Docker Compose, скрипты, CI, документация | **VERIFIED** — стек поднят от начала до конца, smoke-тест 9/9; рабочий процесс CI идёт на GitHub Actions (fmt, vet, unit, интеграция против реального PostgreSQL, lint/type/test/build фронтенда, сборка Docker, миграции, сканирование зависимостей + секретов + безопасности, наличие документации) |
 
-## Cycle 2 — Integration platform
+## Цикл 2 — Платформа интеграций
 
-| # | Item | Status |
+| # | Пункт | Статус |
 |---|---|---|
-| 2.1 | Outbox drain → dispatcher | **VERIFIED** |
-| 2.2 | Event gateway (inbound HTTP, HMAC, replay protection, idempotency) | **VERIFIED** |
-| 2.3 | Webhook subscriptions, signed delivery, retry/backoff, delivery history, replay | **VERIFIED** — end-to-end via the worker; `webhooks.manage` seed gap found and fixed in migration 0006 |
-| 2.4 | Integration hub CRUD + adapter lifecycle + runs history | **VERIFIED** |
-| 2.5 | SSRF guard for outbound connections | **VERIFIED** |
-| 2.6 | Postgres + SQLite + REST + MySQL/MariaDB migration source adapters | **VERIFIED** — `internal/migratex/mysql.go` reads from MySQL or MariaDB through `go-sql-driver/mysql`, with the session opened read-only via the server's `transaction_read_only` variable (verified by reading the variable back, not trusting the DSN), backtick identifier quoting that rejects anything but a plain identifier, `information_schema` discovery, and the same batched/watermarked read the other sources use. `migratex.ImplementedSources()` is the single source of truth for the `migration_sources` capability and the Migrations page picker. Covered by `internal/migratex/mysql_integration_test.go` against a real MariaDB 11 |
-| 2.7 | Migration reconciliation reports | **VERIFIED** |
-| 2.8 | MySQL/MariaDB as the ForgeCRM datastore | **DEFERRED** — the direction is assessed from the code in ADR 0008, which records the measured blockers (19 non-test files importing pgx, 64 `RETURNING`, 21 `ON CONFLICT`, 8 `SKIP LOCKED`, 26 `ILIKE`, 16 PostgreSQL migrations using `gen_random_uuid`, `plpgsql` triggers, partial indexes, `jsonb` and arrays). PostgreSQL remains the only supported datastore; no MySQL code is added, and compilation against a MySQL driver is explicitly not treated as support |
-| 2.9 | MSSQL / Oracle adapters | **NOT_STARTED** |
-| 2.10 | CDC adapter | **NOT_STARTED** |
-| 2.11 | S3-compatible artefact storage | **VERIFIED** — `internal/storage`; a provider-agnostic `ObjectStore` with an S3 implementation (AWS, MinIO, Ceph, B2, Wasabi) and a memory store for tests. Metadata in the `documents` table (migration `0016`), server-built object keys, per-route permission checks, an SSRF guard on the endpoint, and an object/row reconciler that the worker now actually runs (`maintenance.storage_reconcile` on the hourly maintenance tick — it had no production caller, so an orphan object and a row whose object was gone both stayed wrong forever; it inherits the retention dry-run posture so it deletes nothing on a deployment that has not opted in). The `AttachmentPanel` in the CRM exposes upload, download and archive; `GET /api/v1/system/capabilities` reports `storage` and `max_upload_bytes`. Covered by `internal/testsupport/storage_test.go`, `storage_s3_test.go` and `internal/storage/storage_test.go` |
+| 2.1 | Разбор outbox → диспетчер | **VERIFIED** |
+| 2.2 | Шлюз событий (входящий HTTP, HMAC, защита от повторов, идемпотентность) | **VERIFIED** |
+| 2.3 | Подписки на вебхуки, подписанная доставка, повтор/задержка, история доставок, повтор | **VERIFIED** — от начала до конца через воркер; пробел в сиде `webhooks.manage` найден и исправлен в миграции 0006 |
+| 2.4 | CRUD хаба интеграций + жизненный цикл адаптера + история прогонов | **VERIFIED** |
+| 2.5 | Защита SSRF для исходящих соединений | **VERIFIED** |
+| 2.6 | Адаптеры источников миграции Postgres + SQLite + REST + MySQL/MariaDB | **VERIFIED** — `internal/migratex/mysql.go` читает из MySQL или MariaDB через `go-sql-driver/mysql`, сессия открывается только для чтения через переменную `transaction_read_only` сервера (проверено чтением переменной обратно, а не доверием DSN), экранирование идентификаторов бэктиками, отклоняющее всё, кроме простого идентификатора, обнаружение через `information_schema` и то же пакетное/по водяному знаку чтение, что используют другие источники. `migratex.ImplementedSources()` — единственный источник истины для возможности `migration_sources` и выбора на странице Migrations. Покрыто `internal/migratex/mysql_integration_test.go` против реального MariaDB 11 |
+| 2.7 | Отчёты сверки миграции | **VERIFIED** |
+| 2.8 | MySQL/MariaDB как хранилище ForgeCRM | **DEFERRED** — направление оценено по коду в ADR 0008, который фиксирует измеренные блокеры (19 не-тестовых файлов, импортирующих pgx, 64 `RETURNING`, 21 `ON CONFLICT`, 8 `SKIP LOCKED`, 26 `ILIKE`, 16 миграций PostgreSQL, использующих `gen_random_uuid`, триггеры `plpgsql`, частичные индексы, `jsonb` и массивы). PostgreSQL остаётся единственным поддерживаемым хранилищем; код MySQL не добавляется, и компиляция с драйвером MySQL явно не считается поддержкой |
+| 2.9 | Адаптеры MSSQL / Oracle | **NOT_STARTED** |
+| 2.10 | Адаптер CDC | **NOT_STARTED** |
+| 2.11 | Хранилище артефактов, совместимое с S3 | **VERIFIED** — `internal/storage`; независимый от провайдера `ObjectStore` с реализацией S3 (AWS, MinIO, Ceph, B2, Wasabi) и хранилищем в памяти для тестов. Метаданные в таблице `documents` (миграция `0016`), ключи объектов, строимые сервером, проверки прав на каждый маршрут, защита SSRF на эндпоинте и сверщик объектов/строк, который воркер теперь действительно запускает (`maintenance.storage_reconcile` на ежечасном такте обслуживания — у него не было производственного вызывающего, поэтому осиротевший объект и строка, чей объект исчез, оба оставались неверными навсегда; он наследует позу пробного прогона хранения, поэтому ничего не удаляет на развёртывании, которое не дало согласия). `AttachmentPanel` в CRM выставляет загрузку, скачивание и архивирование; `GET /api/v1/system/capabilities` сообщает `storage` и `max_upload_bytes`. Покрыто `internal/testsupport/storage_test.go`, `storage_s3_test.go` и `internal/storage/storage_test.go` |
 
-## Cycle 3 — Communications
+## Цикл 3 — Коммуникации
 
-| # | Item | Status |
+| # | Пункт | Статус |
 |---|---|---|
-| 3.1 | SMTP adapter with TLS, config validation, connection + send test, queue, retry, send log | **VERIFIED** |
-| 3.2 | HTML + plain-text templates, task/deal/ticket notifications, password reset | **VERIFIED** |
-| 3.3 | Telegram bot adapter: config, webhook auth, CRM link, notifications, own tasks, unlink | **IMPLEMENTED** — requires a real bot token to become `VERIFIED` |
-| 3.4 | Alternative mail providers | **NOT_STARTED** |
+| 3.1 | Адаптер SMTP с TLS, валидацией конфигурации, проверкой соединения + отправки, очередью, повтором, журналом отправок | **VERIFIED** |
+| 3.2 | Шаблоны HTML + plain-text, уведомления о задачах/сделках/обращениях, сброс пароля | **VERIFIED** |
+| 3.3 | Адаптер бота Telegram: конфигурация, аутентификация вебхука, связь с CRM, уведомления, свои задачи, отвязка | **IMPLEMENTED** — требуется реальный токен бота, чтобы стать `VERIFIED` |
+| 3.4 | Альтернативные почтовые провайдеры | **NOT_STARTED** |
 
-## Cycle 4 — Audit & operations
+## Цикл 4 — Аудит и эксплуатация
 
-| # | Item | Status |
+| # | Пункт | Статус |
 |---|---|---|
-| 4.1 | Diagnostics API + admin pages (logs, audit, jobs, events, metrics) | **VERIFIED** |
-| 4.2 | Metrics endpoint (protected context) | **VERIFIED** |
-| 4.3 | Backup / restore scripts + verification | **VERIFIED** |
-| 4.4 | Retention & rotation policy enforcement | **VERIFIED** — `internal/retention`; an opt-in registry of per-table windows, dry-run by default, batched deletes, append-only audit protection, per-policy counts and one audit entry per real run. Covers the run history that nothing pruned before: finished workflow runs, finished agent runs and processed inbound events, each swept by terminal status only so a paused run or an unhandled event is never removed. Also covers the transient rows that accumulate one per user action and were never pruned: expired OIDC login states (the sweeper migration 0022 promised), expired password-reset tokens and settled email-log entries, each swept on the row's own terminal condition so a queued email, an unexpired token or a live sign-in is never touched. The sweep is rows-only, so the file side is covered by `importx.ReclaimStoredFiles` (`maintenance.import_files`, `internal/importx/reclaim.go`): it removes uploaded files no `import_jobs` row references, so sweeping the row window reclaims the disk the import consumed rather than leaking one file per upload. It keeps a file younger than its age bound (it may belong to a row not yet inserted) and any file a row still references, and it is a dry run whenever retention is. Also covers the migration reconciliation history (`migration_reconciliations`, migration 0026): `migratex.Reconcile` writes one row per row-count comparison and nothing pruned it, so a deployment that reconciles on a schedule grew it without bound; the counts are recomputable from the source and the target, so an old comparison is history rather than evidence, and the sweep gets an index that leads with `created_at` because the existing per-job index cannot serve a sweep bounded by time alone. Covered by 15 integration tests in `internal/testsupport/retention_test.go` and 4 in `internal/testsupport/import_reclaim_test.go` |
+| 4.1 | API диагностики + страницы администрирования (логи, аудит, задания, события, метрики) | **VERIFIED** |
+| 4.2 | Эндпоинт метрик (защищённый контекст) | **VERIFIED** |
+| 4.3 | Скрипты резервного копирования / восстановления + проверка | **VERIFIED** |
+| 4.4 | Обеспечение политики хранения и ротации | **VERIFIED** — `internal/retention`; включаемый реестр окон по таблицам, по умолчанию пробный прогон, пакетные удаления, защита аудита «только добавление», счётчики на политику и одна запись аудита на реальный прогон. Покрывает историю прогонов, которую ничто не чистило: завершённые прогоны workflow, завершённые прогоны агента и обработанные входящие события, каждый обметается только по терминальному статусу, поэтому приостановленный прогон или необработанное событие никогда не удаляются. Также покрывает преходящие строки, накапливающиеся по одной на действие пользователя и никогда не чистившиеся: истёкшие состояния входа OIDC (обещанные обходчиком миграции 0022), истёкшие токены сброса пароля и завершённые записи журнала почты, каждая обметается по собственному терминальному условию строки, поэтому письмо в очереди, неистёкший токен или живой вход никогда не трогаются. Обход только по строкам, поэтому файловая сторона покрыта `importx.ReclaimStoredFiles` (`maintenance.import_files`, `internal/importx/reclaim.go`): он удаляет загруженные файлы, на которые не ссылается ни одна строка `import_jobs`, поэтому обход окна строк возвращает диск, который израсходовал импорт, а не течёт по одному файлу на загрузку. Он держит файл моложе своей границы возраста (он может принадлежать ещё не вставленной строке) и любой файл, на который строка всё ещё ссылается, и это пробный прогон всякий раз, когда хранение является им. Также покрывает историю сверки миграции (`migration_reconciliations`, миграция 0026): `migratex.Reconcile` пишет одну строку на сравнение числа строк, и ничто её не чистило, поэтому развёртывание, сверяющееся по расписанию, росло безгранично; счётчики пересчитываемы из источника и цели, поэтому старое сравнение — история, а не доказательство, и обход получает индекс, ведущий с `created_at`, потому что существующий индекс на задание не может обслужить обход, ограниченный только временем. Покрыто 15 интеграционными тестами в `internal/testsupport/retention_test.go` и 4 в `internal/testsupport/import_reclaim_test.go` |
 
-## Cycle 5 — AI & MCP
+## Цикл 5 — ИИ и MCP
 
-| # | Item | Status |
+| # | Пункт | Статус |
 |---|---|---|
-| 5.1 | `ai.Provider` interface, Ollama + OpenAI-compatible providers | **VERIFIED** |
-| 5.2 | AI task records, timeouts, request caps, cost metadata, audit | **VERIFIED** |
-| 5.3 | Tool registry reusing domain authz (8 tools, permission-checked, audited) | **VERIFIED** |
-| 5.3a | MCP **protocol** transport (JSON-RPC 2.0, `initialize`, `tools/list`, `tools/call`) | **VERIFIED** — `POST /api/v1/mcp` speaks JSON-RPC 2.0: `initialize` with protocol-version negotiation, `ping`, `tools/list` in the protocol shape (`inputSchema`), `tools/call`, notifications answered with an empty 202, and the JSON-RPC error codes for parse, invalid-request, method-not-found and invalid-params. `GET /api/v1/mcp/tools` and `POST /api/v1/mcp/call` remain as the admin UI's own shape. Verified by `internal/ai/mcp_protocol_test.go` (transport) and `internal/api/mcp_integration_test.go` (session, permission, confirmation and tenant scope over the real HTTP stack). See `docs/mcp/` |
-| 5.4 | Prompt-injection hardening + unauthorized-access tests | **VERIFIED** |
-| 5.4a | Human-in-the-loop agent execution: durable approval requests, risk tiers, payload-hash binding, second-factor step-up for `destructive` actions, approve/reject UI | **VERIFIED** — `internal/agent` (approval lifecycle), migrations `0009`–`0011`, `POST /api/v1/agent/actions/{id}/decide`, `POST /api/v1/auth/step-up`, and the `/approvals` screen. A lapsed step-up window is refused with `403`; a decision whose arguments hash does not match the stored one is refused. Covered by `internal/api/agent_http_test.go` (integration) and `internal/agent/agent_test.go` (unit). See `docs/adr/0005-hitl-agent-execution-model.md` |
-| 5.5 | Contextual AI in entity cards, calibrated confidence, graceful failure, human handoff | **VERIFIED** — `internal/ai/assist.go` assembles a permission-checked context per entity (account, contact, deal, ticket, task), masks personal data, and returns CRM facts, model inference and recommendations in separate fields so a suggestion is never presented as a recorded fact. The `AssistPanel` is on the account, contact, deal, ticket and task screens. Integration tests in `internal/testsupport/ai_assist_test.go` cover cross-organization refusal and masking; `ai_assist_cache_test.go` covers the answer cache, which migration 0018 repaired (the table lacked the `recommendations` and `draft` columns the code writes, and the read ignored `context_hash`). Calibrated confidence is the server-computed grounding score in `internal/ai/confidence.go` — not the model's self-report, which is uncalibrated by nature, but a score from signals the server can check (structured reply, figures matched against the given facts, context completeness), returned with its basis. `confidence_test.go` covers the scoring and the cache test asserts it is identical on a fresh and a cached answer. `frontend/e2e/platform.spec.ts` drives the panel in real Chromium against a real provider and asserts the grounding note and its reason are shown; both contextual-AI E2E cases skip on provider availability so they are honest with and without one |
+| 5.1 | Интерфейс `ai.Provider`, провайдеры Ollama + совместимые с OpenAI | **VERIFIED** |
+| 5.2 | Записи задач ИИ, тайм-ауты, ограничения запросов, метаданные стоимости, аудит | **VERIFIED** |
+| 5.3 | Реестр инструментов, переиспользующий доменную авторизацию (8 инструментов, с проверкой прав, с аудитом) | **VERIFIED** |
+| 5.3a | **Протокольный** транспорт MCP (JSON-RPC 2.0, `initialize`, `tools/list`, `tools/call`) | **VERIFIED** — `POST /api/v1/mcp` говорит на JSON-RPC 2.0: `initialize` с согласованием версии протокола, `ping`, `tools/list` в форме протокола (`inputSchema`), `tools/call`, уведомления получают пустой 202, и коды ошибок JSON-RPC для parse, invalid-request, method-not-found и invalid-params. `GET /api/v1/mcp/tools` и `POST /api/v1/mcp/call` остаются собственной формой админ-UI. Проверено `internal/ai/mcp_protocol_test.go` (транспорт) и `internal/api/mcp_integration_test.go` (сессия, права, подтверждение и область тенанта через реальный стек HTTP). См. `docs/mcp/` |
+| 5.4 | Укрепление против инъекции промптов + тесты неавторизованного доступа | **VERIFIED** |
+| 5.4a | Исполнение агента с участием человека: долговечные запросы согласования, уровни риска, привязка хеша payload, step-up второго фактора для опасных действий, UI одобрения/отклонения | **VERIFIED** — `internal/agent` (жизненный цикл согласования), миграции `0009`–`0011`, `POST /api/v1/agent/actions/{id}/decide`, `POST /api/v1/auth/step-up` и экран `/approvals`. Истёкшее окно step-up отклоняется с `403`; решение, чей хеш аргументов не совпадает с сохранённым, отклоняется. Покрыто `internal/api/agent_http_test.go` (интеграция) и `internal/agent/agent_test.go` (модуль). См. `docs/adr/0005-hitl-agent-execution-model.md` |
+| 5.5 | Контекстный ИИ в карточках сущностей, калиброванная уверенность, корректный сбой, передача человеку | **VERIFIED** — `internal/ai/assist.go` собирает контекст с проверкой прав на сущность (аккаунт, контакт, сделка, обращение, задача), маскирует персональные данные и возвращает факты CRM, вывод модели и рекомендации в отдельных полях, поэтому предложение никогда не подаётся как записанный факт. `AssistPanel` находится на экранах аккаунта, контакта, сделки, обращения и задачи. Интеграционные тесты в `internal/testsupport/ai_assist_test.go` покрывают отказ между организациями и маскирование; `ai_assist_cache_test.go` покрывает кэш ответов, который миграция 0018 исправила (в таблице отсутствовали столбцы `recommendations` и `draft`, которые пишет код, а чтение игнорировало `context_hash`). Калиброванная уверенность — это вычисляемый сервером балл обоснованности в `internal/ai/confidence.go` — не самоотчёт модели, который по природе некалиброван, а балл из сигналов, которые сервер может проверить (структурированный ответ, цифры, совпадающие с данными фактами, полнота контекста), возвращаемый с его основанием. `confidence_test.go` покрывает подсчёт баллов, а тест кэша утверждает, что он идентичен на свежем и кэшированном ответе. `frontend/e2e/platform.spec.ts` управляет панелью в реальном Chromium против реального провайдера и утверждает, что показаны заметка об обоснованности и её причина; оба случая E2E контекстного ИИ пропускаются при доступности провайдера, поэтому они честны и с ним, и без него |
 
-> Correction: an earlier revision of this file marked "MCP tool server" as
-> `VERIFIED`. The tool *logic* was verified — 8 tools that reuse `crm.Service` and
-> enforce permissions — but the MCP *transport* did not exist, so the claim was
-> narrowed rather than left to overstate the system. The transport now exists and
-> is verified separately, which is why 5.3a is distinct from 5.3.
+> Исправление: более ранняя редакция этого файла помечала «MCP tool server» как
+> `VERIFIED`. *Логика* инструментов была проверена — 8 инструментов, которые
+> переиспользуют `crm.Service` и обеспечивают права, — но *транспорта* MCP не
+> существовало, поэтому утверждение было сужено, а не оставлено преувеличивающим
+> систему. Транспорт теперь существует и проверяется отдельно, поэтому 5.3a
+> отличается от 5.3.
 
+## Цикл 6 — Готовность к production
 
-## Cycle 6 — Production readiness
-
-| # | Item | Status |
+| # | Пункт | Статус |
 |---|---|---|
-| 6.1 | CI: fmt, vet, unit, integration (real PG), frontend lint/type/test/build, docker build, migrations, dep + secret + security scan, docs presence | **VERIFIED** |
-| 6.2 | E2E browser tests | **IN_PROGRESS** |
-| 6.3 | Clean-environment install rehearsal | **VERIFIED** |
-| 6.4 | LICENSE selection | **BLOCKED** — owner decision (see `PROJECT_AUDIT.md` §3 finding F) |
-| 6.5 | OIDC / corporate SSO | **VERIFIED** — the Authorization Code flow with PKCE exists (`internal/oidc`) and a provider can be registered and managed from `/admin/sso`. See cycle 16. A local test IdP (6.2 / item 2.2) is still open |
-| 6.6 | LDAP / Active Directory adapter | **NOT_STARTED** — needs confirmed demand |
+| 6.1 | CI: fmt, vet, unit, интеграция (реальный PG), lint/type/test/build фронтенда, сборка docker, миграции, сканирование зависимостей + секретов + безопасности, наличие документации | **VERIFIED** |
+| 6.2 | Браузерные E2E-тесты | **IN_PROGRESS** |
+| 6.3 | Репетиция установки в чистом окружении | **VERIFIED** |
+| 6.4 | Выбор LICENSE | **BLOCKED** — решение владельца (см. `PROJECT_AUDIT.md` §3 находка F) |
+| 6.5 | OIDC / корпоративный SSO | **VERIFIED** — поток Authorization Code с PKCE существует (`internal/oidc`), и провайдером можно управлять с `/admin/sso`. См. цикл 16. Локальный тестовый IdP (6.2 / пункт 2.2) всё ещё открыт |
+| 6.6 | Адаптер LDAP / Active Directory | **NOT_STARTED** — нужен подтверждённый спрос |
+
+## Цикл 7 — Распределённое ограничение частоты и доверие адресу клиента
+
+| # | Пункт | Статус |
+|---|---|---|
+| 7.1 | Интерфейс `Store` с `MemoryStore` и `RedisStore` | **VERIFIED** — `internal/ratelimit`; `MemoryStore` под мьютексом, `RedisStore` инкрементирует одним Lua-скриптом, поэтому чтение-изменение-запись атомарно на сервере |
+| 7.2 | Гонка данных в прежнем лимитере в процессе | **VERIFIED FIXED** — старый `httpx.RateLimiter` держал счётчики в голом `map`, записываемом из каждой горутины запроса. `net/http` обслуживает каждый запрос в своей горутине, поэтому это была живая гонка и возможная невосстановимая паника `concurrent map write`. `TestMemoryStoreIsSafeForConcurrentUse` (64 горутины × 250 инкрементов) падает под `-race` против старого кода и утверждает, что против нового ни один инкремент не потерян |
+| 7.3 | Неограниченный рост ключей | **VERIFIED FIXED** — прежний map никогда не обметался, потому что у `Sweep` не было вызывающего. `MemoryStore` имеет фоновый обходчик и границу `maxKeys`, оба покрыты тестами |
+| 7.4 | Доверие заголовку перенаправления | **VERIFIED FIXED** — `middleware.RealIP` из `chi` переписывал `RemoteAddr` из `X-Forwarded-For` для каждого вызывающего, поэтому любой клиент мог выбрать адрес, под которым его ограничивали и логировали. Он удалён. `ClientIPMiddleware` определяет адрес один раз, из узла, если только узел не в `FORGECRM_TRUSTED_PROXIES`, а цепочка читается справа налево, пропуская доверенные узлы |
+| 7.5 | Режим отказа на политику | **VERIFIED** — `FailOpen` для общего трафика API, `FailClosed` для аутентификации. Оба решения устанавливают `Degraded`, и ошибка хранилища никогда не сообщается как 429 |
+| 7.6 | Развёртывание с Redis по согласию | **VERIFIED** — сервис `redis` за профилем compose; `docker compose config` с профилем и без него оба валидированы. По умолчанию `up` не запускает Redis |
+| 7.7 | Общий счётчик при нескольких репликах | **VERIFIED (на уровне модуля)** — `TestRedisStoreWindowIsSharedBetweenInstances` строит два лимитера на отдельных соединениях и утверждает, что лимит 5 даёт ровно 5 разрешений на оба. Два контейнера API против реальной базы — это пункт 1.6 |
+
+### Доказательство
+
+| Проверка | Команда | Результат |
+|---|---|---|
+| Форматирование | `gofmt -l ./...` | чисто |
+| Vet | `go vet ./...` | чисто |
+| Модульные тесты, детектор гонок | `go test -race -count=1 ./...` | все пакеты проходят, включая новый тест параллелизма на 16 000 инкрементов |
+| Интеграция Redis | `go test -race -tags=integration -run TestRedisStore ./internal/ratelimit/` | 5 тестов проходят против `redis:7-alpine` |
+| Актуальность OpenAPI | `go run ./cmd/openapi-gen -check` | спецификация актуальна; изменение маршрута отсутствует |
+| Compose | `docker compose config`, `docker compose --profile redis config` | оба валидны; Redis отсутствует в профиле по умолчанию |
+
+Тест подмены был написан до исправления и наблюдался как падающий против исходного
+разбора заголовка слева направо (`TestForwardedChainIsReadRightToLeft`), что и
+показало, что очевидная реализация возвращает адрес, который написал клиент, а не
+тот, который наблюдал прокси.
 
 ---
 
-## Cycle 7 — Distributed rate limiting and client-address trust
+## Цикл 8 — Словарь событий вебхуков и покрытие жизненного цикла на уровне HTTP
 
-| # | Item | Status |
+| # | Пункт | Статус |
 |---|---|---|
-| 7.1 | `Store` interface with `MemoryStore` and `RedisStore` | **VERIFIED** — `internal/ratelimit`; `MemoryStore` is mutex-guarded, `RedisStore` increments with a single Lua script so the read-modify-write is atomic on the server |
-| 7.2 | Data race in the previous in-process limiter | **VERIFIED FIXED** — the old `httpx.RateLimiter` kept counters in a bare `map` written from every request goroutine. `net/http` serves each request in its own goroutine, so this was a live race and a possible unrecoverable `concurrent map write` panic. `TestMemoryStoreIsSafeForConcurrentUse` (64 goroutines × 250 increments) fails under `-race` against the old code and asserts no increment is lost against the new |
-| 7.3 | Unbounded key growth | **VERIFIED FIXED** — the previous map was never swept because `Sweep` had no caller. `MemoryStore` has a background sweeper and a `maxKeys` bound, both covered by tests |
-| 7.4 | Forwarding-header trust | **VERIFIED FIXED** — `chi`'s `middleware.RealIP` was rewriting `RemoteAddr` from `X-Forwarded-For` for every caller, so any client could choose the address it was rate-limited and logged under. It is removed. `ClientIPMiddleware` resolves the address once, from the peer unless the peer is in `FORGECRM_TRUSTED_PROXIES`, and the chain is read right-to-left skipping trusted hops |
-| 7.5 | Per-policy fail mode | **VERIFIED** — `FailOpen` for general API traffic, `FailClosed` for authentication. Both decisions set `Degraded`, and a store error is never reported as a 429 |
-| 7.6 | Redis opt-in deployment | **VERIFIED** — `redis` service behind a compose profile; `docker compose config` with and without the profile both validated. Default `up` starts no Redis |
-| 7.7 | Multi-replica shared counter | **VERIFIED (unit level)** — `TestRedisStoreWindowIsSharedBetweenInstances` builds two limiters over separate connections and asserts a limit of 5 yields exactly 5 allows across both. Two API containers against a real database is item 1.6 |
+| 8.1 | Дрейф словаря событий между формой подписки и диспетчером | **VERIFIED FIXED** — `WebhooksPage` зашивал сокращённый список (`contact.created`), тогда как диспетчер сопоставлял имя с пространством имён (`crm.contact.created`). Подписка, созданная из формы, не выбирала событий, поэтому эндпоинт клиента молча не получал ничего: сбой выглядит как сетевой, невидим в UI. Канонический список теперь `outbox.EventTypes()`, выставляемый как `event_types` на `GET /api/v1/system/capabilities`, и форма строит свой выбор из него |
+| 8.2 | Страж регрессии для словаря | **VERIFIED** — `TestWebhookEventVocabularyMatchesTheDispatcher` (`internal/api`, тег integration) читает объявленный список, затем порождает и доставляет каждый объявленный тип и утверждает, что каждый даёт ровно одну доставку. Он был запущен против намеренно сокращённого списка и упал, назвав каждый отсутствующий тип |
+| 8.3 | Покрытие dead-letter и повтора на уровне HTTP | **VERIFIED** — `TestWebhookLifecycleOverHTTP` доводит create → dispatch → исчерпание попыток → dead → replay целиком через API, утверждая состояние доставки, `replay_count` и записи аудита `webhooks.delivery_dead_lettered` / `webhooks.replayed`, как их увидел бы оператор. Повтор ещё-ожидающей доставки утверждается как отклонённый с 404 |
+| 8.4 | `/webhooks` и `/events` в обходе страниц E2E | **VERIFIED** — обе страницы добавлены в обход в `frontend/e2e/platform.spec.ts`; форма вебхука утверждается как предлагающая `crm.contact.created`, а не голый `contact.created` |
+| 8.5 | Граничные случаи повтора на уровне HTTP и два дефекта, которые они вскрыли | **VERIFIED FIXED** — `internal/api/webhook_replay_http_test.go` добавляет десять сценариев через реальный стек: форма ответа повтора, `replay_count` за всё время через два окна, контекст записи аудита (действующее лицо, сущность, метаданные `replay_count`), отказ при «в полёте», отказ при неверной подписке, одновременные повторы, применённые один раз, повтор после потерянного ответа, отказ между тенантами и для повтора, и для перечисления доставок, вызывающий без `webhooks.manage` и общий инвариант, что отклонённый повтор не оставляет ни состояния, ни записи аудита. Найдены и исправлены два дефекта: (1) защита была `status <> 'pending'`, поэтому доставка, которую воркер забрал (`delivering`), могла быть повторена, пока её отправляли — противореча собственному «уже в полёте отклоняется» ADR 0004; защита теперь `status NOT IN ('pending','delivering')`. (2) `handleReplayDelivery` читал только `deliveryId` и игнорировал подписку `{id}`, которую маршрут и OpenAPI объявляют обязательной, поэтому доставку можно было повторить под подпиской, которой она не принадлежала; `Replay` теперь ограничивает мутирующее выражение по `subscription_id`, а также `organization_id`. Каждое исправление проверено мутацией: откат любого из них проваливает его тест с ожидаемым сообщением |
 
-### Evidence
+### Доказательство
 
-| Check | Command | Result |
+| Проверка | Команда | Результат |
 |---|---|---|
-| Formatting | `gofmt -l ./...` | clean |
-| Vet | `go vet ./...` | clean |
-| Unit tests, race detector | `go test -race -count=1 ./...` | all packages pass, including the new 16 000-increment concurrency test |
-| Redis integration | `go test -race -tags=integration -run TestRedisStore ./internal/ratelimit/` | 5 tests pass against `redis:7-alpine` |
-| OpenAPI currency | `go run ./cmd/openapi-gen -check` | spec current; no route change |
-| Compose | `docker compose config`, `docker compose --profile redis config` | both valid; Redis absent from the default profile |
-
-The spoofing test was written before the fix and observed to fail against the
-original left-to-right header parsing (`TestForwardedChainIsReadRightToLeft`),
-which is what showed the obvious implementation returns the address the client
-wrote rather than the one the proxy observed.
+| Форматирование | `gofmt -l ./internal/ ./cmd/` | чисто |
+| Vet | `go vet ./...` | чисто |
+| Модульные тесты | `go test ./internal/rbac/ ./internal/outbox/ ./internal/api/` | проходят |
+| Интеграционные тесты | `go test -p 1 -tags=integration ./...` | все пакеты проходят, включая `internal/testsupport` и два новых теста `internal/api` |
+| Страж регрессии, негативный | сократить объявленный список, перезапустить 8.2 | тест падает, называя каждый опущенный тип |
+| E2E | `npx playwright test` | 28 проходят в реальном Chromium (было 26), включая два новых случая |
+| Актуальность OpenAPI | `go run ./cmd/openapi-gen` | спецификация перегенерирована; добавляет `event_types` в `CapabilitiesResponse` |
 
 ---
 
-## Cycle 8 — Webhook event vocabulary and HTTP-level lifecycle coverage
+## Цикл 9 — Движок автоматизации workflow
 
-| # | Item | Status |
+| # | Пункт | Статус |
 |---|---|---|
-| 8.1 | Event vocabulary drift between the subscription form and the dispatcher | **VERIFIED FIXED** — `WebhooksPage` hard-coded a shortened list (`contact.created`) while the dispatcher matched the namespaced name (`crm.contact.created`). A subscription created from the form selected no events, so the customer's endpoint silently received nothing: the failure looks like a network fault and is invisible in the UI. The canonical list is now `outbox.EventTypes()`, exposed as `event_types` on `GET /api/v1/system/capabilities`, and the form builds its picker from it |
-| 8.2 | A regression guard for the vocabulary | **VERIFIED** — `TestWebhookEventVocabularyMatchesTheDispatcher` (`internal/api`, integration tag) reads the advertised list, then emits and dispatches every advertised type and asserts each produces exactly one delivery. It was run against a deliberately shortened list and failed, naming each missing type |
-| 8.3 | HTTP-level coverage of dead-letter and replay | **VERIFIED** — `TestWebhookLifecycleOverHTTP` drives create → dispatch → exhaust attempts → dead → replay entirely through the API, asserting the delivery state, `replay_count`, and the `webhooks.delivery_dead_lettered` / `webhooks.replayed` audit entries as an operator would see them. Replaying a still-pending delivery is asserted to be refused with 404 |
-| 8.4 | `/webhooks` and `/events` in the E2E page sweep | **VERIFIED** — both pages added to the sweep in `frontend/e2e/platform.spec.ts`; the webhook form is asserted to offer `crm.contact.created` and not the bare `contact.created` |
-| 8.5 | HTTP-level replay edge cases, and the two defects they exposed | **VERIFIED FIXED** — `internal/api/webhook_replay_http_test.go` adds ten scenarios through the real stack: the replay response shape, lifetime `replay_count` across two windows, the audit entry's context (actor, entity, `replay_count` metadata), the in-flight refusal, the wrong-subscription refusal, concurrent replays applied once, a retried replay after a lost response, cross-tenant refusal for both replay and delivery listing, a caller without `webhooks.manage`, and the shared invariant that a refused replay leaves no state or audit entry. Two defects were found and fixed: (1) the guard was `status <> 'pending'`, so a delivery a worker had claimed (`delivering`) could be replayed while it was being sent — contradicting ADR 0004's own "already in flight is refused"; the guard is now `status NOT IN ('pending','delivering')`. (2) `handleReplayDelivery` read only `deliveryId` and ignored the `{id}` subscription the route and OpenAPI both declare required, so a delivery could be replayed under a subscription it did not belong to; `Replay` now scopes the mutating statement by `subscription_id` as well as `organization_id`. Each fix was mutation-tested: reverting either one fails its test with the expected message |
+| 9.1 | Документ определения, валидация, типы триггеров (event, schedule, manual) | **VERIFIED** — `internal/workflow`; определение — JSON с ограниченным числом шагов, глубиной ветвления и задержкой; валидация при сохранении, поэтому workflow, который не мог бы выполниться, отклоняется API |
+| 9.2 | Действия шагов через `crm.Service` (create_task, update_deal, create_ticket, notify) | **VERIFIED** — каждое действие вызывает тот же сервис, что HTTP API, от имени автора workflow |
+| 9.3 | Права обеспечиваются на момент исполнения, а не авторинга | **VERIFIED** — движок сопоставляет каждый тип шага с требуемым разрешением и определяет разрешения автора из базы на каждом прогоне. Это требуется, потому что движок вызывает сервис напрямую и обходит middleware API, который обычно проверяет грубое разрешение; без этого `workflows.manage` подразумевал бы каждое разрешение на действие. `TestWorkflowPermissionIsRecheckedAtExecutionTime` отзывает `tasks.create` и утверждает, что следующий прогон падает и ничего не создаёт |
+| 9.4 | Доставка at-least-once, дедуплицированная по `(workflow_id, event_id)` | **VERIFIED** — заявка и строка прогона — одна транзакция; дубликат не коммитит ничего. `TestWorkflowEventTriggerIsDeDuplicated` доставляет одно событие три раза и утверждает один прогон и одну задачу |
+| 9.5 | Задержка без удержания воркера | **VERIFIED** — задержка пишет момент возобновления и индекс следующего шага; планировщик воркера возобновляет с него. `TestWorkflowDelayPausesAndResumes` |
+| 9.6 | Ограничение глубины цепочки | **VERIFIED** — событие, вызванное шагом, наследует correlation id прогона, а глубина цепочки — число прогонов для него; прогон на `max_depth` записывается как `skipped`. `TestWorkflowDepthLimitStopsLoops` |
+| 9.7 | Уведомление между тенантами отклонено | **VERIFIED** — активное участие получателя проверяется перед вставкой. `TestWorkflowCannotNotifyAcrossOrganizations` |
+| 9.8 | Планировщик при нескольких репликах | **VERIFIED** — планировщик заявляет готовый workflow, продвигая `next_run_at` в той же транзакции, которая его выбирает |
+| 9.9 | REST API + страница администрирования | **VERIFIED** — `/api/v1/workflows` и `/api/v1/workflow-runs`; страница `/workflows` перечисляет, редактирует, включает, запускает, архивирует и показывает историю прогонов с журналом по шагам |
+| 9.10 | Документация | **VERIFIED** — `docs/adr/0007-workflow-automation-engine.md`, `docs/architecture/workflows.md` |
 
-### Evidence
+### Доказательство
 
-| Check | Command | Result |
+| Проверка | Команда | Результат |
 |---|---|---|
-| Formatting | `gofmt -l ./internal/ ./cmd/` | clean |
-| Vet | `go vet ./...` | clean |
-| Unit tests | `go test ./internal/rbac/ ./internal/outbox/ ./internal/api/` | pass |
-| Integration tests | `go test -p 1 -tags=integration ./...` | all packages pass, including `internal/testsupport` and the two new `internal/api` tests |
-| Regression guard, negative | shorten the advertised list, re-run 8.2 | test fails, naming every omitted type |
-| E2E | `npx playwright test` | 28 pass in real Chromium (was 26), including the two new cases |
-| OpenAPI currency | `go run ./cmd/openapi-gen` | spec regenerated; adds `event_types` to `CapabilitiesResponse` |
+| Форматирование | `gofmt -l ./internal/ ./cmd/` | чисто |
+| Vet | `go vet ./...` | чисто |
+| Модульные тесты | `go test -count=1 ./...` | 15 пакетов проходят |
+| Интеграционные тесты | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration -run TestWorkflow ./internal/testsupport/` | 6/6 проходят против реального PostgreSQL |
+| Полный интеграционный набор | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration -count=1 ./internal/testsupport/` | проходит |
+| Фронтенд | `npm run build`, `npm test` | сборка чиста; 48 модульных тестов проходят |
+| API, вживую | create → list → run → run detail → steps против работающего сервера | `201`, `1 item`, `200 succeeded`, деталь прогона `200`, шаги `200`; созданная задача присутствует в базе |
+| API, отказы | мутация без CSRF, анонимное чтение, неизвестный тип шага | `403`, `401`, `422` |
+
+Дефект был найден интеграционным тестом и исправлен в этом цикле: заявка события
+выполнялась после создания строки прогона, поэтому каждая дублирующая доставка одного
+события писала второй прогон, помеченный `skipped`, накапливаясь безгранично при
+повторах. См. запись `Fixed` в `CHANGELOG.md`.
 
 ---
 
-## Cycle 9 — Workflow automation engine
+## Цикл 10 — Шаблоны workflow и структурированный редактор определений
 
-| # | Item | Status |
+| # | Пункт | Статус |
 |---|---|---|
-| 9.1 | Definition document, validation, trigger types (event, schedule, manual) | **VERIFIED** — `internal/workflow`; the definition is JSON with a bounded step count, branch depth and delay; validation is at save time so a workflow that could not execute is rejected by the API |
-| 9.2 | Step actions through `crm.Service` (create_task, update_deal, create_ticket, notify) | **VERIFIED** — every action calls the same service the HTTP API uses, as the workflow's author |
-| 9.3 | Permission enforced at execution time, not authoring time | **VERIFIED** — the engine maps each step type to the permission it requires and resolves the author's permissions from the database on every run. This is required because the engine calls the service directly and bypasses the API middleware that normally checks the coarse permission; without it, `workflows.manage` would imply every action permission. `TestWorkflowPermissionIsRecheckedAtExecutionTime` revokes `tasks.create` and asserts the next run fails and creates nothing |
-| 9.4 | At-least-once delivery, de-duplicated on `(workflow_id, event_id)` | **VERIFIED** — the claim and the run row are one transaction; a duplicate commits nothing. `TestWorkflowEventTriggerIsDeDuplicated` delivers one event three times and asserts one run and one task |
-| 9.5 | Delay without holding a worker | **VERIFIED** — a delay writes a resume instant and the next step index; the worker scheduler resumes from there. `TestWorkflowDelayPausesAndResumes` |
-| 9.6 | Chain depth bound | **VERIFIED** — an event a step causes inherits the run's correlation id and the chain depth is the run count for it; a run at `max_depth` is recorded as `skipped`. `TestWorkflowDepthLimitStopsLoops` |
-| 9.7 | Cross-tenant notification refused | **VERIFIED** — the recipient's active membership is verified before the insert. `TestWorkflowCannotNotifyAcrossOrganizations` |
-| 9.8 | Multi-replica scheduler | **VERIFIED** — the scheduler claims a due workflow by advancing `next_run_at` in the same transaction that selects it |
-| 9.9 | REST API + admin page | **VERIFIED** — `/api/v1/workflows` and `/api/v1/workflow-runs`; the `/workflows` page lists, edits, enables, runs, archives and shows run history with the per-step log |
-| 9.10 | Documentation | **VERIFIED** — `docs/adr/0007-workflow-automation-engine.md`, `docs/architecture/workflows.md` |
+| 10.1 | Каталог шаблонов готовых CRM-сценариев | **VERIFIED** — `internal/workflow/templates.go` регистрирует шесть сценариев (уведомление владельца о просроченной сделке, задача-продолжение при смене стадии, напоминание о бездействии, подтверждение нового обращения, задача онбординга при выигрыше сделки, сортировка обращения по приоритету). Каждый называет триггер и шаги, которые движок уже выполняет; построение падает, если событие шаблона не в `outbox.EventTypes()`, поэтому шаблон нельзя создать, включить и затем никогда не сработать |
+| 10.2 | Создание workflow из шаблона | **VERIFIED** — `POST /api/v1/workflow-templates/{id}/create`; определение строится и валидируется на сервере, поэтому клиент его никогда не поставляет. Покрыто `TestEveryCatalogTemplateCanBeCreatedAndRun` и `TestTemplateCreateFromAPI` |
+| 10.3 | Импорт и экспорт workflow как переносимого документа | **VERIFIED** — `internal/workflow/export.go`; документ экспорта несёт имя формата и версию, и импорт проверяет и то и другое сначала, поэтому документ из другой версии отклоняется с причиной, а не применяется частично. `TestExportImportRoundTripsThroughTheStore` |
+| 10.4 | Валидация определения, выставляемая редактору | **VERIFIED** — структурные правила парсера (непустые шаги, уникальные id, условие с оператором, отсутствие delay внутри foreach) проверяются перед сохранением и показываются по каждой ошибке; сервер остаётся авторитетом, и его сообщение показывается дословно |
+| 10.5 | Новые действия шагов, нужные шаблонам | **VERIFIED** — шаги `find_deals` и `foreach` добавлены в `internal/workflow/engine.go`, со связанными фильтрами даты (`expected_close_before`, `updated_before`, `no_activity_since`) на `ListDeals`. У каждого нового типа шага есть запись в map разрешений, поэтому workflow не может использовать его, чтобы превысить права автора. `TestWorkflowFindDealsAndForeachCreatesOneTaskPerDeal` |
+| 10.6 | Структурированный редактор и UI выбора шаблонов | **VERIFIED** — `frontend/src/components/WorkflowEditor.tsx` читает и пишет тот же JSON-документ, который разбирает движок (сырое представление — тот же документ, сериализованный), поэтому второго формата нет. `WorkflowsPage` получает выбор шаблонов, диалоги импорта/экспорта и историю прогонов. `WorkflowEditor.test.tsx` (11 тестов) |
 
-### Evidence
+### Доказательство
 
-| Check | Command | Result |
+| Проверка | Команда | Результат |
 |---|---|---|
-| Formatting | `gofmt -l ./internal/ ./cmd/` | clean |
-| Vet | `go vet ./...` | clean |
-| Unit tests | `go test -count=1 ./...` | 15 packages pass |
-| Integration tests | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration -run TestWorkflow ./internal/testsupport/` | 6/6 pass against real PostgreSQL |
-| Full integration suite | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration -count=1 ./internal/testsupport/` | passes |
-| Frontend | `npm run build`, `npm test` | build clean; 48 unit tests pass |
-| API, live | create → list → run → run detail → steps against a running server | `201`, `1 item`, `200 succeeded`, run detail `200`, steps `200`; the created task is present in the database |
-| API, refusals | mutation without CSRF, anonymous read, unknown step type | `403`, `401`, `422` |
+| Форматирование | `gofmt -l ./cmd ./internal` | чисто |
+| Vet | `go vet ./...` | чисто |
+| Модульные тесты | `go test -count=1 ./...` | все пакеты проходят |
+| Интеграционные тесты | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration -count=1 ./...` | проходит против реального PostgreSQL |
+| Актуальность OpenAPI | `go run ./cmd/openapi-gen -check` | спецификация актуальна |
+| Фронтенд | `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` | typecheck чисто, lint 0 ошибок, 69 тестов проходят, сборка успешна |
 
-A defect was found by the integration test and fixed in this cycle: the event claim
-ran after the run row was created, so every duplicate delivery of the same event
-wrote a second run marked `skipped`, accumulating without bound under retry. See the
-`Fixed` entry in `CHANGELOG.md`.
+Скрытый дефект был найден и исправлен в этом цикле: `expected_close_date` — это
+PostgreSQL `date`, и он сканировался в `*string`, что pgx не может закодировать в
+бинарном формате. Любая сделка, у которой была дата закрытия, не загружалась из
+`ListDeals`, `GetDeal` и обхода workflow. Столбец теперь приводится к тексту, что и
+есть ISO-дата, которую API уже обещал.
 
 ---
 
-## Cycle 10 — Workflow templates and a structured definition editor
+## Цикл 11 — Intelligence Platform: Simulation Lab
 
-| # | Item | Status |
+| # | Пункт | Статус |
 |---|---|---|
-| 10.1 | Template catalog of ready CRM scenarios | **VERIFIED** — `internal/workflow/templates.go` registers six scenarios (overdue-deal owner notification, follow-up task on stage change, inactivity reminder, new-ticket acknowledgement, deal-won onboarding task, ticket priority triage). Each names a trigger and steps the engine already runs; construction fails if a template's event is not in `outbox.EventTypes()`, so a template cannot be created, enabled and then never fire |
-| 10.2 | Create a workflow from a template | **VERIFIED** — `POST /api/v1/workflow-templates/{id}/create`; the definition is built and validated server-side, so the client never supplies it. Covered by `TestEveryCatalogTemplateCanBeCreatedAndRun` and `TestTemplateCreateFromAPI` |
-| 10.3 | Import and export a workflow as a portable document | **VERIFIED** — `internal/workflow/export.go`; the export document carries a format name and version and import checks both first, so a document from another version is refused with a reason rather than partially applied. `TestExportImportRoundTripsThroughTheStore` |
-| 10.4 | Definition validation, exposed to the editor | **VERIFIED** — the parser's structural rules (non-empty steps, unique ids, a condition with an operator, no delay inside a foreach) are checked before save and surfaced per error; the server remains the authority and its message is shown verbatim |
-| 10.5 | New step actions the templates need | **VERIFIED** — `find_deals` and `foreach` steps added to `internal/workflow/engine.go`, with bound date filters (`expected_close_before`, `updated_before`, `no_activity_since`) on `ListDeals`. Every new step type has an entry in the permission map, so a workflow cannot use it to exceed the author's rights. `TestWorkflowFindDealsAndForeachCreatesOneTaskPerDeal` |
-| 10.6 | Structured editor and template picker UI | **VERIFIED** — `frontend/src/components/WorkflowEditor.tsx` reads and writes the same JSON document the engine parses (the raw view is the same document serialised), so there is no second format. The `WorkflowsPage` gains the template picker, import/export dialogs and the runs history. `WorkflowEditor.test.tsx` (11 tests) |
+| 11.1 | Чистое ядро аналитики (точные деньги, доли, математика сценариев) | **VERIFIED** — `internal/analytics`; импортирует только стандартную библиотеку, никогда не float для денег. Версия алгоритма `simulate-v1` хранится с каждым прогоном, поэтому результат, вычисленный старой версией, остаётся интерпретируемым |
+| 11.2 | Читатель базовой линии CRM | **VERIFIED** — `crm.Service.Baseline` читает собственную организацию вызывающего под `reports.read` и возвращает агрегаты по стадиям и периодам с явными предупреждениями об исключённых валютах и отсутствующей воронке |
+| 11.3 | Сервис `internal/simulate` + сохранение | **VERIFIED** — `CreateScenario`, `ListScenarios`, `GetScenario`, `ArchiveScenario`, `RunScenario`, `Preview`, `ListRuns`. Обеспечивает `simulation.manage`/`simulation.run`/`simulation.read` в сервисе, а не только на маршруте, и фильтрует каждый запрос по `organization_id` |
+| 11.4 | Миграция `0019_simulation_lab` + сид разрешений | **VERIFIED** — `simulation_scenarios` и `simulation_runs`, обе с областью тенанта, с частичным индексом уникальности имени на организацию и индексами истории прогонов; три разрешения засеяны в роли, и `TestSeedDataMatchesThePermissionCatalog` держит каталог и сид в шаге |
+| 11.5 | Поверхность API + OpenAPI | **VERIFIED** — CRUD сценариев, прогон, предпросмотр и каталог только для сессии; строки контракта в `internal/api/contract.go`; `go run ./cmd/openapi-gen -check` сообщает, что спецификация актуальна |
+| 11.6 | Фронтенд Simulation Lab | **VERIFIED** — `frontend/src/pages/SimulationPage.tsx` и `frontend/src/api/simulation.ts`, пункт `Simulation Lab` в навигации Workspace. Наблюдаемые цифры CRM и смоделированные цифры показываются в отдельных столбцах с допущениями модели, поэтому предложение никогда не подаётся как записанный факт |
+| 11.7 | Тесты: модульные, интеграция PostgreSQL, фронтенд, E2E | **VERIFIED** — `internal/testsupport/simulation_test.go` (PostgreSQL), `frontend/src/pages/SimulationPage.test.tsx` и набор в Chromium в `e2e/platform.spec.ts` |
 
-### Evidence
+### Доказательство
 
-| Check | Command | Result |
+| Проверка | Команда | Результат |
 |---|---|---|
-| Formatting | `gofmt -l ./cmd ./internal` | clean |
-| Vet | `go vet ./...` | clean |
-| Unit tests | `go test -count=1 ./...` | all packages pass |
-| Integration tests | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration -count=1 ./...` | passes against real PostgreSQL |
-| OpenAPI currency | `go run ./cmd/openapi-gen -check` | spec current |
-| Frontend | `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` | typecheck clean, lint 0 errors, 69 tests pass, build succeeds |
+| Форматирование | `gofmt -l ./cmd ./internal` | чисто |
+| Vet | `go vet ./...` | чисто |
+| Модульные тесты | `go test -count=1 ./...` | все пакеты проходят |
+| Интеграционные тесты | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration -count=1 -p 1 ./...` | проходит против реального PostgreSQL |
+| Актуальность OpenAPI | `go run ./cmd/openapi-gen -check` | спецификация актуальна |
+| Фронтенд | `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` | typecheck чисто, lint 0 ошибок, 79 тестов проходят, сборка успешна |
+| E2E (Chromium) | `npx playwright test --project=chromium` | 38 прошли, включая путь create → save → run → history Simulation Lab |
 
-A latent defect was found and fixed in this cycle: `expected_close_date` is a
-PostgreSQL `date` and was scanned into a `*string`, which pgx cannot encode in
-binary format. Any deal that had a close date failed to load from `ListDeals`,
-`GetDeal` and the workflow sweep. The column is now cast to text, which is the ISO
-date the API already promised.
+Реальный дефект был найден интеграционными тестами и исправлен: `avg(amount)` по
+`numeric(18,2)` возвращает гораздо больший масштаб (`500.0000000000000000`), а точный
+парсер денег отклоняет значение более чем с двумя десятичными знаками, а не усекает
+его, поэтому каждый сценарий выручки и удержания падал во время прогона. Читатель
+базовой линии теперь округляет среднее до масштаба денег там, где оно производится;
+парсер оставлен строгим, потому что округление там скрыло бы тот же класс ошибки в
+другом месте.
 
----
+## Цикл 12 — Intelligence Platform: Forecasting & Risk Lab
 
-## Cycle 11 — Intelligence Platform: the Simulation Lab
-
-| # | Item | Status |
+| # | Пункт | Статус |
 |---|---|---|
-| 11.1 | Pure analytics core (exact money, ratios, scenario maths) | **VERIFIED** — `internal/analytics`; imports only the standard library, never a float for money. Algorithm version `simulate-v1` is stored with every run so a result computed by an older version stays interpretable |
-| 11.2 | CRM baseline reader | **VERIFIED** — `crm.Service.Baseline` reads the caller's own organization under `reports.read` and returns per-stage and period aggregates with explicit warnings for excluded currencies and a missing pipeline |
-| 11.3 | `internal/simulate` service + persistence | **VERIFIED** — `CreateScenario`, `ListScenarios`, `GetScenario`, `ArchiveScenario`, `RunScenario`, `Preview`, `ListRuns`. Enforces `simulation.manage`/`simulation.run`/`simulation.read` in the service, not only at the route, and filters every query by `organization_id` |
-| 11.4 | Migration `0019_simulation_lab` + permission seed | **VERIFIED** — `simulation_scenarios` and `simulation_runs`, both tenant-scoped, with the name-unique-per-org partial index and the run-history indexes; the three permissions are seeded to roles and `TestSeedDataMatchesThePermissionCatalog` keeps the catalog and the seed in step |
-| 11.5 | API surface + OpenAPI | **VERIFIED** — scenario CRUD, run, preview and a session-only catalog; contract rows in `internal/api/contract.go`; `go run ./cmd/openapi-gen -check` reports the spec current |
-| 11.6 | Simulation Lab frontend | **VERIFIED** — `frontend/src/pages/SimulationPage.tsx` and `frontend/src/api/simulation.ts`, a `Simulation Lab` entry in the Workspace navigation. Observed CRM figures and modelled figures are shown in separate columns with the model's assumptions, so a suggestion is never presented as a recorded fact |
-| 11.7 | Tests: unit, PostgreSQL integration, frontend, E2E | **VERIFIED** — `internal/testsupport/simulation_test.go` (PostgreSQL), `frontend/src/pages/SimulationPage.test.tsx`, and the Chromium suite in `e2e/platform.spec.ts` |
+| 12.1 | Чистое ядро прогнозирования | **VERIFIED** — `internal/analytics`, `forecast-v1`: методы среднего, скользящего среднего и тренда над деньгами в целых минорных единицах; окно истории ограничено `MinHistoryPeriods=3` / `MaxHistoryPeriods=240`, горизонт — `MaxForecastHorizon=36`. Сообщает измеренную ошибку вне выборки (MAE) рядом с наивной базовой линией по последнему значению; недостаточная история — первоклассная ошибка, никогда не выдуманное число |
+| 12.2 | Сервис `internal/forecast` + сохранение | **VERIFIED** — читает историю выручки через `crm.Service` под принципалом вызывающего, сохраняет прогон в `forecast_runs`, замораживая параметры, историю и версию алгоритма. Обеспечивает `forecast.run`/`forecast.read` в сервисе и фильтрует по `organization_id` |
+| 12.3 | Сервис `internal/risk` + сохранение | **VERIFIED** — сканирует CRM на застрявшие сделки, просроченные задачи, аккаунты без контакта, необычные суммы сделок, падения конверсии и концентрацию стадий; держит живой сигнал, только пока он держится (частичный уникальный индекс по живому сигналу на организацию+тип); каждый сигнал ссылается на свои строки-доказательства. `Thresholds.validateBounds()` повторяет границы столбца, поэтому обновление вне диапазона возвращает 422 с причиной |
+| 12.4 | Миграция `0020_forecasting_risk` + сид разрешений | **VERIFIED** — `forecast_runs`, `risk_signals` и `risk_thresholds`, все с областью тенанта, с частичным уникальным индексом живого сигнала и индексами истории; `forecast.read`, `forecast.run`, `risk.read`, `risk.manage` засеяны в роли |
+| 12.5 | Поверхность API + OpenAPI | **VERIFIED** — прогоны прогнозов и каталог только для сессии; сигналы риска, обход, переходы статуса и пороги; строки контракта в `internal/api/contract.go`; `go run ./cmd/openapi-gen -check` сообщает, что спецификация актуальна |
+| 12.6 | Страницы фронтенда | **VERIFIED** — `frontend/src/pages/ForecastPage.tsx`, `RiskPage.tsx` и `frontend/src/api/intelligence.ts`, с пунктами `Forecasting` и `Risk` в навигации Workspace. Проекция никогда не показывается в одиночку: наблюдаемый ряд, измеренная ошибка и наивная базовая линия стоят рядом |
+| 12.7 | Тесты: модульные, интеграция PostgreSQL, фронтенд, E2E | **VERIFIED** — `internal/testsupport/intelligence_test.go` (PostgreSQL), `frontend/src/pages/ForecastPage.test.tsx` / `RiskPage.test.tsx` и набор в Chromium в `e2e/platform.spec.ts` |
 
-### Evidence
+### Доказательство
 
-| Check | Command | Result |
+| Проверка | Команда | Результат |
 |---|---|---|
-| Formatting | `gofmt -l ./cmd ./internal` | clean |
-| Vet | `go vet ./...` | clean |
-| Unit tests | `go test -count=1 ./...` | all packages pass |
-| Integration tests | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration -count=1 -p 1 ./...` | passes against real PostgreSQL |
-| OpenAPI currency | `go run ./cmd/openapi-gen -check` | spec current |
-| Frontend | `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` | typecheck clean, lint 0 errors, 79 tests pass, build succeeds |
-| E2E (Chromium) | `npx playwright test --project=chromium` | 38 passed, including the Simulation Lab create → save → run → history path |
+| Форматирование | `gofmt -l ./cmd ./internal` | чисто |
+| Vet | `go vet ./...` | чисто |
+| Модульные тесты | `go test -count=1 ./...` | все пакеты проходят |
+| Интеграционные тесты | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration -count=1 -p 1 ./...` | проходит против реального PostgreSQL |
+| Актуальность OpenAPI | `go run ./cmd/openapi-gen -check` | спецификация актуальна |
+| Фронтенд | `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` | typecheck чисто, lint 0 ошибок, 92 теста проходят, сборка успешна |
+| E2E (Chromium) | `npx playwright test --project=chromium` | 43 прошли, включая путь Forecasting compute → accuracy → observed-series и путь Risk scan → thresholds |
 
-A real defect was found by the integration tests and fixed: `avg(amount)` over
-`numeric(18,2)` returns a much higher scale (`500.0000000000000000`), and the
-exact money parser refuses a value with more than two decimals rather than
-truncating it, so every revenue and retention scenario failed at run time. The
-baseline reader now rounds the average to the money scale where it is produced;
-the parser is left strict, because rounding there would hide the same class of
-mistake elsewhere.
-
-## Cycle 12 — Intelligence Platform: the Forecasting & Risk Lab
-
-| # | Item | Status |
-|---|---|---|
-| 12.1 | Pure forecasting core | **VERIFIED** — `internal/analytics`, `forecast-v1`: mean, moving-average and trend methods over integer-minor-unit money; history window bounded by `MinHistoryPeriods=3` / `MaxHistoryPeriods=240`, horizon by `MaxForecastHorizon=36`. Reports measured out-of-sample error (MAE) beside the naive last-value baseline; insufficient history is a first-class error, never a fabricated number |
-| 12.2 | `internal/forecast` service + persistence | **VERIFIED** — reads revenue history through `crm.Service` under the caller's principal, persists a run to `forecast_runs` freezing params, history and algorithm version. Enforces `forecast.run`/`forecast.read` in the service and filters by `organization_id` |
-| 12.3 | `internal/risk` service + persistence | **VERIFIED** — scans the CRM for stalled deals, overdue tasks, accounts without contact, unusual deal amounts, conversion drops and stage concentration; keeps a live signal only while it holds (partial unique index on live signal per org+type); each signal cites its evidence rows. `Thresholds.validateBounds()` mirrors the column bounds so an out-of-range update returns 422 with a reason |
-| 12.4 | Migration `0020_forecasting_risk` + permission seed | **VERIFIED** — `forecast_runs`, `risk_signals` and `risk_thresholds`, all tenant-scoped, with the live-signal partial unique index and history indexes; `forecast.read`, `forecast.run`, `risk.read`, `risk.manage` seeded to roles |
-| 12.5 | API surface + OpenAPI | **VERIFIED** — forecast runs and a session-only catalog; risk signals, scan, status transitions and thresholds; contract rows in `internal/api/contract.go`; `go run ./cmd/openapi-gen -check` reports the spec current |
-| 12.6 | Frontend pages | **VERIFIED** — `frontend/src/pages/ForecastPage.tsx`, `RiskPage.tsx` and `frontend/src/api/intelligence.ts`, with `Forecasting` and `Risk` entries in the Workspace navigation. A projection is never shown alone: observed series, measured error and the naive baseline sit beside it |
-| 12.7 | Tests: unit, PostgreSQL integration, frontend, E2E | **VERIFIED** — `internal/testsupport/intelligence_test.go` (PostgreSQL), `frontend/src/pages/ForecastPage.test.tsx` / `RiskPage.test.tsx`, and the Chromium suite in `e2e/platform.spec.ts` |
-
-### Evidence
-
-| Check | Command | Result |
-|---|---|---|
-| Formatting | `gofmt -l ./cmd ./internal` | clean |
-| Vet | `go vet ./...` | clean |
-| Unit tests | `go test -count=1 ./...` | all packages pass |
-| Integration tests | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration -count=1 -p 1 ./...` | passes against real PostgreSQL |
-| OpenAPI currency | `go run ./cmd/openapi-gen -check` | spec current |
-| Frontend | `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` | typecheck clean, lint 0 errors, 92 tests pass, build succeeds |
-| E2E (Chromium) | `npx playwright test --project=chromium` | 43 passed, including the Forecasting compute → accuracy → observed-series path and the Risk scan → thresholds path |
-
-A real defect was found by the Chromium suite and fixed: the API binary assembled
-`api.Deps` without copying the `Forecast` and `Risk` services that
-`internal/wiring` builds, so every intelligence handler dereferenced a nil service
-and the recovery middleware answered an opaque 500. The dependency is now copied,
-and the routes are mounted behind a guard that answers 503 naming the subsystem
-when a service is missing, so the same mistake is legible next time
+Реальный дефект был найден набором в Chromium и исправлен: бинарник API собирал
+`api.Deps` без копирования сервисов `Forecast` и `Risk`, которые строит
+`internal/wiring`, поэтому каждый обработчик интеллекта разыменовывал nil-сервис и
+middleware восстановления отвечал непрозрачным 500. Зависимость теперь копируется, а
+маршруты смонтированы за защитой, которая отвечает 503, называя подсистему, когда
+сервис отсутствует, поэтому та же ошибка в следующий раз будет читаемой
 (`TestIntelligenceRoutesRefuseWhenUnwired`).
 
 ---
 
-## Cycle 13 — Graceful AI provider failure
+## Цикл 13 — Корректный сбой провайдера ИИ
 
-| # | Item | Status |
+| # | Пункт | Статус |
 |---|---|---|
-| 13.1 | An unreachable or timed-out provider is a retryable outage | **VERIFIED** — `internal/ai/ai.go` `classifyProviderError` recognises a deadline or a transport-level failure and wraps it as `ErrProviderUnavailable`; `HTTPErrorFrom` maps it to a 503 with code `unavailable`. A provider that answered with an application error is passed through unchanged, so a 4xx is not disguised as "try again shortly" |
-| 13.2 | The API reports the outage distinctly from "not configured" | **VERIFIED** — `respondDomainError` routes `ErrProviderUnavailable` alongside `ErrDisabled` (503/`disabled`) and `ErrRateLimited` (429); the three states stay distinct |
-| 13.3 | The panel offers a retry only when retrying could work | **VERIFIED** — `AssistPanel` renders a "Try again" control only when the error envelope's `retryable` flag is set, so a permission refusal gets no button that cannot work |
-| 13.4 | A configured-but-unreachable provider is visible before a request is spent | **VERIFIED** — the panel reads the reachability the status endpoint already reports (`healthy` plus the probe error) and warns when a provider is configured but the probe did not reach it; the controls stay enabled, because the probe can be stale, so the user is warned, not blocked |
+| 13.1 | Недостижимый или просроченный провайдер — это повторяемый сбой | **VERIFIED** — `internal/ai/ai.go` `classifyProviderError` распознаёт дедлайн или сбой уровня транспорта и оборачивает его как `ErrProviderUnavailable`; `HTTPErrorFrom` отображает его в 503 с кодом `unavailable`. Провайдер, ответивший ошибкой приложения, передаётся без изменений, поэтому 4xx не маскируется под «попробуйте позже» |
+| 13.2 | API сообщает о сбое отдельно от «не настроено» | **VERIFIED** — `respondDomainError` направляет `ErrProviderUnavailable` наравне с `ErrDisabled` (503/`disabled`) и `ErrRateLimited` (429); три состояния остаются различными |
+| 13.3 | Панель предлагает повтор, только когда он мог бы сработать | **VERIFIED** — `AssistPanel` отрисовывает элемент «Try again», только когда установлен флаг `retryable` конверта ошибки, поэтому отказ в правах не получает кнопки, которая не может сработать |
+| 13.4 | Настроенный-но-недостижимый провайдер виден до того, как потрачен запрос | **VERIFIED** — панель читает достижимость, которую уже сообщает эндпоинт статуса (`healthy` плюс ошибка пробы), и предупреждает, когда провайдер настроен, но проба до него не дошла; элементы управления остаются включёнными, потому что проба может быть устаревшей, поэтому пользователь предупреждён, а не заблокирован |
 
-### Evidence
+### Доказательство
 
-| Check | Command | Result |
+| Проверка | Команда | Результат |
 |---|---|---|
-| Unit tests | `go test -count=1 ./internal/ai/... ./internal/httpx/...` | pass, including `provider_error_test.go` (classification, mapping, wrapping) |
-| Integration test | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration -count=1 -run TestAssistReportsAnUnreachableProvider ./internal/testsupport/` | passes against real PostgreSQL; the `ai_tasks` row is asserted `failed` with a recorded error |
-| Frontend unit | `npx vitest run src/components/AssistPanel.test.tsx` | 11 pass, including retry-button presence and absence and the pre-request reachability warning |
-| E2E (Chromium) | `npx playwright test --project=chromium` | 43 passed, 1 skipped (the no-provider case is skipped when a provider is configured, and vice versa) |
+| Модульные тесты | `go test -count=1 ./internal/ai/... ./internal/httpx/...` | проходят, включая `provider_error_test.go` (классификация, отображение, оборачивание) |
+| Интеграционный тест | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration -count=1 -run TestAssistReportsAnUnreachableProvider ./internal/testsupport/` | проходит против реального PostgreSQL; строка `ai_tasks` утверждается как `failed` с записанной ошибкой |
+| Модульные фронтенда | `npx vitest run src/components/AssistPanel.test.tsx` | 11 проходят, включая наличие и отсутствие кнопки повтора и предупреждение о достижимости до запроса |
+| E2E (Chromium) | `npx playwright test --project=chromium` | 43 прошли, 1 пропущен (случай без провайдера пропускается, когда провайдер настроен, и наоборот) |
 
-## Cycle 14 — The constructor: recipes into standalone projects
+## Цикл 14 — Конструктор: рецепты в автономные проекты
 
-| # | Item | Status |
+| # | Пункт | Статус |
 |---|---|---|
-| 14.1 | A recipe manifest names the modules, adapters and demo for a project | **VERIFIED** — `internal/constructor/recipes/analytics-demo/recipe.yaml`; the loader validates it and `List`/`Load` are exercised by `internal/constructor/constructor_test.go` |
-| 14.2 | Generation copies only the named modules and rewrites their imports | **VERIFIED** — `internal/constructor/generate.go` rewrites `github.com/geff1778/forgecrm/internal/` to the recipe's module path; a unit test proves a cross-package import is re-pointed and no file still names the monolith |
-| 14.3 | Generation refuses to overwrite and writes nothing on failure | **VERIFIED** — a non-empty output directory is an error, and a missing module aborts before the first file is written; both are unit-tested |
-| 14.4 | A generated project builds, tests and runs on its own | **VERIFIED** — `scripts/constructor-test/run.sh` scaffolds `analytics-demo`, builds, tests and runs the demo twice and checks the deterministic output; CI job `constructor`, `make test-constructor` |
-| 14.5 | The demo asserts real numbers, not a printed "success" | **VERIFIED** — the generated `cmd/demo` checks the funnel, revenue, retention, forecast and risk outputs against the values `internal/analytics` produces inside ForgeCRM |
-| 14.6 | The constructor is itself extraction-proven | **VERIFIED** — `scripts/extract-test/constructor/setup.sh` (also copies the embedded `recipes/`), an archtest pin, and tests that use a fixture tree rather than the monolith |
+| 14.1 | Манифест рецепта называет модули, адаптеры и демо для проекта | **VERIFIED** — `internal/constructor/recipes/analytics-demo/recipe.yaml`; загрузчик его валидирует, а `List`/`Load` упражняются `internal/constructor/constructor_test.go` |
+| 14.2 | Генерация копирует только названные модули и переписывает их импорты | **VERIFIED** — `internal/constructor/generate.go` переписывает `github.com/geff1778/forgecrm/internal/` на путь модуля рецепта; модульный тест доказывает, что межпакетный импорт переуказан и ни один файл больше не называет монолит |
+| 14.3 | Генерация отказывается перезаписывать и ничего не пишет при сбое | **VERIFIED** — непустой выходной каталог — ошибка, а отсутствующий модуль прерывает до записи первого файла; оба покрыты модульными тестами |
+| 14.4 | Сгенерированный проект собирается, тестируется и запускается сам | **VERIFIED** — `scripts/constructor-test/run.sh` создаёт `analytics-demo`, собирает, тестирует и дважды запускает демо и проверяет детерминированный вывод; задание CI `constructor`, `make test-constructor` |
+| 14.5 | Демо утверждает реальные числа, а не напечатанное «success» | **VERIFIED** — сгенерированный `cmd/demo` сверяет выходы воронки, выручки, удержания, прогноза и риска со значениями, которые `internal/analytics` даёт внутри ForgeCRM |
+| 14.6 | Конструктор сам доказан на выделяемость | **VERIFIED** — `scripts/extract-test/constructor/setup.sh` (также копирует встроенные `recipes/`), закрепление в archtest и тесты, использующие дерево фикстур, а не монолит |
 
-### Evidence
+### Доказательство
 
-| Check | Command | Result |
+| Проверка | Команда | Результат |
 |---|---|---|
-| Unit tests | `go test -count=1 ./internal/constructor/ ./internal/archtest/` | pass |
-| Constructor harness | `./scripts/constructor-test/run.sh` | `analytics-demo` generated, built, tested and run; deterministic output |
-| Extraction harness | `./scripts/extract-test/run.sh constructor` | build, tests and smoke pass in a clean module |
-| Format and vet | `gofmt -l ./cmd ./internal`, `go vet ./...` | clean |
+| Модульные тесты | `go test -count=1 ./internal/constructor/ ./internal/archtest/` | проходят |
+| Набор конструктора | `./scripts/constructor-test/run.sh` | `analytics-demo` сгенерирован, собран, протестирован и запущен; детерминированный вывод |
+| Набор выделения | `./scripts/extract-test/run.sh constructor` | build, тесты и smoke проходят в чистом модуле |
+| Формат и vet | `gofmt -l ./cmd ./internal`, `go vet ./...` | чисто |
 
 ---
 
-## Cycle 15 — Saved list views
+## Цикл 15 — Сохранённые представления списков
 
-| # | Item | Status |
+| # | Пункт | Статус |
 |---|---|---|
-| 15.1 | A view is a stored list filter/sort/column selection, not a new query language | **VERIFIED** — `internal/views`; the stored `filters` document is exactly the query-parameter set the CRM list endpoints accept, so applying a view replays those parameters to the same endpoint. A view cannot name a filter no list endpoint honours |
-| 15.2 | Owner-scoped visibility, one predicate in the query | **VERIFIED** — `List`/`Get` filter `owner_user_id = $3 OR shared = true` in SQL, so another user's private view is never loaded. `Update`/`Delete` are narrower: only the owner may change a view, and a shared view is readable by the organization but not editable by it. `missReason` answers 404 for "not there" and 403 for "not yours" |
-| 15.3 | Migration `0023` + permission seed | **VERIFIED** — `saved_views` with the entity-type CHECK, the partial unique name index per owner and screen, and the scope/owner indexes; `views.read`/`views.manage` seeded to the roles that work a CRM list. `TestSeedDataMatchesThePermissionCatalog` keeps the catalog and the seed in step |
-| 15.4 | API surface + OpenAPI | **VERIFIED** — `/api/v1/views` CRUD behind `views.read`/`views.manage` and a nil-service guard; contract rows in `internal/api/contract.go`; `go run ./cmd/openapi-gen -check` reports the spec current |
-| 15.5 | Frontend switcher | **VERIFIED** — `frontend/src/components/SavedViewsBar.tsx` and `frontend/src/api/views.ts`; the switcher is controlled by the screen, so applying a view is the same code path a hand-entered filter takes. It sits on the deals, leads, tasks and tickets list screens. A read-only user is offered no save or delete control |
-| 15.6 | Tests: unit, PostgreSQL integration, frontend, E2E | **VERIFIED** — `internal/views/views_test.go` (7 unit tests), `internal/testsupport/views_test.go` (7 PostgreSQL tests: owner scoping, shared read-only, cross-org isolation, name uniqueness, validation, archive-and-free-the-name, filter round-trip), `frontend/src/components/SavedViewsBar.test.tsx` (7 tests), and two Chromium cases in `e2e/platform.spec.ts` |
+| 15.1 | Представление — это сохранённый выбор фильтра/сортировки/столбцов, а не новый язык запросов | **VERIFIED** — `internal/views`; сохранённый документ `filters` — это ровно набор параметров запроса, которые принимают эндпоинты списков CRM, поэтому применение представления повторяет эти параметры на тот же эндпоинт. Представление не может назвать фильтр, которого не соблюдает ни один эндпоинт списка |
+| 15.2 | Видимость с областью владельца, один предикат в запросе | **VERIFIED** — `List`/`Get` фильтруют `owner_user_id = $3 OR shared = true` в SQL, поэтому приватное представление другого пользователя никогда не загружается. `Update`/`Delete` узже: только владелец может изменить представление, а общее представление читаемо организацией, но не редактируемо ею. `missReason` отвечает 404 для «не там» и 403 для «не ваше» |
+| 15.3 | Миграция `0023` + сид разрешений | **VERIFIED** — `saved_views` с CHECK типа сущности, частичным уникальным индексом имени на владельца и экран и индексами области/владельца; `views.read`/`views.manage` засеяны в роли, которые работают со списком CRM. `TestSeedDataMatchesThePermissionCatalog` держит каталог и сид в шаге |
+| 15.4 | Поверхность API + OpenAPI | **VERIFIED** — CRUD `/api/v1/views` за `views.read`/`views.manage` и защитой nil-сервиса; строки контракта в `internal/api/contract.go`; `go run ./cmd/openapi-gen -check` сообщает, что спецификация актуальна |
+| 15.5 | Переключатель фронтенда | **VERIFIED** — `frontend/src/components/SavedViewsBar.tsx` и `frontend/src/api/views.ts`; переключатель управляется экраном, поэтому применение представления — тот же путь кода, что и введённый вручную фильтр. Он находится на экранах списков сделок, лидов, задач и обращений. Пользователю только для чтения не предлагается элемент сохранения или удаления |
+| 15.6 | Тесты: модульные, интеграция PostgreSQL, фронтенд, E2E | **VERIFIED** — `internal/views/views_test.go` (7 модульных тестов), `internal/testsupport/views_test.go` (7 тестов PostgreSQL: область владельца, общий только для чтения, изоляция между организациями, уникальность имени, валидация, архивирование-и-освобождение-имени, круговой рейс фильтра), `frontend/src/components/SavedViewsBar.test.tsx` (7 тестов) и два случая Chromium в `e2e/platform.spec.ts` |
 
-### Evidence
+### Доказательство
 
-| Check | Command | Result |
+| Проверка | Команда | Результат |
 |---|---|---|
-| Formatting | `gofmt -l ./cmd ./internal` | clean |
-| Vet | `go vet ./...` | clean |
-| Unit tests | `go test -count=1 ./internal/views/... ./internal/api/... ./internal/openapi/... ./internal/archtest/...` | pass |
-| Integration tests | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration -count=1 -p 1 ./internal/testsupport/... ./internal/api/...` | pass against real PostgreSQL (`testsupport` 168s, `api` 128s) |
-| OpenAPI currency | `go run ./cmd/openapi-gen -check` | spec current |
-| Frontend | `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` | typecheck clean, lint 0 errors, 141 tests pass, build succeeds |
+| Форматирование | `gofmt -l ./cmd ./internal` | чисто |
+| Vet | `go vet ./...` | чисто |
+| Модульные тесты | `go test -count=1 ./internal/views/... ./internal/api/... ./internal/openapi/... ./internal/archtest/...` | проходят |
+| Интеграционные тесты | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration -count=1 -p 1 ./internal/testsupport/... ./internal/api/...` | проходят против реального PostgreSQL (`testsupport` 168с, `api` 128с) |
+| Актуальность OpenAPI | `go run ./cmd/openapi-gen -check` | спецификация актуальна |
+| Фронтенд | `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` | typecheck чисто, lint 0 ошибок, 141 тест проходит, сборка успешна |
 
 ---
 
-## Cycle 16 — Single sign-on: the flow and its administration
+## Цикл 16 — Единый вход: поток и его администрирование
 
-| # | Item | Status |
+| # | Пункт | Статус |
 |---|---|---|
-| 16.1 | Authorization-code flow with PKCE and a nonce | **VERIFIED** — `internal/oidc`. `Begin` stores the state, nonce and PKCE verifier server-side and returns the provider's authorization URL; `Complete` claims the state row once, exchanges the code, and verifies the ID token's signature, issuer, audience, expiry and nonce before reading a claim. Nothing is tied to one vendor: the provider's discovery document is fetched |
-| 16.2 | Identity resolution without an account-takeover path | **VERIFIED** — a local account is identified by `(provider, subject)`, never by email. An email claim is used to find an existing account only when the provider marks it verified and it falls inside the configured domains; otherwise a provider that let a user set an arbitrary address would be a takeover path. Just-in-time provisioning is opt-in per provider |
-| 16.3 | Secret handling and open-redirect defence | **VERIFIED** — the client secret is sealed with the platform keyring and never returned by an API; `has_secret` reports only its presence. `return_to` is validated as a relative path, and the provider list the sign-in page reads is anonymous and carries no secret |
-| 16.4 | Migration `0022` + permission seed | **VERIFIED** — `oidc_providers`, `user_identities` and `oidc_login_states`; `sso.read`/`sso.manage` seeded and added to the Go catalog in the same change, so `TestSeedDataMatchesThePermissionCatalog` holds |
-| 16.5 | Administration page | **VERIFIED** — `frontend/src/pages/admin/SSOPage.tsx` and the `ssoAdminApi` client. Lists providers, shows the exact redirect URL to register with each, and creates, edits, enables and deletes them. The secret is write-only: an edit that leaves the field blank sends no secret, so it cannot clear the stored one. A read-only caller is offered no management control |
-| 16.6 | Tests: unit, PostgreSQL integration, frontend, E2E | **VERIFIED** — `internal/oidc/oidc_test.go` (input validation), `internal/api/sso_integration_test.go` (the whole flow against PostgreSQL through an in-process provider that publishes real discovery and JWKS documents and signs real ID tokens, including wrong issuer, audience, nonce and an unverified email), `frontend/src/pages/admin/SSOPage.test.tsx` (3 tests), and a Chromium case in `e2e/platform.spec.ts` |
+| 16.1 | Поток authorization-code с PKCE и nonce | **VERIFIED** — `internal/oidc`. `Begin` сохраняет состояние, nonce и PKCE-верификатор на сервере и возвращает URL авторизации провайдера; `Complete` заявляет строку состояния один раз, обменивает код и проверяет подпись, издателя, аудиторию, срок и nonce ID-токена, прежде чем читать утверждение. Ничто не привязано к одному вендору: документ обнаружения провайдера загружается |
+| 16.2 | Разрешение идентичности без пути захвата аккаунта | **VERIFIED** — локальный аккаунт идентифицируется по `(provider, subject)`, никогда по email. Утверждение email используется для поиска существующего аккаунта, только когда провайдер помечает его подтверждённым и оно попадает в настроенные домены; иначе провайдер, позволивший пользователю задать произвольный адрес, был бы путём захвата. Just-in-time провижининг включается по согласию на провайдера |
+| 16.3 | Работа с секретом и защита от open-redirect | **VERIFIED** — клиентский секрет запечатывается кольцом ключей платформы и никогда не возвращается API; `has_secret` сообщает только его присутствие. `return_to` валидируется как относительный путь, а список провайдеров, который читает страница входа, анонимен и не несёт секрета |
+| 16.4 | Миграция `0022` + сид разрешений | **VERIFIED** — `oidc_providers`, `user_identities` и `oidc_login_states`; `sso.read`/`sso.manage` засеяны и добавлены в каталог Go тем же изменением, поэтому `TestSeedDataMatchesThePermissionCatalog` держится |
+| 16.5 | Страница администрирования | **VERIFIED** — `frontend/src/pages/admin/SSOPage.tsx` и клиент `ssoAdminApi`. Перечисляет провайдеров, показывает точный URL перенаправления для регистрации с каждым и создаёт, редактирует, включает и удаляет их. Секрет только для записи: правка, оставляющая поле пустым, не отправляет секрет, поэтому не может очистить сохранённый. Вызывающему только для чтения не предлагается элемент управления |
+| 16.6 | Тесты: модульные, интеграция PostgreSQL, фронтенд, E2E | **VERIFIED** — `internal/oidc/oidc_test.go` (валидация ввода), `internal/api/sso_integration_test.go` (весь поток против PostgreSQL через провайдер в процессе, публикующий реальные документы обнаружения и JWKS и подписывающий реальные ID-токены, включая неверного издателя, аудиторию, nonce и неподтверждённый email), `frontend/src/pages/admin/SSOPage.test.tsx` (3 теста) и случай Chromium в `e2e/platform.spec.ts` |
 
-### Evidence
+### Доказательство
 
-| Check | Command | Result |
+| Проверка | Команда | Результат |
 |---|---|---|
-| Formatting | `gofmt -l ./cmd ./internal` | clean |
-| Vet | `go vet ./...` | clean |
-| Unit tests | `go test -count=1 ./internal/oidc/... ./internal/archtest/...` | pass |
-| Integration tests | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration -count=1 -p 1 ./internal/api/...` | pass against real PostgreSQL |
-| Frontend | `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` | typecheck clean, lint 0 errors, 144 tests pass, build succeeds |
-| E2E | `npx playwright test -g "single sign-on"` | pass in Chromium against the real API and database |
+| Форматирование | `gofmt -l ./cmd ./internal` | чисто |
+| Vet | `go vet ./...` | чисто |
+| Модульные тесты | `go test -count=1 ./internal/oidc/... ./internal/archtest/...` | проходят |
+| Интеграционные тесты | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration -count=1 -p 1 ./internal/api/...` | проходят против реального PostgreSQL |
+| Фронтенд | `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` | typecheck чисто, lint 0 ошибок, 144 теста проходят, сборка успешна |
+| E2E | `npx playwright test -g "single sign-on"` | проходят в Chromium против реального API и базы |
 
 ---
 
-# Master plan phases
-The cycles above describe how the platform was built. The phases below describe
-where it is going. Strategy and Definition of Done: `docs/MASTER_PLAN.md`.
+# Фазы мастер-плана
+Циклы выше описывают, как платформа строилась. Фазы ниже описывают, куда она идёт.
+Стратегия и определение готовности: `docs/MASTER_PLAN.md`.
 
-## Phase 0 — Safe start — **COMPLETE**
+## Фаза 0 — Безопасный старт — **ЗАВЕРШЕНА**
 
-| # | Item | Status |
+| # | Пункт | Статус |
 |---|---|---|
-| 0.1 | Audit the repository against the code, not the prior report | **VERIFIED** — `docs/PROJECT_AUDIT.md`, 8 findings |
-| 0.2 | Integrate PRs #1–#3 into `main` without losing history | **VERIFIED** — fast-forward `7cf51de` → `ff83452`, no force push |
-| 0.3 | ADR 0001 — hybrid architecture | **VERIFIED** — `docs/adr/0001-hybrid-architecture.md` |
-| 0.4 | ADR 0002 — measurable extraction triggers | **VERIFIED** — `docs/adr/0002-service-extraction-triggers.md` |
-| 0.5 | Enforce module boundaries with tests | **VERIFIED** — `internal/archtest`, 5 tests, `3b1ce12` |
-| 0.6 | Master plan, audit, roadmap, statuses | **VERIFIED** |
+| 0.1 | Аудит репозитория против кода, а не предыдущего отчёта | **VERIFIED** — `docs/PROJECT_AUDIT.md`, 8 находок |
+| 0.2 | Интегрировать PR #1–#3 в `main` без потери истории | **VERIFIED** — fast-forward `7cf51de` → `ff83452`, без force push |
+| 0.3 | ADR 0001 — гибридная архитектура | **VERIFIED** — `docs/adr/0001-hybrid-architecture.md` |
+| 0.4 | ADR 0002 — измеримые триггеры выделения | **VERIFIED** — `docs/adr/0002-service-extraction-triggers.md` |
+| 0.5 | Обеспечить границы модулей тестами | **VERIFIED** — `internal/archtest`, 5 тестов, `3b1ce12` |
+| 0.6 | Мастер-план, аудит, дорожная карта, статусы | **VERIFIED** |
 
-## Phase 1 — Contracts and platform base — **IN PROGRESS**
+## Фаза 1 — Контракты и база платформы — **IN PROGRESS**
 
-| # | Item | Status |
+| # | Пункт | Статус |
 |---|---|---|
-| 1.1 | OpenAPI 3.1 generated from real routes | **VERIFIED** — `cmd/openapi-gen` builds the live router and walks it; 144 operations, 111 paths |
-| 1.2 | Contract test: spec matches the router | **VERIFIED** — `internal/openapi/openapi_test.go`; drift guard proven negatively (added and modified routes both fail) |
-| 1.3 | OpenAPI validation in CI | **IMPLEMENTED** — `go run ./cmd/openapi-gen -check` runs in the backend job |
-| 1.4 | API reference site | **VERIFIED** — `internal/openapi/site.go` renders `docs/api/index.html`, a single self-contained page generated from the same document as `openapi.json`; it groups operations by the document's tags, anchors each with its parameters, request body and responses, and inlines its stylesheet and filter script so it opens with no network. `go run ./cmd/openapi-gen` writes it and `-check` fails when it is stale, so it cannot drift from the router. `internal/openapi/site_test.go` covers operation coverage, refusal of a non-OpenAPI document and escaping |
-| 1.5 | Distributed rate limiting (Redis, tenant-aware, fail-open/closed per category) | **VERIFIED** — `internal/ratelimit` with a `Store` interface, `MemoryStore` and `RedisStore` (atomic Lua script); fail mode is per policy; see cycle 7 below |
-| 1.6 | Multi-replica pool verification | **IN_PROGRESS** — the shared counter is verified across two independent connections (see cycle 7); running two API containers against one database and confirming the session and limiter behaviour together is still to do |
-| 1.7 | Request correlation and diagnostics | **VERIFIED** — `request_id`/`correlation_id` are emitted on every request, and a W3C Trace Context (`traceparent`) is propagated across the whole path, not just the request: `internal/tracectx` parses and mints the value, `httpx.TraceMiddleware` continues an incoming trace or starts one and echoes it, the access log carries `trace_id`, and each async boundary in the worker seeds a trace from a durable id — a job from its job id, an outbox event from the event's correlation id, a scheduled run from the workflow id — so the request, the dispatch, the delivery and any workflow run it triggers share one trace id and a retry rejoins the first attempt's trace. The id is standard-format, so any tracing backend can consume it; the platform records no spans itself and takes on no tracing vendor dependency |
+| 1.1 | OpenAPI 3.1, генерируемый из реальных маршрутов | **VERIFIED** — `cmd/openapi-gen` строит живой роутер и обходит его; 144 операции, 111 путей |
+| 1.2 | Контрактный тест: спецификация совпадает с роутером | **VERIFIED** — `internal/openapi/openapi_test.go`; страж дрейфа доказан негативно (и добавленный, и изменённый маршруты падают) |
+| 1.3 | Валидация OpenAPI в CI | **IMPLEMENTED** — `go run ./cmd/openapi-gen -check` идёт в задании бэкенда |
+| 1.4 | Сайт справочника API | **VERIFIED** — `internal/openapi/site.go` отрисовывает `docs/api/index.html`, одну самодостаточную страницу, сгенерированную из того же документа, что и `openapi.json`; он группирует операции по тегам документа, якорит каждую с её параметрами, телом запроса и ответами и встраивает свою таблицу стилей и скрипт фильтра, поэтому открывается без сети. `go run ./cmd/openapi-gen` его пишет, а `-check` падает, когда он устарел, поэтому он не может разойтись с роутером. `internal/openapi/site_test.go` покрывает полноту операций, отказ от не-OpenAPI документа и экранирование |
+| 1.5 | Распределённое ограничение частоты (Redis, с учётом тенанта, fail-open/closed по категории) | **VERIFIED** — `internal/ratelimit` с интерфейсом `Store`, `MemoryStore` и `RedisStore` (атомарный Lua-скрипт); режим отказа на политику; см. цикл 7 ниже |
+| 1.6 | Проверка пула при нескольких репликах | **IN_PROGRESS** — общий счётчик проверен через два независимых соединения (см. цикл 7); запуск двух контейнеров API против одной базы и подтверждение поведения сессии и лимитера вместе ещё предстоит |
+| 1.7 | Корреляция запроса и диагностика | **VERIFIED** — `request_id`/`correlation_id` выводятся на каждом запросе, а W3C Trace Context (`traceparent`) распространяется по всему пути, а не только по запросу: `internal/tracectx` разбирает и порождает значение, `httpx.TraceMiddleware` продолжает входящую трассировку или начинает её и отражает, журнал доступа несёт `trace_id`, а каждая асинхронная граница в воркере засевает трассировку из долговечного id — задание из своего job id, событие outbox из correlation id события, запланированный прогон из id workflow — поэтому запрос, диспетчеризация, доставка и любой вызванный прогон workflow делят один trace id, а повтор присоединяется к трассировке первой попытки. Id стандартного формата, поэтому любой бэкенд трассировки может его потребить; платформа сама не записывает спанов и не берёт на себя зависимость от вендора трассировки |
 
-## Phase 2 — Identity and security — **IN PROGRESS**
+## Фаза 2 — Идентичность и безопасность — **IN PROGRESS**
 
-| # | Item | Status |
+| # | Пункт | Статус |
 |---|---|---|
-| 2.1 | OIDC Authorization Code Flow + PKCE | **VERIFIED** — `internal/oidc`; the flow, its administration page and the PostgreSQL integration tests. See cycle 16 |
-| 2.2 | Local test IdP (Keycloak) | **PARTIAL** — no Keycloak container is provisioned, but the flow is driven end to end against an in-process provider that publishes real discovery and JWKS documents and signs real ID tokens (`internal/api/sso_integration_test.go`). A shared Keycloak for the E2E stack remains open |
-| 2.3 | `capabilities.oidc` truthful | **VERIFIED** — field renamed `oidc_configured`, and `mcp` renamed `tool_api`; `capabilities_test.go` fails if either misleading name returns. The field reports whether the deployment-level OIDC setting is present; the flow itself is item 2.1 |
-| 2.4 | Consent model + policy service | **NOT_STARTED** |
-| 2.5 | Consent enforcement in every channel | **NOT_STARTED** |
-| 2.6 | Consent UI and "why was this allowed/blocked" | **NOT_STARTED** |
+| 2.1 | OIDC Authorization Code Flow + PKCE | **VERIFIED** — `internal/oidc`; поток, его страница администрирования и интеграционные тесты PostgreSQL. См. цикл 16 |
+| 2.2 | Локальный тестовый IdP (Keycloak) | **PARTIAL** — контейнер Keycloak не предоставлен, но поток доводится от начала до конца против провайдера в процессе, публикующего реальные документы обнаружения и JWKS и подписывающего реальные ID-токены (`internal/api/sso_integration_test.go`). Общий Keycloak для стека E2E остаётся открытым |
+| 2.3 | `capabilities.oidc` правдив | **VERIFIED** — поле переименовано в `oidc_configured`, а `mcp` — в `tool_api`; `capabilities_test.go` падает, если любое вводящее в заблуждение имя вернётся. Поле сообщает, присутствует ли настройка OIDC уровня развёртывания; сам поток — пункт 2.1 |
+| 2.4 | Модель согласия + сервис политик | **NOT_STARTED** |
+| 2.5 | Обеспечение согласия в каждом канале | **NOT_STARTED** |
+| 2.6 | UI согласия и «почему это было разрешено/заблокировано» | **NOT_STARTED** |
 
-## Phase 3 — MCP and AI-native UX — **IN_PROGRESS**
+## Фаза 3 — MCP и ИИ-нативный UX — **IN PROGRESS**
 
-| # | Item | Status |
+| # | Пункт | Статус |
 |---|---|---|
-| 3.1 | MCP protocol transport | **VERIFIED** — JSON-RPC 2.0 over `POST /api/v1/mcp`; see cycle 5.3a |
-| 3.2 | Read and safe-write MCP tools | **VERIFIED** — 8 tools are reachable over the protocol. The read/write split is enforced two ways: per tool (the `dangerous` flag plus a required `confirm` acknowledgement in the arguments) and per credential (item 3.3, where a token carries only the permissions it was granted, so a read-only credential cannot call a mutating tool at all) |
-| 3.3 | MCP credential model, revocation, read/write split | **VERIFIED** — `internal/mcpcred` mints a personal access token bound to one organization and owner, storing only its SHA-256. A credential carries an explicit permission list and is authorized against that list, never the owner's roles, so a read-only credential cannot mutate CRM data even when its owner is an administrator; the scope must be a subset of what the caller holds, so a credential narrows but never widens authority. `/api/v1/mcp` accepts the session cookie or an `Authorization: Bearer fcmcp_…` header; the credential routes are session-only and gated on `mcp.credentials.read` / `.manage`. Revocation, expiry, a blocked owner and a removed membership each stop a token immediately. A per-credential rate limit (`FORGECRM_MCP_REQUESTS_PER_MIN`) bounds a client, and create/rotate/revoke are audited without recording the token. Migration `0025`; the `/admin/mcp-credentials` page and a Playwright scenario cover the flow end to end |
-| 3.4 | MCP UI and client config examples | **VERIFIED** — the AI & MCP page lists tools and can invoke one, with a confirmation checkbox for mutating tools. The `/admin/mcp-credentials` page manages the client credentials and generates a ready-to-paste client configuration (endpoint, `mcpServers` JSON, curl) with copy controls; every snippet carries a token placeholder, never a value |
-| 3.5 | Contextual AI, calibrated confidence, graceful failure, human handoff | **PARTIAL** — `internal/ai` assembles a permission-checked, PII-masked context for an account, contact, deal, ticket or task and runs summarise / risks / next-steps / draft / recap / ask through the provider abstraction, surfaced in the CRM record screens. Human handoff is the existing approval path: the model drafts, the user saves. Calibrated confidence is implemented as a server-computed grounding score (`internal/ai/confidence.go`): it is not the model's self-reported number, which is uncalibrated by nature, but a score the server derives from signals it can verify — whether the reply was structured, whether the figures in it appear in the CRM facts the model was given, and whether the context was complete. The basis is returned alongside the level so the panel shows the reason, not a bare number. Graceful failure is implemented (cycle 13): no provider → 503 `disabled`, rate cap → 429 `rate_limited`, unreachable or timed-out provider → retryable 503 `unavailable`, each distinct; the panel offers a retry only for the retryable case. Streaming is implemented (cycle 14): `POST /api/v1/ai/stream/chat` and `POST /api/v1/ai/stream/assist/{id}` answer with server-sent events (`delta` events carry the text as it arrives, a final `done` event carries the same result the buffered route returns, and an `error` event carries the same code the buffered route would have used). The buffered routes are unchanged, so a proxy or client that cannot read an event stream keeps working; the panel falls back to the buffered request when a stream closes with no result. A provider that implements only the base interface is buffered and delivered as a single delta |
+| 3.1 | Протокольный транспорт MCP | **VERIFIED** — JSON-RPC 2.0 по `POST /api/v1/mcp`; см. цикл 5.3a |
+| 3.2 | Инструменты MCP для чтения и безопасной записи | **VERIFIED** — 8 инструментов достижимы по протоколу. Разделение чтения/записи обеспечивается двумя способами: по инструменту (флаг `dangerous` плюс обязательное подтверждение `confirm` в аргументах) и по учётным данным (пункт 3.3, где токен несёт только выданные ему разрешения, поэтому учётные данные только для чтения вообще не могут вызвать мутирующий инструмент) |
+| 3.3 | Модель учётных данных MCP, отзыв, разделение чтения/записи | **VERIFIED** — `internal/mcpcred` выпускает персональный токен доступа, привязанный к одной организации и владельцу, храня только его SHA-256. Учётные данные несут явный список разрешений и авторизуются по этому списку, никогда по ролям владельца, поэтому учётные данные только для чтения не могут изменить данные CRM, даже когда их владелец — администратор; область должна быть подмножеством того, что держит вызывающий, поэтому учётные данные сужают, но никогда не расширяют полномочия. `/api/v1/mcp` принимает cookie сессии или заголовок `Authorization: Bearer fcmcp_…`; маршруты учётных данных только для сессии и за `mcp.credentials.read` / `.manage`. Отзыв, истечение, заблокированный владелец и удалённое участие каждый останавливает токен немедленно. Ограничение частоты на учётные данные (`FORGECRM_MCP_REQUESTS_PER_MIN`) ограничивает клиента, а создание/ротация/отзыв аудируются без записи токена. Миграция `0025`; страница `/admin/mcp-credentials` и сценарий Playwright покрывают поток от начала до конца |
+| 3.4 | UI MCP и примеры конфигурации клиента | **VERIFIED** — страница AI & MCP перечисляет инструменты и может вызвать один, с флажком подтверждения для мутирующих инструментов. Страница `/admin/mcp-credentials` управляет учётными данными клиента и генерирует готовую к вставке конфигурацию клиента (эндпоинт, JSON `mcpServers`, curl) с элементами копирования; каждый сниппет несёт плейсхолдер токена, никогда значение |
+| 3.5 | Контекстный ИИ, калиброванная уверенность, корректный сбой, передача человеку | **PARTIAL** — `internal/ai` собирает контекст с проверкой прав и маскированием PII для аккаунта, контакта, сделки, обращения или задачи и выполняет summarise / risks / next-steps / draft / recap / ask через абстракцию провайдера, выставляя это на экранах записей CRM. Передача человеку — это существующий путь согласования: модель пишет черновик, пользователь сохраняет. Калиброванная уверенность реализована как вычисляемый сервером балл обоснованности (`internal/ai/confidence.go`): это не самоотчётное число модели, которое по природе некалибровано, а балл, который сервер выводит из сигналов, которые может проверить, — был ли ответ структурированным, появляются ли цифры в нём среди фактов CRM, которые дали модели, и был ли контекст полным. Основание возвращается рядом с уровнем, поэтому панель показывает причину, а не голое число. Корректный сбой реализован (цикл 13): нет провайдера → 503 `disabled`, ограничение частоты → 429 `rate_limited`, недостижимый или просроченный провайдер → повторяемый 503 `unavailable`, каждый различен; панель предлагает повтор только для повторяемого случая. Стриминг реализован (цикл 14): `POST /api/v1/ai/stream/chat` и `POST /api/v1/ai/stream/assist/{id}` отвечают server-sent events (события `delta` несут текст по мере поступления, финальное событие `done` несёт тот же результат, что возвращает буферизованный маршрут, а событие `error` несёт тот же код, который использовал бы буферизованный маршрут). Буферизованные маршруты не изменены, поэтому прокси или клиент, не умеющий читать поток событий, продолжает работать; панель падает обратно на буферизованный запрос, когда поток закрывается без результата. Провайдер, реализующий только базовый интерфейс, буферизуется и доставляется одним дельтом |
 
-## Phases 4–9 — Planned
+## Фазы 4–9 — Запланированы
 
-Agentic system, tenant adaptation and SDK, identity resolution and collaboration,
-mobile and analytics, automation and infrastructure, polish and documentation.
-Each is scoped in `docs/MASTER_PLAN.md` §4. None is started; none is claimed as
-done.
+Агентная система, адаптация тенанта и SDK, разрешение идентичности и сотрудничество,
+мобильность и аналитика, автоматизация и инфраструктура, полировка и документация.
+Каждая очерчена в `docs/MASTER_PLAN.md` §4. Ни одна не начата; ни одна не заявлена
+как готовая.
 
-### Ordering rationale
+### Обоснование порядка
 
-Phase 1 precedes Phase 2 because the OIDC flow needs a contract to be testable
-against, and because the rate limiter is the last obstacle to running more than
-one replica — which every later phase depends on. Phase 3 precedes Phase 4 because
-agents call tools, so the tool transport and credential model must be sound before
-anything runs autonomously.
-
+Фаза 1 предшествует Фазе 2, потому что потоку OIDC нужен контракт, против которого
+его можно тестировать, и потому что лимитер — последнее препятствие к запуску более
+одной реплики, от которого зависит каждая поздняя фаза. Фаза 3 предшествует Фазе 4,
+потому что агенты вызывают инструменты, поэтому транспорт инструментов и модель
+учётных данных должны быть надёжны, прежде чем что-либо будет работать автономно.
