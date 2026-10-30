@@ -2,10 +2,17 @@
 
 - **Дата:** 2026-10-30
 - **Репозиторий:** `https://github.com/ForgeLabHub/ForgeCRM` (origin), ветка `main`
-- **Проверяемый коммит:** `49ec175`
+- **Проверяемый коммит:** `49ec175`, обновлён до `cb93db0`
 - **Метод:** проверка по фактическому коду и прогонам, а не по прежним отчётам.
   Все числа ниже получены командами на этом коммите; там, где результат —
   утверждение о поведении, указан запущенный тест.
+
+> **Обновление (цикл 14).** После `49ec175` в `main` вошли `c6b10e0` (SSO/OIDC),
+> `b23fd44` (потоковая выдача AI по SSE) и `cb93db0` (документация streaming и
+> исправление счётчиков схемы). Разделы §4.3 и §6 обновлены под фактическое
+> состояние: потоковая выдача реализована. Полный прогон на `cb93db0`: backend
+> unit + integration — 31 пакет ok; frontend — 19 файлов / 134 теста; typecheck,
+> lint, build — чисто; E2E Chromium — 49 passed, 1 skipped (нужен живой AI-провайдер).
 
 ---
 
@@ -14,7 +21,7 @@
 ```bash
 # состояние дерева
 git rev-parse --abbrev-ref HEAD      # main
-git log --oneline -1                 # 49ec175
+git log --oneline -1                 # cb93db0
 
 # backend
 cd backend
@@ -22,22 +29,22 @@ export PATH=$PATH:/usr/local/go/bin GOTOOLCHAIN=local
 go build ./...                       # ok
 gofmt -l ./cmd ./internal            # пусто
 go vet ./...                         # чисто
-go test -race -count=1 ./...         # 27 пакетов ok, 0 FAIL
+go test -race -count=1 ./...         # все пакеты ok, 0 FAIL
 
-# интеграция (реальный PostgreSQL 16, схема пересоздаётся)
-FORGECRM_TEST_DATABASE_URL='postgres://forgecrm:forgecrm@127.0.0.1:5433/forgecrm_test?sslmode=disable' \
-  go test -count=1 -p 1 -tags=integration ./...   # 30 пакетов ok, 0 FAIL
+# интеграция (реальный PostgreSQL, схема пересоздаётся)
+FORGECRM_TEST_DATABASE_URL='postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_test?sslmode=disable' \
+  go test -count=1 -p 1 -tags=integration ./...   # 31 пакет ok, 0 FAIL
 
 # спецификация API генерируется из роутера
 go run ./cmd/openapi-gen -check      # "... is current"
 
 # frontend
 cd ../frontend
-npm run test                         # 18 файлов, 121 тест — ok
+npm run test                         # 19 файлов, 134 теста — ok
 npm run typecheck                    # tsc -b --noEmit — чисто
 npm run lint                         # 0 ошибок, 7 предупреждений
 npm run build                        # ok
-npx playwright test                  # 48 passed (реальный API + PostgreSQL + Chromium)
+npx playwright test                  # 49 passed, 1 skipped (реальный API + PostgreSQL + Chromium)
 ```
 
 > Примечание по запуску интеграционных тестов: их обязательно нужно запускать с
@@ -52,6 +59,9 @@ npx playwright test                  # 48 passed (реальный API + Postgre
 
 | Коммит | Что |
 |---|---|
+| `b23fd44` | Потоковая выдача AI по SSE: `internal/ai/streaming.go` (интерфейс `StreamProvider` + реализация для Ollama и OpenAI-совместимого провайдера + `Service.Stream` с откатом на буферизацию), `internal/api/ai_stream_handlers.go` (маршруты `/ai/stream/chat` и `/ai/stream/assist/{id}`), `sseWriter` с флагами против прокси-буферизации; защита от nil-DB в `ai.go`; тесты `internal/ai/streaming_test.go`, `internal/api/ai_stream_test.go`, `internal/testsupport/ai_stream_test.go` (PostgreSQL, изоляция арендаторов); фронт — `parseSSEFrame`/`streamEventError` в `client.ts`, метод `stream` в `assistApi`, потоковая выдача в `AssistPanel` с `AbortController`; тесты `client.test.ts`, `AssistPanel.test.tsx` |
+| `cb93db0` | Документация: roadmap 3.5 (streaming реализован), CHANGELOG (Added), исправлены счётчики `docs/database/schema.md` (71 таблица / 22 миграции); новый E2E-сценарий на потоковый маршрут |
+| `c6b10e0` | SSO/OIDC (не в этой сессии): вход по OpenID Connect, `internal/oidc`, миграция `0022_sso_oidc` |
 | `f13a775` | Экспорт доступен из интерфейса: `ApiClient.download`, привязка `exportsApi` к реальному `POST /api/v1/exports`, кнопка Export в Import Center под правом `exports.execute`; backend-интеграционный тест `internal/api/export_test.go`; frontend-тест `ImportCenterPage.test.tsx`; E2E-сценарий |
 | `9335a7d` | Исправлено число frontend-тест-файлов в карте модулей (`docs/MODULES.md`) |
 | `49ec175` | Спецификация больше не описывает потоковые ответы как JSON: генератор получил объявление `StreamingSuccess`, экспорт и скачивание документа описаны честно (media types + бинарная схема), экспорт возвращает `200`, а не `201`; добавлен сторожевой тест `TestStreamingResponsesAreNotDescribedAsJSON` |
@@ -69,17 +79,16 @@ npx playwright test                  # 48 passed (реальный API + Postgre
 
 | Метрика | Значение |
 |---|---|
-| Backend, Go (без тестов) | ~42 084 строки |
-| Backend, всего | ~62 827 строк |
-| Backend, тест-файлы | 82 файла, 576 функций `Test*`/`Benchmark*` |
-| Пакеты backend | 36 внутренних пакетов |
-| Миграции | 21 пара `NNNN_name.{up,down}.sql` (встроены в бинарник) |
-| Frontend, TS/TSX | ~20 222 строки, 85 файлов |
-| Frontend, страницы | 30 страниц (включая 11 в `pages/admin`) |
-| Frontend, unit-тесты | 18 файлов, 121 тест |
-| E2E | 48 сценариев (Chromium, реальный стек), 1 условно пропускаемый |
-| Спецификация API | 156 путей, 166 схем, генерируется из роутера |
-| RBAC | 93 права в каталоге |
+| Backend, Go (без тестов) | ~44 136 строк |
+| Backend, всего | ~66 180 строк |
+| Backend, тест-файлы | 87 файлов, 606 функций `Test*`/`Benchmark*` |
+| Пакеты backend | 42 пакета |
+| Миграции | 22 пары `NNNN_name.{up,down}.sql` (встроены в бинарник) |
+| Frontend, TS/TSX | 85 файлов |
+| Frontend, unit-тесты | 19 файлов, 134 теста |
+| E2E | 50 сценариев (Chromium, реальный стек), 1 условно пропускаемый |
+| Спецификация API | 164 пути, 174 схемы, генерируется из роутера |
+| RBAC | 129 прав в каталоге |
 | ADR | 13 записей |
 
 ### 3.2 Топология
@@ -174,7 +183,16 @@ DTO у запроса/ответа). Схемы выводятся из Go-ти�
   `429 rate_limited`, недоступен/таймаут → retryable `503 unavailable`; панель
   предлагает повтор только для retryable-случая.
 - **Frontend** — `AssistPanel` на экранах account, contact, deal, ticket, task.
-- **Не реализовано:** потоковая выдача (streaming) — заявлено как PARTIAL в roadmap.
+- **Потоковая выдача — реализована (цикл 14).** `POST /api/v1/ai/stream/chat` и
+  `POST /api/v1/ai/stream/assist/{id}` отвечают server-sent events: `delta`-события
+  несут текст по мере генерации, завершающее `done` — тот же результат, что и
+  буферизованный маршрут, а `error`-событие — тот же код, что вернул бы буферный
+  маршрут (`disabled` / `rate_limited` / `unavailable`). Оба маршрута вызывают
+  один и тот же сервис, поэтому проверки прав, лимит и запись в `ai_tasks`
+  идентичны; отличается только транспорт. Буферизованные маршруты не изменены, и
+  панель откатывается на буферный запрос, если поток закрылся без результата
+  (так ведёт себя прокси, проглотивший тело). Провайдер, реализующий только
+  базовый интерфейс, буферизуется и отдаётся одним `delta`.
 
 ### 4.4 Retention и rotation (приоритет 2) — реализовано
 
@@ -249,7 +267,7 @@ tenant-agnostic, запись аудита, наличие индексов (`Te
 
 | Приоритет | Статус | Ключевые файлы |
 |---|---|---|
-| 1. Contextual AI | **Реализовано** | `internal/ai/assist.go`, `confidence.go`, `prompt.go`, `api/ai_assist_handlers.go`, `frontend/src/components/AssistPanel.tsx` |
+| 1. Contextual AI | **Реализовано** | `internal/ai/assist.go`, `confidence.go`, `prompt.go`, `streaming.go`, `api/ai_assist_handlers.go`, `api/ai_stream_handlers.go`, `frontend/src/components/AssistPanel.tsx` |
 | 2. Retention / rotation | **Реализовано** | `internal/retention/retention.go`, `cmd/forgecrm-worker/main.go` (maintenance loop), `config.RetentionConfig` |
 | 3. S3-совместимое хранилище | **Реализовано** | `internal/storage/{storage.go,reconcile.go}`, `internal/objectstore/{s3.go,memory.go}`, `frontend/src/components/AttachmentPanel.tsx` |
 | 4. Workflow templates | **Реализовано** | `internal/workflow/templates.go`, `export.go`, `api/workflow_handlers.go` |
@@ -269,9 +287,10 @@ tenant-agnostic, запись аудита, наличие индексов (`Te
    потребовал бы переписать *места вызова*, а не только обёртку. Компиляция под
    MySQL-драйвер здесь **не** считается поддержкой. Это отдельный большой этап.
 
-2. **Потоковая выдача AI (streaming) — не реализована.** Остальные требования
-   приоритета 1 (контекст, права, маскирование, лимиты, кэш, аудит, состояния
-   загрузки/ошибки/повтора) выполнены. Streaming отмечен как PARTIAL в roadmap.
+2. **Потоковая выдача AI (streaming) — реализована (цикл 14).** Все требования
+   приоритета 1 выполнены: контекст, права, маскирование, лимиты, кэш, аудит,
+   состояния загрузки/ошибки/повтора и потоковая выдача по SSE. Остаются
+   осознанно незакрытые улучшения — не дефекты.
 
 3. **OIDC Authorization Code Flow — не реализован** (finding A в `docs/PROJECT_AUDIT.md`).
    `capabilities.oidc_configured` теперь честно сообщает только о наличии настроек.
