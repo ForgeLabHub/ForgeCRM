@@ -344,6 +344,25 @@ test.describe('workspace pages render live data', () => {
   }
 })
 
+test.describe('migration sources', () => {
+  test('the source picker offers the kinds the server can build, including MySQL', async ({
+    authedPage: page,
+  }) => {
+    await page.goto('/migrations')
+    await page.getByRole('button', { name: 'New migration' }).click()
+
+    // The picker must equal `migration_sources` on the server. A local list once
+    // offered `sqlserver`, which the server refuses with "not implemented", and
+    // spelled REST `rest` while the server calls it `rest_api` — a migration
+    // created from the interface would have been rejected at submit.
+    const dialog = page.getByRole('dialog')
+    const select = dialog.locator('#migration-source')
+    await expect(select.locator('option', { hasText: 'mysql' })).toHaveCount(1)
+    await expect(select.locator('option', { hasText: 'rest_api' })).toHaveCount(1)
+    await expect(select.locator('option', { hasText: 'sqlserver' })).toHaveCount(0)
+  })
+})
+
 test.describe('webhook subscriptions', () => {
   test('the event picker offers the canonical event types the dispatcher matches', async ({
     authedPage: page,

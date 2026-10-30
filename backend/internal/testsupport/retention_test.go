@@ -562,6 +562,67 @@ func TestRetentionSweepsRunHistoryAndInboundEvents(t *testing.T) {
 	}
 }
 
+// TestRetentionSweepsMigrationReconciliations covers the migration reconciliation
+// history: one row per row-count comparison, written after an import, which
+// nothing pruned before the policy was added.
+//
+// A reconciliation created long ago must be removed and a fresh one kept, so the
+// window is measured against created_at. The table has no status column and every
+// row is eligible, so there is no predicate to get wrong.
+func TestRetentionSweepsMigrationReconciliations(t *testing.T) {
+	db := connectOrSkip(t)
+	freshSchema(t, db)
+
+	ctx := context.Background()
+	org := retentionOrg(t, db, "retention-migration-recon")
+
+	var migrationID uuid.UUID
+	if err := db.Pool().QueryRow(ctx, `
+		INSERT INTO migration_jobs (organization_id, name, source_kind, strategy)
+		VALUES ($1, 'retention fixture', 'postgres', 'one_time') RETURNING id`,
+		org).Scan(&migrationID); err != nil {
+		t.Fatalf("insert migration job: %v", err)
+	}
+
+	old := time.Now().Add(-200 * 24 * time.Hour)
+	if _, err := db.Pool().Exec(ctx, `
+		INSERT INTO migration_reconciliations (migration_job_id, source_table, target_entity, status, created_at)
+		VALUES ($1, 'contacts', 'contact', 'match', $2),
+		       ($1, 'deals',    'deal',    'mismatch', now())`,
+		migrationID, old); err != nil {
+		t.Fatalf("insert reconciliations: %v", err)
+	}
+
+	runner := retention.New(db, audit.New(db), nil, retention.Options{Enabled: true, Delete: true})
+	results, err := runner.Run(ctx)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	res := resultFor(results, "migration_reconciliations")
+	if res.Error != "" {
+		t.Fatalf("migration_reconciliations policy failed: %s", res.Error)
+	}
+	if res.Deleted != 1 {
+		t.Errorf("migration_reconciliations deleted %d rows, want exactly the old one", res.Deleted)
+	}
+
+	var n int64
+	if err := db.Pool().QueryRow(ctx, `SELECT count(*) FROM migration_reconciliations`).Scan(&n); err != nil {
+		t.Fatalf("count reconciliations: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("migration_reconciliations holds %d rows, want the fresh one preserved", n)
+	}
+	var status string
+	if err := db.Pool().QueryRow(ctx, `SELECT status FROM migration_reconciliations`).Scan(&status); err != nil {
+		t.Fatalf("read kept reconciliation: %v", err)
+	}
+	if status != "mismatch" {
+		t.Errorf("kept reconciliation is %q, want mismatch", status)
+	}
+}
+
 func deletedFor(results []retention.Result, key string) int64 {
 	for _, r := range results {
 		if r.Key == key {
@@ -905,6 +966,8 @@ func TestRetentionSweepIndexesExist(t *testing.T) {
 		"email_log_settled_idx",
 		// 0025: the MCP client credentials.
 		"mcp_credentials_created_at_idx",
+		// 0026: the migration reconciliation history.
+		"migration_recon_created_at_idx",
 	}
 	for _, name := range want {
 		var exists bool

@@ -31,9 +31,9 @@ import (
 // SourceKind identifies a migration source type.
 type SourceKind string
 
-// Supported source kinds. MySQL, MSSQL and Oracle are recognised as configuration
-// values but are not implemented in this cycle; attempting to use one returns a
-// clear "not implemented" error rather than a silent no-op.
+// Supported source kinds. MSSQL and Oracle are recognised as configuration values
+// but are not implemented in this cycle; attempting to use one returns a clear
+// "not implemented" error rather than a silent no-op.
 const (
 	SourcePostgres SourceKind = "postgres"
 	SourceMySQL    SourceKind = "mysql"
@@ -46,10 +46,23 @@ const (
 // Implemented reports whether a source kind can actually be used.
 func Implemented(k SourceKind) bool {
 	switch k {
-	case SourcePostgres, SourceSQLite, SourceREST:
+	case SourcePostgres, SourceMySQL, SourceSQLite, SourceREST:
 		return true
 	}
 	return false
+}
+
+// ImplementedSources returns the source kinds a client may offer, in a stable
+// order. It is the single source of truth for the migration_sources capability,
+// so a kind is advertised exactly when BuildSource can build it — the two cannot
+// drift the way a hand-written list can.
+func ImplementedSources() []string {
+	kinds := []SourceKind{SourcePostgres, SourceMySQL, SourceSQLite, SourceREST}
+	out := make([]string, 0, len(kinds))
+	for _, k := range kinds {
+		out = append(out, string(k))
+	}
+	return out
 }
 
 // Source is a readable external data source.
@@ -548,6 +561,8 @@ func (s *Service) BuildSource(ctx context.Context, p *rbac.Principal, id uuid.UU
 	switch cfg.Kind {
 	case SourcePostgres:
 		return NewPostgresSource(ctx, cfg, password)
+	case SourceMySQL:
+		return NewMySQLSource(ctx, cfg, password)
 	case SourceSQLite:
 		return NewSQLiteSource(ctx, cfg)
 	case SourceREST:

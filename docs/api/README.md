@@ -3,9 +3,24 @@
 The API specification is generated from the running router. It cannot describe a
 route the server does not serve, and it cannot miss one the server does.
 
+- **Browsable reference:** [`index.html`](./index.html) — a single self-contained
+  page, generated from the specification
 - **Machine-readable specification:** [`openapi.json`](./openapi.json) (OpenAPI 3.1)
 - **Error contract:** [`errors.md`](./errors.md)
 - **Permission reference:** `docs/security/permissions.md`
+
+## The browsable reference
+
+`index.html` is generated from the same document as `openapi.json`, so it is a
+view of the specification rather than a second, hand-maintained description. It
+opens straight from disk — the stylesheet is inlined and the only script is a few
+lines of operation filter — so it needs no network, no CDN and no server. Every
+operation the document declares is rendered as its own anchored section, grouped
+by the document's tags, with its parameters, request body and responses.
+
+Because it is generated, it cannot drift: `go run ./cmd/openapi-gen -check` fails
+if `index.html` is out of date in the same way it fails for `openapi.json`. A
+route change means running the generator and committing both files.
 
 ## Why the specification is generated
 
@@ -96,13 +111,16 @@ The specification is generated, but two parts are still declared rather than
 derived, and both are listed here so the document is not read as more complete
 than it is:
 
-- **Request and response bodies.** Success responses are described by status and
-  media type, not by a per-endpoint schema. The error envelope, the pagination
-  object and the shared components are specified in full, because every client
-  must handle those. Per-resource body schemas are not yet emitted.
 - **Query parameters.** Collection operations declare the shared
-  `limit`/`offset`/`q`/`sort`/`order` set. Resource-specific filters are not yet
-  declared, so they are not documented even though the server accepts some.
+  `limit`/`offset`/`q`/`sort`/`order` set. Resource-specific filters are declared
+  for the routes that register them in `internal/api/contract.go`; a route whose
+  filters are not registered there is documented without them, so a filter the
+  server accepts may be missing from the document.
+- **Conditional validation rules.** A rule that cannot be expressed as a required
+  list — "at least one of these", "one of a fixed set" — is recorded in the
+  request body description rather than the `required` set. `contract_test.go`
+  fails if a rule the validator enforces is neither declared required nor recorded
+  as conditional.
 
 Both gaps are tracked in `docs/ROADMAP.md`. Neither affects the guarantee that
 matters most: every route the server serves is listed, with the permission it

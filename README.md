@@ -188,7 +188,10 @@ npm run typecheck && npm run lint && npm run test && npm run build
 Stated explicitly so nobody assumes more than the project provides:
 
 - **PostgreSQL 17 is the only supported database.** MySQL/MariaDB are not supported
-  (see [ADR 0008](docs/adr/0008-mysql-mariadb-datastore-blockers.md)).
+  *as the datastore* (see [ADR 0008](docs/adr/0008-mysql-mariadb-datastore-blockers.md)).
+  A MySQL/MariaDB database can, however, be used as a **migration source** — the
+  Import Center reads from one — which is a different question from running ForgeCRM
+  on it.
 - **No license file yet.** Until one is chosen the default applies and the code is
   not licensed for redistribution - an owner decision, tracked in
   [CONTRIBUTING.md](CONTRIBUTING.md).

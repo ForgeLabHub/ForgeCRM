@@ -36,6 +36,9 @@ import (
 	"github.com/geff1778/forgecrm/internal/rbac"
 	"github.com/geff1778/forgecrm/internal/retention"
 	"github.com/geff1778/forgecrm/internal/secrets"
+	"github.com/geff1778/forgecrm/internal/storage"
+	"github.com/geff1778/forgecrm/internal/tracectx"
+	"github.com/geff1778/forgecrm/internal/wiring"
 	"github.com/geff1778/forgecrm/internal/workflow"
 )
 
@@ -87,6 +90,16 @@ func run() error {
 	telegramSvc := notify.NewTelegramService(&cfg.Telegram, db, log, auditLog, keyring)
 	hub := integrations.NewHub(db, auditLog, keyring)
 
+	// The attachment store is optional and reports itself off when unconfigured, so the
+	// worker can build it unconditionally and the reconcile handler becomes a no-op on a
+	// deployment without object storage. Without this the reconcile pass had no caller
+	// outside a test, so an orphan object left by an interrupted upload accumulated
+	// forever and a row whose object was gone kept being offered for download.
+	storageSvc, err := wiring.BuildStorage(cfg, db, auditLog, log)
+	if err != nil {
+		return fmt.Errorf("initialise object storage: %w", err)
+	}
+
 	imports, err := importx.NewService(db, cfg, auditLog, outboxStore, crmSvc, queue, cfg.ImportStorageDir)
 	if err != nil {
 		return fmt.Errorf("initialise the import service: %w", err)
@@ -110,6 +123,7 @@ func run() error {
 		hub:        hub,
 		crm:        crmSvc,
 		retention:  retentionRunner,
+		storage:    storageSvc,
 	}
 	if cfg.Retention.Enabled {
 		mode := "delete"
@@ -261,6 +275,7 @@ type handlerRegistry struct {
 	agent      *agent.Service
 	workflows  *workflow.Engine
 	retention  *retention.Runner
+	storage    *storage.Service
 }
 
 // handle dispatches one job. An unknown kind is a hard failure rather than a
@@ -316,8 +331,14 @@ func (r *handlerRegistry) handle(ctx context.Context, queue *jobs.Queue, job *jo
 	case jobs.KindImportTempSweep:
 		return r.importTempSweep(ctx)
 
+	case jobs.KindImportFileReclaim:
+		return r.importFileReclaim(ctx)
+
 	case jobs.KindAgentSweep:
 		return r.agentSweep(ctx)
+
+	case jobs.KindStorageReconcile:
+		return r.storageReconcile(ctx)
 
 	default:
 		return fmt.Errorf("no handler is registered for job kind %q", job.Kind)
@@ -425,6 +446,69 @@ func (r *handlerRegistry) importTempSweep(ctx context.Context) error {
 	return nil
 }
 
+// importFileReclaim removes uploaded files no import_jobs row references. The
+// retention registry sweeps the rows but knows nothing about the private files
+// they describe, so this is what makes the import_jobs window reclaim the disk the
+// import consumed. It is the file-side counterpart to the row sweep and runs on
+// the same tick.
+//
+// The age bound is deliberately larger than the job timeout (30 minutes, see the
+// worker's job context) and larger than any in-flight upload: the file is written
+// before its row is inserted, so a file younger than the bound may belong to a row
+// that does not exist yet. A dry run only measures and is the default posture of
+// the retention engine, so a deployment that has not opted into deletion never
+// loses a file to this pass.
+func (r *handlerRegistry) importFileReclaim(ctx context.Context) error {
+	if r.imports == nil {
+		return nil
+	}
+	dryRun := r.retention == nil || r.retention.DryRun()
+	report, err := r.imports.ReclaimStoredFiles(ctx, 2*time.Hour, dryRun)
+	if err != nil {
+		return fmt.Errorf("reclaim import files: %w", err)
+	}
+	if len(report.Errors) > 0 {
+		r.log.Warn("import file reclaim could not remove some files",
+			"errors", len(report.Errors), "first", report.Errors[0])
+	}
+	mode := "reclaimed"
+	if report.DryRun {
+		mode = "previewed"
+	}
+	r.log.Info("import file reclaim complete", "mode", mode,
+		"scanned", report.Scanned, "referenced", report.Referenced,
+		"orphans", report.Orphans, "removed", report.Removed, "bytes", report.Bytes)
+	return nil
+}
+
+// storageReconcile repairs the two ways the object store and the documents table can
+// disagree, so an object or a row left behind by an interrupted upload does not stay
+// wrong forever. It is a no-op when storage is not configured.
+//
+// It is a dry run whenever retention is: a deployment that has not opted into deletion
+// must not have an orphan object removed by a maintenance pass. The grace period is
+// larger than the job timeout, because an object younger than that may belong to an
+// upload whose row has not committed yet, and deleting it would break a live upload.
+func (r *handlerRegistry) storageReconcile(ctx context.Context) error {
+	if r.storage == nil || !r.storage.Enabled() {
+		return nil
+	}
+	dryRun := r.retention == nil || r.retention.DryRun()
+	report, err := r.storage.Reconcile(ctx, dryRun, 2*time.Hour)
+	if err != nil {
+		return fmt.Errorf("reconcile object storage: %w", err)
+	}
+	mode := "repaired"
+	if report.DryRun {
+		mode = "previewed"
+	}
+	r.log.Info("storage reconcile complete", "mode", mode,
+		"scanned_rows", report.ScannedRows, "missing_objects", len(report.MissingObjects),
+		"repaired_rows", report.RepairedRows, "scanned_objects", report.ScannedObjects,
+		"orphan_objects", len(report.OrphanObjects), "deleted_objects", report.DeletedObjects)
+	return nil
+}
+
 // ---------------------------------------------------------------------------
 // Loops
 // ---------------------------------------------------------------------------
@@ -469,6 +553,10 @@ func workerLoop(loopCtx, jobCtx context.Context, log *slog.Logger, queue *jobs.Q
 		// cancelled once the grace period has elapsed, and the 30-minute cap is the
 		// ordinary bound on a single job.
 		runCtx, cancel := context.WithTimeout(jobCtx, 30*time.Minute)
+		// A job has no inbound request to inherit a trace from, so it is seeded from
+		// its own durable id: the trace id is stable across retries of the same job,
+		// and every outbound call the job makes joins that one trace.
+		runCtx = tracectx.WithTrace(runCtx, tracectx.FromSeed("job:"+job.ID.String()))
 		err = handle(runCtx, queue, job)
 		cancel()
 
@@ -519,7 +607,16 @@ func runOutboxLoop(ctx context.Context, log *slog.Logger, store *outbox.Store,
 				continue
 			}
 			for _, ev := range events {
-				if _, err := dispatcher.Dispatch(ctx, ev); err != nil {
+				// The event carries the correlation id of the request that produced it, so a
+				// trace seeded from it joins the originating request to the dispatch, the
+				// delivery it causes and any workflow run it triggers. A redelivery of the
+				// same event resolves to the same trace id, so retries are one operation.
+				seed := ev.CorrelationID
+				if seed == "" {
+					seed = "event:" + ev.ID.String()
+				}
+				evCtx := tracectx.WithTrace(ctx, tracectx.FromSeed(seed))
+				if _, err := dispatcher.Dispatch(evCtx, ev); err != nil {
 					log.Warn("could not dispatch an event", "event_id", ev.ID, "error", err)
 					_ = store.MarkFailed(ctx, ev.ID, err)
 					continue
@@ -527,7 +624,7 @@ func runOutboxLoop(ctx context.Context, log *slog.Logger, store *outbox.Store,
 				// Run event-triggered workflows. De-duplication inside the engine makes a
 				// redelivery of this event safe.
 				if wf != nil {
-					wf.HandleEvent(ctx, ev)
+					wf.HandleEvent(evCtx, ev)
 				}
 				if err := store.MarkPublished(ctx, ev.ID); err != nil {
 					log.Warn("could not mark an event published", "event_id", ev.ID, "error", err)
@@ -556,7 +653,10 @@ func runWorkflowSchedulerLoop(ctx context.Context, log *slog.Logger, engine *wor
 				log.Warn("could not claim due workflows", "error", err)
 			}
 			for i := range due {
-				if _, err := engine.RunScheduled(ctx, due[i]); err != nil {
+				// A scheduled run has no request behind it; seeding from the workflow id
+				// gives every firing of one workflow a shared, followable trace id.
+				runCtx := tracectx.WithTrace(ctx, tracectx.FromSeed("workflow:"+due[i].ID.String()))
+				if _, err := engine.RunScheduled(runCtx, due[i]); err != nil {
 					log.Warn("scheduled workflow run failed to start", "workflow_id", due[i].ID, "error", err)
 				}
 			}
@@ -653,6 +753,25 @@ func runMaintenanceLoop(ctx context.Context, log *slog.Logger, queue *jobs.Queue
 				log.Warn("could not enqueue the import temp sweep", "error", err)
 			} else if temp != nil {
 				log.Info("enqueued the import temp sweep", "job_id", temp.ID)
+			}
+			// Uploaded files the retention sweep has left unreferenced are reclaimed on
+			// the same tick. The row sweep removes the import_jobs rows; this removes the
+			// files they described, so the window reclaims disk as well as rows.
+			files, err := queue.EnqueuePeriodic(ctx, jobs.KindImportFileReclaim, map[string]any{})
+			if err != nil {
+				log.Warn("could not enqueue the import file reclaim", "error", err)
+			} else if files != nil {
+				log.Info("enqueued the import file reclaim", "job_id", files.ID)
+			}
+			// The object store and the documents table can disagree in two ways after an
+			// interrupted upload: a row whose object is gone, and an object no row
+			// references. Neither is visible to a user, so without this pass both persist
+			// until an operator notices. It is a no-op when storage is not configured.
+			reconcile, err := queue.EnqueuePeriodic(ctx, jobs.KindStorageReconcile, map[string]any{})
+			if err != nil {
+				log.Warn("could not enqueue the storage reconcile", "error", err)
+			} else if reconcile != nil {
+				log.Info("enqueued the storage reconcile", "job_id", reconcile.ID)
 			}
 		}
 	}

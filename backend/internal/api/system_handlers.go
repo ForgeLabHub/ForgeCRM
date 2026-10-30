@@ -7,6 +7,7 @@ import (
 
 	"github.com/geff1778/forgecrm/internal/audit"
 	"github.com/geff1778/forgecrm/internal/httpx"
+	"github.com/geff1778/forgecrm/internal/migratex"
 	"github.com/geff1778/forgecrm/internal/notify"
 	"github.com/geff1778/forgecrm/internal/outbox"
 )
@@ -139,7 +140,7 @@ func (s *Server) handleCapabilities(w http.ResponseWriter, r *http.Request) {
 
 		Imports:          []string{"csv", "tsv", "json", "jsonl", "xlsx", "xml"},
 		Archives:         []string{"zip", "tar", "tar.gz", "tar.bz2", "tar.xz", "gzip", "bzip2", "xz"},
-		MigrationSources: []string{"postgres", "sqlite", "rest_api"},
+		MigrationSources: migratex.ImplementedSources(),
 		EventTypes:       outbox.EventTypes(),
 	})
 }

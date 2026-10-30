@@ -11,14 +11,14 @@ import (
 	"github.com/geff1778/forgecrm/internal/storage"
 )
 
-// buildStorage constructs the attachment service.
+// BuildStorage constructs the attachment service.
 //
 // The result is always non-nil. A deployment that has not configured object
 // storage gets a service that reports itself off, which lets the capabilities
 // endpoint say "storage: off" and the document routes answer 503, rather than a
 // nil dereference at the first upload. The bucket is created when it is missing so
 // a deployment against a fresh MinIO works without a manual step.
-func buildStorage(cfg *config.Config, db *database.DB, auditLog *audit.Logger, log *slog.Logger) (*storage.Service, error) {
+func BuildStorage(cfg *config.Config, db *database.DB, auditLog *audit.Logger, log *slog.Logger) (*storage.Service, error) {
 	svcCfg := storage.Config{
 		Enabled:        cfg.Storage.Enabled,
 		MaxObjectBytes: cfg.Storage.MaxObjectBytes,

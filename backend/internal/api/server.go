@@ -281,6 +281,7 @@ func (s *Server) buildRouter() chi.Router {
 	r := chi.NewRouter()
 
 	r.Use(httpx.RequestIDMiddleware)
+	r.Use(httpx.TraceMiddleware)
 	r.Use(httpx.RecoverMiddleware(s.deps.Log))
 	r.Use(httpx.SecurityHeadersMiddleware)
 	// The client address is resolved once, here, against the configured proxy trust

@@ -166,9 +166,13 @@ column; CDC is a documented adapter slot, not implemented this cycle.
   tick enqueues the periodic sweeps idempotently (`EnqueuePeriodic` takes an advisory lock
   and inserts only when the kind is not already queued or running): `maintenance.retention`
   prunes rows past their window, `agent.sweep_expired` closes approval requests nobody
-  decided, and `maintenance.import_temp` reclaims extraction directories an import
-  abandoned when its worker died. Files are not rows, so the last is not part of the
-  retention registry.
+  decided, `maintenance.import_temp` reclaims extraction directories an import
+  abandoned when its worker died, `maintenance.import_files` reclaims uploaded files no
+  `import_jobs` row references, and `maintenance.storage_reconcile` repairs a
+  disagreement between the object store and the `documents` table. The last two are file
+  and object maintenance rather than row retention, so neither is part of the retention
+  registry; both inherit the retention engine's dry-run posture and delete nothing on a
+  deployment that has not opted into deletion.
 
 ## 7. Integration hub
 
