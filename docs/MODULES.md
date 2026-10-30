@@ -749,12 +749,12 @@ Two things this document deliberately does not do:
   seams without a shipped fake: `ai.Provider`, `events.Poster`,
   `integrations.Adapter`, `migratex.Source`, `agent.Executor`,
   `database.Querier`, `objectstore.ObjectStore`, `ratelimit.Store`.
-- **Extract status:** thirty-two modules are `yes` — `analytics`, `ratelimit`,
+- **Extract status:** thirty-three modules are `yes` — `analytics`, `ratelimit`,
   `netguard`, `objectstore`, `secrets`, `logging`, `httpx`, `importx/safe`,
   `importx/parsers`, `database`, `rbac`, `audit`, `outbox`, `retention`, `agent`,
   `jobs`, `crm`, `storage`, `integrations`, `config`, `workflow`, `events`,
   `migratex`, `simulate`, `forecast`, `risk`, `notify`, `ai`, `importx`,
-  `migrations`, `migrate` and `authn` —
+  `migrations`, `migrate`, `authn` and `constructor` —
   because they were
   actually extracted, built, tested and run in a clean module, now by the
   automated harness in `scripts/extract-test/`. The statuses here match

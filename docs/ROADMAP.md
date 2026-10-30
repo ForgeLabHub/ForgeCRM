@@ -296,6 +296,26 @@ when a service is missing, so the same mistake is legible next time
 | Frontend unit | `npx vitest run src/components/AssistPanel.test.tsx` | 11 pass, including retry-button presence and absence and the pre-request reachability warning |
 | E2E (Chromium) | `npx playwright test --project=chromium` | 43 passed, 1 skipped (the no-provider case is skipped when a provider is configured, and vice versa) |
 
+## Cycle 14 — The constructor: recipes into standalone projects
+
+| # | Item | Status |
+|---|---|---|
+| 14.1 | A recipe manifest names the modules, adapters and demo for a project | **VERIFIED** — `internal/constructor/recipes/analytics-demo/recipe.yaml`; the loader validates it and `List`/`Load` are exercised by `internal/constructor/constructor_test.go` |
+| 14.2 | Generation copies only the named modules and rewrites their imports | **VERIFIED** — `internal/constructor/generate.go` rewrites `github.com/geff1778/forgecrm/internal/` to the recipe's module path; a unit test proves a cross-package import is re-pointed and no file still names the monolith |
+| 14.3 | Generation refuses to overwrite and writes nothing on failure | **VERIFIED** — a non-empty output directory is an error, and a missing module aborts before the first file is written; both are unit-tested |
+| 14.4 | A generated project builds, tests and runs on its own | **VERIFIED** — `scripts/constructor-test/run.sh` scaffolds `analytics-demo`, builds, tests and runs the demo twice and checks the deterministic output; CI job `constructor`, `make test-constructor` |
+| 14.5 | The demo asserts real numbers, not a printed "success" | **VERIFIED** — the generated `cmd/demo` checks the funnel, revenue, retention, forecast and risk outputs against the values `internal/analytics` produces inside ForgeCRM |
+| 14.6 | The constructor is itself extraction-proven | **VERIFIED** — `scripts/extract-test/constructor/setup.sh` (also copies the embedded `recipes/`), an archtest pin, and tests that use a fixture tree rather than the monolith |
+
+### Evidence
+
+| Check | Command | Result |
+|---|---|---|
+| Unit tests | `go test -count=1 ./internal/constructor/ ./internal/archtest/` | pass |
+| Constructor harness | `./scripts/constructor-test/run.sh` | `analytics-demo` generated, built, tested and run; deterministic output |
+| Extraction harness | `./scripts/extract-test/run.sh constructor` | build, tests and smoke pass in a clean module |
+| Format and vet | `gofmt -l ./cmd ./internal`, `go vet ./...` | clean |
+
 ---
 
 # Master plan phases

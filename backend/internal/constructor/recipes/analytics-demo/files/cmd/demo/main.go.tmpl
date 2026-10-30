@@ -1,0 +1,160 @@
+// Command demo runs a small "what-if" analysis over a sample CRM snapshot using
+// the analytics package, and checks the result against known values.
+//
+// It is not a placeholder that prints "success". It reads a pipeline and a
+// period of history, applies a scenario the way the product does — a funnel with
+// more leads, a revenue case with a higher ticket, a retention case with less
+// churn — and then a trend forecast and a stalled-deal scan over the same data.
+// Every number is deterministic, so the assertions at the end are a real check
+// that the extracted module behaves as it does inside ForgeCRM. If they ever
+// diverge, this command exits non-zero.
+package main
+
+import (
+	"fmt"
+	"os"
+
+	"{{.ModulePath}}/analytics"
+)
+
+func main() {
+	// A frozen snapshot of one organization's pipeline and its last 30 days.
+	baseline := analytics.Baseline{
+		Currency: "USD",
+		Stages: []analytics.StageSnapshot{
+			{StageID: "qualified", StageName: "Qualified", Position: 1,
+				OpenCount: 100, OpenValue: analytics.NewMoney(1_000_000, "USD"),
+				Probability: analytics.OneRatio},
+			{StageID: "proposal", StageName: "Proposal", Position: 2,
+				OpenCount: 40, OpenValue: analytics.NewMoney(500_000, "USD"),
+				Probability: analytics.NewRatioFromBasisPoints(5000)},
+		},
+		WonCount: 20, LostCount: 10, OpenCount: 140,
+		WonValue:        analytics.NewMoney(2_000_000, "USD"),
+		LostValue:       analytics.NewMoney(300_000, "USD"),
+		OpenValue:       analytics.NewMoney(1_500_000, "USD"),
+		AvgDealValue:    analytics.NewMoney(100_000, "USD"),
+		ActiveCustomers: 50, ChurnedCustomers: 5,
+		PeriodDays: 30,
+	}
+
+	fmt.Println("Analytics demo — one organization's pipeline over 30 days")
+	fmt.Printf("  currency %s\n\n", baseline.Currency)
+
+	// Scenario 1: 10% more leads entering the funnel.
+	funnel, err := analytics.RunFunnel(baseline, analytics.FunnelParams{
+		LeadVolume: analytics.NewRatioFromBasisPoints(11000),
+	})
+	must("funnel", err)
+	report(funnel)
+
+	// Scenario 2: a 5% higher ticket, a 10% better win rate and 10% more deals.
+	revenue, err := analytics.RunRevenue(baseline, analytics.RevenueParams{
+		AvgTicket: analytics.NewRatioFromBasisPoints(10500),
+		WinRate:   analytics.NewRatioFromBasisPoints(11000),
+		DealCount: analytics.NewRatioFromBasisPoints(11000),
+	})
+	must("revenue", err)
+	report(revenue)
+
+	// Scenario 3: churn falls by 20%.
+	retention, err := analytics.RunRetention(baseline, analytics.RetentionParams{
+		ChurnMultiplier: analytics.NewRatioFromBasisPoints(8000),
+	})
+	must("retention", err)
+	report(retention)
+
+	// A trend forecast over five observed months of revenue. The series is long
+	// enough for the backtest to score the method against the naive baseline, so
+	// the quality report below is a real measurement rather than an empty one.
+	forecast, err := analytics.RunForecast([]analytics.PeriodPoint{
+		{Period: "2026-01", Value: analytics.NewMoney(100_000, "USD")},
+		{Period: "2026-02", Value: analytics.NewMoney(108_000, "USD")},
+		{Period: "2026-03", Value: analytics.NewMoney(119_000, "USD")},
+		{Period: "2026-04", Value: analytics.NewMoney(127_000, "USD")},
+		{Period: "2026-05", Value: analytics.NewMoney(141_000, "USD")},
+	}, analytics.ForecastParams{Method: analytics.MethodTrend, Horizon: 2})
+	must("forecast", err)
+	fmt.Printf("Forecast (%s): %s -> %s\n", forecast.Method,
+		forecast.History[len(forecast.History)-1].Period,
+		forecast.Points[0].Period)
+	for _, p := range forecast.Points {
+		fmt.Printf("  %s: %s (band %s..%s)\n", p.Period, p.Value, p.Lower, p.Upper)
+	}
+
+	// A stalled-deal scan over the same pipeline intent.
+	signals := analytics.DetectStalledDeals([]analytics.DealObservation{
+		{ID: "deal-quiet", Title: "Quiet renewal", StageID: "proposal",
+			AmountMinor: 100_000, Currency: "USD", DaysSinceActivity: 90},
+	}, analytics.DefaultRiskThresholds())
+	fmt.Printf("Risk: %d stalled-deal signal(s)\n\n", len(signals))
+
+	// Deterministic assertions. These are the values the module produces inside
+	// ForgeCRM; a mismatch means the extracted copy behaves differently.
+	check("funnel expected_won_count variant", metric(funnel, "expected_won_count").Variant, int64(132))
+	check("funnel expected_won_value variant", metric(funnel, "expected_won_value").Variant, int64(1_375_000))
+	check("revenue expected_won_value variant", metric(revenue, "expected_won_value").Variant, int64(2_541_000))
+	check("retention financial_impact variant", metric(retention, "financial_impact").Variant, int64(100_000))
+	check("forecast first value", forecast.Points[0].Value.AmountMinor, int64(149_300))
+	check("forecast scored folds", forecast.Quality.Folds, 2)
+	check("forecast beats naive", forecast.Quality.BeatsNaive, true)
+	check("risk signal count", len(signals), 1)
+
+	fmt.Println("demo: all checks passed")
+}
+
+// report prints a comparison the way the product shows it: baseline, variant and
+// the delta, each with its unit.
+func report(c *analytics.Comparison) {
+	fmt.Printf("Scenario: %s\n", c.Kind)
+	for _, m := range c.Metrics {
+		fmt.Printf("  %-22s %s -> %s (%+d)\n", m.Label, format(m, m.Baseline), format(m, m.Variant), m.Delta)
+	}
+	for _, w := range c.Warnings {
+		fmt.Printf("  ! %s\n", w)
+	}
+	fmt.Println()
+}
+
+// format renders a metric value with its unit. Money is stored in minor units,
+// so it is scaled here; printing the raw integer would read as a number far
+// larger than it is.
+func format(m analytics.Metric, v int64) string {
+	switch m.Unit {
+	case analytics.UnitMoney:
+		whole, frac := v/100, v%100
+		if frac < 0 {
+			frac = -frac
+		}
+		return fmt.Sprintf("%d.%02d %s", whole, frac, m.Currency)
+	case analytics.UnitPercent:
+		return analytics.PercentString(v)
+	default:
+		return fmt.Sprintf("%d", v)
+	}
+}
+
+// metric returns the named metric, or a zero metric if it is absent.
+func metric(c *analytics.Comparison, key string) analytics.Metric {
+	for _, m := range c.Metrics {
+		if m.Key == key {
+			return m
+		}
+	}
+	return analytics.Metric{}
+}
+
+func must(what string, err error) {
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "demo: %s: %v\n", what, err)
+		os.Exit(1)
+	}
+}
+
+// check fails the demo when a computed value does not match.
+func check[T comparable](what string, got, want T) {
+	if got != want {
+		fmt.Fprintf(os.Stderr, "demo: %s = %v, want %v\n", what, got, want)
+		os.Exit(1)
+	}
+}

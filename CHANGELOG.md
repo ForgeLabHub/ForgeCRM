@@ -10,6 +10,25 @@ once it reaches 1.0.
 
 ### Added
 
+- **A constructor that turns a recipe into a working, standalone project.** The
+  extraction harness proves a single package *can* stand alone; the constructor is
+  how someone actually does it for a chosen combination. `internal/constructor`
+  reads a recipe manifest (`recipe.yaml`), copies exactly the named modules out of
+  `backend/internal`, rewrites their imports to the new module path, renders the
+  recipe's templates and writes a README — then refuses to finish if any generated
+  file still names ForgeCRM. `cmd/forgecrm` is the CLI (`forgecrm recipes`,
+  `forgecrm scaffold <recipe> --output <dir>`). The first recipe,
+  `analytics-demo`, lifts the pure `analytics` core into a project with no
+  database, no external service and no secrets, and runs a demo that computes the
+  funnel, revenue and retention scenarios, a trend forecast and a stalled-deal scan
+  over a fixed snapshot, asserting every number. `scripts/constructor-test/run.sh`
+  runs `forgecrm scaffold` for each recipe, then builds, tests and runs the
+  generated project and checks the demo's deterministic output; it is a CI job
+  (`constructor`) and a `make test-constructor` target. The constructor is itself
+  proven extractable — it is a leaf that depends only on the standard library and
+  a YAML parser — so it is a thirty-third module in the extraction harness and an
+  archtest pin.
+
 - **Thirteen more modules are extraction-proven, taking the harness to
   thirty-two.**
   The remaining backend packages that sit above the leaves now lift out on their

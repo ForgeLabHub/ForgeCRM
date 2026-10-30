@@ -289,6 +289,10 @@ func TestCoreDoesNotImportCompositionOrHTTP(t *testing.T) {
 //   - migrate is the runner over the embedded migrations; it depends only on them.
 //   - authn is authentication. It is the widest module proven — the environment
 //     loader, the schema runner, the retention engine and RBAC all travel with it.
+//   - constructor builds a standalone project from a recipe: it reads a manifest
+//     and copies modules out of the tree by path, importing none of them. It is a
+//     leaf, but it carries data as well as code — the recipes/ directory is
+//     embedded — so an extraction must copy the recipes too.
 //
 // This is the cheap, always-on half of the check. The extraction harness is the
 // expensive half that actually compiles the module on its own; the two are
@@ -326,6 +330,10 @@ func TestExtractionBoundaryHolds(t *testing.T) {
 		"importx/safe":    true,
 		"importx/parsers": true,
 		"database":        true,
+		// constructor reads recipe manifests and the source tree; it copies modules
+		// by path and imports none of them, so it is a leaf. A recipe that needed to
+		// import a module to describe it would weld the constructor to that module.
+		"constructor": true,
 	}
 	allowedDeps := map[string]map[string]bool{
 		// httpx may depend only on its two proven leaves. A dependency on the

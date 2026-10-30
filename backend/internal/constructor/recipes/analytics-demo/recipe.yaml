@@ -1,0 +1,49 @@
+# ForgeCRM constructor recipe.
+#
+# A recipe names a set of modules, the adapters they use and a runnable demo, so
+# `forgecrm scaffold` can generate a standalone project from it. It is read by
+# `internal/constructor`, which embeds this file and the `files/` templates into
+# the forgecrm binary.
+#
+# Every field below is checked against the real source: the modules are resolved
+# under backend/internal and the generation fails if one is missing, and the
+# generated project fails to build if a copied package still reaches into
+# ForgeCRM. Nothing here declares a capability that does not exist.
+
+name: analytics-demo
+version: 1
+description: >-
+  A standalone analytics demonstration. ForgeCRM's pure analytics core — the
+  funnel, revenue and retention scenarios, a trend forecast and the risk rules —
+  lifted out of the monolith into a project with no database, no external service
+  and no secrets. It is the smallest honest proof that ForgeCRM can generate an
+  independent, working application.
+
+# The module path and toolchain of the generated project. The toolchain matches
+# the monolith's pinned version so a generated project builds with the same Go.
+module_path: example.com/analytics-demo
+go_version: "1.26.10"
+
+# The in-module packages to copy, by their path under backend/internal. This is
+# the whole closure: analytics imports nothing else inside ForgeCRM, so it is the
+# complete list. A recipe that needed dependencies would name them here too, and
+# the generator would still refuse to finish while a copied file named ForgeCRM.
+modules:
+  - analytics
+
+# Adapters the generated project needs. This recipe is pure arithmetic and reads
+# no service, so the list is empty — claiming a `database: memory` adapter here
+# would describe a component that does not exist.
+adapters: {}
+
+# The demo program. `enabled: true` means `files/cmd/demo/main.go.tmpl` is
+# rendered into the project; the command is what the reader runs to see it work.
+demo:
+  enabled: true
+  command: go run ./cmd/demo
+
+# Commands the generated README tells the reader to run, and that CI runs against
+# the generated project.
+commands:
+  test: go test ./...
+  run: go run ./cmd/demo

@@ -117,6 +117,23 @@ rewrite_import() {
     xargs -0 sed -i "s#$old#$new#g"
 }
 
+# assert_no_monolith_dependency <work> fails if the extracted module's go.mod
+# requires or replaces the ForgeCRM module.
+#
+# It is the precise form of assert_no_monolith_import for a module that must
+# *mention* the monolith prefix as data: the constructor names
+# github.com/geff1778/forgecrm/internal/ as the prefix it rewrites, which is its
+# job, but it must never depend on the module. A build in a clean module with no
+# replace directive already proves the dependency is absent; this states it.
+assert_no_monolith_dependency() {
+  local work="$1"
+  if grep -qE '(require|replace).*geff1778/forgecrm' "$work/go.mod"; then
+    cat "$work/go.mod" >&2
+    die "the extracted module depends on the ForgeCRM monolith"
+  fi
+  ok "no dependency on the ForgeCRM monolith"
+}
+
 # assert_no_monolith_import <work> fails if any copied file still names ForgeCRM.
 assert_no_monolith_import() {
   local work="$1"

@@ -66,6 +66,13 @@ that is not true, which is worse than not listing it at all.
    copy.
 5. Add the module name to `modules.txt`.
 
+## Relationship to the constructor
+
+This harness proves a module *can* stand alone. `internal/constructor` (with
+`cmd/forgecrm` and `scripts/constructor-test/run.sh`) is how a combination of
+proven modules becomes a working project in one command. A recipe is only built
+from modules this harness has passed; the two are not substitutes.
+
 ## Relationship to the archtest
 
 `internal/archtest` enforces the same boundaries cheaply, from the import graph,

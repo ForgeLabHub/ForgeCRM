@@ -244,13 +244,13 @@ An "extraction-ready" claim is **testable, not documentary**:
   the test passes while checking nothing. The archtest and the harness are
   independent, so neither a stale check nor a skipped CI job can hide a violation.
 
-Thirty-two modules are proven today: `netguard`, `analytics`, `ratelimit`,
+Thirty-three modules are proven today: `netguard`, `analytics`, `ratelimit`,
 `objectstore`, `secrets`, `logging`, `httpx`, the two `importx` leaves
 `importx/safe` (untrusted-archive extraction) and `importx/parsers` (tabular
 source parsing), and `database`, `rbac`, `audit`, `outbox`, `retention`, `agent`,
 `jobs`, `crm`, `storage`, `integrations`, `config`, `workflow`, `events`,
 `migratex`, `simulate`, `forecast`, `risk`, `notify`, `ai`, `importx`,
-`migrations`, `migrate` and `authn` (each
+`migrations`, `migrate`, `authn` and `constructor` (each
 with its proven dependencies: `database`, and where needed `logging`, `audit`,
 `httpx`, `outbox`, `objectstore`, `netguard`, `ratelimit`, `rbac`, `secrets`,
 `analytics`, `crm`, `agent`, `config`, `retention`, `integrations`, `jobs` and the
@@ -262,6 +262,32 @@ extraction is what surfaced that XLSX was rejected by the UTF-8 check applied to
 every format, and that the XML parser emitted a record's attributes and nested
 elements as separate rows. When you extract a package with no tests, expect to
 find something.
+
+## The constructor
+
+The extraction harness proves a module *can* stand alone; `internal/constructor`
+is how a combination of proven modules becomes a working project in one command.
+`cmd/forgecrm scaffold <recipe> --output <dir>` reads a recipe manifest, copies
+exactly the named modules out of `internal/`, rewrites their imports to the
+project's module path, renders the recipe's templates and writes a README — then
+fails if any generated file still names ForgeCRM, or if the output directory
+already holds files. A recipe lives in `internal/constructor/recipes/<name>/`.
+
+Two properties matter and are easy to break:
+
+- **It never overwrites.** Refusing a non-empty directory is deliberate: a
+  mistyped `--output` must not delete a user's work. Do not add a `--force` that
+  clears the directory.
+- **It is its own check.** A generated project must import no ForgeCRM package;
+  the generator enforces it and `scripts/constructor-test/run.sh` enforces it
+  again, independently, so a regression in the check cannot hide behind it.
+
+`scripts/constructor-test/run.sh` scaffolds every recipe, then builds, tests and
+runs the generated project and checks the demo's deterministic output. It is a CI
+job (`constructor`) and a `make test-constructor` target. Add a recipe only once
+that passes. The constructor is itself extraction-proven (a leaf: stdlib plus a
+YAML parser), and its tests use a throwaway fixture tree rather than the real
+monolith so the package extracts with them. See `docs/CONSTRUCTOR.md`.
 
 ## Conventions
 

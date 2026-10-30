@@ -112,6 +112,12 @@ test-integration: ## Тесты против реального PostgreSQL (ну
 test-e2e: ## Playwright E2E (Chromium, реальный API и база)
 	cd $(FRONTEND_DIR) && npm run e2e
 
+test-extract: ## Каждый модуль собирается вне монолита
+	./scripts/extract-test/run.sh
+
+test-constructor: ## Каждый рецепт конструктора даёт рабочий проект
+	./scripts/constructor-test/run.sh
+
 migrate: ## Применить миграции через API-контейнер
 	@./scripts/migrate.sh up
 

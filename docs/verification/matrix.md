@@ -8,6 +8,8 @@
 | Сборка на чистом Linux-runner | нет зависимости от машины автора | `make build` | `ci.yml` → `backend`, `frontend` |
 | Unit-тесты без PostgreSQL | бизнес-правила отделены от инфраструктуры | `make test-unit` | `ci.yml` → `backend` |
 | Правила зависимостей | модульность не деградирует | `make test-unit` (пакет `archtest`) | `ci.yml` → `backend` |
+| Модуль собирается вне монолита | «extraction-ready» — проверяемый факт, а не заявление | `make test-extract` | `ci.yml` → `extraction` |
+| Рецепт конструктора даёт рабочий проект | из рецепта получается проект, который собирается и запускается сам | `make test-constructor` | `ci.yml` → `constructor` |
 | Миграции на пустой БД | схема создаётся с нуля | `make migrate` | `ci.yml` → `backend` |
 | Повторный запуск миграций | миграции идемпотентны | `make migrate` дважды | `ci.yml` → `backend` |
 | Обновление существующей БД | продукт обновляем, а не только устанавливаем | `make migrate` на базе предыдущей версии | `portability.yml` → `upgrade-path` |

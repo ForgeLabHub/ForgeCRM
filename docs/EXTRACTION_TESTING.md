@@ -5,8 +5,12 @@ document enforces is the one in `ORG_DOD.md`: **a module is not extract-ready un
 it has been copied into a clean project and built, tested and run there.** A
 green monolith build is not evidence.
 
-This document defines the procedure and records the first executions. It does not
-implement a universal extraction CLI — that is later work.
+This document defines the procedure and records the first executions. The
+procedure now has a tool: when a module has proved it stands alone, the
+[constructor](CONSTRUCTOR.md) turns a recipe naming that module — and its proven
+dependencies — into a working project in one command. The harness proves the
+property; the constructor acts on it. Neither replaces the other: a recipe is only
+built from modules the harness has already passed.
 
 ## Procedure
 
@@ -325,11 +329,11 @@ should notice. The harness was itself verified to fail: replacing `objectstore`'
 `netguard` import with `integrations` made both the harness and the archtest report
 the violation, and giving `logging` an in-module import made the archtest fail.
 
-`modules.txt` lists thirty-two modules today: `netguard`, `analytics`,
+`modules.txt` lists thirty-three modules today: `netguard`, `analytics`,
 `ratelimit`, `objectstore`, `secrets`, `logging`, `httpx`, `safe`
 (internal/importx/safe), `parsers` (internal/importx/parsers), `database`, `rbac`,
 `audit`, `outbox`, `retention`, `agent`, `jobs`, `crm`, `storage`, `integrations`,
 `config`, `workflow`, `events`, `migratex`, `simulate`, `forecast`, `risk`,
-`notify`, `ai`, `importx`, `migrations`, `migrate` and `authn`.
+`notify`, `ai`, `importx`, `migrations`, `migrate`, `authn` and `constructor`.
 
 See `scripts/extract-test/README.md` for how to add a module.

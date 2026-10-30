@@ -40,6 +40,7 @@
 # migrations    the embedded SQL: a leaf that carries data as well as code (//go:embed *.sql)
 # migrate       the runner over the embedded migrations; depends only on them
 # authn         authentication: login, lockout, sessions, MFA, password reset
+constructor   the recipe catalog and generator; embeds recipes/ and copies modules by path
 
 netguard
 analytics
@@ -73,3 +74,4 @@ importx
 migrations
 migrate
 authn
+constructor

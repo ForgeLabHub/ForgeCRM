@@ -33,6 +33,7 @@ Verified (see [docs/PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md) for evidence):
 | Workflow automation (event, schedule, manual triggers) | Working, verified against PostgreSQL; template catalog, import/export and a structured editor |
 | File attachments (S3-compatible) | Working; provider-agnostic object store, metadata in PostgreSQL, per-route permissions |
 | Retention & rotation | Working; opt-in per-table windows, dry-run, batched, audit-protected |
+| Constructor (recipe -> standalone project) | Working, verified end to end; the `analytics-demo` recipe generates a project that builds, tests and runs; a CI job regenerates and runs it |
 
 The web interface covers sign-in with second factor, the CRM workspace, the Import
 Center including the mapping wizard, integrations, events and webhooks, background
@@ -107,6 +108,7 @@ that answers it.
 - [Portability audit](docs/audit/portability-audit-2026-10-29.md) - gaps found and closed
 - [Verification matrix](docs/verification/matrix.md) - claim -> command -> CI job
 - [Architecture](docs/ARCHITECTURE.md) - module boundaries and data flow
+- [Constructor](docs/CONSTRUCTOR.md) - build a standalone project from a recipe
 - [Workflow automation](docs/architecture/workflows.md) - triggers, steps, execution model
 - [Roadmap](docs/ROADMAP.md) - staged plan
 - [Acceptance criteria](docs/ACCEPTANCE_CRITERIA.md) - definition of done
@@ -118,7 +120,7 @@ that answers it.
 
 ```
 backend/            Go API and worker
-  cmd/              forgecrm-api, forgecrm-worker
+  cmd/              forgecrm-api, forgecrm-worker, forgecrm (constructor CLI)
   internal/
     api/            HTTP handlers, routing, middleware
     authn/          passwords, sessions, TOTP, OIDC
@@ -133,6 +135,7 @@ backend/            Go API and worker
     audit/          audit and security event logging
     notify/         email and Telegram
     ai/             model provider abstraction
+    constructor/    recipes that build standalone projects; embeds recipes/
     migrate/        schema migrations
     database/       connection pool and transactions
 frontend/           React + TypeScript web interface (Vite)
@@ -152,6 +155,17 @@ go build ./...
 go vet ./...
 go test ./...
 gofmt -l ./cmd ./internal    # must print nothing
+```
+
+The constructor turns a recipe from `internal/constructor` into a standalone
+project on disk. `analytics-demo` lifts the pure analytics core into a project
+with no database, no service and no secrets:
+
+```bash
+cd backend
+go run ./cmd/forgecrm recipes
+go run ./cmd/forgecrm scaffold analytics-demo --output /tmp/demo
+cd /tmp/demo && go test ./... && go run ./cmd/demo
 ```
 
 Integration tests run against a real database:
