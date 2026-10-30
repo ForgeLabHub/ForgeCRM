@@ -27,6 +27,16 @@
 # crm           the domain service: accounts, contacts, deals, tasks, tickets, activities
 # storage       object-store application layer: documents, entity attachment, reconcile
 # integrations  Integration Hub: adapter lifecycle, SSRF guard, secret handoff, run log
+# config        the environment loader: every FORGECRM_* variable, defaults, validation
+# workflow      the automation engine: step document, cron, template catalog, export/import
+# events        the inbound webhook gateway: signature, timestamp window, dead-letter
+# migratex      the cross-database migration service: source adapters, reconciliation
+# simulate      the Simulation Lab: scenario catalog and preview over the analytics core
+# forecast      the revenue forecast: method catalog and accuracy
+# risk          the Risk scan: thresholds, scan and signal reconciliation
+# notify        outbound transports: email and Telegram, off when unconfigured
+# ai            the contextual AI layer: prompt assembly, tool risk tiers, MCP protocol
+# importx       the Import Center: format detection, field catalog, parser leaves
 
 netguard
 analytics
@@ -47,3 +57,13 @@ jobs
 crm
 storage
 integrations
+config
+workflow
+events
+migratex
+simulate
+forecast
+risk
+notify
+ai
+importx

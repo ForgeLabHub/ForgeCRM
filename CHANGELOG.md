@@ -10,6 +10,29 @@ once it reaches 1.0.
 
 ### Added
 
+- **Ten more modules are extraction-proven, taking the harness to twenty-nine.**
+  The remaining backend packages that sit above the leaves now lift out on their
+  own, each with its dependencies proven in turn: `internal/config` (the
+  environment loader — the last shared piece most modules wait on),
+  `internal/workflow` (the automation engine: step document, cron, template
+  catalog, export/import), `internal/events` (the inbound webhook gateway),
+  `internal/migratex` (the cross-database migration service), `internal/simulate`,
+  `internal/forecast` and `internal/risk` (read-only computations over the pure
+  analytics core), `internal/notify` (the email and Telegram transports),
+  `internal/ai` (the contextual AI layer) and `internal/importx` (the Import
+  Center). Each gained a `scripts/extract-test/<module>/` harness — a `setup.sh`
+  that copies the module and its proven dependencies into a clean Go module, and a
+  `cmd/smoke` program that exercises the real public API rather than merely
+  importing it. The smoke for `ai` proves a forged data fence is neutralised and
+  the tool risk tiers are the explicit mapping; the smoke for `workflow` registers
+  the live event vocabulary and validates the catalog; the smoke for `config`
+  proves the retention default is off and an empty DSN is refused. The pins in
+  `internal/archtest` name each module's allowed in-module dependencies, so a new
+  import outside that set fails `go test ./...` before the harness runs. Earlier
+  `docs/MODULES.md` rows marked these `no` on the reasoning that they bind to
+  `crm` or name every subsystem's config; those rows were wrong — a dependency on
+  a proven module is a dependency, not a blocker — and are corrected.
+
 - **An extraction harness that proves a module stands alone.** "This module is
   extraction-ready" was a claim nobody tested: a package builds inside the
   monolith while depending on half of it, and that only fails when someone tries
@@ -25,7 +48,7 @@ once it reaches 1.0.
   passes. A CI job `extraction` runs the harness, and `TestExtractionBoundaryHolds`
   in `internal/archtest` enforces the same boundary cheaply on every
   `go test ./...`; the two are independent, so neither a stale check nor a skipped
-  job can hide a violation. Nineteen modules are proven today: the four above plus
+  job can hide a violation. Twenty-nine modules are proven today: the four above plus
   `secrets` and `logging` (which became provable once they gained their own tests),
   `httpx`, `importx/safe`, `importx/parsers`, `database`, `rbac`, `audit`,
   `outbox`, `retention`, `agent`, `jobs`, `crm`, `storage` and `integrations` (the

@@ -213,7 +213,7 @@ func TestCoreDoesNotImportCompositionOrHTTP(t *testing.T) {
 // graph, so a regression is caught by `go test ./...` and not only by the heavier
 // extraction harness in scripts/extract-test.
 //
-// Nineteen modules are pinned:
+// Twenty-nine modules are pinned:
 //
 //   - netguard is the SSRF guard. It is a leaf: it must depend on nothing inside
 //     this module and nothing outside the standard library. That is what lets the
@@ -260,6 +260,30 @@ func TestCoreDoesNotImportCompositionOrHTTP(t *testing.T) {
 //   - integrations is the Integration Hub. It may depend only on the database
 //     handle, the audit trail, the HTTP primitives, the SSRF guard (netguard), RBAC
 //     and the secret keyring.
+//   - config is the environment loader. It may depend only on the database handle,
+//     the HTTP primitives and the retention engine whose window settings it
+//     validates. It is the last shared piece most modules wait on.
+//   - workflow is the automation engine. It may depend only on the database
+//     handle, the audit trail, the HTTP primitives, the CRM domain, the outbox and
+//     RBAC.
+//   - events is the inbound webhook gateway. It may depend only on the database
+//     handle, the audit trail, the HTTP primitives, the Integration Hub, the
+//     outbox, RBAC and the secret keyring.
+//   - migratex is the cross-database migration service. It may depend only on the
+//     database handle, the audit trail, the HTTP primitives, the Integration Hub,
+//     RBAC and the secret keyring.
+//   - simulate, forecast and risk are read-only computations. Each may depend only
+//     on the pure analytics core, the audit trail, the CRM read, the database
+//     handle and RBAC; none of them writes a domain row.
+//   - notify is the outbound transports. It may depend only on the environment
+//     loader, the database handle, the audit trail, the HTTP primitives, RBAC and
+//     the secret keyring.
+//   - ai is the contextual AI layer. It may depend only on the human-in-the-loop
+//     agent layer, the environment loader, the database handle, the audit trail,
+//     the HTTP primitives, the CRM domain, the logger, the rate limiter and RBAC.
+//   - importx is the Import Center. It may depend only on the environment loader,
+//     the database handle, the audit trail, the HTTP primitives, the CRM domain,
+//     the two parser leaves, the job queue, the outbox and RBAC.
 //
 // This is the cheap, always-on half of the check. The extraction harness is the
 // expensive half that actually compiles the module on its own; the two are
@@ -334,6 +358,37 @@ func TestExtractionBoundaryHolds(t *testing.T) {
 		// integrations is the Integration Hub: adapter lifecycle, the SSRF guard
 		// (aliased from netguard), the secret handoff and the run log.
 		"integrations": {"database": true, "audit": true, "httpx": true, "netguard": true, "rbac": true, "secrets": true},
+		// config is the environment loader. It is the last shared piece most modules
+		// wait on, so it is pinned to the database handle, the HTTP primitives and the
+		// retention engine whose window settings it validates.
+		"config": {"database": true, "httpx": true, "retention": true},
+		// workflow is the automation engine: the step document, its validation, the
+		// cron parser, the template catalog and the export/import round-trip. It reads
+		// the CRM domain and writes through the outbox, so both are declared.
+		"workflow": {"audit": true, "crm": true, "database": true, "httpx": true, "logging": true, "outbox": true, "rbac": true},
+		// events is the inbound webhook gateway: signature verification, the timestamp
+		// window, the payload cap and the dead-letter path, with the Integration Hub's
+		// secret handoff for the per-subscription key.
+		"events": {"audit": true, "database": true, "httpx": true, "integrations": true, "logging": true, "outbox": true, "rbac": true, "secrets": true},
+		// migratex is the cross-database migration service: the source adapters and the
+		// reconciliation, over the Integration Hub's connection secrets.
+		"migratex": {"audit": true, "database": true, "httpx": true, "integrations": true, "rbac": true, "secrets": true},
+		// simulate, forecast and risk are read-only computations over the pure
+		// analytics core and the CRM read; none of them writes a domain row.
+		"simulate": {"analytics": true, "audit": true, "crm": true, "database": true, "rbac": true},
+		"forecast": {"analytics": true, "audit": true, "crm": true, "database": true, "rbac": true},
+		"risk":     {"analytics": true, "audit": true, "crm": true, "database": true, "rbac": true},
+		// notify is the outbound transports (email, Telegram), configured by the
+		// environment loader and logging every send.
+		"notify": {"audit": true, "config": true, "database": true, "httpx": true, "rbac": true, "secrets": true},
+		// ai is the contextual AI layer: prompt assembly, the tool risk tiers and the
+		// MCP protocol. It acts through the human-in-the-loop agent layer and reads the
+		// CRM domain, so both are declared.
+		"ai": {"agent": true, "audit": true, "config": true, "crm": true, "database": true, "httpx": true, "logging": true, "ratelimit": true, "rbac": true},
+		// importx is the Import Center: format detection, the field catalog and the
+		// two parser leaves it stands on. It enqueues its work and writes through the
+		// outbox in the same transaction.
+		"importx": {"audit": true, "config": true, "crm": true, "database": true, "httpx": true, "importx/parsers": true, "importx/safe": true, "jobs": true, "outbox": true, "rbac": true},
 	}
 	forbiddenDeps := map[string]map[string]bool{
 		"objectstore": forbiddenForObjectstore,

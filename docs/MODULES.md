@@ -150,7 +150,11 @@ Two things this document deliberately does not do:
   fake of the CRM write path.
 - **Tests:** `importx` unit tests (2 files, incl. detection and temp cleanup);
   integration via `testsupport`.
-- **Extract:** `no` — 10 internal dependencies and a direct write path into `crm`.
+- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/importx`,
+  with `audit`, `config`, `crm`, `database`, `httpx`, `importx/parsers`,
+  `importx/safe`, `jobs`, `outbox` and `rbac` as its dependencies, all proven. The
+  earlier `no` understated it: the write path into `crm` is a dependency, not a
+  blocker, and every dependency is proven.
 - **Cut lines:** `parsers/` and `safe/` are separable sub-packages; the service
   itself is not.
 
@@ -206,7 +210,10 @@ Two things this document deliberately does not do:
 - **Fake:** `Source` is an interface (a documented seam); a REST source adapter is
   included.
 - **Tests:** integration via `testsupport`.
-- **Extract:** `no`.
+- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/migratex`,
+  with `audit`, `database`, `httpx`, `integrations`, `rbac` and `secrets` as its
+  dependencies, all proven. The `Source` interface is the boundary; sources stay
+  pluggable, and `Implemented` names the three that have a real adapter.
 - **Cut lines:** the `Source` interface is the boundary; sources are pluggable.
 
 ### internal/ai  — provider abstraction, contextual assist, MCP, agent tools
@@ -232,7 +239,12 @@ Two things this document deliberately does not do:
 - **Tests:** 7 unit files (prompt assembly, confidence/grounding, masking, MCP
   protocol, provider error classification) + integration (`ai_assist_test.go`,
   `ai_assist_cache_test.go`, `ai_provider_outage_test.go`).
-- **Extract:** `no` — depends on `crm`, `rbac`, `audit`, `database`.
+- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/ai`, with
+  `agent`, `audit`, `config`, `crm`, `database`, `httpx`, `logging`, `ratelimit`,
+  `rbac` and `retention` as its dependencies, all proven. The smoke proves the
+  context fence neutralises a forged record and the risk tiers are the explicit
+  mapping. The earlier `no` understated it: binding to `crm` is not a blocker when
+  `crm` is proven.
 - **Cut lines:** the `Provider` interface and prompt/confidence logic are the
   portable part; the service binds to `crm`.
 
@@ -271,7 +283,11 @@ Two things this document deliberately does not do:
 - **Fake:** none in-process.
 - **Tests:** `workflow` unit tests (2 files: cron, definition) +
   `testsupport/workflow_engine_test.go`, `workflow_templates_test.go`.
-- **Extract:** `no` — the engine calls `crm.Service` directly.
+- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/workflow`,
+  with `audit`, `crm`, `database`, `httpx`, `logging`, `outbox` and `rbac` as its
+  dependencies, all proven. The smoke registers the real event vocabulary and
+  validates the catalog. Calling `crm.Service` directly is not a blocker when `crm`
+  is proven.
 - **Cut lines:** the definition/parse/template layer is separable from the
   execution engine.
 
@@ -285,7 +301,9 @@ Two things this document deliberately does not do:
 - **External deps:** `github.com/google/uuid`.
 - **Fake:** none; reads through `crm.Service`.
 - **Tests:** `testsupport/simulation_test.go` (integration) + frontend page tests.
-- **Extract:** `no` — reads `crm`.
+- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/simulate`,
+  with `analytics`, `audit`, `crm`, `database` and `rbac` as its dependencies, all
+  proven. Reading `crm` is not a blocker when `crm` is proven.
 - **Cut lines:** `analytics` is the portable core; `simulate` is the persistence +
   service wrapper.
 
@@ -297,7 +315,8 @@ Two things this document deliberately does not do:
 - **Internal deps:** `analytics, audit, crm, database, rbac`.
 - **External deps:** `github.com/google/uuid`.
 - **Tests:** `testsupport/intelligence_test.go`.
-- **Extract:** `no`.
+- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/forecast`,
+  with `analytics`, `audit`, `crm`, `database` and `rbac` as its dependencies.
 - **Cut lines:** as `simulate`.
 
 ### internal/risk
@@ -308,7 +327,8 @@ Two things this document deliberately does not do:
 - **Internal deps:** `analytics, audit, crm, database, rbac`.
 - **External deps:** `github.com/google/uuid`.
 - **Tests:** `testsupport/intelligence_test.go`.
-- **Extract:** `no`.
+- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/risk`,
+  with `analytics`, `audit`, `crm`, `database` and `rbac` as its dependencies.
 - **Cut lines:** as `simulate`.
 
 ### internal/integrations  — adapter lifecycle
@@ -348,7 +368,10 @@ Two things this document deliberately does not do:
 - **Fake:** `Poster` is the documented transport seam; `NewPlainPoster` is a
   test-only unguarded poster.
 - **Tests:** `testsupport/webhook_sink_test.go`, `webhook_deadletter_test.go`.
-- **Extract:** `no` — 8 internal deps.
+- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/events`,
+  with `audit`, `database`, `httpx`, `integrations`, `logging`, `outbox`, `rbac`
+  and `secrets` as its dependencies, all proven. The smoke pins the signature,
+  tolerance and payload-cap contract.
 - **Cut lines:** the `Poster` interface is the boundary.
 
 ### internal/notify  — email + Telegram
@@ -362,7 +385,11 @@ Two things this document deliberately does not do:
 - **Fake:** `Enabled()` tolerates nil; when disabled it is a no-op. **No realistic
   fake transport.**
 - **Tests:** none in-package (no `_test.go`). This is a gap.
-- **Extract:** `no`.
+- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/notify`,
+  with `audit`, `config`, `database`, `httpx`, `rbac` and `secrets` as its
+  dependencies, all proven. The smoke proves a disabled transport reports off and
+  refuses to send. The earlier "would need a `Mailer` interface" was wrong: the
+  transports already tolerate a nil receiver and return `ErrDisabled`.
 - **Cut lines:** would need a `Mailer` interface to be extractable.
 
 ### internal/authn  — authentication
@@ -600,8 +627,9 @@ Two things this document deliberately does not do:
 - **External deps:** none beyond stdlib.
 - **Fake:** not applicable.
 - **Tests:** `config_test.go`.
-- **Extract:** `no` — it names every subsystem's config, so it moves only with the
-  whole app.
+- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/config`,
+  with `database`, `httpx` and `retention` as its dependencies, all proven. Naming
+  every subsystem's config is not a blocker when the packages it names are proven.
 - **Cut lines:** a recipe generates its own trimmed config.
 
 ### internal/logging
@@ -711,10 +739,12 @@ Two things this document deliberately does not do:
   seams without a shipped fake: `ai.Provider`, `events.Poster`,
   `integrations.Adapter`, `migratex.Source`, `agent.Executor`,
   `database.Querier`, `objectstore.ObjectStore`, `ratelimit.Store`.
-- **Extract status:** nineteen modules are `yes` — `analytics`, `ratelimit`,
+- **Extract status:** twenty-nine modules are `yes` — `analytics`, `ratelimit`,
   `netguard`, `objectstore`, `secrets`, `logging`, `httpx`, `importx/safe`,
   `importx/parsers`, `database`, `rbac`, `audit`, `outbox`, `retention`, `agent`,
-  `jobs`, `crm`, `storage` and `integrations` — because they were
+  `jobs`, `crm`, `storage`, `integrations`, `config`, `workflow`, `events`,
+  `migratex`, `simulate`, `forecast`, `risk`, `notify`, `ai` and `importx` —
+  because they were
   actually extracted, built, tested and run in a clean module, now by the
   automated harness in `scripts/extract-test/`. The statuses here match
   `EXTRACT_READY.md` exactly.

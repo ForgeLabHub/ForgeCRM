@@ -580,13 +580,7 @@ run, because each has a concrete blocker that an extraction would only confirm.
 
 | Module | Status | Evidence | Blockers | Next actions |
 | --- | --- | --- | --- | --- |
-| `internal/ai` | **NOT READY** | 9 internal deps; binds to `crm` for context. | `agent, audit, config, crm, database, httpx, logging, ratelimit, rbac`. | Split `Provider`+prompt+confidence (portable) from the context assembly (bound). |
-| `internal/importx` | **NOT READY** | 10 internal deps; writes into `crm`. | `parsers/` and `safe/` are separable; the service is not. | Extract the two sub-packages only. |
-| `internal/events` | **NOT READY** | 8 internal deps. | `audit, database, httpx, integrations, logging, outbox, rbac, secrets`. | The `Poster` interface is the only clean seam. |
-| `internal/workflow` | **NOT READY** | Engine calls `crm.Service` directly. | `audit, crm, database, httpx, logging, outbox, rbac`. | Definition/parse/template layer is separable. |
-| `internal/simulate`, `forecast`, `risk` | **NOT READY** | Thin service wrappers over `analytics` + `crm`. | Each depends on `analytics, audit, crm, database, rbac`. | The portable core is already `analytics`. |
-| `internal/api`, `wiring`, `config`, `openapi`, `migrate`, `migrations`, `testsupport` | **NOT READY** | Structurally application-wide. | — | Not extraction targets. |
-| `internal/notify` | **NOT READY** | SMTP + Telegram. | No `Mailer` interface; no in-package tests. | Introduce a `Mailer` port first. |
+| `internal/api`, `wiring`, `openapi`, `migrate`, `migrations`, `testsupport` | **NOT READY** | Structurally application-wide. | — | Not extraction targets. |
 | `internal/authn` | **NOT READY** | Binds to `rbac`, `secrets`, `database`, `config`, `audit`, `logging`. | 6 internal deps. | Extract after `rbac`/`secrets`. |
 
 ---
@@ -614,6 +608,16 @@ run, because each has a concrete blocker that an extraction would only confirm.
 | `crm` | **READY** | Extracted with `audit`, `database`, `httpx`, `outbox` and `rbac`; its first tests (validators) and a smoke ran. |
 | `storage` | **READY** | Extracted with `audit`, `database`, `httpx`, `objectstore`, `ratelimit` and `rbac`; its tests and a smoke ran. |
 | `integrations` | **READY** | Extracted with `audit`, `database`, `httpx`, `netguard`, `rbac` and `secrets`; the SSRF smoke ran. |
+| `config` | **READY** | Extracted with `database`, `httpx` and `retention`; the smoke proved the defaults and the refusal of an empty DSN. |
+| `workflow` | **READY** | Extracted with `audit`, `crm`, `database`, `httpx`, `logging`, `outbox` and `rbac`; the smoke registered the event vocabulary and validated the catalog. |
+| `events` | **READY** | Extracted with `audit`, `database`, `httpx`, `integrations`, `logging`, `outbox`, `rbac` and `secrets`; the smoke pinned the signature, tolerance and payload cap. |
+| `migratex` | **READY** | Extracted with `audit`, `database`, `httpx`, `integrations`, `rbac` and `secrets`; the smoke pinned the implemented source kinds. |
+| `simulate` | **READY** | Extracted with `analytics`, `audit`, `crm`, `database` and `rbac`; the smoke checked the scenario catalog. |
+| `forecast` | **READY** | Extracted with `analytics`, `audit`, `crm`, `database` and `rbac`; the smoke checked the method catalog. |
+| `risk` | **READY** | Extracted with `analytics`, `audit`, `crm`, `database` and `rbac`; the smoke checked the threshold and signal contract. |
+| `notify` | **READY** | Extracted with `audit`, `config`, `database`, `httpx`, `rbac` and `secrets`; the smoke proved a disabled transport reports off. |
+| `ai` | **READY** | Extracted with `agent`, `audit`, `config`, `crm`, `database`, `httpx`, `logging`, `ratelimit`, `rbac` and `retention`; the smoke proved the context fence neutralises a forged record. |
+| `importx` | **READY** | Extracted with `audit`, `config`, `crm`, `database`, `httpx`, `importx/parsers`, `importx/safe`, `jobs`, `outbox` and `rbac`; the smoke checked the field catalog. |
 | everything else | **ALMOST** / **NOT READY** | Concrete blocker listed above. |
 
 **No module is marked `READY` without an extraction run recorded here**, and the
@@ -621,6 +625,6 @@ run is now automated: `scripts/extract-test/run.sh` performs it for every module
 `modules.txt` on each CI run. `analytics`, `ratelimit`, `netguard`, `objectstore`,
 `secrets`, `logging`, `httpx`, `importx/safe` and `importx/parsers` pass that bar today.
 
-The nineteen `READY` modules are proven by the harness, not by this document. If the
+The twenty-nine `READY` modules are proven by the harness, not by this document. If the
 harness ever fails for one of them, the status here is wrong and the harness is
 right.
