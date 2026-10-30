@@ -10,6 +10,16 @@ once it reaches 1.0.
 
 ### Added
 
+- **Browsable API reference.** The specification was machine-readable but had no
+  human view, so reading it meant a JSON file or a third-party viewer. The
+  generator now also writes `docs/api/index.html`: a single self-contained page,
+  grouped by the document's own tags, with each operation anchored and shown with
+  its parameters, request body and responses. Its stylesheet is inlined and its
+  only script is a few lines of operation filter, so it opens from disk with no
+  network, no CDN and no server. It is generated from the same document as
+  `openapi.json` and `go run ./cmd/openapi-gen -check` fails when it is stale, so
+  it cannot drift from the router the way a hand-written reference would.
+
 - **W3C Trace Context propagation.** A request id says which single request was
   served; it cannot join the request to the background job or the webhook it
   caused. A `traceparent` in the standard W3C format now travels through the
