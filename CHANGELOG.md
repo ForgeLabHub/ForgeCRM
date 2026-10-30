@@ -10,6 +10,20 @@ once it reaches 1.0.
 
 ### Fixed
 
+- **The specification described two streaming endpoints as JSON.** `POST
+  /api/v1/exports` and `GET /api/v1/documents/{id}/download` write the CSV, JSONL
+  or file bytes straight to the response, but the generated OpenAPI document
+  described both as `application/json` objects — and the export as a `201`
+  created-resource, when the handler returns `200`. A client generated from the
+  document would have tried to parse a CSV export or a PNG download as JSON. The
+  generator gained a `StreamingSuccess` declaration: a route named there is
+  documented with the media types it really sets (`text/csv`,
+  `application/x-ndjson`, `application/octet-stream`) and a binary schema, with a
+  description of what the bytes are. `TestStreamingResponsesAreNotDescribedAsJSON`
+  fails if a declared stream is documented as JSON again, and
+  `TestEveryOperationNamesAComponentOrSaysWhyNot` now accepts a described byte
+  stream as an alternative to a JSON schema.
+
 - **The platform-settings write could never succeed.** The route reads the
   setting key from the `key` query parameter and the value from the body, but the
   interface's client sent `key` inside the body — so every save was rejected as a

@@ -83,6 +83,30 @@ type Contract struct {
 	// honest about those instead of forcing the handler to return a status that
 	// misdescribes what it did.
 	SuccessStatus map[string]int
+
+	// StreamingSuccess names the routes whose success response is a byte stream
+	// rather than JSON: an export, a file download. The generator would otherwise
+	// describe the body as an application/json object, which is wrong for every
+	// caller — a client that reads the document as JSON finds it is CSV. Naming the
+	// route lets the response be documented as the media types it really carries, and
+	// the description says what the bytes are.
+	StreamingSuccess map[string]StreamingResponse
+}
+
+// StreamingResponse describes a success response that is not JSON.
+type StreamingResponse struct {
+	// MediaTypes are the content types the handler can set. For a download whose type
+	// is the stored file's own type, application/octet-stream is the fallback.
+	MediaTypes []string
+	// Description says what the bytes are and how the type is decided, since a schema
+	// cannot.
+	Description string
+}
+
+// StreamingSuccessFor returns the streaming description for a route, if any.
+func (c Contract) StreamingSuccessFor(key string) (StreamingResponse, bool) {
+	s, ok := c.StreamingSuccess[key]
+	return s, ok
 }
 
 // QueryParam describes one query parameter.

@@ -99,6 +99,8 @@ func responsesFor(rt Route, isAnonymous bool, c Contract, reg *registry) map[str
 
 	if success == http.StatusNoContent {
 		out["204"] = response{Description: "The operation succeeded. No body is returned."}
+	} else if stream, ok := c.StreamingSuccessFor(rt.Key()); ok {
+		out[fmt.Sprint(success)] = streamingResponse(stream)
 	} else {
 		out[fmt.Sprint(success)] = successResponse(rt, c, reg)
 	}
@@ -138,6 +140,19 @@ func successResponse(rt Route, c Contract, reg *registry) response {
 			"application/json": {Schema: map[string]any{"type": "object"}},
 		},
 	}
+}
+
+// streamingResponse describes a success body that is not JSON.
+//
+// The bytes are documented by media type with a binary schema, and the description
+// says what they are. A JSON schema here would be a lie a client would act on: a
+// download whose body is a PNG is not an object.
+func streamingResponse(s StreamingResponse) response {
+	content := map[string]mediaType{}
+	for _, mt := range s.MediaTypes {
+		content[mt] = mediaType{Schema: map[string]any{"type": "string", "format": "binary"}}
+	}
+	return response{Description: s.Description, Content: content}
 }
 
 func problemResponse(description string) response {

@@ -271,6 +271,16 @@ func TestEveryOperationNamesAComponentOrSaysWhyNot(t *testing.T) {
 				}
 				resp, _ := rawResp.(map[string]any)
 				content, _ := resp["content"].(map[string]any)
+				// A streaming success (an export, a download) has no application/json
+				// media type; it carries the bytes as a non-JSON type with a binary
+				// schema and a description of what they are.
+				if _, isJSON := content["application/json"]; !isJSON {
+					if !isBinaryStream(content) {
+						t.Errorf("%s %s: the success response is neither JSON nor a described byte stream",
+							strings.ToUpper(method), path)
+					}
+					continue
+				}
 				mt, _ := content["application/json"].(map[string]any)
 				schema, _ := mt["schema"].(map[string]any)
 				_, hasRef := schema["$ref"]
@@ -355,8 +365,65 @@ func collectRefs(v any) []string {
 	return out
 }
 
-// requestBodyDescription finds the request body description for the operation that
-// declares the given component, so the conditional-rule test can read it.
+// isBinaryStream reports whether a success response's content is a non-JSON byte
+// stream: every media type carries a binary schema, and none is application/json.
+// This is what a declared StreamingSuccess must produce.
+func isBinaryStream(content map[string]any) bool {
+	if len(content) == 0 {
+		return false
+	}
+	for mediaType, raw := range content {
+		if mediaType == "application/json" || mediaType == "application/problem+json" {
+			return false
+		}
+		mt, _ := raw.(map[string]any)
+		schema, _ := mt["schema"].(map[string]any)
+		if schema["type"] != "string" || schema["format"] != "binary" {
+			return false
+		}
+	}
+	return true
+}
+
+// TestStreamingResponsesAreNotDescribedAsJSON fails if a route declared as a byte
+// stream is still documented with an application/json body. That is the exact
+// inaccuracy this declaration exists to remove: a client generated from the
+// specification would try to parse a CSV export or a file download as JSON.
+func TestStreamingResponsesAreNotDescribedAsJSON(t *testing.T) {
+	doc := buildDocument(t)
+	paths, _ := doc["paths"].(map[string]any)
+
+	contract := APIContract()
+	if len(contract.StreamingSuccess) == 0 {
+		t.Fatal("no route declares a streaming success; the export and the download both should")
+	}
+	for key := range contract.StreamingSuccess {
+		method, path, ok := strings.Cut(key, " ")
+		if !ok {
+			t.Fatalf("streaming route key %q is not \"METHOD /path\"", key)
+		}
+		item, _ := paths[path].(map[string]any)
+		op, _ := item[strings.ToLower(method)].(map[string]any)
+		if op == nil {
+			t.Fatalf("%s is declared as streaming but is not in the document", key)
+		}
+		responses, _ := op["responses"].(map[string]any)
+		for status, rawResp := range responses {
+			if strings.HasPrefix(status, "4") || strings.HasPrefix(status, "5") {
+				continue
+			}
+			resp, _ := rawResp.(map[string]any)
+			content, _ := resp["content"].(map[string]any)
+			if _, isJSON := content["application/json"]; isJSON {
+				t.Errorf("%s: a streaming response is documented as application/json", key)
+			}
+			if !isBinaryStream(content) {
+				t.Errorf("%s: a streaming response does not carry a binary schema", key)
+			}
+		}
+	}
+}
+
 func requestBodyDescription(t *testing.T, paths map[string]any, component string) string {
 	t.Helper()
 

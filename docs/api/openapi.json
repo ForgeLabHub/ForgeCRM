@@ -12085,11 +12085,12 @@
         ],
         "responses": {
           "200": {
-            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
+            "description": "The stored file's bytes. The Content-Type is the type recorded for the document, and Content-Disposition carries its filename. Content-Length is set, and the body is not JSON.",
             "content": {
-              "application/json": {
+              "application/octet-stream": {
                 "schema": {
-                  "type": "object"
+                  "format": "binary",
+                  "type": "string"
                 }
               }
             }
@@ -12581,12 +12582,19 @@
           }
         },
         "responses": {
-          "201": {
-            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
+          "200": {
+            "description": "The exported records, streamed. `format=csv` returns text/csv; `format=jsonl` returns one JSON object per line as application/x-ndjson. The filename is carried in Content-Disposition.",
             "content": {
-              "application/json": {
+              "application/x-ndjson": {
                 "schema": {
-                  "type": "object"
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
                 }
               }
             }

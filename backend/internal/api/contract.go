@@ -46,6 +46,7 @@ func APIContract() openapi.Contract {
 		SortColumns:      map[string][]string{},
 		TypeNames:        map[reflect.Type]string{},
 		SuccessStatus:    map[string]int{},
+		StreamingSuccess: map[string]openapi.StreamingResponse{},
 	}
 
 	// --- Authentication ------------------------------------------------------
@@ -271,6 +272,20 @@ func APIContract() openapi.Contract {
 
 	c.RequestBodies["POST /api/v1/exports"] = reflect.TypeOf(createExportRequest{})
 	c.RequiredBody["CreateExportRequest"] = []string{"entity_type", "format"}
+	// The export streams the records as CSV or JSONL, so it returns 200 with a body
+	// that is not JSON. Without the declaration the generator would document a 201
+	// created-resource and an application/json object, neither of which is what the
+	// handler sends.
+	c.SuccessStatus["POST /api/v1/exports"] = 200
+	c.StreamingSuccess["POST /api/v1/exports"] = openapi.StreamingResponse{
+		MediaTypes:  []string{"text/csv", "application/x-ndjson"},
+		Description: "The exported records, streamed. `format=csv` returns text/csv; `format=jsonl` returns one JSON object per line as application/x-ndjson. The filename is carried in Content-Disposition.",
+	}
+
+	c.StreamingSuccess["GET /api/v1/documents/{id}/download"] = openapi.StreamingResponse{
+		MediaTypes:  []string{"application/octet-stream"},
+		Description: "The stored file's bytes. The Content-Type is the type recorded for the document, and Content-Disposition carries its filename. Content-Length is set, and the body is not JSON.",
+	}
 
 	// --- Migrations ---------------------------------------------------------
 	c.RequestBodies["POST /api/v1/migrations"] = reflect.TypeOf(createMigrationRequest{})
