@@ -75,6 +75,18 @@ func APIContract() openapi.Contract {
 
 	c.Responses["GET /api/v1/auth/me"] = reflect.TypeOf(meResponse{})
 
+	// Single sign-on. The start and callback are browser navigations, so they
+	// answer a redirect rather than a JSON body; only the provider list and the
+	// administration routes carry a schema.
+	c.Responses["GET /api/v1/auth/oidc/providers"] = reflect.TypeOf(ssoProvidersResponse{})
+	c.Responses["GET /api/v1/auth/identities"] = reflect.TypeOf(httpx.ListResponse[map[string]any]{})
+	c.RequestBodies["POST /api/v1/admin/sso/providers"] = reflect.TypeOf(oidcProviderInput{})
+	c.RequiredBody["OidcProviderInput"] = []string{"key", "display_name", "issuer", "client_id"}
+	c.Responses["GET /api/v1/admin/sso/providers"] = reflect.TypeOf(oidcProviderListResponse{})
+	c.Responses["POST /api/v1/admin/sso/providers"] = reflect.TypeOf(oidcProviderResponse{})
+	c.RequestBodies["PUT /api/v1/admin/sso/providers/{id}"] = reflect.TypeOf(oidcProviderInput{})
+	c.Responses["PUT /api/v1/admin/sso/providers/{id}"] = reflect.TypeOf(oidcProviderResponse{})
+
 	// --- Users, roles, teams, organizations ---------------------------------
 	c.RequestBodies["POST /api/v1/users"] = reflect.TypeOf(inviteUserRequest{})
 	c.RequiredBody["InviteUserRequest"] = []string{"email", "display_name"}

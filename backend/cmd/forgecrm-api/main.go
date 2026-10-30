@@ -177,6 +177,7 @@ func run() error {
 		Forecast:     services.Forecast,
 		Risk:         services.Risk,
 		Storage:      services.Storage,
+		OIDC:         services.OIDC,
 		StartedAt:    time.Now(),
 		Version:      version,
 		BuildCommit:  commit,

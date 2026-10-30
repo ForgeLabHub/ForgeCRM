@@ -174,6 +174,9 @@ var Anonymous = map[string]string{
 	"POST /api/v1/auth/password/forgot": "Request a password reset. The response is identical whether or not the account exists.",
 	"POST /api/v1/auth/password/reset":  "Complete a password reset with a single-use token.",
 	"POST /api/v1/auth/mfa/verify":      "Complete sign-in by presenting a second factor.",
+	"GET /api/v1/auth/oidc/providers":   "The single sign-on providers a signed-out visitor may choose from. Returns an empty list when SSO is not configured.",
+	"GET /api/v1/auth/oidc/start":       "Begin single sign-on: redirects the browser to the configured identity provider.",
+	"GET /api/v1/auth/oidc/callback":    "Complete single sign-on: verifies the provider's response and establishes a session, then redirects back into the application.",
 }
 
 // SessionOnly lists routes that require a signed-in session but no specific
@@ -187,6 +190,7 @@ var SessionOnly = map[string]string{
 	"GET /api/v1/auth/me":               "The current caller and their CSRF token.",
 	"POST /api/v1/auth/logout":          "Sign out and revoke the current session.",
 	"GET /api/v1/auth/sessions":         "The caller's own active sessions.",
+	"GET /api/v1/auth/identities":       "The caller's own linked single sign-on identities.",
 	"DELETE /api/v1/auth/sessions/{id}": "Revoke one of the caller's own sessions.",
 	"POST /api/v1/auth/password/change": "Change the caller's own password.",
 	"POST /api/v1/auth/mfa/enroll":      "Begin enrolling a second factor for the caller.",

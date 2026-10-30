@@ -28,6 +28,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/jobs"
 	"github.com/geff1778/forgecrm/internal/migratex"
 	"github.com/geff1778/forgecrm/internal/notify"
+	"github.com/geff1778/forgecrm/internal/oidc"
 	"github.com/geff1778/forgecrm/internal/outbox"
 	"github.com/geff1778/forgecrm/internal/ratelimit"
 	"github.com/geff1778/forgecrm/internal/rbac"
@@ -79,6 +80,10 @@ type Services struct {
 	// Risk scans the CRM for explainable risk conditions and keeps the signals an
 	// operator works through. It cannot modify CRM data.
 	Risk *risk.Service
+	// OIDC is corporate single sign-on. It authenticates a person but does not
+	// mint a session; the API issues the session through authn, so there is one
+	// place that creates sessions.
+	OIDC *oidc.Service
 }
 
 // Build constructs every service from the given configuration and database.
@@ -159,6 +164,7 @@ func Build(cfg *config.Config, db *database.DB, keyring *secrets.Keyring, log *s
 		Simulation:   simulate.NewService(db, crmSvc, auditLog),
 		Forecast:     forecast.NewService(db, crmSvc, auditLog),
 		Risk:         risk.NewService(db, crmSvc, auditLog),
+		OIDC:         oidc.NewService(db, cfg, keyring, auditLog, log),
 		Workflows: workflow.NewEngine(workflow.Config{
 			DB:     db,
 			CRM:    crmSvc,
