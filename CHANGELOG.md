@@ -10,6 +10,21 @@ once it reaches 1.0.
 
 ### Added
 
+- **Retention for the migration reconciliation history.** `migratex.Reconcile`
+  writes one `migration_reconciliations` row per row-count comparison after an
+  import, and nothing pruned them: on a deployment that reconciles on a schedule
+  the table grew by one row per run without bound, exactly the leak the retention
+  engine exists to close for the other run histories (`workflow_runs`,
+  `integration_runs`). The registry now carries a `migration_reconciliations`
+  policy (180-day default, 30-day minimum, measured from `created_at`), and
+  migration `0026` adds the index the sweep needs. The sweep filters on the time
+  column alone and no organization, so it needs an index that leads with
+  `created_at`; the existing `migration_recon_job_idx` leads with `migration_job_id`
+  and cannot serve it, so without the new index the sweep would scan the table.
+  `TestRetentionSweepIndexesExist` now pins the new index, and
+  `TestRetentionSweepsMigrationReconciliations` proves against a real database that
+  an old comparison is removed and a fresh one is kept.
+
 - **Storage reconciliation actually runs.** `storage.Service.Reconcile` repaired the
   two ways the object store and the `documents` table can disagree — a row whose
   object is gone (archived, so the API stops offering a broken download) and an
