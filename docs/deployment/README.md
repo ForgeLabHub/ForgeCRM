@@ -92,3 +92,24 @@ The stack in this repository was brought up and tested end to end: four containe
 started, health checks passed, migrations reached version 5, an administrator was
 bootstrapped, and the smoke test reported 9 of 9 checks passing, including a full
 archive import executed by the worker.
+
+## Render Deployment (Blueprint)
+
+ForgeCRM can be deployed directly to [Render](https://render.com) using the included `render.yaml` Blueprint specification.
+
+### Architecture on Render
+
+1. **PostgreSQL Database (`forgecrm-db`)**: Render Managed PostgreSQL database instance.
+2. **Backend Web Service (`forgecrm-api`)**: Render Web Service built from `./backend/Dockerfile`. Serves the REST API and applies database migrations on startup (`FORGECRM_MIGRATE_ON_START=true`).
+3. **Background Worker (`forgecrm-worker`)**: Render Background Worker built from `./backend/Dockerfile` with entrypoint `/usr/local/bin/forgecrm-worker` processing background jobs and workflows.
+4. **Frontend Static Site (`forgecrm-frontend`)**: Render Static Site compiled via `cd frontend && npm ci && npm run build` and served via global CDN with SPA rewrite rules (`/* -> /index.html`).
+
+### Deploying via Blueprint
+
+1. Connect the repository `ForgeLabHub/ForgeCRM` in your Render Dashboard.
+2. Choose **New Blueprint Instance**.
+3. Render will automatically detect `render.yaml` and provision `forgecrm-db`, `forgecrm-api`, `forgecrm-worker`, and `forgecrm-frontend`.
+4. Once deployed, bootstrap the platform administrator via Render SSH or Shell:
+   ```bash
+   FORGECRM_BOOTSTRAP_PASSWORD="<strong-password>" /usr/local/bin/forgecrm-api -bootstrap-admin -bootstrap-email admin@example.com
+   ```
