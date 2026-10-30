@@ -48,6 +48,11 @@ const (
 	// directories accumulate without bound, because the in-process cleanup only
 	// runs on the path that returns normally.
 	KindImportTempSweep = "maintenance.import_temp"
+	// KindImportFileReclaim removes uploaded files no import_jobs row references.
+	// The retention engine sweeps the rows, but it knows nothing about the private
+	// files those rows describe, so without this pass the storage directory grows by
+	// the size of every upload ever made.
+	KindImportFileReclaim = "maintenance.import_files"
 	// KindAgentSweep expires approval requests that were never decided, and fails
 	// the runs that were waiting on them. It is the bound that keeps "waiting for
 	// approval" from becoming "waiting forever" (ADR 0005).

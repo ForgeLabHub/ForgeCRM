@@ -27,7 +27,7 @@ func TestStatusAndKindVocabulariesAreWellFormed(t *testing.T) {
 	kinds := []string{
 		KindImportExecute, KindImportDryRun, KindExportExecute, KindMigrationRun,
 		KindWebhookDeliver, KindEmailSend, KindOutboxDrain, KindReconcile,
-		KindRetentionSweep, KindImportTempSweep, KindAgentSweep,
+		KindRetentionSweep, KindImportTempSweep, KindImportFileReclaim, KindAgentSweep,
 	}
 	seenKind := map[string]bool{}
 	for _, k := range kinds {

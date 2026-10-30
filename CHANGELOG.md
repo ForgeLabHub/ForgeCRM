@@ -10,6 +10,20 @@ once it reaches 1.0.
 
 ### Added
 
+- **Import file reclamation.** The retention engine swept `import_jobs` rows but
+  knew nothing about the private files those rows described, so every upload ever
+  made left its file on disk forever — the row sweep reclaimed the record, not the
+  disk. `importx.ReclaimStoredFiles` is the file-side counterpart, run on the same
+  maintenance tick as `maintenance.import_files`: it removes uploaded files no
+  `import_jobs` row references. It keeps a file younger than its age bound, because
+  a file is written before its row is inserted and a young one may belong to an
+  upload in flight, and it keeps any file a row still references. It is a dry run
+  whenever retention is, so a deployment that has not opted into deletion never
+  loses a file to it. Covered by `internal/testsupport/import_reclaim_test.go`
+  against a real database and a real storage directory, including the end-to-end
+  property that a row swept by the retention engine takes its file with it on the
+  next reclaim pass.
+
 - **Browsable API reference.** The specification was machine-readable but had no
   human view, so reading it meant a JSON file or a third-party viewer. The
   generator now also writes `docs/api/index.html`: a single self-contained page,

@@ -313,6 +313,9 @@ func (r *handlerRegistry) handle(ctx context.Context, queue *jobs.Queue, job *jo
 	case jobs.KindImportTempSweep:
 		return r.importTempSweep(ctx)
 
+	case jobs.KindImportFileReclaim:
+		return r.importFileReclaim(ctx)
+
 	case jobs.KindAgentSweep:
 		return r.agentSweep(ctx)
 
@@ -419,6 +422,41 @@ func (r *handlerRegistry) importTempSweep(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("sweep import temp directories: %w", err)
 	}
+	return nil
+}
+
+// importFileReclaim removes uploaded files no import_jobs row references. The
+// retention registry sweeps the rows but knows nothing about the private files
+// they describe, so this is what makes the import_jobs window reclaim the disk the
+// import consumed. It is the file-side counterpart to the row sweep and runs on
+// the same tick.
+//
+// The age bound is deliberately larger than the job timeout (30 minutes, see the
+// worker's job context) and larger than any in-flight upload: the file is written
+// before its row is inserted, so a file younger than the bound may belong to a row
+// that does not exist yet. A dry run only measures and is the default posture of
+// the retention engine, so a deployment that has not opted into deletion never
+// loses a file to this pass.
+func (r *handlerRegistry) importFileReclaim(ctx context.Context) error {
+	if r.imports == nil {
+		return nil
+	}
+	dryRun := r.retention == nil || r.retention.DryRun()
+	report, err := r.imports.ReclaimStoredFiles(ctx, 2*time.Hour, dryRun)
+	if err != nil {
+		return fmt.Errorf("reclaim import files: %w", err)
+	}
+	if len(report.Errors) > 0 {
+		r.log.Warn("import file reclaim could not remove some files",
+			"errors", len(report.Errors), "first", report.Errors[0])
+	}
+	mode := "reclaimed"
+	if report.DryRun {
+		mode = "previewed"
+	}
+	r.log.Info("import file reclaim complete", "mode", mode,
+		"scanned", report.Scanned, "referenced", report.Referenced,
+		"orphans", report.Orphans, "removed", report.Removed, "bytes", report.Bytes)
 	return nil
 }
 
@@ -666,6 +704,15 @@ func runMaintenanceLoop(ctx context.Context, log *slog.Logger, queue *jobs.Queue
 				log.Warn("could not enqueue the import temp sweep", "error", err)
 			} else if temp != nil {
 				log.Info("enqueued the import temp sweep", "job_id", temp.ID)
+			}
+			// Uploaded files the retention sweep has left unreferenced are reclaimed on
+			// the same tick. The row sweep removes the import_jobs rows; this removes the
+			// files they described, so the window reclaims disk as well as rows.
+			files, err := queue.EnqueuePeriodic(ctx, jobs.KindImportFileReclaim, map[string]any{})
+			if err != nil {
+				log.Warn("could not enqueue the import file reclaim", "error", err)
+			} else if files != nil {
+				log.Info("enqueued the import file reclaim", "job_id", files.ID)
 			}
 		}
 	}
