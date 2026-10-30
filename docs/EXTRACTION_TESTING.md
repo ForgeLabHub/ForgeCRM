@@ -1,85 +1,85 @@
-# Extraction testing
+# Тестирование выделения
 
-A reproducible procedure for proving that a module can stand alone. The rule this
-document enforces is the one in `ORG_DOD.md`: **a module is not extract-ready until
-it has been copied into a clean project and built, tested and run there.** A
-green monolith build is not evidence.
+Воспроизводимая процедура доказательства того, что модуль может стоять отдельно.
+Правило, которое обеспечивает этот документ, — из `ORG_DOD.md`: **модуль не готов к
+выделению, пока он не скопирован в чистый проект и не собран, протестирован и запущен
+там.** Зелёная сборка монолита не является доказательством.
 
-This document defines the procedure and records the first executions. The
-procedure now has a tool: when a module has proved it stands alone, the
-[constructor](CONSTRUCTOR.md) turns a recipe naming that module — and its proven
-dependencies — into a working project in one command. The harness proves the
-property; the constructor acts on it. Neither replaces the other: a recipe is only
-built from modules the harness has already passed.
+Этот документ определяет процедуру и записывает первые исполнения. У процедуры теперь
+есть инструмент: когда модуль доказал, что стоит отдельно, [конструктор](CONSTRUCTOR.md)
+превращает рецепт, называющий этот модуль — и его доказанные зависимости, — в
+работающий проект одной командой. Набор доказывает свойство; конструктор на него
+опирается. Ни один не заменяет другой: рецепт строится только из модулей, которые
+набор уже прошёл.
 
-## Procedure
+## Процедура
 
-For a candidate module `M` at ForgeCRM commit `SHA`:
+Для модуля-кандидата `M` на коммите ForgeCRM `SHA`:
 
-1. **Record the source SHA.**
+1. **Запишите исходный SHA.**
    ```bash
    git -C /workspace/project/ForgeCRM rev-parse HEAD
    ```
-2. **Create a clean project.**
+2. **Создайте чистый проект.**
    ```bash
    T=/tmp/extract-M
    rm -rf "$T" && mkdir -p "$T"
    ```
-3. **Copy only the module's files.** Non-test and test files of the package, and
-   nothing else unless it is a *declared* dependency:
+3. **Скопируйте только файлы модуля.** Не-тестовые и тестовые файлы пакета, и ничего
+   больше, если это не *объявленная* зависимость:
    ```bash
    cp backend/internal/M/*.go "$T"/
    ```
-4. **Remove references to ForgeCRM internal packages.** If any import still names
-   `github.com/geff1778/forgecrm/internal/…`, the module is not independent: that
-   import either travels (add it and repeat) or must be inverted behind an
-   interface. Record which.
-5. **Provide a `go.mod`** with a throwaway module path and only the third-party
-   requirements the module actually needs, pinned to versions from the module
-   cache:
+4. **Удалите ссылки на внутренние пакеты ForgeCRM.** Если какой-либо импорт всё ещё
+   называет `github.com/geff1778/forgecrm/internal/…`, модуль не независим: этот импорт
+   либо путешествует (добавьте его и повторите), либо должен быть инвертирован за
+   интерфейсом. Запишите, что именно.
+5. **Предоставьте `go.mod`** с одноразовым путём модуля и только теми сторонними
+   требованиями, которые модуль действительно нуждается, закреплёнными на версиях из
+   кэша модулей:
    ```bash
    cd "$T" && printf 'module example.com/M\n\ngo 1.26.10\n' > go.mod
    ```
-6. **Add fake adapters** for any external dependency so the module runs with no
-   real service.
-7. **Build:** `go build ./...`
-8. **Unit tests:** `go test -count=1 ./...`
-9. **Integration/smoke:** run the module's integration test if it needs a real
-   service, or a `cmd/smoke` program that exercises the public API:
+6. **Добавьте фейковые адаптеры** для любой внешней зависимости, чтобы модуль работал
+   без реального сервиса.
+7. **Сборка:** `go build ./...`
+8. **Модульные тесты:** `go test -count=1 ./...`
+9. **Интеграция/smoke:** запустите интеграционный тест модуля, если ему нужен реальный
+   сервис, или программу `cmd/smoke`, которая упражняет публичный API:
    ```bash
-   mkdir -p cmd/smoke   # a main.go using only the module's public API
+   mkdir -p cmd/smoke   # main.go, использующий только публичный API модуля
    go run ./cmd/smoke
    ```
-10. **Confirm no ForgeCRM Compose is required.** The smoke must pass with no
-    PostgreSQL/Redis/S3 unless the module's whole purpose is that service.
-11. **Record the result** in `docs/EXTRACT_READY.md` with both SHAs (source
-    ForgeCRM SHA and the test project's state) and the exact commands and output.
+10. **Убедитесь, что стек ForgeCRM в Compose не требуется.** Smoke должен проходить без
+    PostgreSQL/Redis/S3, если только весь смысл модуля не в этом сервисе.
+11. **Запишите результат** в `docs/EXTRACT_READY.md` с обоими SHA (исходный SHA
+    ForgeCRM и состояние тестового проекта) и точными командами и выводом.
 
-**The procedure is not successful until step 11 is written down.** An extraction
-that ran but was not recorded does not count.
+**Процедура не успешна, пока не записан шаг 11.** Выделение, которое прошло, но не было
+записано, не считается.
 
-## What counts as a hidden dependency
+## Что считается скрытой зависимостью
 
-A hidden dependency is any import or runtime requirement discovered during
-extraction that the module's documentation did not list. Common ones:
+Скрытая зависимость — это любой импорт или требование времени исполнения, обнаруженное
+при выделении, которое документация модуля не перечислила. Частые:
 
-- a shared `httpx` helper for error responses;
-- `database` for a transaction;
-- a `logging` redactor;
-- a `config` struct;
-- an ambient `context` value another package sets.
+- общий помощник `httpx` для ответов об ошибках;
+- `database` для транзакции;
+- редактор `logging`;
+- структура `config`;
+- окружающее значение `context`, которое устанавливает другой пакет.
 
-Each is a finding. The extraction either carries it (and the module's dependency
-list grows) or inverts it behind an interface (and the module's boundary shrinks).
-Both are acceptable outcomes; silently importing half the monolith is not.
+Каждое — это находка. Выделение либо несёт его (и список зависимостей модуля растёт),
+либо инвертирует его за интерфейсом (и граница модуля уменьшается). Оба исхода
+приемлемы; молчаливый импорт половины монолита — нет.
 
-## Executed extractions
+## Выполненные выделения
 
 ### `analytics` — READY
 
-- **Source SHA:** `7a6d67f`
-- **Internal imports:** none.
-- **Commands:**
+- **Исходный SHA:** `7a6d67f`
+- **Внутренние импорты:** нет.
+- **Команды:**
   ```bash
   cp backend/internal/analytics/*.go /tmp/extract-analytics/
   cd /tmp/extract-analytics && printf 'module example.com/analytics\n\ngo 1.26.10\n' > go.mod
@@ -88,252 +88,250 @@ Both are acceptable outcomes; silently importing half the monolith is not.
   go test -count=1 ./...  # ok  example.com/analytics  0.006s
   go run ./cmd/smoke      # smoke: 49.98
   ```
-- **Result:** built, tested and ran standalone. No ForgeCRM package, no database.
-- **Hidden dependencies found:** none.
+- **Результат:** собран, протестирован и запущен автономно. Ни пакета ForgeCRM, ни базы.
+- **Найденные скрытые зависимости:** нет.
 
-### `ratelimit` — READY (memory path)
+### `ratelimit` — READY (путь в памяти)
 
-- **Source SHA:** `7a6d67f`
-- **Internal imports:** none.
-- **Commands:**
+- **Исходный SHA:** `7a6d67f`
+- **Внутренние импорты:** нет.
+- **Команды:**
   ```bash
   cp backend/internal/ratelimit/*.go /tmp/extract-ratelimit/
-  # go.mod pins go-redis v9.23.0 and golang.org/x/sys v0.49.0 from the cache
+  # go.mod закрепляет go-redis v9.23.0 и golang.org/x/sys v0.49.0 из кэша
   go build ./...   # ok
   go test -count=1 -run 'TestMemory|TestLimiter|TestFail|TestDisabled|TestStoreError' ./...
   # ok  example.com/ratelimit  0.026s
   ```
-- **Result:** built and its memory-path unit tests passed standalone.
-- **Not verified in isolation:** `redis_integration_test.go` (build tag
-  `integration`) needs a live Redis; the Redis code path compiled but was not
-  executed in the clean project. Recorded, not glossed over.
+- **Результат:** собран, и его модульные тесты пути в памяти прошли автономно.
+- **Не проверено изолированно:** `redis_integration_test.go` (тег сборки
+  `integration`) нуждается в живом Redis; путь кода Redis скомпилировался, но не
+  исполнялся в чистом проекте. Записано, не заглажено.
 
 ### `netguard` — READY
 
-- **Internal imports:** none (standard library only).
-- **Commands:** `scripts/extract-test/netguard/setup.sh` — `go build`, `go test`,
-  and a smoke that asserts loopback, link-local metadata and `file://` are refused
-  while a public literal address is allowed.
-- **Result:** built, tested and ran standalone with no dependency at all.
-- **Hidden dependencies found:** none. The setup asserts the `go.mod` has no
-  `require` block, so a third-party dependency would fail the extraction.
+- **Внутренние импорты:** нет (только стандартная библиотека).
+- **Команды:** `scripts/extract-test/netguard/setup.sh` — `go build`, `go test` и smoke,
+  который утверждает, что loopback, link-local метаданные и `file://` отклоняются, а
+  публичный литеральный адрес разрешается.
+- **Результат:** собран, протестирован и запущен автономно без единой зависимости.
+- **Найденные скрытые зависимости:** нет. Setup утверждает, что в `go.mod` нет блока
+  `require`, поэтому сторонняя зависимость провалила бы выделение.
 
 ### `objectstore` — READY
 
-- **Internal imports:** `netguard` only, copied into a subdirectory of the extracted
-  module and re-pointed at it.
-- **Commands:** `scripts/extract-test/objectstore/setup.sh` — `go build`, `go test`
-  (the shared provider contract runs against `Memory` and against a real S3 wire
-  protocol via `gofakes3`), and a smoke that stores, reads, lists, presigns and
-  deletes an object.
-- **Result:** built, tested and ran standalone. No database, no audit log, no RBAC,
-  no HTTP error type.
-- **Hidden dependencies found:** none.
+- **Внутренние импорты:** только `netguard`, скопированный в подкаталог выделенного
+  модуля и переуказанный на него.
+- **Команды:** `scripts/extract-test/objectstore/setup.sh` — `go build`, `go test`
+  (общий контракт провайдера идёт против `Memory` и против реального протокола S3 через
+  `gofakes3`) и smoke, который сохраняет, читает, перечисляет, подписывает и удаляет
+  объект.
+- **Результат:** собран, протестирован и запущен автономно. Ни базы, ни журнала аудита,
+  ни RBAC, ни типа ошибки HTTP.
+- **Найденные скрытые зависимости:** нет.
 
 ### `secrets` — READY
 
-- **Internal imports:** none (`golang.org/x/crypto` only).
-- **Commands:** `scripts/extract-test/secrets/setup.sh` — `go build`, `go test`
-  and a smoke that hashes, verifies, rejects a mismatch and round-trips a value
-  through the keyring.
-- **Result:** built, tested and ran standalone. The package shipped no tests
-  before this slice; it now ships 20, and they run in the extracted project.
-- **Hidden dependencies found:** none.
+- **Внутренние импорты:** нет (только `golang.org/x/crypto`).
+- **Команды:** `scripts/extract-test/secrets/setup.sh` — `go build`, `go test` и smoke,
+  который хеширует, проверяет, отклоняет несовпадение и прогоняет значение через кольцо
+  ключей.
+- **Результат:** собран, протестирован и запущен автономно. Пакет не поставлял тестов до
+  этого среза; теперь он поставляет 20, и они идут в выделенном проекте.
+- **Найденные скрытые зависимости:** нет.
 
 ### `logging` — READY
 
-- **Internal imports:** none (standard library only).
-- **Commands:** `scripts/extract-test/logging/setup.sh` — `go build`, `go test` and
-  a smoke that logs a secret through `New` and asserts it is absent from the
-  output.
-- **Result:** built, tested and ran standalone. The package shipped no tests
-  before this slice; it now ships tests pinning the redaction control.
-- **Hidden dependencies found:** none.
+- **Внутренние импорты:** нет (только стандартная библиотека).
+- **Команды:** `scripts/extract-test/logging/setup.sh` — `go build`, `go test` и smoke,
+  который логирует секрет через `New` и утверждает, что он отсутствует в выводе.
+- **Результат:** собран, протестирован и запущен автономно. Пакет не поставлял тестов до
+  этого среза; теперь он поставляет тесты, закрепляющие контроль сокрытия.
+- **Найденные скрытые зависимости:** нет.
 
 ### `httpx` — READY
 
-- **Internal imports:** `logging`, `ratelimit` (both proven leaves, copied into
-  the extracted module).
-- **Commands:** `scripts/extract-test/httpx/setup.sh` — `go build`, `go test` and a
-  smoke that round-trips a JSON list response, drives a rate-limited handler to a
-  429 (with the limit header on the allowed response) and resolves a client
-  address.
-- **Result:** built, tested and ran standalone. The package's own tests, including
-  the client-address trust tests, run in the extracted module.
-- **Hidden dependencies found:** none.
+- **Внутренние импорты:** `logging`, `ratelimit` (оба доказанных листа, скопированные в
+  выделенный модуль).
+- **Команды:** `scripts/extract-test/httpx/setup.sh` — `go build`, `go test` и smoke,
+  который прогоняет JSON-ответ списка, доводит обработчик с ограничением до 429 (с
+  заголовком лимита на разрешённом ответе) и определяет адрес клиента.
+- **Результат:** собран, протестирован и запущен автономно. Собственные тесты пакета,
+  включая тесты доверия адресу клиента, идут в выделенном модуле.
+- **Найденные скрытые зависимости:** нет.
 
 ### `importx/safe` — READY
 
-- **Internal imports:** none.
-- **Commands:** `scripts/extract-test/safe/setup.sh` — `go build`, `go test` and a
-  smoke that round-trips a ZIP, refuses a path traversal and refuses a zip bomb.
-- **Result:** built, tested and ran standalone; the package's ~24 security tests
-  (traversal, symlink, zip bomb, deep nesting, corrupt data) run in the extracted
-  module.
-- **Hidden dependencies found:** none.
+- **Внутренние импорты:** нет.
+- **Команды:** `scripts/extract-test/safe/setup.sh` — `go build`, `go test` и smoke,
+  который прогоняет ZIP, отклоняет обход пути и отклоняет zip-бомбу.
+- **Результат:** собран, протестирован и запущен автономно; ~24 теста безопасности
+  пакета (обход, символическая ссылка, zip-бомба, глубокая вложенность, повреждённые
+  данные) идут в выделенном модуле.
+- **Найденные скрытые зависимости:** нет.
 
 ### `importx/parsers` — READY
 
-- **Internal imports:** none.
-- **Commands:** `scripts/extract-test/parsers/setup.sh` — `go build`, `go test` and
-  a smoke that parses a CSV and a JSON export.
-- **Result:** built, tested and ran standalone. The package had no tests; 19 were
-  added in this slice, and they found two real bugs — XLSX was rejected by the
-  UTF-8 check applied to every format, and the XML parser emitted a record's
-  attributes and nested elements as separate rows. Both are fixed.
-- **Hidden dependencies found:** none.
+- **Внутренние импорты:** нет.
+- **Команды:** `scripts/extract-test/parsers/setup.sh` — `go build`, `go test` и smoke,
+  который разбирает CSV и экспорт JSON.
+- **Результат:** собран, протестирован и запущен автономно. Пакет не имел тестов; в этом
+  срезе добавлено 19, и они нашли два реальных бага — XLSX отклонялся проверкой UTF-8,
+  применявшейся ко всем форматам, а XML-парсер выдавал атрибуты и вложенные элементы
+  записи как отдельные строки. Оба исправлены.
+- **Найденные скрытые зависимости:** нет.
 
 ### `database` — READY
 
-- **Internal imports:** none.
-- **Commands:** `scripts/extract-test/database/setup.sh` — `go build`, `go test`
-  and a smoke that confirms an over-large pool is refused before any connection.
-- **Result:** built, tested and ran standalone. Its pool-guard tests need no
-  server, so the extracted module is green everywhere.
-- **Hidden dependencies found:** none.
+- **Внутренние импорты:** нет.
+- **Команды:** `scripts/extract-test/database/setup.sh` — `go build`, `go test` и smoke,
+  который подтверждает, что слишком большой пул отклоняется до любого соединения.
+- **Результат:** собран, протестирован и запущен автономно. Его тесты защиты пула не
+  нуждаются в сервере, поэтому выделенный модуль зелёный везде.
+- **Найденные скрытые зависимости:** нет.
 
 ### `rbac` — READY
 
-- **Internal imports:** `database` (extracted alongside it).
-- **Commands:** `scripts/extract-test/rbac/setup.sh` — `go build`, `go test` and a
-  smoke that drives the catalog, the principal checks and the owner's permission
-  set.
-- **Result:** built, tested and ran standalone, whole rather than split — the
-  catalog, `Principal` and `Service` already lift out together, so the split the
-  docs once proposed is a code change and not a boundary change.
-- **Hidden dependencies found:** none beyond `database`.
+- **Внутренние импорты:** `database` (выделен вместе с ним).
+- **Команды:** `scripts/extract-test/rbac/setup.sh` — `go build`, `go test` и smoke,
+  который прогоняет каталог, проверки принципала и набор разрешений владельца.
+- **Результат:** собран, протестирован и запущен автономно, целиком, а не раздельно —
+  каталог, `Principal` и `Service` уже поднимаются вместе, поэтому разделение, которое
+  однажды предлагали документы, — это изменение кода, а не границы.
+- **Найденные скрытые зависимости:** нет, кроме `database`.
 
 ### `audit` — READY
 
-- **Internal imports:** `database`, `logging` (extracted alongside it).
-- **Commands:** `scripts/extract-test/audit/setup.sh` — `go build`, `go test` and a
-  smoke that confirms the validation runs before any write.
-- **Result:** built, tested and ran standalone. Its first tests were added in this
-  slice (action vocabulary, validation ordering, marshalling helpers). Its schema
-  lives in migration 0001 and is not part of the package — a real extraction would
-  carry a migration with it.
-- **Hidden dependencies found:** none in the Go package.
+- **Внутренние импорты:** `database`, `logging` (выделены вместе с ним).
+- **Команды:** `scripts/extract-test/audit/setup.sh` — `go build`, `go test` и smoke,
+  который подтверждает, что валидация идёт до любой записи.
+- **Результат:** собран, протестирован и запущен автономно. Его первые тесты добавлены в
+  этом срезе (словарь действий, порядок валидации, помощники маршалинга). Его схема
+  живёт в миграции 0001 и не является частью пакета — реальное выделение понесло бы
+  миграцию с собой.
+- **Найденные скрытые зависимости:** нет в пакете Go.
 
 ### `outbox` — READY
 
-- **Internal imports:** `database`, `logging` (extracted alongside it).
-- **Commands:** `scripts/extract-test/outbox/setup.sh` — `go build`, `go test` and a
-  smoke that drives the event vocabulary and the event-to-envelope mapping.
-- **Result:** built, tested and ran standalone; its vocabulary test runs in the
-  extracted module.
-- **Hidden dependencies found:** none.
+- **Внутренние импорты:** `database`, `logging` (выделены вместе с ним).
+- **Команды:** `scripts/extract-test/outbox/setup.sh` — `go build`, `go test` и smoke,
+  который прогоняет словарь событий и отображение события в конверт.
+- **Результат:** собран, протестирован и запущен автономно; его тест словаря идёт в
+  выделенном модуле.
+- **Найденные скрытые зависимости:** нет.
 
 ### `retention` — READY
 
-- **Internal imports:** `audit`, `database` (extracted alongside it).
-- **Commands:** `scripts/extract-test/retention/setup.sh` — `go build`, `go test`
-  and a smoke that checks the 22-policy catalog and the safety posture.
-- **Result:** built, tested and ran standalone. The smoke caught a real fact
-  while it was written — an expiry-driven policy legitimately carries a zero
-  window, and a protected policy has no default on purpose — which the smoke now
-  encodes instead of assuming away.
-- **Hidden dependencies found:** none.
+- **Внутренние импорты:** `audit`, `database` (выделены вместе с ним).
+- **Команды:** `scripts/extract-test/retention/setup.sh` — `go build`, `go test` и smoke,
+  который проверяет каталог из 22 политик и позу безопасности.
+- **Результат:** собран, протестирован и запущен автономно. Smoke поймал реальный факт,
+  пока писался, — политика, движимая истечением, законно несёт нулевое окно, а у
+  защищённой политики намеренно нет значения по умолчанию — что smoke теперь кодирует,
+  а не отбрасывает предположением.
+- **Найденные скрытые зависимости:** нет.
 
 ### `agent` — READY
 
-- **Internal imports:** `audit`, `database`, `httpx` (and `httpx`'s leaves
-  `logging`, `ratelimit`), all extracted alongside it.
-- **Commands:** `scripts/extract-test/agent/setup.sh` — `go build`, `go test` and
-  a smoke that drives the argument hash, the risk tiers and the secret guard.
-- **Result:** built, tested and ran standalone; the argument-hash stability test —
-  the property the whole approval flow rests on — runs in the extracted module.
-- **Hidden dependencies found:** none. The `Executor` seam travels with the
-  package, which is what lets a host supply the real tool path.
+- **Внутренние импорты:** `audit`, `database`, `httpx` (и листья `httpx` — `logging`,
+  `ratelimit`), все выделены вместе с ним.
+- **Команды:** `scripts/extract-test/agent/setup.sh` — `go build`, `go test` и smoke,
+  который прогоняет хеш аргументов, уровни риска и защиту секретов.
+- **Результат:** собран, протестирован и запущен автономно; тест стабильности хеша
+  аргументов — свойство, на котором держится весь поток согласования, — идёт в выделенном
+  модуле.
+- **Найденные скрытые зависимости:** нет. Шов `Executor` путешествует с пакетом, что и
+  позволяет хосту поставлять реальный путь инструментов.
 
 ### `jobs` — READY
 
-- **Internal imports:** `database` (extracted alongside it).
-- **Commands:** `scripts/extract-test/jobs/setup.sh` — `go build`, `go test` and a
-  smoke that checks the kind/status vocabularies and the pre-write validation.
-- **Result:** built, tested and ran standalone. Writing the backoff test found a
-  real latent bug: the shift was clamped at 10, so the retry delay topped out at
-  1024s and the documented 30-minute ceiling was unreachable dead code.
-- **Hidden dependencies found:** none.
+- **Внутренние импорты:** `database` (выделен вместе с ним).
+- **Команды:** `scripts/extract-test/jobs/setup.sh` — `go build`, `go test` и smoke,
+  который проверяет словари вида/статуса и валидацию до записи.
+- **Результат:** собран, протестирован и запущен автономно. Написание теста задержки
+  нашло реальный скрытый баг: сдвиг был ограничен 10, поэтому задержка повтора
+  упиралась в 1024с, а документированный потолок в 30 минут был недостижимым мёртвым
+  кодом.
+- **Найденные скрытые зависимости:** нет.
 
 ### `crm` — READY
 
-- **Internal imports:** `audit`, `database`, `httpx`, `outbox`, `rbac` (all
-  extracted alongside it).
-- **Commands:** `scripts/extract-test/crm/setup.sh` — `go build`, `go test` and a
-  smoke that drives the validators and the `JSONMap` codec.
-- **Result:** built, tested and ran standalone. The package had no in-package
-  tests; it now has the first, covering the validators that run before any
-  database access.
-- **Hidden dependencies found:** none. The docs' claim that `httpx` and `outbox`
-  were "the real friction" was wrong — both are proven, so they travel.
+- **Внутренние импорты:** `audit`, `database`, `httpx`, `outbox`, `rbac` (все выделены
+  вместе с ним).
+- **Команды:** `scripts/extract-test/crm/setup.sh` — `go build`, `go test` и smoke,
+  который прогоняет валидаторы и кодек `JSONMap`.
+- **Результат:** собран, протестирован и запущен автономно. Пакет не имел тестов внутри
+  пакета; теперь у него первые, покрывающие валидаторы, которые идут до любого доступа к
+  базе.
+- **Найденные скрытые зависимости:** нет. Утверждение документов, что `httpx` и `outbox`
+  были «настоящим трением», оказалось неверным — оба доказаны, поэтому путешествуют.
 
 ### `storage` — READY
 
-- **Internal imports:** `audit`, `database`, `httpx`, `objectstore`, `netguard`,
-  `ratelimit`, `rbac` (all extracted alongside it).
-- **Commands:** `scripts/extract-test/storage/setup.sh` — `go build`, `go test`
-  (the key/extension/entity/S3-config tests) and a smoke that drives the memory
-  store round trip and the unconfigured-service posture.
-- **Result:** built, tested and ran standalone.
-- **Hidden dependencies found:** none.
+- **Внутренние импорты:** `audit`, `database`, `httpx`, `objectstore`, `netguard`,
+  `ratelimit`, `rbac` (все выделены вместе с ним).
+- **Команды:** `scripts/extract-test/storage/setup.sh` — `go build`, `go test` (тесты
+  ключа/расширения/сущности/конфигурации S3) и smoke, который прогоняет круговой рейс
+  хранилища в памяти и позу ненастроенного сервиса.
+- **Результат:** собран, протестирован и запущен автономно.
+- **Найденные скрытые зависимости:** нет.
 
 ### `integrations` — READY
 
-- **Internal imports:** `audit`, `database`, `httpx`, `netguard`, `ratelimit`,
-  `rbac`, `secrets` (all extracted alongside it).
-- **Commands:** `scripts/extract-test/integrations/setup.sh` — `go build`,
-  `go test` and a smoke that drives the SSRF guard's address and URL decisions.
-- **Result:** built, tested and ran standalone. The guard refuses loopback,
-  private and link-local addresses and a `file://` URL before any dial.
-- **Hidden dependencies found:** none.
+- **Внутренние импорты:** `audit`, `database`, `httpx`, `netguard`, `ratelimit`,
+  `rbac`, `secrets` (все выделены вместе с ним).
+- **Команды:** `scripts/extract-test/integrations/setup.sh` — `go build`, `go test` и
+  smoke, который прогоняет решения защиты SSRF по адресу и URL.
+- **Результат:** собран, протестирован и запущен автономно. Защита отклоняет loopback,
+  приватные и link-local адреса и URL `file://` до любого дозвона.
+- **Найденные скрытые зависимости:** нет.
 
-### `secrets` — ALMOST (superseded by READY above)
+### `secrets` — ALMOST (заменено READY выше)
 
-- **Source SHA:** `7a6d67f`
-- **Commands:** copied, built (`ok`) and a smoke hashed/verified a password.
-- **Blocker (now cleared):** `go test ./...` reported `[no test files]` — the
-  package shipped no tests of its own, so "the module's own tests run in isolation"
-  could not be satisfied. The package now ships `secrets_test.go`.
+- **Исходный SHA:** `7a6d67f`
+- **Команды:** скопирован, собран (`ok`) и smoke захешировал/проверил пароль.
+- **Блокер (теперь снят):** `go test ./...` сообщил `[no test files]` — пакет не
+  поставлял собственных тестов, поэтому «собственные тесты модуля идут изолированно»
+  нельзя было удовлетворить. Пакет теперь поставляет `secrets_test.go`.
 
-### `logging` — ALMOST (superseded by READY above)
+### `logging` — ALMOST (заменено READY выше)
 
-- **Commands:** copied, `go build ./...` and `go vet ./...` both clean.
-- **Blocker (now cleared):** no tests. The package now ships `logging_test.go`,
-  which pins the redaction control.
+- **Команды:** скопирован, `go build ./...` и `go vet ./...` оба чистые.
+- **Блокер (теперь снят):** нет тестов. Пакет теперь поставляет `logging_test.go`,
+  который закрепляет контроль сокрытия.
 
-## Next extraction candidate
+## Следующий кандидат на выделение
 
-The two `importx` sub-packages, `safe` and `parsers`, are now extracted and
-proven; they were the cheapest remaining targets because both are leaves with no
-in-module dependency, and running the parsers extraction is what surfaced its two
-real bugs.
+Два подпакета `importx`, `safe` и `parsers`, теперь выделены и доказаны; они были
+самыми дешёвыми оставшимися целями, потому что оба — листья без внутренних
+зависимостей, и именно запуск выделения parsers вскрыл его два реальных бага.
 
-The next candidates, in order of how much the boundary has to change first, are in
-`docs/EXTRACT_READY.md`: `rbac` (split the pure catalog and `Principal` from the
-DB-backed service), `retention` (extract the engine, inject a table catalog), and
-`integrations` (the SSRF guard is already out; the rest needs `secrets` and
-`audit`).
+Следующие кандидаты, в порядке того, насколько сначала должна измениться граница, — в
+`docs/EXTRACT_READY.md`: `rbac` (отделить чистый каталог и `Principal` от сервиса на
+базе), `retention` (выделить движок, внедрить каталог таблиц) и `integrations` (защита
+SSRF уже вынесена; остальному нужны `secrets` и `audit`).
 
-## Automating this
+## Автоматизация этого
 
-The procedure is implemented as `scripts/extract-test/`, driven by the table in
-`scripts/extract-test/modules.txt`. Each module has a `setup.sh` that performs
-steps 3–10 of the procedure above; `run.sh` runs every module's setup and fails if
-any of them fails. A CI job `extraction` runs it, and `internal/archtest`'s
-`TestExtractionBoundaryHolds` enforces the same boundaries from the import graph on
-every `go test ./...`.
+Процедура реализована как `scripts/extract-test/`, управляемая таблицей в
+`scripts/extract-test/modules.txt`. У каждого модуля есть `setup.sh`, выполняющий шаги
+3–10 процедуры выше; `run.sh` запускает setup каждого модуля и падает, если любой из них
+падает. Задание CI `extraction` запускает это, а
+`TestExtractionBoundaryHolds` в `internal/archtest` обеспечивает те же границы из графа
+импортов на каждом `go test ./...`.
 
-The job fails if a module claimed `READY` no longer builds or tests in isolation —
-which is the point: extraction readiness is a property that can regress, and CI
-should notice. The harness was itself verified to fail: replacing `objectstore`'s
-`netguard` import with `integrations` made both the harness and the archtest report
-the violation, and giving `logging` an in-module import made the archtest fail.
+Задание падает, если модуль, заявивший `READY`, больше не собирается или не тестируется
+изолированно — в этом и смысл: готовность к выделению — свойство, которое может
+регрессировать, и CI должен это замечать. Набор был сам проверен на отказ: замена
+импорта `netguard` в `objectstore` на `integrations` заставила и набор, и archtest
+сообщить о нарушении, а добавление внутреннего импорта в `logging` заставило archtest
+упасть.
 
-`modules.txt` lists thirty-three modules today: `netguard`, `analytics`,
+`modules.txt` перечисляет сегодня тридцать три модуля: `netguard`, `analytics`,
 `ratelimit`, `objectstore`, `secrets`, `logging`, `httpx`, `safe`
 (internal/importx/safe), `parsers` (internal/importx/parsers), `database`, `rbac`,
 `audit`, `outbox`, `retention`, `agent`, `jobs`, `crm`, `storage`, `integrations`,
 `config`, `workflow`, `events`, `migratex`, `simulate`, `forecast`, `risk`,
-`notify`, `ai`, `importx`, `migrations`, `migrate`, `authn` and `constructor`.
+`notify`, `ai`, `importx`, `migrations`, `migrate`, `authn` и `constructor`.
 
-See `scripts/extract-test/README.md` for how to add a module.
+О том, как добавить модуль, см. `scripts/extract-test/README.md`.

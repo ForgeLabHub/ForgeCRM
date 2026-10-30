@@ -1,10 +1,10 @@
-# Dependency map
+# Карта зависимостей
 
-Code-verified dependency graph at commit `7a6d67f`. Every edge below is a real
-non-test import taken from `go list -f '{{.ImportPath}} {{join .Imports " "}}'`.
-Nothing here is aspirational.
+Проверенный по коду граф зависимостей на коммите `7a6d67f`. Каждое ребро ниже —
+реальный не-тестовый импорт, взятый из `go list -f '{{.ImportPath}} {{join .Imports " "}}'`.
+Здесь нет ничего умозрительного.
 
-## How this was produced
+## Как это получено
 
 ```bash
 cd backend
@@ -12,20 +12,19 @@ go list -f '{{.ImportPath}} {{join .Imports " "}}' ./internal/... ./cmd/... \
   | sed 's#github.com/geff1778/forgecrm/##g'
 ```
 
-The output was parsed to keep only edges whose target begins with `internal/`,
-then out-degrees were counted and cycles were detected with a DFS colouring pass.
-The graph and the prose below are the result of that pass, not of reading folder
-names.
+Вывод был разобран, чтобы оставить только рёбра, чья цель начинается с `internal/`,
+затем были посчитаны исходящие степени и циклы обнаружены проходом раскраски DFS.
+Граф и текст ниже — результат того прохода, а не чтения имён папок.
 
-## Legend
+## Легенда
 
-- Solid arrows: a real `internal/…` import.
-- Dashed arrows: an external service reached at runtime (not a Go import).
-- `⟦cmd⟧`: a composition root (entrypoint), not a reusable module.
+- Сплошные стрелки: реальный импорт `internal/…`.
+- Пунктирные стрелки: внешний сервис, достигаемый во время исполнения (не импорт Go).
+- `⟦cmd⟧`: корень композиции (точка входа), не переиспользуемый модуль.
 
 ---
 
-## Graph — application and domain
+## Граф — приложение и домен
 
 ```mermaid
 graph TD
@@ -221,7 +220,7 @@ graph TD
 
 ---
 
-## Graph — external services (runtime, not imports)
+## Граф — внешние сервисы (во время исполнения, не импорты)
 
 ```mermaid
 graph LR
@@ -242,72 +241,72 @@ graph LR
   NGINX[(Nginx, same-origin)] --> API2
 ```
 
-Optional services: Redis (rate limiting across replicas), S3 (attachments),
-SMTP/Telegram (notifications), an AI provider (assist/MCP). Each reports itself
-"off" when unconfigured rather than failing at startup.
+Опциональные сервисы: Redis (ограничение частоты между репликами), S3 (вложения),
+SMTP/Telegram (уведомления), провайдер ИИ (assist/MCP). Каждый сообщает о себе «off»,
+когда не настроен, а не падает при старте.
 
 ---
 
-## Findings
+## Находки
 
-### 1. Cyclic dependencies
+### 1. Циклические зависимости
 
-**None.** The DFS over the real import graph found no cycle. This is consistent
-with `internal/archtest`, which pins the two rules that would create one
+**Нет.** DFS по реальному графу импортов не нашёл цикла. Это согласуется с
+`internal/archtest`, который закрепляет два правила, которые создали бы цикл
 (`TestNoPackageImportsAPI`, `TestApplicationServicesDependOnTheCoreAndNotTheReverse`).
 
-### 2. Modules with 8+ internal dependencies
+### 2. Модули с 8+ внутренними зависимостями
 
-Per the stop-rule "a module with 8+ dependencies is not extract-ready", these are
-recorded as `no` in `EXTRACT_READY.md` on this ground alone:
+Согласно правилу остановки «модуль с 8+ зависимостями не готов к выделению», они
+записаны как `no` в `EXTRACT_READY.md` уже на этом основании:
 
-| Package | Internal deps | Note |
+| Пакет | Внутренних зависимостей | Примечание |
 | --- | --- | --- |
-| `internal/api` | 26 | Composition/HTTP layer — not a module by design. |
-| `internal/wiring` | 22 | The composition root itself. |
-| `internal/importx` | 10 | Counts its own sub-packages `parsers` and `safe`; 8 if collapsed to top-level. |
-| `internal/ai` | 9 | Binds to `crm`, `rbac`, `audit`, `database`. |
-| `internal/events` | 8 | Binds to `outbox`, `integrations`, `rbac`, `secrets`. |
+| `internal/api` | 26 | Слой композиции/HTTP — по дизайну не модуль. |
+| `internal/wiring` | 22 | Сам корень композиции. |
+| `internal/importx` | 10 | Считает собственные подпакеты `parsers` и `safe`; 8 при свёртке до верхнего уровня. |
+| `internal/ai` | 9 | Связывается с `crm`, `rbac`, `audit`, `database`. |
+| `internal/events` | 8 | Связывается с `outbox`, `integrations`, `rbac`, `secrets`. |
 
-`cmd/forgecrm-worker` (17) and `cmd/forgecrm-api` (11) are entrypoints, not
-modules, and are excluded from the rule.
+`cmd/forgecrm-worker` (17) и `cmd/forgecrm-api` (11) — точки входа, а не модули, и
+исключены из правила.
 
-### 3. Modules that depend directly on infrastructure
+### 3. Модули, зависящие напрямую от инфраструктуры
 
-Nearly every application service depends on `database` and `httpx`. The packages
-that reach for a *specific* piece of infrastructure rather than the substrate:
+Почти каждый прикладной сервис зависит от `database` и `httpx`. Пакеты, тянущиеся к
+*конкретной* части инфраструктуры, а не к субстрату:
 
-- `ratelimit` → Redis (only when `RedisStore` is constructed; `MemoryStore` needs
-  nothing).
-- `objectstore` → S3/MinIO (`minio-go`), and `netguard` for the endpoint check.
-- `storage` → PostgreSQL (metadata rows); it delegates the object mechanism to
+- `ratelimit` → Redis (только когда строится `RedisStore`; `MemoryStore` не нуждается
+  ни в чём).
+- `objectstore` → S3/MinIO (`minio-go`) и `netguard` для проверки эндпоинта.
+- `storage` → PostgreSQL (строки метаданных); механизм объектов он делегирует
   `objectstore`.
 - `notify` → SMTP (`net/smtp`), Telegram (HTTP).
-- `ai` → an HTTP AI provider.
-- `integrations`/`events` → outbound HTTP through `netguard`.
+- `ai` → HTTP-провайдер ИИ.
+- `integrations`/`events` → исходящий HTTP через `netguard`.
 
-### 4. Modules tied to global application state
+### 4. Модули, привязанные к глобальному состоянию приложения
 
-There is **no package-level mutable global** used for wiring. State flows through
-`wiring.Services` → `api.Deps`. The only ambient state is the transaction carried
-on `context.Context` (`database.WithTx` / `database.TxFromContext`), which
-`crm` and `audit` read. A module that writes must therefore travel with
-`database` or accept a `Querier`.
+**Пакетной изменяемой глобальной переменной** для связывания нет. Состояние течёт
+через `wiring.Services` → `api.Deps`. Единственное окружающее состояние — транзакция,
+несомая на `context.Context` (`database.WithTx` / `database.TxFromContext`), которую
+читают `crm` и `audit`. Модуль, который пишет, поэтому должен путешествовать с
+`database` или принимать `Querier`.
 
-### 5. Modules that cannot be extracted without moving much of the monolith
+### 5. Модули, которые нельзя выделить без переноса большей части монолита
 
 - `api`, `wiring`, `config`, `openapi`, `migrate`, `migrations`, `testsupport`
-  are structurally application-wide. Extraction is not the goal for these.
+  структурно общеприкладные. Выделение для них не цель.
 
-### 6. Common infrastructure components (shared by everyone)
+### 6. Общие компоненты инфраструктуры (используемые всеми)
 
-`database`, `logging`, `httpx`, `rbac`, `audit`, `secrets`, `config`. These are
-the components an extraction must either carry or invert behind an interface.
-The lightest — `analytics`, `netguard` (both zero internal dependencies) and
-`logging`/`secrets` — are the natural first extractions, and `analytics` and
-`netguard` have been extracted and proven by `scripts/extract-test/`.
+`database`, `logging`, `httpx`, `rbac`, `audit`, `secrets`, `config`. Это компоненты,
+которые выделение должно либо нести, либо инвертировать за интерфейсом. Самые лёгкие —
+`analytics`, `netguard` (оба с нулём внутренних зависимостей) и `logging`/`secrets` —
+естественные первые выделения, и `analytics` и `netguard` выделены и доказаны
+`scripts/extract-test/`.
 
-### 7. Dependency direction (the rule the code follows)
+### 7. Направление зависимостей (правило, которому следует код)
 
 ```
 domain (crm, analytics)
@@ -321,31 +320,29 @@ platform (netguard, rbac, audit, database, httpx, ratelimit, retention,
 composition (wiring, api, cmd/*)
 ```
 
-`httpx` importing `ratelimit` is the one edge where a platform package reaches
-"sideways" into another platform package; it is intentional (the rate-limit
-middleware lives with the other middleware) and creates no cycle. `httpx` also
-depends on `logging`. Those two are its only in-module dependencies, and both are
-proven leaves, so `httpx` is itself extractable and is proven so by the harness in
+`httpx`, импортирующий `ratelimit`, — единственное ребро, где платформенный пакет
+тянется «вбок» в другой платформенный пакет; это намеренно (middleware ограничения
+частоты живёт с остальным middleware) и не создаёт цикла. `httpx` также зависит от
+`logging`. Эти двое — его единственные внутренние зависимости, и оба доказаны как
+листья, поэтому `httpx` сам извлекаем и доказан как таковой набором в
 `scripts/extract-test/httpx`.
 
-`importx`'s two sub-packages, `parsers` and `safe`, are leaves: neither imports
-anything else in this module. `safe` (untrusted-archive extraction) and `parsers`
-(tabular source parsing) are both extracted and proven by
-`scripts/extract-test/safe` and `scripts/extract-test/parsers`; the service in
-`importx` itself remains application code.
+Два подпакета `importx`, `parsers` и `safe`, — листья: ни один не импортирует что-либо
+ещё в этом модуле. `safe` (распаковка недоверенных архивов) и `parsers` (разбор
+табличных источников) оба выделены и доказаны `scripts/extract-test/safe` и
+`scripts/extract-test/parsers`; сам сервис в `importx` остаётся прикладным кодом.
 
-`database` is a leaf: it imports nothing else in this module, and it is extracted
-and proven by `scripts/extract-test/database`. `rbac`'s only in-module dependency
-is `database`, so it is extracted with it by `scripts/extract-test/rbac`; the
-archtest pins that `rbac` may import `database` and nothing else. `audit` and
-`outbox` are built on `database` and `logging` and on nothing else, and both are
-extracted and proven by `scripts/extract-test/audit` and
-`scripts/extract-test/outbox`; the archtest pins that boundary too. `retention` is
-built on `audit` and `database`, and `agent` on `audit`, `database` and `httpx` —
-the widest proven set — and both are extracted and proven by
-`scripts/extract-test/retention` and `scripts/extract-test/agent`. `jobs` is built
-on `database` alone; `crm` on `database`, `audit`, `httpx`, `outbox` and `rbac`;
-`storage` on `database`, `audit`, `httpx`, `objectstore` (and its `netguard`),
-`ratelimit` and `rbac`; and `integrations` on `database`, `audit`, `httpx`,
-`netguard`, `rbac` and `secrets`. All four are extracted and proven by
+`database` — лист: он не импортирует ничего ещё в этом модуле, и он выделен и доказан
+`scripts/extract-test/database`. Единственная внутренняя зависимость `rbac` —
+`database`, поэтому он выделяется вместе с ним через `scripts/extract-test/rbac`;
+archtest закрепляет, что `rbac` может импортировать `database` и ничего больше. `audit`
+и `outbox` построены на `database` и `logging` и ни на чём больше, и оба выделены и
+доказаны `scripts/extract-test/audit` и `scripts/extract-test/outbox`; archtest
+закрепляет и эту границу. `retention` построен на `audit` и `database`, а `agent` — на
+`audit`, `database` и `httpx` — самый широкий доказанный набор — и оба выделены и
+доказаны `scripts/extract-test/retention` и `scripts/extract-test/agent`. `jobs` построен
+только на `database`; `crm` — на `database`, `audit`, `httpx`, `outbox` и
+`rbac`; `storage` — на `database`, `audit`, `httpx`, `objectstore` (и его `netguard`),
+`ratelimit` и `rbac`; а `integrations` — на `database`, `audit`, `httpx`, `netguard`,
+`rbac` и `secrets`. Все четыре выделены и доказаны
 `scripts/extract-test/{jobs,crm,storage,integrations}`.
