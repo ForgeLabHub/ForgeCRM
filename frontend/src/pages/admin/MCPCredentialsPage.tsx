@@ -105,6 +105,8 @@ export function MCPCredentialsPage() {
         </p>
       </Card>
 
+      <ClientConfigCard />
+
       <Card
         title="Credentials"
         flush
@@ -240,6 +242,92 @@ export function MCPCredentialsPage() {
         }}
       />
     </>
+  )
+}
+
+/**
+ * A ready-to-paste client configuration.
+ *
+ * An operator who has just minted a token still has to work out the URL and the
+ * header shape, and a wrong guess looks like a network fault. The snippet names
+ * the endpoint the deployment actually serves and the exact header, so the first
+ * connection either works or fails for a reason that is visible. The token is
+ * never embedded: the placeholder is deliberate, because the value is a secret
+ * and this text may be copied into a shared place.
+ */
+function ClientConfigCard() {
+  const origin = typeof window === 'undefined' ? 'https://your-forgecrm-host' : window.location.origin
+  const endpoint = `${origin}/api/v1/mcp`
+  const config = JSON.stringify(
+    {
+      mcpServers: {
+        forgecrm: {
+          type: 'http',
+          url: endpoint,
+          headers: { Authorization: 'Bearer fcmcp_…' },
+        },
+      },
+    },
+    null,
+    2,
+  )
+
+  return (
+    <Card title="Client configuration">
+      <p className="text-muted text-sm" style={{ marginBottom: 'var(--space-3)' }}>
+        Point an MCP client at the endpoint below and give it a credential. The token is not filled
+        in here on purpose — paste it from your secret store.
+      </p>
+      <div className="stack stack--sm">
+        <div>
+          <span className="field__label">Endpoint</span>
+          <div className="mono text-sm">{endpoint}</div>
+        </div>
+        <CopyBlock label="mcpServers JSON" value={config} />
+        <CopyBlock
+          label="curl"
+          value={`curl -s ${endpoint} \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer fcmcp_…' \\\n  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'`}
+        />
+      </div>
+    </Card>
+  )
+}
+
+/** A monospaced block with a copy control. */
+function CopyBlock({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false)
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setCopied(false)
+    }
+  }
+
+  return (
+    <div>
+      <div className="row row--between">
+        <span className="field__label">{label}</span>
+        <button type="button" className="btn btn--ghost btn--sm" onClick={() => void copy()}>
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+      <pre
+        className="mono text-sm"
+        style={{
+          margin: 0,
+          padding: 'var(--space-3)',
+          background: 'var(--surface-sunken, #f4f4f5)',
+          borderRadius: 6,
+          overflowX: 'auto',
+        }}
+      >
+        {value}
+      </pre>
+    </div>
   )
 }
 

@@ -147,4 +147,14 @@ describe('MCPCredentialsPage', () => {
     expect(screen.queryByRole('button', { name: 'Rotate' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Revoke' })).toBeNull()
   })
+
+  it('offers a client configuration that names the endpoint and never embeds a token', async () => {
+    stubFetch()
+    renderPage()
+
+    // The snippet must point at the endpoint and carry only a placeholder.
+    const json = await screen.findByText(/"mcpServers"/)
+    expect(json.textContent).toContain('/api/v1/mcp')
+    expect(json.textContent).toContain('Bearer fcmcp_…')
+  })
 })
