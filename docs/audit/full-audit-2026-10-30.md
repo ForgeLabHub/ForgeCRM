@@ -71,6 +71,17 @@ npx playwright test                  # 49 passed, 1 skipped (реальный AP
 но документ описывал оба как `application/json`-объект, а экспорт — как `201`.
 Клиент, сгенерированный из документа, пытался бы разобрать CSV как JSON.
 
+### Цикл 17 — временные строки в retention
+
+| Коммит | Что |
+|---|---|
+| `e050e14` | Три политики retention для временных строк, которые никто не убирал: `oidc_login_states_expired` (по `expires_at`, то есть только истёкший вход), `password_reset_tokens_expired` (по `expires_at`), `email_log_settled` (по `created_at`, но только для `sent`/`failed`, чтобы не потерять письмо в очереди). Миграция `0024_transient_retention_indexes` добавляет индексы `password_reset_tokens_expires_idx` и `email_log_settled_idx` — у `password_reset_tokens` не было индекса по `expires_at`, а существующий индекс `email_log` ведёт по `status`, а не по времени. Интеграционный тест `TestRetentionSweepsTransientAuthAndDeliveryRows` кладёт рядом «живую» строку того же возраста, поэтому политика, чистящая по возрасту без учёта состояния, провалится. `oidc_login_states` уже имеет индекс из миграции 0022, а сама миграция обещала свипер, которого не было — это и был реальный дефект. |
+| `9546bec` | Настройки retention (`FORGECRM_RETENTION_ENABLED` / `_DRY_RUN` / `_ALLOW_AUDIT` / `_WINDOWS`) задокументированы в `.env.example`; до этого их можно было прочитать только из `internal/config`, и оператор не мог их обнаружить. |
+
+Число политик в реестре выросло с 22 до 25; счётчики миграций (24) и таблиц (72)
+обновлены в `docs/database/schema.md` и `docs/database/migrations.md`, ссылка на
+смоук-вывод исправлена в `docs/EXTRACT_READY.md`.
+
 ---
 
 ## 3. Состояние проекта
@@ -196,14 +207,17 @@ DTO у запроса/ответа). Схемы выводятся из Go-ти�
 
 ### 4.4 Retention и rotation (приоритет 2) — реализовано
 
-`internal/retention` (566 строк): реестр политик, **по умолчанию выключен**,
+`internal/retention` (600 строк): реестр политик, **по умолчанию выключен**,
 **dry-run по умолчанию**, пакетное удаление, защита append-only аудита, счётчики по
 каждой политике и одна запись аудита на реальный прогон.
 
-Покрытые таблицы (22 политики): `audit_log` (защищён), `ai_insights`, `ai_tasks`,
+Покрытые таблицы (25 политик): `audit_log` (защищён), `ai_insights`, `ai_tasks`,
 `agent_runs`, `workflow_runs`, `webhook_deliveries` (в т.ч. `_dead`, `_delivered`),
 `outbox_events`, `events_inbox`, `jobs`, `export_jobs`, `import_jobs`,
-`notifications`, `sessions`, `security_events` и др.
+`notifications`, `sessions`, `security_events`, `login_attempts`, `idempotency_keys`,
+`simulation_runs`, `forecast_runs`, `risk_signals`, `app_logs`, `integration_runs`,
+`oidc_login_states` (цикл 17), `password_reset_tokens` (цикл 17) и
+`email_log` (цикл 17) и др.
 
 Проверяется 13 интеграционными тестами: окно, dry-run, идемпотентность, защита
 таблиц, отказ чистить `audit_log`, минимальное окно, пакетная обработка,
@@ -292,8 +306,14 @@ tenant-agnostic, запись аудита, наличие индексов (`Te
    состояния загрузки/ошибки/повтора и потоковая выдача по SSE. Остаются
    осознанно незакрытые улучшения — не дефекты.
 
-3. **OIDC Authorization Code Flow — не реализован** (finding A в `docs/PROJECT_AUDIT.md`).
-   `capabilities.oidc_configured` теперь честно сообщает только о наличии настроек.
+3. **OIDC Authorization Code Flow — реализован (цикл 16, коммит `c6b10e0`).**
+   `internal/oidc` проводит вход по OpenID Connect (PKCE + nonce), миграция
+   `0022_sso_oidc` добавляет настройки и право, административная страница и E2E
+   добавлены коммитом `25d944b`. `capabilities.oidc_configured` честно сообщает
+   только о наличии настроек, а не о работающем входе. Открытым остаётся лишь
+   общий Keycloak для E2E-стека (roadmap 2.2, PARTIAL): поток проверяется против
+   встроенного провайдера, публикующего реальные discovery/JWKS и подписывающего
+   реальные ID-токены.
 
 4. **Распределённый rate limiting** — общий `ratelimit.Limiter`; для нескольких
    реплик он опирается на общее хранилище. Проверяется в multireplica-композе.
