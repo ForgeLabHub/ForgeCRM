@@ -223,6 +223,40 @@ schema change requires a rebuild, not just a restart.
   The intelligence routes also mount behind `requireService`, which answers 503
   naming the subsystem when its service is nil rather than panicking.
 
+## Module extraction
+
+The monolith is being carved into modules that can be lifted out on their own.
+An "extraction-ready" claim is **testable, not documentary**:
+
+- `scripts/extract-test/<module>/setup.sh` copies the module's own `.go` files
+  into a clean Go module, builds it, runs its tests and runs a `cmd/smoke`
+  program there. Only the package's own files are copied, so a hidden dependency
+  shows up as a compile error.
+- A module is listed in `scripts/extract-test/modules.txt` **only when its
+  extraction actually passes**. Listing one that does not extract makes the
+  harness lie, which is worse than not listing it.
+- `scripts/extract-test/run.sh` runs every listed module; CI has an `extraction`
+  job for it.
+- `TestExtractionBoundaryHolds` in `internal/archtest` enforces the same boundary
+  cheaply on every `go test ./...`. It keys on the **full path relative to
+  `internal/`**, not the first segment, and fails when a pinned module is absent
+  from the graph — otherwise a nested module's case silently matches nothing and
+  the test passes while checking nothing. The archtest and the harness are
+  independent, so neither a stale check nor a skipped CI job can hide a violation.
+
+Eleven modules are proven today: `netguard`, `analytics`, `ratelimit`,
+`objectstore`, `secrets`, `logging`, `httpx`, the two `importx` leaves
+`importx/safe` (untrusted-archive extraction) and `importx/parsers` (tabular
+source parsing), and `database` and `rbac` (the latter with `database` as its one
+dependency). `docs/MODULES.md` and `docs/EXTRACT_READY.md` record the status and
+must match the harness.
+
+Writing a module's first tests is itself a bug-finding step: the `parsers`
+extraction is what surfaced that XLSX was rejected by the UTF-8 check applied to
+every format, and that the XML parser emitted a record's attributes and nested
+elements as separate rows. When you extract a package with no tests, expect to
+find something.
+
 ## Conventions
 
 - `gofmt` clean, `go vet` clean, no new dependency where the standard library works.

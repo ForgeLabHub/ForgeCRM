@@ -386,8 +386,14 @@ Two things this document deliberately does not do:
 - **External deps:** `github.com/google/uuid`.
 - **Fake:** `NewPrincipal` builds a principal from an explicit permission set —
   usable as a fake principal in tests.
-- **Tests:** `rbac_test.go` + `testsupport` (seed/catalog match).
-- **Extract:** `almost` — 1 internal dep (`database`).
+- **Tests:** `principal_test.go` + `testsupport` (seed/catalog match).
+- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/rbac`,
+  with `database` as its one dependency. The package is extracted whole rather
+  than split: the docs once proposed splitting a pure catalog and `Principal` from
+  the DB-backed service, but the catalog, the principal and the service share the
+  permission type and already lift out together, so a split would be a change to
+  the code and not to the boundary. The boundary is pinned in `archtest`: `rbac`
+  may import `database` and nothing else in the module.
 - **Cut lines:** moves with `database`.
 
 ### internal/audit
@@ -410,8 +416,13 @@ Two things this document deliberately does not do:
 - **Internal deps:** none.
 - **External deps:** `github.com/jackc/pgx/v5`, `.../pgconn`, `.../pgxpool`.
 - **Fake:** `Querier` is an interface (seam). No in-memory DB.
-- **Tests:** `database_test.go`.
-- **Extract:** `no` — it is the shared substrate; everything sits on it.
+- **Tests:** `pool_test.go` (no server needed: the pool bound is checked before a
+  connection is attempted).
+- **Extract:** **`yes`** — a leaf with no in-module dependency; extracted and
+  proven by `scripts/extract-test/database`. Its pool guard and transaction
+  contract are testable with no server, which is what makes the extraction cheap.
+  That it is the shared substrate is a fact about desirability, not feasibility,
+  and the guarantee worth having is that it *can* lift out.
 - **Cut lines:** it is the common infrastructure component.
 
 ### internal/httpx  — HTTP primitives
@@ -675,11 +686,11 @@ Two things this document deliberately does not do:
   seams without a shipped fake: `ai.Provider`, `events.Poster`,
   `integrations.Adapter`, `migratex.Source`, `agent.Executor`,
   `database.Querier`, `objectstore.ObjectStore`, `ratelimit.Store`.
-- **Extract status:** nine modules are `yes` — `analytics`, `ratelimit`, `netguard`,
-  `objectstore`, `secrets`, `logging`, `httpx`, `importx/safe` and
-  `importx/parsers` — because they were actually extracted, built, tested and run
-  in a clean module, now by the automated harness in `scripts/extract-test/`. The
-  statuses here match `EXTRACT_READY.md` exactly.
+- **Extract status:** eleven modules are `yes` — `analytics`, `ratelimit`,
+  `netguard`, `objectstore`, `secrets`, `logging`, `httpx`, `importx/safe`,
+  `importx/parsers`, `database` and `rbac` — because they were actually extracted,
+  built, tested and run in a clean module, now by the automated harness in
+  `scripts/extract-test/`. The statuses here match `EXTRACT_READY.md` exactly.
 - **Gaps found:** the packages with **no `_test.go` at all** are `audit`, `crm`,
   `events`, `forecast`, `jobs`, `migrate`, `migratex`, `migrations`, `notify`,
   `risk`, `simulate`, `wiring`. Of these, `crm`, `events`, `forecast`, `risk` and

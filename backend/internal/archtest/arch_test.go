@@ -213,7 +213,7 @@ func TestCoreDoesNotImportCompositionOrHTTP(t *testing.T) {
 // graph, so a regression is caught by `go test ./...` and not only by the heavier
 // extraction harness in scripts/extract-test.
 //
-// Seven modules are pinned:
+// Nine modules are pinned:
 //
 //   - netguard is the SSRF guard. It is a leaf: it must depend on nothing inside
 //     this module and nothing outside the standard library. That is what lets the
@@ -222,6 +222,9 @@ func TestCoreDoesNotImportCompositionOrHTTP(t *testing.T) {
 //     too, so it can be built and tested on its own.
 //   - logging is structured logging with central redaction; a leaf as well, and the
 //     foundation every other package logs through.
+//   - database is the connection pool and transaction helper. A leaf, so the pool
+//     guard and the transaction contract can be tested with no server and no
+//     application around them.
 //   - importx/safe is the untrusted-archive extractor: the one place that writes
 //     uploader-chosen bytes to disk. It is a leaf, so nothing it does can be
 //     influenced by the application around it.
@@ -234,6 +237,9 @@ func TestCoreDoesNotImportCompositionOrHTTP(t *testing.T) {
 //   - httpx is the HTTP layer. It may depend only on logging and ratelimit, the
 //     two leaves it is built on; a dependency on the database, RBAC or a domain
 //     service is what would stop it from lifting out of the monolith.
+//   - rbac is the permission catalog, the request principal and the resolution
+//     service. It may depend only on the database handle: the catalog and the
+//     checks are pure, and the service talks to the database and nothing else.
 //
 // This is the cheap, always-on half of the check. The extraction harness is the
 // expensive half that actually compiles the module on its own; the two are
@@ -270,12 +276,17 @@ func TestExtractionBoundaryHolds(t *testing.T) {
 		"logging":         true,
 		"importx/safe":    true,
 		"importx/parsers": true,
+		"database":        true,
 	}
 	allowedDeps := map[string]map[string]bool{
 		// httpx may depend only on its two proven leaves. A dependency on the
 		// database, RBAC or a domain service is what would stop the HTTP layer
 		// from lifting out, and is the coupling the extraction harness catches.
 		"httpx": {"logging": true, "ratelimit": true},
+		// rbac may depend only on the database handle. Its catalog and Principal are
+		// pure, and the resolution service talks to the database and nothing else, so
+		// that is the whole boundary it has to keep to stay extractable.
+		"rbac": {"database": true},
 	}
 	forbiddenDeps := map[string]map[string]bool{
 		"objectstore": forbiddenForObjectstore,

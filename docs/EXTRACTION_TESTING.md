@@ -179,6 +179,26 @@ Both are acceptable outcomes; silently importing half the monolith is not.
   attributes and nested elements as separate rows. Both are fixed.
 - **Hidden dependencies found:** none.
 
+### `database` — READY
+
+- **Internal imports:** none.
+- **Commands:** `scripts/extract-test/database/setup.sh` — `go build`, `go test`
+  and a smoke that confirms an over-large pool is refused before any connection.
+- **Result:** built, tested and ran standalone. Its pool-guard tests need no
+  server, so the extracted module is green everywhere.
+- **Hidden dependencies found:** none.
+
+### `rbac` — READY
+
+- **Internal imports:** `database` (extracted alongside it).
+- **Commands:** `scripts/extract-test/rbac/setup.sh` — `go build`, `go test` and a
+  smoke that drives the catalog, the principal checks and the owner's permission
+  set.
+- **Result:** built, tested and ran standalone, whole rather than split — the
+  catalog, `Principal` and `Service` already lift out together, so the split the
+  docs once proposed is a code change and not a boundary change.
+- **Hidden dependencies found:** none beyond `database`.
+
 ### `secrets` — ALMOST (superseded by READY above)
 
 - **Source SHA:** `7a6d67f`
@@ -221,8 +241,8 @@ should notice. The harness was itself verified to fail: replacing `objectstore`'
 `netguard` import with `integrations` made both the harness and the archtest report
 the violation, and giving `logging` an in-module import made the archtest fail.
 
-`modules.txt` lists nine modules today: `netguard`, `analytics`, `ratelimit`,
-`objectstore`, `secrets`, `logging`, `httpx`, `safe` (internal/importx/safe) and
-`parsers` (internal/importx/parsers).
+`modules.txt` lists eleven modules today: `netguard`, `analytics`, `ratelimit`,
+`objectstore`, `secrets`, `logging`, `httpx`, `safe` (internal/importx/safe),
+`parsers` (internal/importx/parsers), `database` and `rbac`.
 
 See `scripts/extract-test/README.md` for how to add a module.

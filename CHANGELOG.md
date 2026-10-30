@@ -25,9 +25,25 @@ once it reaches 1.0.
   passes. A CI job `extraction` runs the harness, and `TestExtractionBoundaryHolds`
   in `internal/archtest` enforces the same boundary cheaply on every
   `go test ./...`; the two are independent, so neither a stale check nor a skipped
-  job can hide a violation. Nine modules are proven today: the four above plus
+  job can hide a violation. Eleven modules are proven today: the four above plus
   `secrets` and `logging` (which became provable once they gained their own tests),
-  `httpx`, and `importx/safe` and `importx/parsers` (added in this slice).
+  `httpx`, `importx/safe`, `importx/parsers`, `database` and `rbac` (added in this
+  slice).
+
+- **The database pool and the RBAC package are now extraction-proven.**
+  `internal/database` — the connection pool and the transaction helper every
+  repository is written against — is a leaf, so it lifts out with only the pgx
+  driver, and its pool-size guard is enforced before a connection is attempted, so
+  its tests need no server. It was marked `no` before on the reasoning that
+  everything sits on it; that is about desirability, not feasibility, and the
+  guarantee worth having is that nothing welds it to the application.
+  `internal/rbac` — the permission catalog, the request principal every handler
+  checks, and the resolution service — depends only on `database`, so it is
+  extracted with it. The docs once proposed splitting a pure catalog and
+  `Principal` from the DB-backed service before it could be extracted; that is not
+  what the code needs, because the three share the `Permission` type and already
+  lift out together, so the package is extracted whole and the boundary is pinned
+  in `archtest` (`rbac` may import `database` and nothing else).
 
 - **The untrusted-archive extractor is now extraction-proven.** `internal/importx/safe`
   is the single place in the codebase that writes bytes chosen by an uploader to

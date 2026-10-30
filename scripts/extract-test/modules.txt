@@ -17,6 +17,8 @@
 # httpx         the HTTP layer: error envelope, JSON writers, middleware, client address
 # safe          untrusted-archive extraction (internal/importx/safe); a leaf
 # parsers       tabular source parsing (internal/importx/parsers); a leaf
+# database      the PostgreSQL pool and transaction helper; a leaf
+# rbac          permission catalog, principal and resolution service
 
 netguard
 analytics
@@ -27,3 +29,5 @@ logging
 httpx
 safe
 parsers
+database
+rbac

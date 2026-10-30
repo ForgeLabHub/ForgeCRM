@@ -263,6 +263,69 @@ with `github.com/xuri/excelize/v2` as its declared dependency.
 
 ---
 
+## Candidate 8 — `internal/database` — **READY**
+
+**Why:** the PostgreSQL connection pool and the transaction helper every
+repository is written against. It has no in-module dependency at all, so the whole
+package moves; its only external dependency is the pgx driver.
+
+**Blocker that was:** none. The package was marked `no` in `MODULES.md` on the
+reasoning that "it is the shared substrate; everything sits on it". That is a fact
+about *desirability*, not *feasibility*, and the guarantee worth having is that it
+*can* lift out — otherwise nothing stops a future import from welding it to the
+application. Its pool-size guard is enforced before a connection is attempted, so
+its tests need no server and run in the extracted module.
+
+**Evidence:**
+
+```bash
+scripts/extract-test/database/setup.sh
+#   copied internal/database -> . (2 files)
+#   ok    no import of the ForgeCRM monolith
+#   ok    go build ./...
+#   ok    go test ./...
+#   ok    go run ./cmd/smoke     # over-large pool refused, defaults consistent
+#   ok    database extracts cleanly
+```
+
+**Files that move:** `internal/database/*.go` (2 sources + 1 test file), with
+`github.com/jackc/pgx/v5` as its declared dependency.
+
+---
+
+## Candidate 9 — `internal/rbac` — **READY**
+
+**Why:** the permission catalog, the request principal every handler checks, and
+the service that resolves a user's effective permissions and roles. It has one
+in-module dependency, `database`, which is itself now proven, so the whole package
+lifts out.
+
+**Blocker that was:** the docs proposed splitting "the pure catalog and
+`Principal` from the DB-backed `Service`" before it could be extracted. That is
+not what the code needs: the catalog, the principal and the service share the
+`Permission` type and the same file, and the package already extracts whole with
+its one dependency. A split would be a change to the code and not to the boundary,
+so the package is extracted as it is, and the boundary is pinned in `archtest`
+(`rbac` may import `database` and nothing else in the module).
+
+**Evidence:**
+
+```bash
+scripts/extract-test/rbac/setup.sh
+#   copied internal/rbac -> . (2 files)
+#   copied internal/database -> database (2 files)
+#   ok    no import of the ForgeCRM monolith
+#   ok    go build ./...
+#   ok    go test ./...
+#   ok    go run ./cmd/smoke     # catalog=93, principal checks, owner=whole catalog
+#   ok    rbac extracts cleanly
+```
+
+**Files that move:** `internal/rbac/*.go` (2 sources + 1 test file) and
+`internal/database` (its one dependency).
+
+---
+
 ## Candidates assessed but not extracted
 
 These were evaluated from the dependency graph and marked without an extraction
@@ -274,7 +337,6 @@ run, because each has a concrete blocker that an extraction would only confirm.
 | `internal/outbox` | **ALMOST** | Small surface (`Store`, `Envelope`, `Event`, `EventTypes`); has a unit test. | Depends on `database`, `logging`; the outbox is meaningless without the app's transaction. | Document the `database` dependency; it is a substrate-bound module. |
 | `internal/retention` | **ALMOST** | Self-contained logic; unit + integration tests; dry-run by default. | Depends on `audit`, `database`; policy table is application-specific. | Extract the engine, inject a table catalog. |
 | `internal/audit` | **ALMOST** | Small surface (`Logger`, `Entry`, `Action`); append-only enforced by a DB trigger. | Depends on `database`, `logging`; no in-package tests; schema lives in migration 0001. | Move schema ownership with it or provide a migration. |
-| `internal/rbac` | **ALMOST** | `NewPrincipal` gives a test fake; catalog is a plain const block. | Depends on `database`; catalog must match migration 0004. | Split the pure catalog + `Principal` from the DB-backed `Service`. |
 | `internal/jobs` | **ALMOST** | One internal dep (`database`); clear responsibility. | Uses `FOR UPDATE … SKIP LOCKED`; PostgreSQL-specific. | Would need a dialect abstraction. |
 | `internal/agent` | **ALMOST** | `Executor` interface seam; unit + integration tests. | Depends on `audit, database, httpx`. | Fine to leave; it is small and cohesive. |
 | `internal/integrations` | **ALMOST** | `Adapter` interface; unit tests. | Depends on `audit, database, httpx, rbac, secrets`. | The SSRF guard alone was extracted: it now lives in `internal/netguard` (standard library only) and `integrations` re-exports it. |
@@ -303,6 +365,8 @@ run, because each has a concrete blocker that an extraction would only confirm.
 | `httpx` | **READY** | Depends only on `logging` and `ratelimit`; extracted with both, built, its own tests ran, smoke drove a 429. |
 | `importx/safe` | **READY** | A leaf; extracted, its ~24 security tests ran, smoke refused a traversal and a zip bomb. |
 | `importx/parsers` | **READY** | A leaf; extracted, 19 tests added in this slice (they found and fixed two bugs), smoke ran. |
+| `database` | **READY** | A leaf; extracted, its pool-guard tests ran with no server, smoke refused an over-large pool. |
+| `rbac` | **READY** | Extracted whole with `database`; its `principal_test.go` and a catalog smoke ran. |
 | everything else | **ALMOST** / **NOT READY** | Concrete blocker listed above. |
 
 **No module is marked `READY` without an extraction run recorded here**, and the
@@ -310,6 +374,6 @@ run is now automated: `scripts/extract-test/run.sh` performs it for every module
 `modules.txt` on each CI run. `analytics`, `ratelimit`, `netguard`, `objectstore`,
 `secrets`, `logging`, `httpx`, `importx/safe` and `importx/parsers` pass that bar today.
 
-The nine `READY` modules are proven by the harness, not by this document. If the
+The eleven `READY` modules are proven by the harness, not by this document. If the
 harness ever fails for one of them, the status here is wrong and the harness is
 right.

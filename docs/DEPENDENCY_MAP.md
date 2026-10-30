@@ -333,3 +333,8 @@ anything else in this module. `safe` (untrusted-archive extraction) and `parsers
 (tabular source parsing) are both extracted and proven by
 `scripts/extract-test/safe` and `scripts/extract-test/parsers`; the service in
 `importx` itself remains application code.
+
+`database` is a leaf: it imports nothing else in this module, and it is extracted
+and proven by `scripts/extract-test/database`. `rbac`'s only in-module dependency
+is `database`, so it is extracted with it by `scripts/extract-test/rbac`; the
+archtest pins that `rbac` may import `database` and nothing else.
