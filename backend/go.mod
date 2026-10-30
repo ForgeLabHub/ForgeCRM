@@ -13,6 +13,7 @@ require (
 	github.com/redis/go-redis/v9 v9.23.0
 	github.com/ulikunitz/xz v0.5.17
 	github.com/xuri/excelize/v2 v2.11.1-0.20261003002531-6258dcebc4e2
+	go.yaml.in/yaml/v3 v3.0.5
 	golang.org/x/crypto v0.58.0
 	modernc.org/sqlite v1.34.5
 )
@@ -47,7 +48,6 @@ require (
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.shabbyrobe.org/gocovmerge v0.0.0-20230507111327-fa4f82cfbf4d // indirect
 	go.uber.org/atomic v1.12.0 // indirect
-	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/net v0.61.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
