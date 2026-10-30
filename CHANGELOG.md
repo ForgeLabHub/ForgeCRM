@@ -10,6 +10,18 @@ once it reaches 1.0.
 
 ### Added
 
+- **W3C Trace Context propagation.** A request id says which single request was
+  served; it cannot join the request to the background job or the webhook it
+  caused. A `traceparent` in the standard W3C format now travels through the
+  platform: `httpx.TraceMiddleware` continues an incoming trace or starts one,
+  echoes it on the response and records this hop as its own span; the access log
+  carries `trace_id`; and an outbound webhook delivery sends a `traceparent`
+  seeded from the delivery id, so the first attempt and every retry share one
+  trace id while each keeps its own span. `internal/tracectx` imports only the
+  standard library and exports no spans, so no tracing vendor is introduced — any
+  external tracing system can consume the id. A malformed header is replaced with
+  a fresh trace rather than rejected.
+
 - **Scoped, revocable MCP client credentials.** The MCP protocol endpoint
   authenticated only with the browser session cookie, so a real MCP client could
   not use it: a long-running client cannot hold an interactive session, and an

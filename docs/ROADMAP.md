@@ -391,7 +391,7 @@ where it is going. Strategy and Definition of Done: `docs/MASTER_PLAN.md`.
 | 1.4 | API reference site | **NOT_STARTED** |
 | 1.5 | Distributed rate limiting (Redis, tenant-aware, fail-open/closed per category) | **VERIFIED** — `internal/ratelimit` with a `Store` interface, `MemoryStore` and `RedisStore` (atomic Lua script); fail mode is per policy; see cycle 7 below |
 | 1.6 | Multi-replica pool verification | **IN_PROGRESS** — the shared counter is verified across two independent connections (see cycle 7); running two API containers against one database and confirming the session and limiter behaviour together is still to do |
-| 1.7 | Request correlation and diagnostics | **PARTIAL** — `request_id`/`correlation_id` emitted; no trace propagation |
+| 1.7 | Request correlation and diagnostics | **VERIFIED** — `request_id`/`correlation_id` are emitted on every request, and a W3C Trace Context (`traceparent`) is propagated: `internal/tracectx` parses and mints the value, `httpx.TraceMiddleware` continues an incoming trace or starts one and echoes it, the access log carries `trace_id`, and an outbound webhook delivery sends a `traceparent` seeded from the delivery id so a retry joins the first attempt's trace. The id is standard-format, so any tracing backend can consume it; the platform records no spans itself and takes on no tracing vendor dependency |
 
 ## Phase 2 — Identity and security — **IN PROGRESS**
 
