@@ -213,7 +213,7 @@ func TestCoreDoesNotImportCompositionOrHTTP(t *testing.T) {
 // graph, so a regression is caught by `go test ./...` and not only by the heavier
 // extraction harness in scripts/extract-test.
 //
-// Thirty-two modules are pinned:
+// Thirty modules are pinned:
 //
 //   - netguard is the SSRF guard. It is a leaf: it must depend on nothing inside
 //     this module and nothing outside the standard library. That is what lets the
@@ -406,6 +406,11 @@ func TestExtractionBoundaryHolds(t *testing.T) {
 		// database handle, writes to the audit trail and reads the caller's
 		// principal for visibility and ownership. It touches no CRM table.
 		"views": {"audit": true, "database": true, "rbac": true},
+		// oidc is the single sign-on service: the authorization-code flow and the
+		// provider registry. It verifies ID tokens, seals each client secret with
+		// the keyring and writes the audit trail, so those four are declared. It
+		// holds no CRM data and reads no principal, which is why rbac is absent.
+		"oidc": {"audit": true, "config": true, "database": true, "secrets": true},
 	}
 	forbiddenDeps := map[string]map[string]bool{
 		"objectstore": forbiddenForObjectstore,

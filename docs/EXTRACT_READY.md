@@ -573,6 +573,53 @@ scripts/extract-test/integrations/setup.sh
 
 ---
 
+## Candidate 18 — `internal/oidc` — **READY**
+
+Single sign-on: the authorization-code flow with PKCE and a nonce, plus the
+provider registry. It depends on `audit`, `config`, `database` and `secrets`;
+`config` reaches `httpx`, `logging`, `ratelimit` and `retention`, so those travel
+too, and each is proven in its own candidate above.
+
+```bash
+scripts/extract-test/oidc/setup.sh
+#   copied internal/oidc -> . (2 files)
+#   copied internal/{audit,config,database,secrets,logging,httpx,ratelimit,retention}
+#   ok    no import of the ForgeCRM monolith
+#   ok    go build ./...
+#   ok    go test ./...          # oidc_test.go: Public() never carries the secret,
+#                                # open-redirect collapse, allowed-domain check
+#   ok    go run ./cmd/smoke     # Public() has no secret field, Enabled() is nil-safe,
+#                                # RedirectURL()/LoginURL() build the right routes
+#   ok    oidc extracts cleanly
+```
+
+**Files that move:** `internal/oidc/*.go` (2 files),
+`internal/{audit,config,database,secrets,logging,httpx,ratelimit,retention}`.
+
+---
+
+## Candidate 19 — `internal/views` — **READY**
+
+Saved list views: named filters stored per user and screen. It reads the caller's
+principal from `rbac` and writes the audit trail, so it moves with `rbac` and
+`audit`; `audit` reaches `logging`.
+
+```bash
+scripts/extract-test/views/setup.sh
+#   copied internal/views -> . (2 files)
+#   copied internal/{audit,database,rbac,logging}
+#   ok    no import of the ForgeCRM monolith
+#   ok    go build ./...
+#   ok    go test ./...          # views_test.go: closed entity-type set, filter validation
+#   ok    go run ./cmd/smoke     # the filter document round-trips through JSON unchanged
+#   ok    views extracts cleanly
+```
+
+**Files that move:** `internal/views/*.go` (2 files),
+`internal/{audit,database,rbac,logging}`.
+
+---
+
 ## Candidates assessed but not extracted
 
 These were evaluated from the dependency graph and marked without an extraction
@@ -620,6 +667,8 @@ run, because each has a concrete blocker that an extraction would only confirm.
 | `migrations` | **READY** | A leaf that carries SQL as well as code; the smoke walked the embedded FS and found 21 balanced up/down pairs. |
 | `migrate` | **READY** | Extracted with `migrations`; the smoke opened the embedded source and walked its list. |
 | `authn` | **READY** | The widest module proven: extracted with `audit`, `config`, `database`, `httpx`, `logging`, `migrate`, `migrations`, `ratelimit`, `rbac`, `retention` and `secrets`; the smoke pinned the password policy and the step-up window. |
+| `oidc` | **READY** | Extracted with `audit`, `config`, `database`, `secrets`, `logging`, `httpx`, `ratelimit` and `retention`; the smoke proved `Public()` carries no secret and `Enabled()` is nil-safe. |
+| `views` | **READY** | Extracted with `audit`, `database`, `rbac` and `logging`; the smoke proved the entity-type set is closed and the filter document round-trips unchanged. |
 | everything else | **ALMOST** / **NOT READY** | Concrete blocker listed above. |
 
 **No module is marked `READY` without an extraction run recorded here**, and the
@@ -627,6 +676,6 @@ run is now automated: `scripts/extract-test/run.sh` performs it for every module
 `modules.txt` on each CI run. `analytics`, `ratelimit`, `netguard`, `objectstore`,
 `secrets`, `logging`, `httpx`, `importx/safe` and `importx/parsers` pass that bar today.
 
-The thirty-three `READY` modules are proven by the harness, not by this document. If the
+The thirty-four `READY` modules are proven by the harness, not by this document. If the
 harness ever fails for one of them, the status here is wrong and the harness is
 right.

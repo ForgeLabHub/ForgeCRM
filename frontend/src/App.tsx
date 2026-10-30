@@ -33,6 +33,7 @@ import { SecurityPage } from './pages/admin/SecurityPage'
 import { DiagnosticsPage } from './pages/admin/DiagnosticsPage'
 import { EmailPage } from './pages/admin/EmailPage'
 import { TelegramPage } from './pages/admin/TelegramPage'
+import { SSOPage } from './pages/admin/SSOPage'
 import { AccountPage } from './pages/AccountPage'
 import { ForbiddenPage, NotFoundPage } from './pages/ErrorPages'
 import { RequirePermission } from './components/RequirePermission'
@@ -332,6 +333,14 @@ export function App() {
           element={
             <RequirePermission permission="email.manage">
               <TelegramPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="admin/sso"
+          element={
+            <RequirePermission permission="sso.read">
+              <SSOPage />
             </RequirePermission>
           }
         />

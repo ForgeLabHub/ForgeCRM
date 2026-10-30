@@ -328,6 +328,7 @@ test.describe('workspace pages render live data', () => {
     { path: '/approvals', title: 'Agent approvals' },
     { path: '/admin/audit', title: 'Audit & logs' },
     { path: '/admin/users', title: 'Users' },
+    { path: '/admin/sso', title: 'Single sign-on' },
   ]
 
   for (const { path, title } of pages) {
@@ -763,6 +764,33 @@ test.describe('saved views', () => {
     await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click()
 
     await expect(select.locator('option', { hasText: viewName })).toHaveCount(0)
+  })
+})
+
+test.describe('single sign-on administration', () => {
+  test('an operator can register a provider and see it listed', async ({ authedPage: page }) => {
+    const key = `e2e${RUN_ID}`.replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 24)
+    await page.goto('/admin/sso')
+
+    // The redirect URL the provider must be configured with is shown, so an
+    // operator does not have to reconstruct it.
+    await expect(page.getByText('/api/v1/auth/oidc/callback')).toBeVisible()
+
+    await page.getByRole('button', { name: 'New provider' }).click()
+    const dialog = page.getByRole('dialog')
+    await dialog.getByLabel('Key').fill(key)
+    await dialog.getByLabel('Display name').fill(`E2E IdP ${RUN_ID}`)
+    await dialog.getByLabel('Issuer URL').fill('https://idp.example.com/realms/e2e')
+    await dialog.getByLabel('Client ID').fill('forgecrm-e2e')
+    await dialog.getByLabel('Client secret').fill('e2e-secret-value')
+    await dialog.getByRole('button', { name: 'Save' }).click()
+
+    // The list is read back from the server, so the row appears only if the
+    // create request really persisted.
+    await expect(page.getByText(`E2E IdP ${RUN_ID}`)).toBeVisible()
+    const row = page.getByRole('row', { name: new RegExp(`E2E IdP ${RUN_ID}`) })
+    await expect(row.getByText('stored')).toBeVisible()
+    await expect(row.getByText('enabled')).toBeVisible()
   })
 })
 

@@ -67,6 +67,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/admin/teams', label: 'Teams', permission: 'teams.manage' },
       { to: '/admin/email', label: 'Email', permission: 'email.manage' },
       { to: '/admin/telegram', label: 'Telegram', permission: 'email.manage' },
+      { to: '/admin/sso', label: 'Single sign-on', permission: 'sso.read' },
       { to: '/admin/audit', label: 'Audit log', permission: 'audit.read' },
       { to: '/admin/security', label: 'Security', permission: 'security.read' },
       { to: '/admin/diagnostics', label: 'Diagnostics', permission: 'logs.read' },

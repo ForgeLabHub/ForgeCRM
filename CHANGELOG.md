@@ -10,6 +10,27 @@ once it reaches 1.0.
 
 ### Added
 
+- **Single sign-on over OpenID Connect, and the page that configures it.** A
+  deployment could only authenticate with a local password; an organization that
+  runs an identity provider had no way to use it. An operator can now register an
+  OpenID Connect provider and a user can sign in through it, end to end. The flow
+  is authorization code with PKCE and a nonce against a discovered provider, so
+  nothing is tied to one vendor. The ID token's signature, issuer, audience,
+  expiry and nonce are all verified before a claim is read; an email claim is only
+  used to find an existing account when the provider says the address is verified
+  and it falls inside the configured domains, and a local account is keyed by
+  `(provider, subject)` rather than email, because addresses change and providers
+  recycle them. The client secret is sealed with the platform keyring and never
+  returned by an API. Permissions `sso.read` and `sso.manage` are seeded by
+  migration `0022`. A new administration page (`/admin/sso`) lists the providers,
+  shows the exact redirect URL to register with each one, and creates, edits,
+  enables and deletes them; the client secret is write-only, so editing a provider
+  leaves the field blank and a blank field keeps the stored secret. `SSOPage.test.tsx`
+  pins the write-only secret and the permission gate; `internal/api/sso_integration_test.go`
+  drives the whole flow against PostgreSQL through an in-process provider that
+  publishes real discovery and JWKS documents and signs real ID tokens; an E2E
+  registers a provider through the page and reads it back from the API.
+
 - **Saved list views.** A CRM list screen could be filtered by hand but not
   remembered: "my open deals this quarter" had to be re-entered on every visit.
   A view is now a named, reusable filter/sort selection for one screen

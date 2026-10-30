@@ -392,6 +392,34 @@ Two things this document deliberately does not do:
   transports already tolerate a nil receiver and return `ErrDisabled`.
 - **Cut lines:** would need a `Mailer` interface to be extractable.
 
+### internal/oidc  — single sign-on
+- **Responsibility:** the OpenID Connect authorization-code flow with PKCE and a
+  nonce, and the registry of identity providers. It begins a login (storing the
+  state, nonce and PKCE verifier server-side), completes it (verifying the ID
+  token's signature, issuer, audience, expiry and nonce before reading a claim),
+  resolves the identity to a local account and optionally provisions one. A local
+  account is keyed by `(provider, subject)`, never by email. The client secret is
+  sealed with the platform keyring and never returned by an API.
+- **Public API:** `Service`, `Provider`, `ProviderInput`, `PublicProvider`,
+  `Identity`; funcs `NewService`, `Enabled`, `List`, `EnabledProviders`,
+  `Create`, `Update`, `Delete`, `Begin`, `Complete`, `ListIdentities`,
+  `RedirectURL`, `LoginURL`; vars `ErrUnknownProvider`, `ErrInvalidProvider`,
+  `ErrTokenInvalid`, `ErrDisabled`.
+- **Internal deps:** `audit, config, database, secrets`.
+- **External deps:** `github.com/coreos/go-oidc/v3/oidc`,
+  `golang.org/x/oauth2`, `github.com/google/uuid`, `github.com/jackc/pgx/v5`.
+- **Fake:** none. The tests use an in-process provider that publishes real
+  discovery and JWKS documents and signs real ID tokens, rather than a mock.
+- **Tests:** `oidc_test.go` (provider input validation) plus
+  `api/sso_integration_test.go` — the whole flow over the real HTTP stack against
+  PostgreSQL, including wrong issuer, audience, nonce and an unverified email.
+- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/oidc` (with
+  `audit`, `config`, `database`, `secrets`, `logging`, `httpx`, `ratelimit` and
+  `retention`, each proven in turn); the smoke program drives `Public`,
+  `Enabled`, `RedirectURL` and `LoginURL` in a clean module. It holds no CRM data and
+  reads no principal, so it carries no application-layer dependency.
+- **Cut lines:** moves with `secrets`, `database`, `config`, `migrate`.
+
 ### internal/authn  — authentication
 - **Responsibility:** passwords (Argon2), sessions, TOTP MFA, recovery codes,
   login attempts and lockout, OIDC config surface.
@@ -534,7 +562,10 @@ Two things this document deliberately does not do:
 - **Fake:** none needed; visibility and ownership are SQL predicates.
 - **Tests:** `views_test.go` (unit) + `testsupport/views_test.go` (PostgreSQL).
 - **Extract:** `almost` — it has no CRM dependency, but reads the caller's
-  principal from `rbac` and writes the audit trail, so it moves with those.
+  principal from `rbac` and writes the audit trail, so it moves with those. Proven
+  by `scripts/extract-test/views`, which extracts it with `audit`, `database`,
+  `rbac` and `logging` and drives the entity-type set and the filter round-trip in
+  a clean module.
 - **Cut lines:** moves with `audit`/`database`/`rbac`.
 
 ### internal/netguard  — outbound SSRF guard
@@ -745,12 +776,12 @@ Two things this document deliberately does not do:
 | **Import pages** | Import Center UI, CSV/JSONL export | `pages/{ImportCenter,ImportDetail}Page.tsx`, `api/imports.ts` | `api/imports.ts` | `ImportCenterPage.test.tsx`, E2E | `no` |
 | **Integrations/Webhooks/Events/Jobs pages** | admin surfaces | `pages/{Integrations,Webhooks,Events,Jobs,Migrations}Page.tsx` + matching api clients | their api clients | E2E | `no` |
 | **Notifications page** | the inbox for workflow notifications | `pages/NotificationsPage.tsx` | `api/crm.ts` | `NotificationsPage.test.tsx` | `almost` |
-| **Admin pages** | audit, users, roles, orgs, teams, security, diagnostics (+ platform settings), email, telegram | `pages/admin/*.tsx`, `api/admin.ts` | `api/admin.ts` | `SecurityPage.test.tsx`, `DiagnosticsPage.test.tsx` | `no` |
+| **Admin pages** | audit, users, roles, orgs, teams, security, diagnostics (+ platform settings), email, telegram, SSO | `pages/admin/*.tsx`, `api/admin.ts` | `api/admin.ts` | `SecurityPage.test.tsx`, `DiagnosticsPage.test.tsx`, `SSOPage.test.tsx` | `no` |
 | **Attachments** | document upload/download | `components/AttachmentPanel.tsx`, `api/documents.ts` | `api/documents.ts` | `AttachmentPanel.test.tsx` | `almost` |
 | **Saved views** | named list filters per screen | `components/SavedViewsBar.tsx`, `api/views.ts` | `api/views.ts` | `SavedViewsBar.test.tsx`, E2E | `almost` |
 
-**Frontend totals:** 86 `.ts`/`.tsx` files; 20 unit test files (141 tests); E2E in
-`frontend/e2e/platform.spec.ts` (51 passing, 1 conditionally skipped).
+**Frontend totals:** 90 `.ts`/`.tsx` files; 21 unit test files (144 tests); E2E in
+`frontend/e2e/platform.spec.ts` (52 passing, 1 conditionally skipped).
 
 ---
 
@@ -758,7 +789,7 @@ Two things this document deliberately does not do:
 
 - **Backend packages inventoried:** 38 (`internal/*` directories; `importx` carries two
   subpackages, so `go list` reports 39), plus 3 commands.
-- **Frontend layers inventoried:** 16.
+- **Frontend layers inventoried:** 20.
 - **Cycles:** none (verified by `go list` + DFS; see `DEPENDENCY_MAP.md`).
 - **Packages with ≥8 internal deps:** `api` (26), `wiring` (22), `importx` (10),
   `ai` (9), `events` (8); `cmd/forgecrm-worker` (17) and `cmd/forgecrm-api` (11)

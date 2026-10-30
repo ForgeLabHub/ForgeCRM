@@ -102,4 +102,50 @@ export const sessionsApi = {
   revoke: (id: string) => api.delete(`/api/v1/auth/sessions/${id}`),
 }
 
+/**
+ * A registered identity provider, as the administration list reports it. The
+ * client secret is never returned: `has_secret` says whether one is stored, so a
+ * screen can show "configured" without holding the secret.
+ */
+export interface SSOProviderRow {
+  id: string
+  organization_id?: string
+  key: string
+  display_name: string
+  issuer: string
+  client_id: string
+  scopes: string[]
+  allowed_email_domains: string[]
+  jit_provisioning: boolean
+  default_role_key?: string
+  enabled: boolean
+  has_secret: boolean
+}
+
+/** The provider document a create or update sends. */
+export interface SSOProviderInput {
+  key: string
+  display_name: string
+  issuer: string
+  client_id: string
+  /** Omitted on update keeps the stored secret; empty never clears it. */
+  client_secret?: string
+  scopes?: string[]
+  allowed_email_domains?: string[]
+  jit_provisioning?: boolean
+  default_role_key?: string
+  enabled?: boolean
+}
+
+export const ssoAdminApi = {
+  /** Providers plus the exact redirect URL to register with each one. */
+  list: () =>
+    api.get<{ items: SSOProviderRow[]; redirect_url: string }>('/api/v1/admin/sso/providers'),
+  create: (body: SSOProviderInput) =>
+    api.post<SSOProviderRow>('/api/v1/admin/sso/providers', body),
+  update: (id: string, body: SSOProviderInput) =>
+    api.put<SSOProviderRow>(`/api/v1/admin/sso/providers/${id}`, body),
+  remove: (id: string) => api.delete(`/api/v1/admin/sso/providers/${id}`),
+}
+
 export type { User }

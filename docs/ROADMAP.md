@@ -5,7 +5,7 @@ Statuses: `NOT_STARTED` · `IN_PROGRESS` · `IMPLEMENTED` · `TESTED` · `VERIFI
 `VERIFIED` requires recorded evidence (command + result). `IMPLEMENTED` means code exists
 and compiles but is not yet covered by passing tests.
 
-## Cycle 1 — Foundation + Import vertical slice (current)
+## Cycle 1 — Foundation + Import vertical slice
 
 | # | Item | Status |
 |---|---|---|
@@ -27,7 +27,7 @@ and compiles but is not yet covered by passing tests.
 | 1.13 | Tests: unit, integration (real PostgreSQL), API, security, import edge cases | **IN_PROGRESS** — backend unit + integration packages (`importx`, `importx/safe`, `internal/api` under the `integration` tag, `authn`, `ratelimit`, `openapi`, `archtest`), frontend unit tests and Playwright E2E; some areas are still verified manually rather than by automated tests |
 | 1.14 | Docker Compose, scripts, CI, docs | **VERIFIED** — stack brought up end to end, smoke test 9/9; CI workflow runs on GitHub Actions (fmt, vet, unit, integration against a real PostgreSQL, frontend lint/type/test/build, Docker build, migrations, dependency + secret + security scan, docs presence) |
 
-## Cycle 2 — Integration platform (next)
+## Cycle 2 — Integration platform
 
 | # | Item | Status |
 |---|---|---|
@@ -88,7 +88,7 @@ and compiles but is not yet covered by passing tests.
 | 6.2 | E2E browser tests | **IN_PROGRESS** |
 | 6.3 | Clean-environment install rehearsal | **VERIFIED** |
 | 6.4 | LICENSE selection | **BLOCKED** — owner decision (see `PROJECT_AUDIT.md` §3 finding F) |
-| 6.5 | OIDC / corporate SSO | **PARTIAL** — config and `capabilities` flag only; no Authorization Code flow exists. See `PROJECT_AUDIT.md` finding A |
+| 6.5 | OIDC / corporate SSO | **VERIFIED** — the Authorization Code flow with PKCE exists (`internal/oidc`) and a provider can be registered and managed from `/admin/sso`. See cycle 16. A local test IdP (6.2 / item 2.2) is still open |
 | 6.6 | LDAP / Active Directory adapter | **NOT_STARTED** — needs confirmed demand |
 
 ---
@@ -342,8 +342,31 @@ when a service is missing, so the same mistake is legible next time
 
 ---
 
-# Master plan phases
+## Cycle 16 — Single sign-on: the flow and its administration
 
+| # | Item | Status |
+|---|---|---|
+| 16.1 | Authorization-code flow with PKCE and a nonce | **VERIFIED** — `internal/oidc`. `Begin` stores the state, nonce and PKCE verifier server-side and returns the provider's authorization URL; `Complete` claims the state row once, exchanges the code, and verifies the ID token's signature, issuer, audience, expiry and nonce before reading a claim. Nothing is tied to one vendor: the provider's discovery document is fetched |
+| 16.2 | Identity resolution without an account-takeover path | **VERIFIED** — a local account is identified by `(provider, subject)`, never by email. An email claim is used to find an existing account only when the provider marks it verified and it falls inside the configured domains; otherwise a provider that let a user set an arbitrary address would be a takeover path. Just-in-time provisioning is opt-in per provider |
+| 16.3 | Secret handling and open-redirect defence | **VERIFIED** — the client secret is sealed with the platform keyring and never returned by an API; `has_secret` reports only its presence. `return_to` is validated as a relative path, and the provider list the sign-in page reads is anonymous and carries no secret |
+| 16.4 | Migration `0022` + permission seed | **VERIFIED** — `oidc_providers`, `user_identities` and `oidc_login_states`; `sso.read`/`sso.manage` seeded and added to the Go catalog in the same change, so `TestSeedDataMatchesThePermissionCatalog` holds |
+| 16.5 | Administration page | **VERIFIED** — `frontend/src/pages/admin/SSOPage.tsx` and the `ssoAdminApi` client. Lists providers, shows the exact redirect URL to register with each, and creates, edits, enables and deletes them. The secret is write-only: an edit that leaves the field blank sends no secret, so it cannot clear the stored one. A read-only caller is offered no management control |
+| 16.6 | Tests: unit, PostgreSQL integration, frontend, E2E | **VERIFIED** — `internal/oidc/oidc_test.go` (input validation), `internal/api/sso_integration_test.go` (the whole flow against PostgreSQL through an in-process provider that publishes real discovery and JWKS documents and signs real ID tokens, including wrong issuer, audience, nonce and an unverified email), `frontend/src/pages/admin/SSOPage.test.tsx` (3 tests), and a Chromium case in `e2e/platform.spec.ts` |
+
+### Evidence
+
+| Check | Command | Result |
+|---|---|---|
+| Formatting | `gofmt -l ./cmd ./internal` | clean |
+| Vet | `go vet ./...` | clean |
+| Unit tests | `go test -count=1 ./internal/oidc/... ./internal/archtest/...` | pass |
+| Integration tests | `FORGECRM_TEST_DATABASE_URL=… go test -tags=integration -count=1 -p 1 ./internal/api/...` | pass against real PostgreSQL |
+| Frontend | `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` | typecheck clean, lint 0 errors, 144 tests pass, build succeeds |
+| E2E | `npx playwright test -g "single sign-on"` | pass in Chromium against the real API and database |
+
+---
+
+# Master plan phases
 The cycles above describe how the platform was built. The phases below describe
 where it is going. Strategy and Definition of Done: `docs/MASTER_PLAN.md`.
 
@@ -370,13 +393,13 @@ where it is going. Strategy and Definition of Done: `docs/MASTER_PLAN.md`.
 | 1.6 | Multi-replica pool verification | **IN_PROGRESS** — the shared counter is verified across two independent connections (see cycle 7); running two API containers against one database and confirming the session and limiter behaviour together is still to do |
 | 1.7 | Request correlation and diagnostics | **PARTIAL** — `request_id`/`correlation_id` emitted; no trace propagation |
 
-## Phase 2 — Identity and security — **NOT_STARTED**
+## Phase 2 — Identity and security — **IN PROGRESS**
 
 | # | Item | Status |
 |---|---|---|
-| 2.1 | OIDC Authorization Code Flow + PKCE | **NOT_STARTED** |
-| 2.2 | Local test IdP (Keycloak) | **NOT_STARTED** |
-| 2.3 | `capabilities.oidc` truthful | **VERIFIED** — field renamed `oidc_configured`, and `mcp` renamed `tool_api`; `capabilities_test.go` fails if either misleading name returns. The setting is still only a setting: the flow itself is item 2.1 |
+| 2.1 | OIDC Authorization Code Flow + PKCE | **VERIFIED** — `internal/oidc`; the flow, its administration page and the PostgreSQL integration tests. See cycle 16 |
+| 2.2 | Local test IdP (Keycloak) | **PARTIAL** — no Keycloak container is provisioned, but the flow is driven end to end against an in-process provider that publishes real discovery and JWKS documents and signs real ID tokens (`internal/api/sso_integration_test.go`). A shared Keycloak for the E2E stack remains open |
+| 2.3 | `capabilities.oidc` truthful | **VERIFIED** — field renamed `oidc_configured`, and `mcp` renamed `tool_api`; `capabilities_test.go` fails if either misleading name returns. The field reports whether the deployment-level OIDC setting is present; the flow itself is item 2.1 |
 | 2.4 | Consent model + policy service | **NOT_STARTED** |
 | 2.5 | Consent enforcement in every channel | **NOT_STARTED** |
 | 2.6 | Consent UI and "why was this allowed/blocked" | **NOT_STARTED** |
