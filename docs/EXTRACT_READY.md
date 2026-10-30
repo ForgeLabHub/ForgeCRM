@@ -1,38 +1,38 @@
-# Extraction readiness
+# Готовность к выделению
 
-Honest assessment of which modules can be lifted out of ForgeCRM today. Statuses
-follow the rule that **`READY` may only be claimed after the module was actually
-copied into a clean project and built, tested and run there** — not because it has
-a tidy folder.
+Честная оценка того, какие модули сегодня можно поднять из ForgeCRM. Статусы следуют
+правилу: **`READY` можно заявлять только после того, как модуль действительно был
+скопирован в чистый проект и собран, протестирован и запущен там** — а не потому, что у
+него аккуратная папка.
 
-Source commit for every experiment below: `7a6d67f`.
+Исходный коммит для каждого эксперимента ниже: `7a6d67f`.
 
-## Status definitions
+## Определения статусов
 
-| Status | Meaning |
+| Статус | Значение |
 | --- | --- |
-| **READY** | Copied into a clean Go module, `go build` succeeded, the module's own tests ran, and a standalone smoke executed. Evidence recorded. |
-| **ALMOST** | Boundary is clear and the module has few or no internal dependencies, but a specific, listed blocker prevents `READY`. |
-| **NOT READY** | Extraction is not sensible now; the module needs much of the monolith. |
+| **READY** | Скопирован в чистый модуль Go, `go build` успешен, собственные тесты модуля прошли, и автономный smoke выполнился. Доказательство записано. |
+| **ALMOST** | Граница ясна и у модуля мало внутренних зависимостей или нет вовсе, но конкретный, перечисленный блокер мешает `READY`. |
+| **NOT READY** | Выделение сейчас неразумно; модулю нужна большая часть монолита. |
 
-## What an extraction test is
+## Что такое тест выделения
 
-For each candidate: a fresh directory, `go.mod` with a throwaway module path, the
-package's non-test and test files copied in, third-party requirements pinned from
-the module cache, then `go build ./...`, `go test ./...`, and a small `cmd/smoke`
-program that exercises the public API. Nothing from ForgeCRM's `internal/` tree
-travels unless it is a declared dependency.
+Для каждого кандидата: свежий каталог, `go.mod` с одноразовым путём модуля,
+скопированные не-тестовые и тестовые файлы пакета, сторонние требования, закреплённые
+из кэша модулей, затем `go build ./...`, `go test ./...` и небольшая программа
+`cmd/smoke`, упражняющая публичный API. Ничто из дерева `internal/` ForgeCRM не
+путешествует, если это не объявленная зависимость.
 
-The procedure is written up in `EXTRACTION_TESTING.md`.
+Процедура изложена в `EXTRACTION_TESTING.md`.
 
 ---
 
-## Candidate 1 — `internal/analytics` — **READY**
+## Кандидат 1 — `internal/analytics` — **READY**
 
-**Why it is the strongest candidate:** it is pure arithmetic. `go list` confirms
-**zero internal imports**; its only non-stdlib dependency is none at all.
+**Почему это самый сильный кандидат:** это чистая арифметика. `go list` подтверждает
+**ноль внутренних импортов**; его единственная не-stdlib зависимость — ни одной.
 
-**Evidence (performed at `7a6d67f`):**
+**Доказательство (выполнено на `7a6d67f`):**
 
 ```bash
 T=/tmp/extract-analytics
@@ -44,73 +44,72 @@ go vet ./...          # VET_OK
 go test -count=1 ./... # ok  example.com/analytics  0.006s
 ```
 
-A standalone `cmd/smoke/main.go` using only `analytics` public API printed
-`smoke: 49.98` (1999 minor units × 150% = 49.98). No database, no config, no
-ForgeCRM package.
+Автономный `cmd/smoke/main.go`, использующий только публичный API `analytics`,
+напечатал `smoke: 49.98` (1999 минорных единиц × 150% = 49.98). Ни базы, ни
+конфигурации, ни пакета ForgeCRM.
 
-**Files that move:** `internal/analytics/*.go` (5 sources + 4 test files). That is
-the whole cut line.
+**Файлы, которые переезжают:** `internal/analytics/*.go` (5 исходников + 4 тестовых
+файла). Это и есть вся линия среза.
 
-**Blockers:** none.
+**Блокеры:** нет.
 
-**Next actions:** decide the import path (`forgecrm/analytics` vs a standalone
-repo), then repeat the same recipe in CI as an `extract-test` job.
+**Следующие действия:** решить путь импорта (`forgecrm/analytics` или отдельный
+репозиторий), затем повторить тот же рецепт в CI как задание `extract-test`.
 
 ---
 
-## Candidate 2 — `internal/ratelimit` — **READY** (one caveat)
+## Кандидат 2 — `internal/ratelimit` — **READY** (одна оговорка)
 
-**Why:** also **zero internal imports**; Redis is optional and only `redis.go`
-names `go-redis`, so the memory path is dependency-free.
+**Почему:** тоже **ноль внутренних импортов**; Redis опционален, и только `redis.go`
+называет `go-redis`, поэтому путь в памяти свободен от зависимостей.
 
-**Evidence (performed at `7a6d67f`):**
+**Доказательство (выполнено на `7a6d67f`):**
 
 ```bash
 T=/tmp/extract-ratelimit
 rm -rf $T && mkdir -p $T
 cp backend/internal/ratelimit/*.go $T/
 cd $T
-# go.mod pins go-redis v9.23.0 + golang.org/x/sys v0.49.0 from the local module cache
+# go.mod закрепляет go-redis v9.23.0 + golang.org/x/sys v0.49.0 из локального кэша модулей
 go build ./...   # BUILD_OK
 go test -count=1 -run 'TestMemory|TestLimiter|TestFail|TestDisabled|TestStoreError' ./...
 # ok  example.com/ratelimit  0.026s
 ```
 
-**Caveat (the one thing not re-verified in isolation):** `redis_integration_test.go`
-is `//go:build integration` and needs a live Redis; the isolated run executed the
-unit tests only. The Redis code path compiled but was not exercised in the clean
-project. This does not block `READY` — the memory limiter, which is the part a
-recipe uses by default, was built and tested — but it is recorded rather than
-glossed over.
+**Оговорка (единственное, что не перепроверено изолированно):**
+`redis_integration_test.go` — это `//go:build integration` и нужен живой Redis;
+изолированный прогон выполнил только модульные тесты. Путь кода Redis
+скомпилировался, но не был упражнён в чистом проекте. Это не блокирует `READY` —
+лимитер в памяти, то есть часть, которую рецепт использует по умолчанию, был собран и
+протестирован, — но это записано, а не заглажено.
 
-**Files that move:** `internal/ratelimit/*.go`. The `Store` interface is the seam;
-a consumer may drop `redis.go` and ship only `MemoryStore`.
+**Файлы, которые переезжают:** `internal/ratelimit/*.go`. Интерфейс `Store` — это шов;
+потребитель может отбросить `redis.go` и поставлять только `MemoryStore`.
 
-**Blockers:** none for the memory path. To claim the Redis path in isolation, run
-the integration build tag against a Redis in the extracted project.
+**Блокеры:** нет для пути в памяти. Чтобы заявить путь Redis изолированно, запустите
+тег сборки integration против Redis в выделенном проекте.
 
-**Next actions:** add a `NoopStore` (there is none today — see "not yet present"
-below) and make `redis.go` a separate build-tagged file so a Redis-free extraction
-needs no third-party module at all.
+**Следующие действия:** добавить `NoopStore` (сегодня его нет — см. «пока не
+присутствует» ниже) и сделать `redis.go` отдельным файлом с тегом сборки, чтобы
+выделение без Redis вообще не нуждалось в стороннем модуле.
 
 ---
 
-## Candidate 3 — `internal/secrets` — **READY**
+## Кандидат 3 — `internal/secrets` — **READY**
 
-**Why:** **zero internal imports**; a small, pure crypto helper library
-(Argon2 hashing, HMAC signing, token generation, the AES-GCM keyring).
+**Почему:** **ноль внутренних импортов**; небольшая чистая библиотека крипто-помощников
+(хеширование Argon2, подпись HMAC, генерация токенов, кольцо ключей AES-GCM).
 
-**Blocker that was, and how it was cleared:** the package shipped **no `_test.go`
-of its own**, so an extraction reported `[no test files]` and the behaviour was
-covered only indirectly through `authn` inside the monolith — exactly the
-"tests pass only in the monolith" condition the Definition of Done forbids.
-`secrets_test.go` now lives with the package: round-trip and salted hashing, the
-malformed-hash path distinguished from a mismatch, a fresh nonce per encryption,
-decryption refused under the wrong key and under tampering, and the CSRF/webhook
-signatures binding secret, timestamp and body. The tests run in the extracted
-project, so the proof is behavioural.
+**Блокер, который был, и как он снят:** пакет не поставлял **своего `_test.go`**,
+поэтому выделение сообщало `[no test files]`, и поведение покрывалось только косвенно
+через `authn` внутри монолита — ровно то условие «тесты проходят только в монолите»,
+которое запрещает определение готовности. `secrets_test.go` теперь живёт с пакетом:
+круговой рейс и хеширование с солью, путь искажённого хеша, отличаемый от несовпадения,
+свежий nonce на каждое шифрование, расшифровка, отклоняемая под неверным ключом и при
+подмене, и подписи CSRF/вебхука, связывающие секрет, время и тело. Тесты идут в
+выделенном проекте, поэтому доказательство поведенческое.
 
-**Evidence (performed at `7a6d67f`; re-run by the harness after this slice):**
+**Доказательство (выполнено на `7a6d67f`; перезапущено набором после этого среза):**
 
 ```bash
 T=/tmp/extract-secrets
@@ -118,31 +117,31 @@ rm -rf $T && mkdir -p $T
 cp backend/internal/secrets/*.go $T/
 cd $T && printf 'module example.com/secrets\n\ngo 1.26.10\n\nrequire golang.org/x/crypto v0.58.0\n' > go.mod
 go build ./...   # BUILD_OK
-go test -count=1 ./...   # ok  example.com/secrets  (20 tests)
+go test -count=1 ./...   # ok  example.com/secrets  (20 тестов)
 ```
 
-A standalone smoke hashes a password, verifies it, rejects a wrong one and
-round-trips a value through the keyring.
+Автономный smoke хеширует пароль, проверяет его, отклоняет неверный и прогоняет
+значение через кольцо ключей.
 
-**Files that move:** `internal/secrets/*.go` (1 source + 1 test file). The only
-third-party dependency is `golang.org/x/crypto`.
+**Файлы, которые переезжают:** `internal/secrets/*.go` (1 исходник + 1 тестовый файл).
+Единственная сторонняя зависимость — `golang.org/x/crypto`.
 
 ---
 
-## Candidate 4 — `internal/logging` — **READY**
+## Кандидат 4 — `internal/logging` — **READY**
 
-**Why:** zero internal imports, pure `log/slog` setup and central redaction. It is
-the foundation every other package logs through, so keeping it a leaf is a
-structural guarantee, not a convenience.
+**Почему:** ноль внутренних импортов, чистая настройка `log/slog` и центральное
+сокрытие. Это фундамент, через который логирует каждый другой пакет, поэтому держать
+его листом — структурная гарантия, а не удобство.
 
-**Blocker that was, and how it was cleared:** no tests. `logging_test.go` now
-pins the security property the package exists for — a password or token passed as
-a log field never reaches the output, including through `With` and through a
-nested group — plus the context helpers and the level/format wiring of `New`. A
-test asserts `New` returns the redacting handler, so a refactor that dropped the
-wrapper would fail.
+**Блокер, который был, и как он снят:** нет тестов. `logging_test.go` теперь
+закрепляет свойство безопасности, ради которого пакет существует, — пароль или токен,
+переданный как поле лога, никогда не достигает вывода, в том числе через `With` и через
+вложенную группу, — плюс помощники контекста и связывание уровня/формата в `New`. Тест
+утверждает, что `New` возвращает скрывающий обработчик, поэтому рефакторинг, который
+отбросил бы обёртку, упал бы.
 
-**Evidence:**
+**Доказательство:**
 
 ```bash
 T=/tmp/extract-logging
@@ -150,28 +149,26 @@ cp backend/internal/logging/*.go $T/
 cd $T && printf 'module example.com/logging\n\ngo 1.26.10\n' > go.mod
 go build ./...   # BUILD_OK
 go vet ./...     # VET_OK
-go test -count=1 ./...   # ok  example.com/logging  (10 tests)
+go test -count=1 ./...   # ok  example.com/logging  (10 тестов)
 ```
 
 ---
 
-## Candidate 5 — `internal/httpx` — **READY**
+## Кандидат 5 — `internal/httpx` — **READY**
 
-**Why:** the HTTP layer every handler is written against — the RFC 9457 error
-envelope, the JSON writers, pagination and sort parsing, the access-log, recovery,
-security-header and rate-limit middleware, and the trusted-proxy client-address
-resolver. Its only in-module dependencies are `logging` and `ratelimit`, both
-already proven, so the whole layer lifts out without reaching into the
-application.
+**Почему:** слой HTTP, под который написан каждый обработчик — конверт ошибок RFC 9457,
+писатели JSON, разбор пагинации и сортировки, middleware журнала доступа, восстановления,
+заголовков безопасности и ограничения частоты, и распознаватель адреса клиента за
+доверенным прокси. Его единственные внутренние зависимости — `logging` и `ratelimit`,
+оба уже доказаны, поэтому весь слой поднимается, не тянясь в приложение.
 
-**Blocker that was:** none structural; it was simply never run. `httpx` was
-marked `almost` on the judgement that it *is* the shared HTTP substrate and so is
-rarely worth extracting on its own. That judgement is about desirability, not
-feasibility, and the two were conflated: the useful guarantee is that the layer
-*can* lift out, because that is what keeps a handler from reaching into it and
-dragging the application layer back in.
+**Блокер, который был:** структурного не было; его просто никогда не запускали. `httpx`
+был помечен `almost` на суждении, что он *и есть* общий HTTP-субстрат и потому редко
+заслуживает выделения сам по себе. Это суждение о желательности, а не о выполнимости, и
+их спутали: полезная гарантия в том, что слой *может* подняться, потому что именно это
+не даёт обработчику дотянуться в него и затащить прикладной слой обратно.
 
-**Evidence:**
+**Доказательство:**
 
 ```bash
 scripts/extract-test/httpx/setup.sh
@@ -185,98 +182,98 @@ scripts/extract-test/httpx/setup.sh
 #   ok    httpx extracts cleanly
 ```
 
-The package's own tests run in the extracted project, including the client-address
-trust tests, and a smoke writes and reads a JSON list response, drives a
-rate-limited handler to a 429 with headers on the allowed response, and resolves a
-client address.
+Собственные тесты пакета идут в выделенном проекте, включая тесты доверия адресу
+клиента, а smoke пишет и читает JSON-ответ списка, доводит обработчик с ограничением до
+429 с заголовками на разрешённом ответе и определяет адрес клиента.
 
-**Files that move:** `internal/httpx/*.go` (4 sources + 4 test files), with
-`internal/logging` and `internal/ratelimit` as declared dependencies.
+**Файлы, которые переезжают:** `internal/httpx/*.go` (4 исходника + 4 тестовых файла), с
+`internal/logging` и `internal/ratelimit` как объявленными зависимостями.
 
 ---
 
-## Candidate 6 — `internal/importx/safe` — **READY**
+## Кандидат 6 — `internal/importx/safe` — **READY**
 
-**Why:** the untrusted-archive extractor. It is the single place in the codebase
-that writes bytes chosen by an uploader to disk, and it is the guard against path
-traversal, symlinks, zip bombs, oversized entries and deep nesting. It has no
-in-module dependency at all, so the whole package moves.
+**Почему:** распаковщик недоверенных архивов. Это единственное место в кодовой базе,
+которое пишет на диск байты, выбранные загружающим, и это защита от обхода пути,
+символических ссылок, zip-бомб, слишком больших записей и глубокой вложенности. У него
+вообще нет внутренних зависимостей, поэтому весь пакет переезжает.
 
-**Blocker that was:** none; it was simply never run. It is the strongest kind of
-extraction claim precisely because the code handles attacker-controlled input:
-"the security tests run in isolation, in a clean module" is worth more here than
-anywhere else.
+**Блокер, который был:** нет; его просто никогда не запускали. Это самый сильный вид
+утверждения о выделении именно потому, что код обрабатывает контролируемый атакующим
+ввод: «тесты безопасности идут изолированно, в чистом модуле» здесь стоит дороже, чем
+где-либо ещё.
 
-**Evidence:**
+**Доказательство:**
 
 ```bash
 scripts/extract-test/safe/setup.sh
 #   copied internal/importx/safe -> . (4 files)
 #   ok    no import of the ForgeCRM monolith
 #   ok    go build ./...
-#   ok    go test ./...          # ~24 tests, incl. traversal, symlink, zip bomb
-#   ok    go run ./cmd/smoke     # roundtrip, traversal refused, zip bomb refused
+#   ok    go test ./...          # ~24 теста, включая обход, символическую ссылку, zip-бомбу
+#   ok    go run ./cmd/smoke     # roundtrip, обход отклонён, zip-бомба отклонена
 #   ok    importx/safe extracts cleanly
 ```
 
-**Files that move:** `internal/importx/safe/*.go` (2 sources + 2 test files). No
-dependency moves with it.
+**Файлы, которые переезжают:** `internal/importx/safe/*.go` (2 исходника + 2 тестовых
+файла). Ни одна зависимость не переезжает с ним.
 
 ---
 
-## Candidate 7 — `internal/importx/parsers` — **READY**
+## Кандидат 7 — `internal/importx/parsers` — **READY**
 
-**Why:** it converts CSV/TSV/JSON/JSONL/XLSX/XML into the common row model the
-Import Center maps to CRM fields. It has no in-module dependency, so the whole
-package moves; its only external dependency is the spreadsheet library.
+**Почему:** он превращает CSV/TSV/JSON/JSONL/XLSX/XML в общую модель строки, которую
+Центр импорта сопоставляет с полями CRM. У него нет внутренних зависимостей, поэтому
+весь пакет переезжает; его единственная внешняя зависимость — библиотека электронных
+таблиц.
 
-**Blocker that was:** it shipped **no tests of its own**, so the extraction
-reported `[no test files]` and nothing pinned its behaviour. Writing the tests
-found two real bugs, both now fixed:
+**Блокер, который был:** он не поставлял **своих тестов**, поэтому выделение сообщало
+`[no test files]` и ничто не закрепляло его поведение. Написание тестов нашло два
+реальных бага, оба теперь исправлены:
 
-- **XLSX could not be parsed at all.** `Parse` applied the UTF-8 text check to
-  every format, but XLSX is a zip of XML parts and is binary by construction, so
-  every workbook was rejected with "file is not valid UTF-8". The check is now
-  skipped for the one binary format it was never meant to see.
-- **XML split every record in two.** A record's attributes and its nested
-  elements were emitted as separate rows — `<contact id="1"><name>Ada</name>` came
-  out as `{@id:1}` and `{name:Ada}` — and the record element was inferred as the
-  document root, so a normal export produced a column set of `[@id name]` with no
-  row holding both. The parser was rewritten to keep one row per record, flatten
-  nested elements to dotted keys (matching the JSON parser) and infer the record
-  element as the root's first child.
+- **XLSX вообще не разбирался.** `Parse` применял проверку текста UTF-8 к каждому
+  формату, но XLSX — это zip из XML-частей и по построению бинарный, поэтому каждая
+  книга отклонялась с «file is not valid UTF-8». Проверка теперь пропускается для
+  единственного бинарного формата, который она никогда не должна была видеть.
+- **XML разбивал каждую запись надвое.** Атрибуты записи и её вложенные элементы
+  выдавались как отдельные строки — `<contact id="1"><name>Ada</name>` выходил как
+  `{@id:1}` и `{name:Ada}` — а элемент записи выводился как корень документа, поэтому
+  обычный экспорт давал набор столбцов `[@id name]` без строки, содержащей и то и
+  другое. Парсер был переписан, чтобы держать одну строку на запись, расплющивать
+  вложенные элементы в точечные ключи (как парсер JSON) и выводить элемент записи как
+  первого ребёнка корня.
 
-**Evidence:**
+**Доказательство:**
 
 ```bash
 scripts/extract-test/parsers/setup.sh
 #   copied internal/importx/parsers -> . (3 files)
 #   ok    no import of the ForgeCRM monolith
 #   ok    go build ./...
-#   ok    go test ./...          # 19 tests added in this slice
+#   ok    go test ./...          # 19 тестов, добавленных в этом срезе
 #   ok    go run ./cmd/smoke
 #   ok    importx/parsers extracts cleanly
 ```
 
-**Files that move:** `internal/importx/parsers/*.go` (3 sources + 1 test file),
-with `github.com/xuri/excelize/v2` as its declared dependency.
+**Файлы, которые переезжают:** `internal/importx/parsers/*.go` (3 исходника + 1 тестовый
+файл), с `github.com/xuri/excelize/v2` как объявленной зависимостью.
 
 ---
 
-## Candidate 8 — `internal/database` — **READY**
+## Кандидат 8 — `internal/database` — **READY**
 
-**Why:** the PostgreSQL connection pool and the transaction helper every
-repository is written against. It has no in-module dependency at all, so the whole
-package moves; its only external dependency is the pgx driver.
+**Почему:** пул соединений PostgreSQL и помощник транзакций, под который написан каждый
+репозиторий. У него вообще нет внутренних зависимостей, поэтому весь пакет переезжает;
+его единственная внешняя зависимость — драйвер pgx.
 
-**Blocker that was:** none. The package was marked `no` in `MODULES.md` on the
-reasoning that "it is the shared substrate; everything sits on it". That is a fact
-about *desirability*, not *feasibility*, and the guarantee worth having is that it
-*can* lift out — otherwise nothing stops a future import from welding it to the
-application. Its pool-size guard is enforced before a connection is attempted, so
-its tests need no server and run in the extracted module.
+**Блокер, который был:** нет. Пакет был помечен `no` в `MODULES.md` на рассуждении, что
+«это общий субстрат; всё на нём сидит». Это факт о *желательности*, а не о
+*выполнимости*, и гарантия, которую стоит иметь, в том, что он *может* подняться —
+иначе ничто не помешает будущему импорту приварить его к приложению. Его защита размера
+пула обеспечивается до попытки соединения, поэтому его тесты не нуждаются в сервере и
+идут в выделенном модуле.
 
-**Evidence:**
+**Доказательство:**
 
 ```bash
 scripts/extract-test/database/setup.sh
@@ -284,31 +281,30 @@ scripts/extract-test/database/setup.sh
 #   ok    no import of the ForgeCRM monolith
 #   ok    go build ./...
 #   ok    go test ./...
-#   ok    go run ./cmd/smoke     # over-large pool refused, defaults consistent
+#   ok    go run ./cmd/smoke     # слишком большой пул отклонён, умолчания согласованы
 #   ok    database extracts cleanly
 ```
 
-**Files that move:** `internal/database/*.go` (2 sources + 1 test file), with
-`github.com/jackc/pgx/v5` as its declared dependency.
+**Файлы, которые переезжают:** `internal/database/*.go` (2 исходника + 1 тестовый файл),
+с `github.com/jackc/pgx/v5` как объявленной зависимостью.
 
 ---
 
-## Candidate 9 — `internal/rbac` — **READY**
+## Кандидат 9 — `internal/rbac` — **READY**
 
-**Why:** the permission catalog, the request principal every handler checks, and
-the service that resolves a user's effective permissions and roles. It has one
-in-module dependency, `database`, which is itself now proven, so the whole package
-lifts out.
+**Почему:** каталог разрешений, принципал запроса, который проверяет каждый обработчик,
+и сервис, определяющий действующие разрешения и роли пользователя. У него одна
+внутренняя зависимость, `database`, которая сама теперь доказана, поэтому весь пакет
+поднимается.
 
-**Blocker that was:** the docs proposed splitting "the pure catalog and
-`Principal` from the DB-backed `Service`" before it could be extracted. That is
-not what the code needs: the catalog, the principal and the service share the
-`Permission` type and the same file, and the package already extracts whole with
-its one dependency. A split would be a change to the code and not to the boundary,
-so the package is extracted as it is, and the boundary is pinned in `archtest`
-(`rbac` may import `database` and nothing else in the module).
+**Блокер, который был:** документы предлагали разделить «чистый каталог и `Principal` от
+сервиса на базе» до выделения. Это не то, что нужно коду: каталог, принципал и сервис
+делят тип `Permission` и один файл, и пакет уже выделяется целиком со своей единственной
+зависимостью. Разделение было бы изменением кода, а не границы, поэтому пакет выделен
+как есть, а граница закреплена в `archtest` (`rbac` может импортировать `database` и
+ничего больше в модуле).
 
-**Evidence:**
+**Доказательство:**
 
 ```bash
 scripts/extract-test/rbac/setup.sh
@@ -317,30 +313,29 @@ scripts/extract-test/rbac/setup.sh
 #   ok    no import of the ForgeCRM monolith
 #   ok    go build ./...
 #   ok    go test ./...
-#   ok    go run ./cmd/smoke     # catalog=93, principal checks, owner=whole catalog
+#   ok    go run ./cmd/smoke     # catalog=93, проверки принципала, owner=весь каталог
 #   ok    rbac extracts cleanly
 ```
 
-**Files that move:** `internal/rbac/*.go` (2 sources + 1 test file) and
-`internal/database` (its one dependency).
+**Файлы, которые переезжают:** `internal/rbac/*.go` (2 исходника + 1 тестовый файл) и
+`internal/database` (его единственная зависимость).
 
 ---
 
-## Candidate 10 — `internal/audit` — **READY**
+## Кандидат 10 — `internal/audit` — **READY**
 
-**Why:** the append-only action trail and the security-event stream. It has two
-in-module dependencies, `database` and `logging`, both proven, so the package
-lifts out. It had no in-package tests before this slice; it now has tests for the
-action vocabulary, the validation ordering that keeps an unattributable row out of
-the trail, and the marshalling helpers, none of which needs a server.
+**Почему:** журнал действий «только добавление» и поток событий безопасности. У него две
+внутренние зависимости, `database` и `logging`, обе доказаны, поэтому пакет поднимается.
+До этого среза у него не было тестов внутри пакета; теперь у него есть тесты для словаря
+действий, порядка валидации, который держит неприписываемую строку вне журнала, и
+помощников маршалинга, ни один из которых не нуждается в сервере.
 
-**Blocker that was:** the docs listed "no in-package tests; schema lives in
-migration 0001" as the blocker. The schema genuinely is not part of the package —
-a real extraction would carry a migration with it, and that is stated rather than
-hidden — but the *Go* package has no coupling to the application, which is what
-the harness proves.
+**Блокер, который был:** документы перечисляли «нет тестов внутри пакета; схема живёт в
+миграции 0001» как блокер. Схема действительно не часть пакета — реальное выделение
+понесло бы миграцию с собой, и это указано, а не скрыто, — но у *Go*-пакета нет связи с
+приложением, что и доказывает набор.
 
-**Evidence:**
+**Доказательство:**
 
 ```bash
 scripts/extract-test/audit/setup.sh
@@ -349,29 +344,25 @@ scripts/extract-test/audit/setup.sh
 #   copied internal/logging -> logging (2 files)
 #   ok    no import of the ForgeCRM monolith
 #   ok    go build ./...
-#   ok    go test ./...     # the new action-vocabulary and validation tests
-#   ok    go run ./cmd/smoke # validation runs before any write
+#   ok    go test ./...     # новые тесты словаря действий и валидации
+#   ok    go run ./cmd/smoke # валидация идёт до любой записи
 #   ok    audit extracts cleanly
 ```
 
-**Files that move:** `internal/audit/*.go` (1 source + 1 test file),
-`internal/database` and `internal/logging` (its two dependencies), plus migration
-0001 for the schema.
-
 ---
 
-## Candidate 11 — `internal/outbox` — **READY**
+## Кандидат 11 — `internal/outbox` — **READY**
 
-**Why:** the transactional outbox — events written in the same transaction as the
-change that caused them, drained by the worker. Two in-module dependencies,
-`database` and `logging`, both proven.
+**Почему:** транзакционный outbox — события, записанные в той же транзакции, что и
+вызвавшее их изменение, разбираемые воркером. Две внутренние зависимости, `database` и
+`logging`, обе доказаны.
 
-**Blocker that was:** the docs called it "substrate-bound" and proposed only
-documenting the dependency. That reasoning stops at documenting rather than
-proving; the package extracts cleanly, and its own vocabulary test runs in the
-extracted module.
+**Блокер, который был:** документы называли его «связанным с субстратом» и предлагали
+только документировать зависимость. Это рассуждение останавливается на документировании,
+а не на доказательстве; пакет выделяется чисто, и его собственный тест словаря идёт в
+выделенном модуле.
 
-**Evidence:**
+**Доказательство:**
 
 ```bash
 scripts/extract-test/outbox/setup.sh
@@ -381,26 +372,26 @@ scripts/extract-test/outbox/setup.sh
 #   ok    no import of the ForgeCRM monolith
 #   ok    go build ./...
 #   ok    go test ./...
-#   ok    go run ./cmd/smoke # event types=25, envelope mapping checked
+#   ok    go run ./cmd/smoke # event types=25, отображение конверта проверено
 #   ok    outbox extracts cleanly
 ```
 
-**Files that move:** `internal/outbox/*.go` (1 source + 1 test file),
-`internal/database` and `internal/logging`.
+**Файлы, которые переезжают:** `internal/outbox/*.go` (1 исходник + 1 тестовый файл),
+`internal/database` и `internal/logging`.
 
 ---
 
-## Candidate 12 — `internal/retention` — **READY**
+## Кандидат 12 — `internal/retention` — **READY**
 
-**Why:** the data-retention engine: a fixed policy catalog, a dry-run default and
-an opt-in delete. It depends only on `audit` and `database`, both proven.
+**Почему:** движок хранения данных: фиксированный каталог политик, умолчание «пробный
+прогон» и удаление по согласию. Он зависит только от `audit` и `database`, обе доказаны.
 
-**Blocker that was:** the docs said "policy table is application-specific; extract
-the engine, inject a table catalog". The catalog *is* the product — a sweep with
-no idea which tables exist has nothing to do — and it extracts with its catalog
-intact, which the harness proves.
+**Блокер, который был:** документы говорили «таблица политик специфична для приложения;
+выделить движок, внедрить каталог таблиц». Каталог *и есть* продукт — обход без понятия
+о том, какие таблицы существуют, не имеет работы, — и он выделяется с каталогом
+нетронутым, что и доказывает набор.
 
-**Evidence:**
+**Доказательство:**
 
 ```bash
 scripts/extract-test/retention/setup.sh
@@ -410,29 +401,29 @@ scripts/extract-test/retention/setup.sh
 #   copied internal/logging -> logging (2 files)
 #   ok    no import of the ForgeCRM monolith
 #   ok    go build ./...
-#   ok    go test ./...     # the retention safety tests
-#   ok    go run ./cmd/smoke # 25 policies; disabled runner refuses; dry-run default
+#   ok    go test ./...     # тесты безопасности хранения
+#   ok    go run ./cmd/smoke # 25 политик; выключенный раннер отказывает; умолчание dry-run
 #   ok    retention extracts cleanly
 ```
 
-**Files that move:** `internal/retention/*.go` (1 source + 1 test file),
-`internal/audit` and `internal/database`.
+**Файлы, которые переезжают:** `internal/retention/*.go` (1 исходник + 1 тестовый файл),
+`internal/audit` и `internal/database`.
 
 ---
 
-## Candidate 13 — `internal/agent` — **READY**
+## Кандидат 13 — `internal/agent` — **READY**
 
-**Why:** the human-in-the-loop layer — a proposal queue where a mutating action is
-hashed, shown to an operator, signed, approved or rejected, and only then
-executed. It is the widest dependency set proven so far — `audit`, `database` and
-`httpx` — and every one of those is proven in turn.
+**Почему:** слой human-in-the-loop — очередь предложений, где мутирующее действие
+хешируется, показывается оператору, подписывается, одобряется или отклоняется и только
+затем исполняется. Это самый широкий набор зависимостей, доказанный до сих пор, —
+`audit`, `database` и `httpx` — и каждая из них доказана в свою очередь.
 
-**Blocker that was:** the docs said "fine to leave; it is small and cohesive".
-Cohesion is not the property the harness checks; extraction is. The package lifts
-out, and the `Executor` seam travels with it, which is what lets a host supply the
-real tool path.
+**Блокер, который был:** документы говорили «можно оставить; он мал и целостен».
+Целостность — не то свойство, которое проверяет набор; проверяется выделение. Пакет
+поднимается, и шов `Executor` путешествует с ним, что и позволяет хосту поставлять
+реальный путь инструментов.
 
-**Evidence:**
+**Доказательство:**
 
 ```bash
 scripts/extract-test/agent/setup.sh
@@ -440,27 +431,28 @@ scripts/extract-test/agent/setup.sh
 #   copied internal/audit, internal/database, internal/logging, internal/httpx, internal/ratelimit
 #   ok    no import of the ForgeCRM monolith
 #   ok    go build ./...
-#   ok    go test ./...     # the argument-hash stability test
-#   ok    go run ./cmd/smoke # hash stable; tiers classify; empty secret refused
+#   ok    go test ./...     # тест стабильности хеша аргументов
+#   ok    go run ./cmd/smoke # хеш стабилен; уровни классифицируют; пустой секрет отклонён
 #   ok    agent extracts cleanly
 ```
 
-**Files that move:** `internal/agent/*.go` (3 source + 1 test file),
-`internal/audit`, `internal/database`, `internal/httpx` (and its own leaves
+**Файлы, которые переезжают:** `internal/agent/*.go` (3 исходника + 1 тестовый файл),
+`internal/audit`, `internal/database`, `internal/httpx` (и его собственные листья
 `logging`, `ratelimit`).
 
 ---
 
-## Candidate 14 — `internal/jobs` — **READY**
+## Кандидат 14 — `internal/jobs` — **READY**
 
-**Why:** the queue: a unit of work enqueued (optionally inside the caller's
-transaction), claimed with `SKIP LOCKED`, completed or failed with a bounded retry
-backoff, and swept for staleness. Its only in-module dependency is `database`.
+**Почему:** очередь: единица работы ставится (опционально внутри транзакции вызывающего),
+забирается с `SKIP LOCKED`, завершается или проваливается с ограниченной задержкой
+повтора и обметается на устаревание. Его единственная внутренняя зависимость — `database`.
 
-**Blocker that was:** the docs said "`almost` — 1 internal dep". One proven dep is
-not a blocker. The package lifts out, and it had no in-package tests.
+**Блокер, который был:** документы говорили «`almost` — 1 внутренняя зависимость». Одна
+доказанная зависимость — не блокер. Пакет поднимается, и у него не было тестов внутри
+пакета.
 
-**Evidence:**
+**Доказательство:**
 
 ```bash
 scripts/extract-test/jobs/setup.sh
@@ -468,33 +460,33 @@ scripts/extract-test/jobs/setup.sh
 #   copied internal/database -> database (2 files)
 #   ok    no import of the ForgeCRM monolith
 #   ok    go build ./...
-#   ok    go test ./...     # the first in-package tests
-#   ok    go run ./cmd/smoke # 11 kinds; validation runs before any write
+#   ok    go test ./...     # первые тесты внутри пакета
+#   ok    go run ./cmd/smoke # 11 видов; валидация идёт до любой записи
 #   ok    jobs extracts cleanly
 ```
 
-Writing the backoff test found a real latent bug: the shift was clamped at 10, so
-the delay topped out at `1<<10 s = 1024s` and the documented 30-minute ceiling was
-unreachable dead code. The clamp is now 11, so the ceiling is real.
+Написание теста задержки нашло реальный скрытый баг: сдвиг был ограничен 10, поэтому
+задержка упиралась в `1<<10 s = 1024s`, а документированный потолок в 30 минут был
+недостижимым мёртвым кодом. Ограничение теперь 11, поэтому потолок реален.
 
-**Files that move:** `internal/jobs/*.go` (1 source + 1 test file) and
+**Файлы, которые переезжают:** `internal/jobs/*.go` (1 исходник + 1 тестовый файл) и
 `internal/database`.
 
 ---
 
-## Candidate 15 — `internal/crm` — **READY**
+## Кандидат 15 — `internal/crm` — **READY**
 
-**Why:** the domain service — accounts, contacts, leads, deals, tasks, tickets,
-activities, the pipeline read, search and the baseline analytics. It is the core of
-the product, and it depends only on `database`, `audit`, `httpx`, `outbox` and
-`rbac`, all proven.
+**Почему:** доменный сервис — аккаунты, контакты, лиды, сделки, задачи, обращения,
+активности, чтение воронки, поиск и базовая аналитика. Это ядро продукта, и оно зависит
+только от `database`, `audit`, `httpx`, `outbox` и `rbac`, все доказаны.
 
-**Blocker that was:** the docs said "`almost` — it imports `httpx` and `outbox`,
-which are platform concerns that would have to travel or be inverted". That claim
-was wrong: `httpx` and `outbox` are proven modules, so they travel as declared
-dependencies rather than friction. Nothing imports `crm` back.
+**Блокер, который был:** документы говорили «`almost` — он импортирует `httpx` и
+`outbox`, которые являются платформенными заботами, которые пришлось бы нести или
+инвертировать». Это утверждение было неверным: `httpx` и `outbox` — доказанные модули,
+поэтому они путешествуют как объявленные зависимости, а не как трение. Ничто не
+импортирует `crm` обратно.
 
-**Evidence:**
+**Доказательство:**
 
 ```bash
 scripts/extract-test/crm/setup.sh
@@ -502,33 +494,33 @@ scripts/extract-test/crm/setup.sh
 #   copied internal/{audit,database,logging,httpx,ratelimit,outbox,rbac}
 #   ok    no import of the ForgeCRM monolith
 #   ok    go build ./...
-#   ok    go test ./...     # the first in-package tests: the validators + JSONMap
-#   ok    go run ./cmd/smoke # deal/contact/bulk validation; JSONMap codec
+#   ok    go test ./...     # первые тесты внутри пакета: валидаторы + JSONMap
+#   ok    go run ./cmd/smoke # валидация сделки/контакта/массовой; кодек JSONMap
 #   ok    crm extracts cleanly
 ```
 
-The package had no in-package tests. It now has the first, covering the validators
-that run before any database access — the boundary an attacker's payload hits first
-— and the `JSONMap` column codec.
+Пакет не имел тестов внутри пакета. Теперь у него первые, покрывающие валидаторы,
+которые идут до любого доступа к базе, — граница, которую payload атакующего бьёт
+первой, — и кодек столбца `JSONMap`.
 
-**Files that move:** `internal/crm/*.go` (8 source + 1 test file),
-`internal/{audit,database,httpx,outbox,rbac}` (and their own leaves).
+**Файлы, которые переезжают:** `internal/crm/*.go` (8 исходников + 1 тестовый файл),
+`internal/{audit,database,httpx,outbox,rbac}` (и их собственные листья).
 
 ---
 
-## Candidate 16 — `internal/storage` — **READY**
+## Кандидат 16 — `internal/storage` — **READY**
 
-**Why:** the application layer over an object store: it owns the document rows, the
-entity attachment rules, the size and content-type limits, the object key and the
-reconciliation. The provider layer was already lifted to `internal/objectstore`
-(which depends only on `netguard`), and the service layer depends only on
-`database`, `audit`, `httpx`, `objectstore`, `ratelimit` and `rbac`, all proven.
+**Почему:** прикладной слой над объектным хранилищем: он владеет строками документов,
+правилами привязки к сущностям, лимитами размера и типа содержимого, ключом объекта и
+сверкой. Слой провайдера уже был поднят в `internal/objectstore` (который зависит только
+от `netguard`), а слой сервиса зависит только от `database`, `audit`, `httpx`,
+`objectstore`, `ratelimit` и `rbac`, все доказаны.
 
-**Blocker that was:** the docs said `no` — "`Service` binds to
-`rbac`/`audit`/`database` by design". Binding to proven modules by design is not a
-blocker; the harness proves it.
+**Блокер, который был:** документы говорили `no` — «`Service` по дизайну связывается с
+`rbac`/`audit`/`database`». Связывание с доказанными модулями по дизайну — не блокер;
+набор это доказывает.
 
-**Evidence:**
+**Доказательство:**
 
 ```bash
 scripts/extract-test/storage/setup.sh
@@ -536,26 +528,26 @@ scripts/extract-test/storage/setup.sh
 #   copied internal/{audit,database,logging,httpx,ratelimit,objectstore,netguard,rbac}
 #   ok    no import of the ForgeCRM monolith
 #   ok    go build ./...
-#   ok    go test ./...     # key/extension/entity/S3-config tests
-#   ok    go run ./cmd/smoke # memory round trip; unconfigured service reports off
+#   ok    go test ./...     # тесты ключа/расширения/сущности/конфигурации S3
+#   ok    go run ./cmd/smoke # круговой рейс в памяти; ненастроенный сервис сообщает off
 #   ok    storage extracts cleanly
 ```
 
-**Files that move:** `internal/storage/*.go` (4 files incl. tests),
+**Файлы, которые переезжают:** `internal/storage/*.go` (4 файла, включая тесты),
 `internal/objectstore`, `internal/{audit,database,httpx,ratelimit,rbac}`.
 
 ---
 
-## Candidate 17 — `internal/integrations` — **READY**
+## Кандидат 17 — `internal/integrations` — **READY**
 
-**Why:** the Integration Hub — adapter lifecycle, the SSRF guard (aliased from
-`netguard`), the encrypted secret handoff and the run log. It depends only on
-`audit`, `database`, `httpx`, `netguard`, `rbac` and `secrets`, all proven.
+**Почему:** Хаб интеграций — жизненный цикл адаптеров, защита SSRF (алиасированная из
+`netguard`), зашифрованная передача секретов и журнал прогонов. Он зависит только от
+`audit`, `database`, `httpx`, `netguard`, `rbac` и `secrets`, все доказаны.
 
-**Blocker that was:** the docs said "`almost` — the rest needs `secrets`". `secrets`
-is proven, so it travels.
+**Блокер, который был:** документы говорили «`almost` — остальному нужен `secrets`».
+`secrets` доказан, поэтому путешествует.
 
-**Evidence:**
+**Доказательство:**
 
 ```bash
 scripts/extract-test/integrations/setup.sh
@@ -564,21 +556,21 @@ scripts/extract-test/integrations/setup.sh
 #   ok    no import of the ForgeCRM monolith
 #   ok    go build ./...
 #   ok    go test ./...
-#   ok    go run ./cmd/smoke # SSRF guard refuses loopback/private/link-local/file://
+#   ok    go run ./cmd/smoke # защита SSRF отклоняет loopback/private/link-local/file://
 #   ok    integrations extracts cleanly
 ```
 
-**Files that move:** `internal/integrations/*.go` (4 files),
+**Файлы, которые переезжают:** `internal/integrations/*.go` (4 файла),
 `internal/{audit,database,httpx,netguard,rbac,secrets}`.
 
 ---
 
-## Candidate 18 — `internal/oidc` — **READY**
+## Кандидат 18 — `internal/oidc` — **READY**
 
-Single sign-on: the authorization-code flow with PKCE and a nonce, plus the
-provider registry. It depends on `audit`, `config`, `database` and `secrets`;
-`config` reaches `httpx`, `logging`, `ratelimit` and `retention`, so those travel
-too, and each is proven in its own candidate above.
+Единый вход: поток authorization-code с PKCE и nonce, плюс реестр провайдеров. Он зависит
+от `audit`, `config`, `database` и `secrets`; `config` достигает `httpx`, `logging`,
+`ratelimit` и `retention`, поэтому те тоже путешествуют, и каждый доказан в своём
+кандидате выше.
 
 ```bash
 scripts/extract-test/oidc/setup.sh
@@ -586,23 +578,23 @@ scripts/extract-test/oidc/setup.sh
 #   copied internal/{audit,config,database,secrets,logging,httpx,ratelimit,retention}
 #   ok    no import of the ForgeCRM monolith
 #   ok    go build ./...
-#   ok    go test ./...          # oidc_test.go: Public() never carries the secret,
-#                                # open-redirect collapse, allowed-domain check
-#   ok    go run ./cmd/smoke     # Public() has no secret field, Enabled() is nil-safe,
-#                                # RedirectURL()/LoginURL() build the right routes
+#   ok    go test ./...          # oidc_test.go: Public() никогда не несёт секрет,
+#                                # сворачивание open-redirect, проверка разрешённого домена
+#   ok    go run ./cmd/smoke     # в Public() нет поля секрета, Enabled() nil-безопасен,
+#                                # RedirectURL()/LoginURL() строят правильные маршруты
 #   ok    oidc extracts cleanly
 ```
 
-**Files that move:** `internal/oidc/*.go` (2 files),
+**Файлы, которые переезжают:** `internal/oidc/*.go` (2 файла),
 `internal/{audit,config,database,secrets,logging,httpx,ratelimit,retention}`.
 
 ---
 
-## Candidate 19 — `internal/views` — **READY**
+## Кандидат 19 — `internal/views` — **READY**
 
-Saved list views: named filters stored per user and screen. It reads the caller's
-principal from `rbac` and writes the audit trail, so it moves with `rbac` and
-`audit`; `audit` reaches `logging`.
+Сохранённые представления списков: именованные фильтры, хранимые на пользователя и экран.
+Он читает принципала вызывающего из `rbac` и пишет журнал аудита, поэтому переезжает с
+`rbac` и `audit`; `audit` достигает `logging`.
 
 ```bash
 scripts/extract-test/views/setup.sh
@@ -610,72 +602,73 @@ scripts/extract-test/views/setup.sh
 #   copied internal/{audit,database,rbac,logging}
 #   ok    no import of the ForgeCRM monolith
 #   ok    go build ./...
-#   ok    go test ./...          # views_test.go: closed entity-type set, filter validation
-#   ok    go run ./cmd/smoke     # the filter document round-trips through JSON unchanged
+#   ok    go test ./...          # views_test.go: закрытый набор типов сущностей, валидация фильтра
+#   ok    go run ./cmd/smoke     # документ фильтра проходит через JSON без изменений
 #   ok    views extracts cleanly
 ```
 
-**Files that move:** `internal/views/*.go` (2 files),
+**Файлы, которые переезжают:** `internal/views/*.go` (2 файла),
 `internal/{audit,database,rbac,logging}`.
 
 ---
 
-## Candidates assessed but not extracted
+## Кандидаты, оценённые, но не выделенные
 
-These were evaluated from the dependency graph and marked without an extraction
-run, because each has a concrete blocker that an extraction would only confirm.
+Они были оценены из графа зависимостей и помечены без прогона выделения, потому что у
+каждого есть конкретный блокер, который выделение лишь подтвердило бы.
 
-| Module | Status | Evidence | Blockers | Next actions |
+| Модуль | Статус | Доказательство | Блокеры | Следующие действия |
 | --- | --- | --- | --- | --- |
-| `internal/api`, `wiring`, `openapi`, `testsupport` | **NOT READY** | Structurally application-wide. | — | Not extraction targets. |
+| `internal/api`, `wiring`, `openapi`, `testsupport` | **NOT READY** | Структурно общеприкладные. | — | Не цели выделения. |
 
 ---
 
-## Summary
+## Сводка
 
-| Module | Status | One-line reason |
+| Модуль | Статус | Причина в одну строку |
 | --- | --- | --- |
-| `analytics` | **READY** | Zero internal deps; extracted, built, tested, smoke ran. |
-| `ratelimit` | **READY** | Zero internal deps; extracted, built, unit-tested (Redis path compiled, not run). |
-| `netguard` | **READY** | Standard library only; extracted, built, tested, smoke ran (blocked loopback/metadata, allowed public). |
-| `objectstore` | **READY** | Extracted with `netguard`; built, shared provider contract passed for `Memory` and real S3 wire protocol, smoke ran. |
-| `secrets` | **READY** | Zero internal deps; extracted, built, its own 20 tests ran (the package gained them in this slice), smoke ran. |
-| `logging` | **READY** | Standard library only; extracted, built, its own tests ran (added in this slice), smoke ran. |
-| `httpx` | **READY** | Depends only on `logging` and `ratelimit`; extracted with both, built, its own tests ran, smoke drove a 429. |
-| `importx/safe` | **READY** | A leaf; extracted, its ~24 security tests ran, smoke refused a traversal and a zip bomb. |
-| `importx/parsers` | **READY** | A leaf; extracted, 19 tests added in this slice (they found and fixed two bugs), smoke ran. |
-| `database` | **READY** | A leaf; extracted, its pool-guard tests ran with no server, smoke refused an over-large pool. |
-| `rbac` | **READY** | Extracted whole with `database`; its `principal_test.go` and a catalog smoke ran. |
-| `audit` | **READY** | Extracted with `database` and `logging`; first tests added, smoke checked the validation ordering. |
-| `outbox` | **READY** | Extracted with `database` and `logging`; its vocabulary test and a smoke ran. |
-| `retention` | **READY** | Extracted with `audit` and `database`; its safety tests and a policy-catalog smoke ran. |
-| `agent` | **READY** | Extracted with `audit`, `database` and `httpx`; its argument-hash test and a smoke ran. |
-| `jobs` | **READY** | Extracted with `database`; its first tests (backoff bug found) and a smoke ran. |
-| `crm` | **READY** | Extracted with `audit`, `database`, `httpx`, `outbox` and `rbac`; its first tests (validators) and a smoke ran. |
-| `storage` | **READY** | Extracted with `audit`, `database`, `httpx`, `objectstore`, `ratelimit` and `rbac`; its tests and a smoke ran. |
-| `integrations` | **READY** | Extracted with `audit`, `database`, `httpx`, `netguard`, `rbac` and `secrets`; the SSRF smoke ran. |
-| `config` | **READY** | Extracted with `database`, `httpx` and `retention`; the smoke proved the defaults and the refusal of an empty DSN. |
-| `workflow` | **READY** | Extracted with `audit`, `crm`, `database`, `httpx`, `logging`, `outbox` and `rbac`; the smoke registered the event vocabulary and validated the catalog. |
-| `events` | **READY** | Extracted with `audit`, `database`, `httpx`, `integrations`, `logging`, `outbox`, `rbac` and `secrets`; the smoke pinned the signature, tolerance and payload cap. |
-| `migratex` | **READY** | Extracted with `audit`, `database`, `httpx`, `integrations`, `rbac` and `secrets`; the smoke pinned the implemented source kinds. |
-| `simulate` | **READY** | Extracted with `analytics`, `audit`, `crm`, `database` and `rbac`; the smoke checked the scenario catalog. |
-| `forecast` | **READY** | Extracted with `analytics`, `audit`, `crm`, `database` and `rbac`; the smoke checked the method catalog. |
-| `risk` | **READY** | Extracted with `analytics`, `audit`, `crm`, `database` and `rbac`; the smoke checked the threshold and signal contract. |
-| `notify` | **READY** | Extracted with `audit`, `config`, `database`, `httpx`, `rbac` and `secrets`; the smoke proved a disabled transport reports off. |
-| `ai` | **READY** | Extracted with `agent`, `audit`, `config`, `crm`, `database`, `httpx`, `logging`, `ratelimit`, `rbac` and `retention`; the smoke proved the context fence neutralises a forged record. |
-| `importx` | **READY** | Extracted with `audit`, `config`, `crm`, `database`, `httpx`, `importx/parsers`, `importx/safe`, `jobs`, `outbox` and `rbac`; the smoke checked the field catalog. |
-| `migrations` | **READY** | A leaf that carries SQL as well as code; the smoke walked the embedded FS and found 21 balanced up/down pairs. |
-| `migrate` | **READY** | Extracted with `migrations`; the smoke opened the embedded source and walked its list. |
-| `authn` | **READY** | The widest module proven: extracted with `audit`, `config`, `database`, `httpx`, `logging`, `migrate`, `migrations`, `ratelimit`, `rbac`, `retention` and `secrets`; the smoke pinned the password policy and the step-up window. |
-| `oidc` | **READY** | Extracted with `audit`, `config`, `database`, `secrets`, `logging`, `httpx`, `ratelimit` and `retention`; the smoke proved `Public()` carries no secret and `Enabled()` is nil-safe. |
-| `views` | **READY** | Extracted with `audit`, `database`, `rbac` and `logging`; the smoke proved the entity-type set is closed and the filter document round-trips unchanged. |
-| everything else | **ALMOST** / **NOT READY** | Concrete blocker listed above. |
+| `analytics` | **READY** | Ноль внутренних зависимостей; выделен, собран, протестирован, smoke прошёл. |
+| `ratelimit` | **READY** | Ноль внутренних зависимостей; выделен, собран, модульно протестирован (путь Redis скомпилирован, не запущен). |
+| `netguard` | **READY** | Только стандартная библиотека; выделен, собран, протестирован, smoke прошёл (loopback/метаданные заблокированы, публичный разрешён). |
+| `objectstore` | **READY** | Выделен с `netguard`; собран, общий контракт провайдера прошёл для `Memory` и реального протокола S3, smoke прошёл. |
+| `secrets` | **READY** | Ноль внутренних зависимостей; выделен, собран, его 20 тестов прошли (пакет получил их в этом срезе), smoke прошёл. |
+| `logging` | **READY** | Только стандартная библиотека; выделен, собран, его собственные тесты прошли (добавлены в этом срезе), smoke прошёл. |
+| `httpx` | **READY** | Зависит только от `logging` и `ratelimit`; выделен с обоими, собран, его собственные тесты прошли, smoke довёл до 429. |
+| `importx/safe` | **READY** | Лист; выделен, его ~24 теста безопасности прошли, smoke отклонил обход и zip-бомбу. |
+| `importx/parsers` | **READY** | Лист; выделен, 19 тестов добавлено в этом срезе (они нашли и исправили два бага), smoke прошёл. |
+| `database` | **READY** | Лист; выделен, его тесты защиты пула прошли без сервера, smoke отклонил слишком большой пул. |
+| `rbac` | **READY** | Выделен целиком с `database`; его `principal_test.go` и smoke каталога прошли. |
+| `audit` | **READY** | Выделен с `database` и `logging`; первые тесты добавлены, smoke проверил порядок валидации. |
+| `outbox` | **READY** | Выделен с `database` и `logging`; его тест словаря и smoke прошли. |
+| `retention` | **READY** | Выделен с `audit` и `database`; его тесты безопасности и smoke каталога политик прошли. |
+| `agent` | **READY** | Выделен с `audit`, `database` и `httpx`; его тест хеша аргументов и smoke прошли. |
+| `jobs` | **READY** | Выделен с `database`; его первые тесты (найден баг задержки) и smoke прошли. |
+| `crm` | **READY** | Выделен с `audit`, `database`, `httpx`, `outbox` и `rbac`; его первые тесты (валидаторы) и smoke прошли. |
+| `storage` | **READY** | Выделен с `audit`, `database`, `httpx`, `objectstore`, `ratelimit` и `rbac`; его тесты и smoke прошли. |
+| `integrations` | **READY** | Выделен с `audit`, `database`, `httpx`, `netguard`, `rbac` и `secrets`; smoke SSRF прошёл. |
+| `config` | **READY** | Выделен с `database`, `httpx` и `retention`; smoke доказал умолчания и отказ при пустом DSN. |
+| `workflow` | **READY** | Выделен с `audit`, `crm`, `database`, `httpx`, `logging`, `outbox` и `rbac`; smoke зарегистрировал словарь событий и валидировал каталог. |
+| `events` | **READY** | Выделен с `audit`, `database`, `httpx`, `integrations`, `logging`, `outbox`, `rbac` и `secrets`; smoke закрепил подпись, допуск и предел payload. |
+| `migratex` | **READY** | Выделен с `audit`, `database`, `httpx`, `integrations`, `rbac` и `secrets`; smoke закрепил реализованные виды источников. |
+| `simulate` | **READY** | Выделен с `analytics`, `audit`, `crm`, `database` и `rbac`; smoke проверил каталог сценариев. |
+| `forecast` | **READY** | Выделен с `analytics`, `audit`, `crm`, `database` и `rbac`; smoke проверил каталог методов. |
+| `risk` | **READY** | Выделен с `analytics`, `audit`, `crm`, `database` и `rbac`; smoke проверил контракт порогов и сигналов. |
+| `notify` | **READY** | Выделен с `audit`, `config`, `database`, `httpx`, `rbac` и `secrets`; smoke доказал, что выключенный транспорт сообщает off. |
+| `ai` | **READY** | Выделен с `agent`, `audit`, `config`, `crm`, `database`, `httpx`, `logging`, `ratelimit`, `rbac` и `retention`; smoke доказал, что ограждение контекста нейтрализует подделанную запись. |
+| `importx` | **READY** | Выделен с `audit`, `config`, `crm`, `database`, `httpx`, `importx/parsers`, `importx/safe`, `jobs`, `outbox` и `rbac`; smoke проверил каталог полей. |
+| `migrations` | **READY** | Лист, несущий SQL наравне с кодом; smoke обошёл встроенную ФС и нашёл 21 сбалансированную пару up/down. |
+| `migrate` | **READY** | Выделен с `migrations`; smoke открыл встроенный источник и обошёл его список. |
+| `authn` | **READY** | Самый широкий доказанный модуль: выделен с `audit`, `config`, `database`, `httpx`, `logging`, `migrate`, `migrations`, `ratelimit`, `rbac`, `retention` и `secrets`; smoke закрепил политику паролей и окно step-up. |
+| `oidc` | **READY** | Выделен с `audit`, `config`, `database`, `secrets`, `logging`, `httpx`, `ratelimit` и `retention`; smoke доказал, что `Public()` не несёт секрета и `Enabled()` nil-безопасен. |
+| `views` | **READY** | Выделен с `audit`, `database`, `rbac` и `logging`; smoke доказал, что набор типов сущностей закрыт и документ фильтра проходит через JSON без изменений. |
+| всё остальное | **ALMOST** / **NOT READY** | Конкретный блокер перечислен выше. |
 
-**No module is marked `READY` without an extraction run recorded here**, and the
-run is now automated: `scripts/extract-test/run.sh` performs it for every module in
-`modules.txt` on each CI run. `analytics`, `ratelimit`, `netguard`, `objectstore`,
-`secrets`, `logging`, `httpx`, `importx/safe` and `importx/parsers` pass that bar today.
+**Ни один модуль не помечен `READY` без записанного здесь прогона выделения**, и прогон
+теперь автоматизирован: `scripts/extract-test/run.sh` выполняет его для каждого модуля в
+`modules.txt` на каждом прогоне CI. `analytics`, `ratelimit`, `netguard`, `objectstore`,
+`secrets`, `logging`, `httpx`, `importx/safe` и `importx/parsers` проходят эту планку
+сегодня.
 
-The thirty-four `READY` modules are proven by the harness, not by this document. If the
-harness ever fails for one of them, the status here is wrong and the harness is
-right.
+Тридцать четыре модуля `READY` доказаны набором, а не этим документом. Если набор
+когда-либо упадёт для одного из них, статус здесь неверен, а набор прав.
+
