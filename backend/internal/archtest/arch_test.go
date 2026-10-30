@@ -213,7 +213,7 @@ func TestCoreDoesNotImportCompositionOrHTTP(t *testing.T) {
 // graph, so a regression is caught by `go test ./...` and not only by the heavier
 // extraction harness in scripts/extract-test.
 //
-// Twenty-nine modules are pinned:
+// Thirty-two modules are pinned:
 //
 //   - netguard is the SSRF guard. It is a leaf: it must depend on nothing inside
 //     this module and nothing outside the standard library. That is what lets the
@@ -284,6 +284,11 @@ func TestCoreDoesNotImportCompositionOrHTTP(t *testing.T) {
 //   - importx is the Import Center. It may depend only on the environment loader,
 //     the database handle, the audit trail, the HTTP primitives, the CRM domain,
 //     the two parser leaves, the job queue, the outbox and RBAC.
+//   - migrations is the embedded SQL. It is a leaf, but it carries data as well as
+//     code: the embed directive names *.sql, so the extraction must copy the SQL.
+//   - migrate is the runner over the embedded migrations; it depends only on them.
+//   - authn is authentication. It is the widest module proven — the environment
+//     loader, the schema runner, the retention engine and RBAC all travel with it.
 //
 // This is the cheap, always-on half of the check. The extraction harness is the
 // expensive half that actually compiles the module on its own; the two are

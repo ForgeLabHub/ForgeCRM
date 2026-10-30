@@ -244,12 +244,13 @@ An "extraction-ready" claim is **testable, not documentary**:
   the test passes while checking nothing. The archtest and the harness are
   independent, so neither a stale check nor a skipped CI job can hide a violation.
 
-Twenty-nine modules are proven today: `netguard`, `analytics`, `ratelimit`,
+Thirty-two modules are proven today: `netguard`, `analytics`, `ratelimit`,
 `objectstore`, `secrets`, `logging`, `httpx`, the two `importx` leaves
 `importx/safe` (untrusted-archive extraction) and `importx/parsers` (tabular
 source parsing), and `database`, `rbac`, `audit`, `outbox`, `retention`, `agent`,
 `jobs`, `crm`, `storage`, `integrations`, `config`, `workflow`, `events`,
-`migratex`, `simulate`, `forecast`, `risk`, `notify`, `ai` and `importx` (each
+`migratex`, `simulate`, `forecast`, `risk`, `notify`, `ai`, `importx`,
+`migrations`, `migrate` and `authn` (each
 with its proven dependencies: `database`, and where needed `logging`, `audit`,
 `httpx`, `outbox`, `objectstore`, `netguard`, `ratelimit`, `rbac`, `secrets`,
 `analytics`, `crm`, `agent`, `config`, `retention`, `integrations`, `jobs` and the

@@ -37,6 +37,9 @@
 # notify        outbound transports: email and Telegram, off when unconfigured
 # ai            the contextual AI layer: prompt assembly, tool risk tiers, MCP protocol
 # importx       the Import Center: format detection, field catalog, parser leaves
+# migrations    the embedded SQL: a leaf that carries data as well as code (//go:embed *.sql)
+# migrate       the runner over the embedded migrations; depends only on them
+# authn         authentication: login, lockout, sessions, MFA, password reset
 
 netguard
 analytics
@@ -67,3 +70,6 @@ risk
 notify
 ai
 importx
+migrations
+migrate
+authn

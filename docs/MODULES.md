@@ -403,9 +403,13 @@ Two things this document deliberately does not do:
   `github.com/pquerna/otp`, `.../totp`.
 - **Fake:** none.
 - **Tests:** `authn_test.go` (password policy) + `testsupport/concurrency_test.go`.
-- **Extract:** `no` — binds to 6 platform packages (`rbac`, `secrets`, `database`,
-  `config`, `audit`, `logging`); extraction is not sensible until those move first.
-- **Cut lines:** moves with `rbac`, `secrets`, `database`.
+- **Extract:** **`yes`** — extracted and proven by `scripts/extract-test/authn`,
+  with `audit`, `config`, `database`, `httpx`, `logging`, `migrate`, `migrations`,
+  `ratelimit`, `rbac`, `retention` and `secrets` as its dependencies, all proven.
+  The earlier `no` said extraction was not sensible "until those move first"; they
+  have all moved, so it now moves too. The smoke pins the password policy and the
+  step-up window.
+- **Cut lines:** moves with `rbac`, `secrets`, `database`, `config`, `migrate`.
 
 ---
 
@@ -654,8 +658,14 @@ Two things this document deliberately does not do:
 - **External deps:** `github.com/golang-migrate/migrate/v4` (+ postgres, iofs).
 - **Fake:** not applicable.
 - **Tests:** none in-package; applied in CI and integration.
-- **Extract:** `no` — schema is application-wide.
-- **Cut lines:** stays with the monolith.
+- **Extract:** **`yes`** — `migrations` and `migrate` are each extracted and proven
+  by `scripts/extract-test/migrations` and `scripts/extract-test/migrate`.
+  `migrations` is a leaf in code but carries data as well: the `//go:embed`
+  directive names `*.sql`, so the extraction must copy the SQL files — a Go-only
+  copy fails to build, and the harness does copy them. The earlier `no` ("schema is
+  application-wide") was wrong: the schema is data the binary embeds, not a
+  dependency on the application.
+- **Cut lines:** moves with the SQL it embeds.
 
 ### internal/openapi  — spec generation
 - **Responsibility:** build `docs/api/openapi.json` from the live router and the
@@ -739,11 +749,12 @@ Two things this document deliberately does not do:
   seams without a shipped fake: `ai.Provider`, `events.Poster`,
   `integrations.Adapter`, `migratex.Source`, `agent.Executor`,
   `database.Querier`, `objectstore.ObjectStore`, `ratelimit.Store`.
-- **Extract status:** twenty-nine modules are `yes` — `analytics`, `ratelimit`,
+- **Extract status:** thirty-two modules are `yes` — `analytics`, `ratelimit`,
   `netguard`, `objectstore`, `secrets`, `logging`, `httpx`, `importx/safe`,
   `importx/parsers`, `database`, `rbac`, `audit`, `outbox`, `retention`, `agent`,
   `jobs`, `crm`, `storage`, `integrations`, `config`, `workflow`, `events`,
-  `migratex`, `simulate`, `forecast`, `risk`, `notify`, `ai` and `importx` —
+  `migratex`, `simulate`, `forecast`, `risk`, `notify`, `ai`, `importx`,
+  `migrations`, `migrate` and `authn` —
   because they were
   actually extracted, built, tested and run in a clean module, now by the
   automated harness in `scripts/extract-test/`. The statuses here match

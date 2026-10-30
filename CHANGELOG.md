@@ -10,7 +10,8 @@ once it reaches 1.0.
 
 ### Added
 
-- **Ten more modules are extraction-proven, taking the harness to twenty-nine.**
+- **Thirteen more modules are extraction-proven, taking the harness to
+  thirty-two.**
   The remaining backend packages that sit above the leaves now lift out on their
   own, each with its dependencies proven in turn: `internal/config` (the
   environment loader — the last shared piece most modules wait on),
@@ -20,7 +21,9 @@ once it reaches 1.0.
   `internal/forecast` and `internal/risk` (read-only computations over the pure
   analytics core), `internal/notify` (the email and Telegram transports),
   `internal/ai` (the contextual AI layer) and `internal/importx` (the Import
-  Center). Each gained a `scripts/extract-test/<module>/` harness — a `setup.sh`
+  Center), `internal/migrations` and `internal/migrate` (the embedded SQL and its
+  runner) and `internal/authn` (authentication). Each gained a
+  `scripts/extract-test/<module>/` harness — a `setup.sh`
   that copies the module and its proven dependencies into a clean Go module, and a
   `cmd/smoke` program that exercises the real public API rather than merely
   importing it. The smoke for `ai` proves a forged data fence is neutralised and
@@ -48,7 +51,7 @@ once it reaches 1.0.
   passes. A CI job `extraction` runs the harness, and `TestExtractionBoundaryHolds`
   in `internal/archtest` enforces the same boundary cheaply on every
   `go test ./...`; the two are independent, so neither a stale check nor a skipped
-  job can hide a violation. Twenty-nine modules are proven today: the four above plus
+  job can hide a violation. Thirty-two modules are proven today: the four above plus
   `secrets` and `logging` (which became provable once they gained their own tests),
   `httpx`, `importx/safe`, `importx/parsers`, `database`, `rbac`, `audit`,
   `outbox`, `retention`, `agent`, `jobs`, `crm`, `storage` and `integrations` (the

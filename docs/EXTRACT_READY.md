@@ -580,8 +580,7 @@ run, because each has a concrete blocker that an extraction would only confirm.
 
 | Module | Status | Evidence | Blockers | Next actions |
 | --- | --- | --- | --- | --- |
-| `internal/api`, `wiring`, `openapi`, `migrate`, `migrations`, `testsupport` | **NOT READY** | Structurally application-wide. | — | Not extraction targets. |
-| `internal/authn` | **NOT READY** | Binds to `rbac`, `secrets`, `database`, `config`, `audit`, `logging`. | 6 internal deps. | Extract after `rbac`/`secrets`. |
+| `internal/api`, `wiring`, `openapi`, `testsupport` | **NOT READY** | Structurally application-wide. | — | Not extraction targets. |
 
 ---
 
@@ -618,6 +617,9 @@ run, because each has a concrete blocker that an extraction would only confirm.
 | `notify` | **READY** | Extracted with `audit`, `config`, `database`, `httpx`, `rbac` and `secrets`; the smoke proved a disabled transport reports off. |
 | `ai` | **READY** | Extracted with `agent`, `audit`, `config`, `crm`, `database`, `httpx`, `logging`, `ratelimit`, `rbac` and `retention`; the smoke proved the context fence neutralises a forged record. |
 | `importx` | **READY** | Extracted with `audit`, `config`, `crm`, `database`, `httpx`, `importx/parsers`, `importx/safe`, `jobs`, `outbox` and `rbac`; the smoke checked the field catalog. |
+| `migrations` | **READY** | A leaf that carries SQL as well as code; the smoke walked the embedded FS and found 21 balanced up/down pairs. |
+| `migrate` | **READY** | Extracted with `migrations`; the smoke opened the embedded source and walked its list. |
+| `authn` | **READY** | The widest module proven: extracted with `audit`, `config`, `database`, `httpx`, `logging`, `migrate`, `migrations`, `ratelimit`, `rbac`, `retention` and `secrets`; the smoke pinned the password policy and the step-up window. |
 | everything else | **ALMOST** / **NOT READY** | Concrete blocker listed above. |
 
 **No module is marked `READY` without an extraction run recorded here**, and the
@@ -625,6 +627,6 @@ run is now automated: `scripts/extract-test/run.sh` performs it for every module
 `modules.txt` on each CI run. `analytics`, `ratelimit`, `netguard`, `objectstore`,
 `secrets`, `logging`, `httpx`, `importx/safe` and `importx/parsers` pass that bar today.
 
-The twenty-nine `READY` modules are proven by the harness, not by this document. If the
+The thirty-two `READY` modules are proven by the harness, not by this document. If the
 harness ever fails for one of them, the status here is wrong and the harness is
 right.

@@ -80,6 +80,21 @@ extract_pkg() {
   info "copied internal/$pkg -> ${dest:-.} ($(ls "$target"/*.go 2>/dev/null | wc -l | tr -d ' ') files)"
 }
 
+# extract_sql <work> <pkg> <dest-rel> copies a package's embedded .sql files
+# alongside its .go files. internal/migrations embeds its SQL with //go:embed, so
+# the copy must carry the files the embed directive names or the build fails with
+# "pattern *.sql: no matching files found".
+extract_sql() {
+  local work="$1" pkg="$2" dest="$3"
+  local src="$BACKEND_DIR/internal/$pkg"
+  [ -d "$src" ] || die "no such package: internal/$pkg"
+  local target="$work"
+  [ -n "$dest" ] && target="$work/$dest"
+  mkdir -p "$target"
+  cp "$src"/*.sql "$target/" 2>/dev/null || die "copy internal/$pkg/*.sql"
+  info "copied internal/$pkg -> ${dest:-.} ($(ls "$target"/*.sql 2>/dev/null | wc -l | tr -d ' ') sql files)"
+}
+
 # install_module_files <work> <module-dir> copies the module's go.mod, optional
 # go.sum and smoke program into the working directory.
 install_module_files() {

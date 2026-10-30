@@ -325,11 +325,11 @@ should notice. The harness was itself verified to fail: replacing `objectstore`'
 `netguard` import with `integrations` made both the harness and the archtest report
 the violation, and giving `logging` an in-module import made the archtest fail.
 
-`modules.txt` lists twenty-nine modules today: `netguard`, `analytics`,
+`modules.txt` lists thirty-two modules today: `netguard`, `analytics`,
 `ratelimit`, `objectstore`, `secrets`, `logging`, `httpx`, `safe`
 (internal/importx/safe), `parsers` (internal/importx/parsers), `database`, `rbac`,
 `audit`, `outbox`, `retention`, `agent`, `jobs`, `crm`, `storage`, `integrations`,
 `config`, `workflow`, `events`, `migratex`, `simulate`, `forecast`, `risk`,
-`notify`, `ai` and `importx`.
+`notify`, `ai`, `importx`, `migrations`, `migrate` and `authn`.
 
 See `scripts/extract-test/README.md` for how to add a module.
