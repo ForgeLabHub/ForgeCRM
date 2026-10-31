@@ -128,37 +128,25 @@ func (s *Server) handleEmailSend(w http.ResponseWriter, r *http.Request) {
 			"purpose": "is not a supported purpose"}))
 		return
 	}
-	// Consent is checked here, at the one point a manual message leaves the platform,
-	// against every recipient's address. Checking only the first would let a caller put
-	// an address with a recorded grant first and an address without one second: the
-	// first would answer the question for both. Each recipient is its own subject, so
-	// each is asked, and the first refusal stops the send before any of them is reached.
-	// The refusal is audited by Enforce. Transactional mail is not gated; marketing is.
-	for _, to := range req.To {
-		decision, err := s.deps.Consent.Enforce(r.Context(), p.OrganizationID, &p.UserID,
-			consent.SubjectForEmail(to), purpose, consent.ChannelEmail)
-		if err != nil {
-			s.respondDomainError(w, r, err)
-			return
-		}
-		if !decision.Allowed {
-			httpx.WriteError(w, r, httpx.NewError(403, httpx.CodeForbidden,
-				"consent blocks this send: "+decision.Reason))
-			return
-		}
-	}
-	// The transport check comes after the consent answer. A message consent forbids
-	// is refused with 403 whether or not SMTP is configured; reporting "SMTP is not
-	// configured" would imply the send would succeed if it were.
-	if !s.deps.Email.Enabled() {
-		httpx.WriteError(w, r, httpx.NewError(503, httpx.CodeDisabled, "SMTP is not configured"))
-		return
-	}
+	// Consent is enforced by the transport, not here. The check a handler performs is
+	// the check the next caller can forget, and one already did: the queued-send worker
+	// reached SMTP without asking. The transport therefore asks for every recipient
+	// before it opens a connection, and this handler inherits that answer. The purpose
+	// and the acting user travel with the message so the policy is asked the same
+	// question it would be asked for a queued send.
+	//
+	// The transport check also lives in Send, and the ordering is preserved there: a
+	// message consent forbids is refused with 403 whether or not SMTP is configured,
+	// because an answer of "SMTP is not configured" would imply the send would succeed
+	// once mail is set up.
 	msg := notify.Message{
-		To:       req.To,
-		Subject:  req.Subject,
-		HTMLBody: req.Body,
-		Template: "manual",
+		To:          req.To,
+		Subject:     req.Subject,
+		HTMLBody:    req.Body,
+		Template:    "manual",
+		OrgID:       &p.OrganizationID,
+		Purpose:     string(purpose),
+		ActorUserID: &p.UserID,
 	}
 	if err := s.deps.Email.Send(r.Context(), msg); err != nil {
 		s.respondDomainError(w, r, err)

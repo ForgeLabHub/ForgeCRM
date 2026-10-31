@@ -19,8 +19,10 @@ func main() {
 		fail("a nil email service reported enabled")
 	}
 
+	// A nil gate is what the extraction proves: the transport declares the policy
+	// question but the package stands alone without the policy implementation.
 	svc := notify.NewEmailService(&config.EmailConfig{Enabled: false}, nil,
-		slog.New(slog.NewTextHandler(os.Stderr, nil)))
+		slog.New(slog.NewTextHandler(os.Stderr, nil)), nil)
 	if svc.Enabled() {
 		fail("a disabled email service reported enabled")
 	}

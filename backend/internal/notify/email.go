@@ -30,16 +30,22 @@ import (
 
 // EmailService sends transactional email.
 type EmailService struct {
-	cfg *config.EmailConfig
-	db  *database.DB
-	log *slog.Logger
+	cfg  *config.EmailConfig
+	db   *database.DB
+	log  *slog.Logger
+	gate ConsentGate
 }
 
 // NewEmailService builds the email service. A disabled configuration yields a
 // service whose methods report ErrDisabled rather than failing startup, so the
 // platform runs fully without mail.
-func NewEmailService(cfg *config.EmailConfig, db *database.DB, log *slog.Logger) *EmailService {
-	return &EmailService{cfg: cfg, db: db, log: log}
+//
+// The gate is taken here rather than set later so that building a transport is
+// the same act as deciding who it must ask before it sends. A nil gate is
+// permitted only for a transport that never sends — the extraction smoke test —
+// and is documented on ConsentGate.
+func NewEmailService(cfg *config.EmailConfig, db *database.DB, log *slog.Logger, gate ConsentGate) *EmailService {
+	return &EmailService{cfg: cfg, db: db, log: log, gate: gate}
 }
 
 // ErrDisabled is returned when a notification transport is not configured.
@@ -126,6 +132,11 @@ func (s *EmailService) TestConnection(ctx context.Context) error {
 }
 
 // Message is one email to send.
+//
+// Purpose and ActorUserID exist so the transport can ask the consent policy the
+// two questions it needs: what the message is about, and who is accountable for
+// it. A caller that omits Purpose gets the strict default rather than an implicit
+// pass, so the field is safe to leave empty and unsafe to fill carelessly.
 type Message struct {
 	To       []string
 	Subject  string
@@ -133,18 +144,46 @@ type Message struct {
 	TextBody string
 	Template string
 	OrgID    *uuid.UUID
+	// Purpose is what the message is about, in the consent vocabulary. Empty means
+	// the strict default (marketing).
+	Purpose string
+	// ActorUserID is the user the send is attributed to in the audit trail, when
+	// there is one. A message with no user behind it — a password reset triggered by
+	// the person themselves — leaves it nil and the policy records the actor as
+	// "system".
+	ActorUserID *uuid.UUID
 }
 
 // Send delivers a message and records the attempt in the send log.
 //
 // The success value reflects the SMTP server accepting the message. A local
 // queue acceptance is not reported as delivery.
+//
+// Consent is checked here, inside the transport, before the send log is written
+// and before any connection is opened. Every caller therefore inherits the check:
+// the manual endpoint, the queued-send worker and any future sender cannot reach
+// SMTP without the policy having answered for each recipient. A refusal returns
+// ErrConsentBlocked and leaves no 'queued' row, so a blocked message never appears
+// in the log as something that was attempted.
 func (s *EmailService) Send(ctx context.Context, msg Message) error {
-	if !s.Enabled() {
-		return ErrDisabled
-	}
 	if len(msg.To) == 0 {
 		return errors.New("at least one recipient is required")
+	}
+	// Consent is asked before the transport is consulted, and this order is deliberate.
+	// A message the policy forbids must be refused whether or not SMTP is configured:
+	// answering "SMTP is not configured" would tell an operator the send would succeed
+	// once mail is set up, which is the belief this gate exists to correct.
+	//
+	// Each recipient is its own subject. Checking only the first would let a caller put
+	// an address with a grant first and an address without one second: the first would
+	// answer for both. The first refusal stops the send before any recipient is reached.
+	for _, to := range msg.To {
+		if err := enforce(ctx, s.gate, msg.OrgID, msg.ActorUserID, to, msg.Purpose, ChannelEmail); err != nil {
+			return err
+		}
+	}
+	if !s.Enabled() {
+		return ErrDisabled
 	}
 	entryIDs, err := s.logQueued(ctx, msg)
 	if err != nil {

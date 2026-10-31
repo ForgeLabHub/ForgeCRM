@@ -757,6 +757,15 @@ func (s *Server) respondDomainError(w http.ResponseWriter, r *http.Request, err 
 		httpx.WriteError(w, r, httpx.ErrNotFound)
 	case errors.Is(err, consent.ErrNotFound):
 		httpx.WriteError(w, r, httpx.ErrNotFound)
+	// A transport refuses a send for two reasons of its own, both of which are answers
+	// rather than faults: consent forbids it (403, with the policy's reason), or the
+	// transport is switched off (503). Neither is a 500, and the consent case must not
+	// be reported as a transport problem, or an operator would set up SMTP and expect
+	// the send to start working.
+	case errors.Is(err, notify.ErrConsentBlocked):
+		httpx.WriteError(w, r, httpx.NewError(403, httpx.CodeForbidden, err.Error()))
+	case errors.Is(err, notify.ErrDisabled):
+		httpx.WriteError(w, r, httpx.NewError(503, httpx.CodeDisabled, "SMTP is not configured"))
 	case errors.Is(err, mcpcred.ErrNotFound):
 		httpx.WriteError(w, r, httpx.ErrNotFound)
 	case errors.Is(err, mcpcred.ErrEmptyScope), errors.Is(err, mcpcred.ErrUnknownScope):
