@@ -199,6 +199,10 @@ func (s *Server) handleTelegramLinkCode(w http.ResponseWriter, r *http.Request) 
 		s.respondDomainError(w, r, err)
 		return
 	}
+	// The code is a one-time secret: the database keeps only its hash. `no-store`
+	// keeps it one-time through the idempotency layer as well, which would otherwise
+	// persist the plaintext code and replay it to a later request reusing the key.
+	w.Header().Set("Cache-Control", "no-store")
 	httpx.WriteJSON(w, map[string]any{
 		"code":               code,
 		"expires_in_seconds": int((15 * time.Minute).Seconds()),

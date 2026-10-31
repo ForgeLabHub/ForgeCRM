@@ -59,6 +59,10 @@ func (s *Server) handleCreateMCPCredential(w http.ResponseWriter, r *http.Reques
 		s.respondDomainError(w, r, err)
 		return
 	}
+	// The plaintext token is revealed exactly once. `no-store` tells the idempotency
+	// layer not to persist the response, so the token cannot be replayed to a later
+	// request that reuses the key.
+	w.Header().Set("Cache-Control", "no-store")
 	httpx.WriteJSONStatus(w, http.StatusCreated, created)
 }
 
@@ -92,6 +96,9 @@ func (s *Server) handleRotateMCPCredential(w http.ResponseWriter, r *http.Reques
 		s.respondDomainError(w, r, err)
 		return
 	}
+	// As with creation, the rotated token is shown once and must not be persisted by
+	// the idempotency layer.
+	w.Header().Set("Cache-Control", "no-store")
 	httpx.WriteJSON(w, created)
 }
 

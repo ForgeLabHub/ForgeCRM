@@ -8,6 +8,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -53,6 +54,11 @@ func (c *credHarness) mint(t *testing.T, name string, perms []string) (string, u
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("mint credential: status %d, body %s", rec.Code, rec.Body.String())
 	}
+	// The token is shown once, so the response must not be storable by an
+	// intermediary — including the idempotency layer, which reads this header.
+	if rec.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("the mint response is not marked no-store, so the token could be persisted")
+	}
 	var out struct {
 		Credential struct {
 			ID uuid.UUID `json:"id"`
@@ -66,6 +72,37 @@ func (c *credHarness) mint(t *testing.T, name string, perms []string) (string, u
 		t.Fatal("the create response carried no token")
 	}
 	return out.Token, out.Credential.ID
+}
+
+// TestMCPCredentialTokenIsNotPersistedByIdempotency proves the one-time token cannot
+// outlive its single reveal through the retry guard. A client that sends an
+// Idempotency-Key with the create would otherwise have the response — token
+// included — written to `idempotency_keys.response` in plaintext and replayed.
+func TestMCPCredentialTokenIsNotPersistedByIdempotency(t *testing.T) {
+	c := newCredHarness(t)
+
+	body, _ := json.Marshal(map[string]any{"name": "idem agent", "permissions": []string{"accounts.read"}})
+	rec := c.postWithKey(c.admin, "/api/v1/mcp/credentials", "mint-once", string(body))
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("mint with key: status %d, body %s", rec.Code, rec.Body.String())
+	}
+	var out struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if out.Token == "" {
+		t.Fatal("the create response carried no token")
+	}
+
+	// The row must not exist: a stored response would contain the token.
+	var stored []byte
+	err := c.db.Pool().QueryRow(context.Background(),
+		`SELECT response FROM idempotency_keys WHERE key = $1`, "mint-once").Scan(&stored)
+	if err == nil {
+		t.Fatalf("the credential token was persisted in idempotency_keys: %s", stored)
+	}
 }
 
 // TestMCPCredentialLifecycleOverHTTP drives create, list, rotate and revoke through

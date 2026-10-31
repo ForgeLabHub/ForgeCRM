@@ -131,6 +131,7 @@ func newHarnessWithStore(t *testing.T, cfg *config.Config, store ratelimit.Store
 		OIDC:           svcs.OIDC,
 		MCPCredentials: svcs.MCPCredentials,
 		Consent:        svcs.Consent,
+		Idempotency:    svcs.Idempotency,
 		Version:        "test",
 	}, store, trusted)
 	if err != nil {

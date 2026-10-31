@@ -324,6 +324,29 @@ func (s *statusRecorder) Write(b []byte) (int, error) {
 	return n, err
 }
 
+// Flush forwards to the wrapped writer when it can flush.
+//
+// Wrapping a ResponseWriter hides the optional interfaces it implements, and the
+// interface that matters here is http.Flusher: server-sent events stream only if
+// the handler can flush each frame, and a handler that asserts for the flusher
+// finds it missing once this middleware is in the chain. The stream then buffers
+// silently — every event arrives at once when the response ends — which is the
+// behaviour the SSE routes exist to avoid, and it is invisible to a test that
+// calls the handler with a recorder directly. Forwarding keeps the wrapper
+// transparent to the handlers behind it.
+func (s *statusRecorder) Flush() {
+	if f, ok := s.ResponseWriter.(http.Flusher); ok {
+		if s.status == 0 {
+			s.status = http.StatusOK
+		}
+		f.Flush()
+	}
+}
+
+// Unwrap exposes the wrapped writer so http.ResponseController and any other
+// interface-probing code reach the original rather than stopping at this type.
+func (s *statusRecorder) Unwrap() http.ResponseWriter { return s.ResponseWriter }
+
 // AccessLogMiddleware logs one structured line per request without body content.
 func AccessLogMiddleware(log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {

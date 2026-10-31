@@ -437,6 +437,14 @@ func operationFor(rt Route, group string, perms map[string]string, c Contract, r
 	if rt.Method == http.MethodGet && !strings.Contains(rt.Path, "{") {
 		op.Parameters = append(op.Parameters, listParams()...)
 	}
+	// A mutating request may carry an idempotency key. It is documented on every
+	// authenticated mutation because the middleware accepts it on each of them, and
+	// deliberately omitted from an anonymous one: the key is scoped to the resolved
+	// caller, and a route with no session has no caller to scope it to. Documenting it
+	// there would promise a guarantee the server does not make.
+	if isMutationMethod(rt.Method) && !isAnonymous {
+		op.Parameters = append(op.Parameters, idempotencyParam())
+	}
 	for _, q := range c.QueryParams[rt.Key()] {
 		op.Parameters = append(op.Parameters, parameter{
 			Name: q.Name, In: "query", Required: q.Required,
@@ -474,6 +482,18 @@ func addSortEnum(params []parameter, cols []string) []parameter {
 		}
 	}
 	return params
+}
+
+// isMutationMethod reports whether a method changes state and so may carry an
+// idempotency key. It matches the middleware's own set: the two must agree, or the
+// specification would document a header the server ignores.
+func isMutationMethod(method string) bool {
+	switch method {
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		return true
+	default:
+		return false
+	}
 }
 
 // requestBodyFor builds a request body from the real type the handler decodes.

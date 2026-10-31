@@ -24,6 +24,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/database"
 	"github.com/geff1778/forgecrm/internal/events"
 	"github.com/geff1778/forgecrm/internal/forecast"
+	"github.com/geff1778/forgecrm/internal/idempotency"
 	"github.com/geff1778/forgecrm/internal/importx"
 	"github.com/geff1778/forgecrm/internal/integrations"
 	"github.com/geff1778/forgecrm/internal/jobs"
@@ -96,6 +97,10 @@ type Services struct {
 	// MCPCredentials mints and resolves the scoped, revocable credentials an external
 	// MCP client uses in place of a browser session.
 	MCPCredentials *mcpcred.Service
+	// Idempotency deduplicates a mutating request that carries an `Idempotency-Key`,
+	// so a retry after a dropped connection returns the first result instead of
+	// performing the operation twice.
+	Idempotency *idempotency.Store
 }
 
 // Build constructs every service from the given configuration and database.
@@ -185,6 +190,7 @@ func Build(cfg *config.Config, db *database.DB, keyring *secrets.Keyring, log *s
 		Views:          views.NewService(db, auditLog),
 		Consent:        consentSvc,
 		MCPCredentials: mcpcred.NewService(db, auditLog),
+		Idempotency:    idempotency.NewStore(db),
 		Workflows: workflow.NewEngine(workflow.Config{
 			DB:     db,
 			CRM:    crmSvc,
