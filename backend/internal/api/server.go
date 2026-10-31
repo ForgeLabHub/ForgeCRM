@@ -310,6 +310,13 @@ func (s *Server) buildRouter() chi.Router {
 	r.Get("/health", s.handleHealth)
 	r.Get("/ready", s.handleReady)
 
+	// The Prometheus scrape endpoint sits beside the probes for the same reason: a
+	// scraper cannot present a session cookie. It is not anonymous in effect — it
+	// refuses unless FORGECRM_METRICS_TOKEN is set and presented — but it cannot be
+	// session-gated, so it is mounted outside /api/v1 and outside the rate limiter,
+	// which would otherwise throttle a scrape interval.
+	r.Get("/metrics", s.handleMetricsPrometheus)
+
 	r.Route("/api/v1", func(r chi.Router) {
 		// The rate limiter covers the API subtree only. Health probes above are
 		// deliberately exempt so a busy API cannot make the container look dead.

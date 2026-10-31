@@ -50,6 +50,29 @@ func APIContract() openapi.Contract {
 		TypeNames:        map[reflect.Type]string{},
 		SuccessStatus:    map[string]int{},
 		StreamingSuccess: map[string]openapi.StreamingResponse{},
+		TextSuccess:      map[string]openapi.TextResponse{},
+		ExtraResponses:   map[string]map[int]string{},
+	}
+
+	// The Prometheus scrape endpoint returns text in the exposition format, not
+	// JSON. Without the declaration the generator would document an
+	// application/json object, which is exactly what a scraper would fail to parse.
+	c.TextSuccess["GET /metrics"] = openapi.TextResponse{
+		MediaTypes: []string{"text/plain"},
+		Description: "Metrics in the Prometheus text exposition format (version 0.0.4), " +
+			"one `# HELP`/`# TYPE` block per metric. Reachable without a session, so it " +
+			"requires `FORGECRM_METRICS_TOKEN` in the `X-Metrics-Token` header; with no " +
+			"token configured the server answers 503 `disabled`. Unlabelled by tenant: a " +
+			"tenant id or target URL in a label would multiply the series without bound and " +
+			"leak a customer's endpoint into a monitoring system.",
+	}
+	// The route is anonymous, so the generator does not infer a 401; the token gate
+	// is the reason it can refuse a valid request, and the 503 is the opt-in refusal
+	// when no token is configured. Both are stated because a scraper needs to know
+	// which one means "misconfigured" rather than "broken".
+	c.ExtraResponses["GET /metrics"] = map[int]string{
+		401: "The `X-Metrics-Token` header is missing or does not match `FORGECRM_METRICS_TOKEN`.",
+		503: "Metrics scraping is not enabled: no `FORGECRM_METRICS_TOKEN` is configured. Set it to enable the endpoint.",
 	}
 
 	// --- Authentication ------------------------------------------------------

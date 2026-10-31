@@ -91,6 +91,32 @@ type Contract struct {
 	// route lets the response be documented as the media types it really carries, and
 	// the description says what the bytes are.
 	StreamingSuccess map[string]StreamingResponse
+
+	// TextSuccess names the routes whose success response is text in a non-JSON
+	// media type, such as the Prometheus exposition format. It is separate from
+	// StreamingSuccess because the body is readable text, not opaque bytes:
+	// documenting `format: binary` on a `text/plain` body would tell a client to
+	// treat text as a blob. Without this, the generator would describe an
+	// application/json object, which is worse — a scraper that parsed it as JSON
+	// would fail.
+	TextSuccess map[string]TextResponse
+
+	// ExtraResponses declares failure responses a route can return that the
+	// generator would not infer from its method and access level. The convention
+	// covers the common cases (400, 404, 429, 500, and 401/403 for a session route);
+	// it cannot know that an anonymous route is closed without a shared token, which
+	// is a 401, or that an opt-in subsystem answers 503 when it is switched off.
+	// Declaring those keeps the document from under-promising: a caller that only
+	// sees the inferred codes would not know a valid request can be refused.
+	ExtraResponses map[string]map[int]string
+}
+
+// TextResponse describes a success response that is text in a non-JSON media type.
+type TextResponse struct {
+	// MediaTypes are the content types the handler can set.
+	MediaTypes []string
+	// Description says what the text is, since a bare string schema cannot.
+	Description string
 }
 
 // StreamingResponse describes a success response that is not JSON.
@@ -107,6 +133,17 @@ type StreamingResponse struct {
 func (c Contract) StreamingSuccessFor(key string) (StreamingResponse, bool) {
 	s, ok := c.StreamingSuccess[key]
 	return s, ok
+}
+
+// TextSuccessFor returns the text-stream description for a route, if any.
+func (c Contract) TextSuccessFor(key string) (TextResponse, bool) {
+	s, ok := c.TextSuccess[key]
+	return s, ok
+}
+
+// ExtraResponsesFor returns the declared extra failure responses for a route.
+func (c Contract) ExtraResponsesFor(key string) map[int]string {
+	return c.ExtraResponses[key]
 }
 
 // QueryParam describes one query parameter.
@@ -153,6 +190,9 @@ func (c Contract) keys() map[string]bool {
 		out[k] = true
 	}
 	for k := range c.SortColumns {
+		out[k] = true
+	}
+	for k := range c.ExtraResponses {
 		out[k] = true
 	}
 	return out
