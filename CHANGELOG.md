@@ -10,6 +10,19 @@
 
 ### Added
 
+- **Эндпоинт `/metrics` в формате Prometheus.** Руководство по эксплуатации
+  описывало `GET /metrics` с алертом на dead letter вебхуков, но такого маршрута не
+  было: существовал только JSON `GET /api/v1/admin/metrics` за сессией, а скрейпер
+  сессионную куку предъявить не может. Теперь `/metrics` отдаёт текст
+  `text/plain; version=0.0.4`, вне сессионного middleware, и закрыт общим токеном:
+  без `FORGECRM_METRICS_TOKEN` — `503 disabled`, при неверном заголовке
+  `X-Metrics-Token` — `401`. Обе поверхности читают один снимок, поэтому ключи JSON
+  и имена метрик не могут разойтись. Метрика `webhook_deliveries_pending_total`
+  переименована в `webhook_deliveries_pending`: это gauge, а `_total` обещает
+  счётчик и приглашает `rate()` по нему. Покрыто `internal/metrics/metrics_test.go`
+  (формат, детерминированность, отказ на некорректном снимке) и
+  `internal/api/metrics_prometheus_test.go` (гейт токена, `503` без токена, формат
+  тела, согласие двух поверхностей).
 - **Многократная репликация проверена на реальных контейнерах, а не только на
   уровне модуля.** `scripts/multi-replica-verify.sh` поднимает два контейнера API
   (`api-a`, `api-b`) и настоящий nginx против одной PostgreSQL и одного Redis.

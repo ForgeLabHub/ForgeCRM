@@ -117,6 +117,8 @@ func responsesFor(rt Route, isAnonymous bool, c Contract, reg *registry) map[str
 		out["204"] = response{Description: "The operation succeeded. No body is returned."}
 	} else if stream, ok := c.StreamingSuccessFor(rt.Key()); ok {
 		out[fmt.Sprint(success)] = streamingResponse(stream)
+	} else if text, ok := c.TextSuccessFor(rt.Key()); ok {
+		out[fmt.Sprint(success)] = textResponse(text)
 	} else {
 		out[fmt.Sprint(success)] = successResponse(rt, c, reg)
 	}
@@ -131,6 +133,12 @@ func responsesFor(rt Route, isAnonymous bool, c Contract, reg *registry) map[str
 	out["422"] = problemResponse("A field failed validation. `error.details` names each field.")
 	out["429"] = problemResponse("Too many requests. Retry after the interval in `Retry-After`.")
 	out["500"] = problemResponse("Unexpected failure. The detail is deliberately generic; the cause is in the server log.")
+
+	// A route may declare failure responses the convention cannot infer. Adding them
+	// after the inferred set lets a declaration override a generic description.
+	for code, description := range c.ExtraResponsesFor(rt.Key()) {
+		out[fmt.Sprint(code)] = problemResponse(description)
+	}
 	return out
 }
 
@@ -167,6 +175,19 @@ func streamingResponse(s StreamingResponse) response {
 	content := map[string]mediaType{}
 	for _, mt := range s.MediaTypes {
 		content[mt] = mediaType{Schema: map[string]any{"type": "string", "format": "binary"}}
+	}
+	return response{Description: s.Description, Content: content}
+}
+
+// textResponse describes a success body that is text in a non-JSON media type.
+//
+// The schema is a string, not an object and not binary: the body is readable text
+// with a documented media type. The description says what the text is, because a
+// bare string schema cannot.
+func textResponse(s TextResponse) response {
+	content := map[string]mediaType{}
+	for _, mt := range s.MediaTypes {
+		content[mt] = mediaType{Schema: map[string]any{"type": "string"}}
 	}
 	return response{Description: s.Description, Content: content}
 }

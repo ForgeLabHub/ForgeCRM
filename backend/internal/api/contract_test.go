@@ -273,9 +273,11 @@ func TestEveryOperationNamesAComponentOrSaysWhyNot(t *testing.T) {
 				content, _ := resp["content"].(map[string]any)
 				// A streaming success (an export, a download) has no application/json
 				// media type; it carries the bytes as a non-JSON type with a binary
-				// schema and a description of what they are.
+				// schema and a description of what they are. A text success (a metrics
+				// scrape) is the same shape but readable text: a string schema under a
+				// text media type. Both are described; neither is a bare object.
 				if _, isJSON := content["application/json"]; !isJSON {
-					if !isBinaryStream(content) {
+					if !isBinaryStream(content) && !isTextStream(content) {
 						t.Errorf("%s %s: the success response is neither JSON nor a described byte stream",
 							strings.ToUpper(method), path)
 					}
@@ -422,6 +424,31 @@ func TestStreamingResponsesAreNotDescribedAsJSON(t *testing.T) {
 			}
 		}
 	}
+}
+
+// isTextStream reports whether a success response's content is a non-JSON text
+// stream: every media type carries a string schema, and none is JSON. This is
+// what a declared TextSuccess must produce. It is deliberately not the same as
+// isBinaryStream: a text body is readable, so it must not be documented as an
+// opaque binary blob.
+func isTextStream(content map[string]any) bool {
+	if len(content) == 0 {
+		return false
+	}
+	for mediaType, raw := range content {
+		if mediaType == "application/json" || mediaType == "application/problem+json" {
+			return false
+		}
+		mt, _ := raw.(map[string]any)
+		schema, _ := mt["schema"].(map[string]any)
+		if schema["type"] != "string" {
+			return false
+		}
+		if _, isBinary := schema["format"]; isBinary {
+			return false
+		}
+	}
+	return true
 }
 
 func requestBodyDescription(t *testing.T, paths map[string]any, component string) string {
