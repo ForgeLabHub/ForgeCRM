@@ -273,6 +273,9 @@ func (s *Server) handlePasswordForgot(w http.ResponseWriter, r *http.Request) {
 	if token != "" && !s.deps.Email.Enabled() && !s.deps.Config.IsProduction() {
 		response["reset_token"] = token
 		response["note"] = "email is not configured, so the token is returned directly (development only)"
+		// The response carries a one-time token, so it must not be kept by any
+		// intermediary — nor by the idempotency layer, which reads this header.
+		w.Header().Set("Cache-Control", "no-store")
 	}
 	if token != "" && s.deps.Email.Enabled() && userID != nil {
 		link := s.deps.Config.BaseURL + "/reset-password?token=" + token
@@ -365,6 +368,12 @@ func (s *Server) handleMFAEnroll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// The secret is returned once, for the authenticator app. It is never logged.
+	//
+	// `no-store` keeps it that way through the idempotency layer as well: the
+	// middleware that buffers a mutating response for replay reads this header and
+	// refuses to write a response that carries it. Without the header the seed would
+	// be persisted in plaintext and handed to a later request reusing the key.
+	w.Header().Set("Cache-Control", "no-store")
 	httpx.WriteJSON(w, map[string]any{
 		"secret":      secret,
 		"otpauth_url": url,

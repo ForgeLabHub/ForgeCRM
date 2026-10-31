@@ -33,6 +33,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/events"
 	"github.com/geff1778/forgecrm/internal/forecast"
 	"github.com/geff1778/forgecrm/internal/httpx"
+	"github.com/geff1778/forgecrm/internal/idempotency"
 	"github.com/geff1778/forgecrm/internal/importx"
 	"github.com/geff1778/forgecrm/internal/integrations"
 	"github.com/geff1778/forgecrm/internal/jobs"
@@ -107,6 +108,9 @@ type Deps struct {
 	// clients. It resolves a bearer token to a principal carrying only the
 	// credential's own permission list.
 	MCPCredentials *mcpcred.Service
+	// Idempotency deduplicates a mutating request that carries an `Idempotency-Key`.
+	// A nil store disables the feature; the middleware passes every request through.
+	Idempotency *idempotency.Store
 	// OIDC is the optional corporate single sign-on service. A nil or disabled
 	// service reports itself off; the SSO routes answer 503 rather than 500.
 	OIDC *oidc.Service
@@ -345,6 +349,9 @@ func (s *Server) buildRouter() chi.Router {
 			// state-changing ones also require a CSRF token.
 			r.Group(func(r chi.Router) {
 				r.Use(s.requireSession)
+				// A session-scoped mutation may carry an `Idempotency-Key`; the key is scoped
+				// to the resolved caller, so the middleware runs after the session.
+				r.Use(idempotency.Middleware(s.deps.Idempotency, principalIdentity))
 				r.Get("/me", s.handleMe)
 				r.Post("/logout", s.withCSRF(s.handleLogout))
 				r.Get("/sessions", s.handleListSessions)
@@ -369,6 +376,12 @@ func (s *Server) buildRouter() chi.Router {
 		r.Group(func(r chi.Router) {
 			r.Use(s.requireSession)
 			r.Use(s.withCSRFOnMutations)
+			// A mutating request may carry an `Idempotency-Key`; one that does is
+			// executed at most once and its response replayed on a retry. The
+			// middleware runs after the session so the key is scoped to the resolved
+			// caller, and before the routes so the claim is taken before any handler
+			// has a chance to write.
+			r.Use(idempotency.Middleware(s.deps.Idempotency, principalIdentity))
 
 			s.mountSystemRoutes(r)
 			s.mountCRM(r)
@@ -401,6 +414,11 @@ func (s *Server) buildRouter() chi.Router {
 		// REST API.
 		r.Group(func(r chi.Router) {
 			r.Use(s.requireMCPAuth)
+			// The MCP protocol is a transport over the same mutations, so a client that
+			// retries a JSON-RPC call after a dropped connection gets the same guarantee.
+			// The middleware runs after the principal is resolved, so the key is scoped
+			// to whichever credential or session authenticated the call.
+			r.Use(idempotency.Middleware(s.deps.Idempotency, principalIdentity))
 			s.mountMCP(r)
 		})
 	})
@@ -456,6 +474,18 @@ type sessionCtxKey struct{}
 func principalFrom(ctx context.Context) (*rbac.Principal, bool) {
 	p, ok := ctx.Value(principalCtxKey{}).(*rbac.Principal)
 	return p, ok
+}
+
+// principalIdentity supplies the organization and user an idempotency key is scoped
+// to. Both come from the resolved principal, never from a request header, so one
+// caller cannot collide with another's keys or with a key of its own against a
+// different operation.
+func principalIdentity(ctx context.Context) (orgID, userID string, ok bool) {
+	p, ok := principalFrom(ctx)
+	if !ok || p == nil {
+		return "", "", false
+	}
+	return p.OrganizationID.String(), p.UserID.String(), true
 }
 
 func sessionFrom(ctx context.Context) (*authn.Session, bool) {

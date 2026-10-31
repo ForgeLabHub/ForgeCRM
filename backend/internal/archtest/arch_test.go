@@ -415,6 +415,10 @@ func TestExtractionBoundaryHolds(t *testing.T) {
 		// trail, and reads the caller's principal; it holds no CRM data and calls
 		// no sibling domain, so those three are the whole boundary.
 		"consent": {"audit": true, "database": true, "rbac": true},
+		// idempotency is the retry guard for mutating HTTP requests. It reads and
+		// writes its own table and renders the shared HTTP error type, so those two
+		// are the whole boundary; it holds no domain data and calls no service.
+		"idempotency": {"database": true, "httpx": true},
 		// oidc is the single sign-on service: the authorization-code flow and the
 		// provider registry. It verifies ID tokens, seals each client secret with
 		// the keyring and writes the audit trail, so those four are declared. It

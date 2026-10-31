@@ -22,6 +22,10 @@ HTTP-маршруты `/api/v1/{contacts,accounts,deals,tasks,tickets,leads,pipe
 `docs/api/openapi.json`. Публичный Go-контракт — экспортируемые типы и методы пакета
 `internal/crm`. События: `deal.created`, `deal.updated`, `deal.stage_changed`,
 `deal.won`, `deal.lost` через `outbox`.
+Изменяющие маршруты принимают `Idempotency-Key`: повтор с тем же ключом возвращает
+первый результат и помечается `Idempotent-Replay: true`, параллельный запрос с тем
+же ключом получает `409`. Ключ привязан к организации, пользователю, методу и пути
+(`internal/idempotency`), поэтому повтор создания после обрыва связи не даёт дубль.
 
 ## 4. Данные
 Владеет: `contacts`, `accounts`, `deals`, `pipelines`, `pipeline_stages`,
@@ -57,9 +61,11 @@ cd backend && go test ./internal/crm/ -run Deal -v
 
 ## 9. Тесты
 Unit: `internal/crm/*_test.go`, `internal/analytics/money_test.go` (правила денег),
-`internal/analytics/scenario_test.go`. Integration: `internal/api/tenant_isolation_test.go`,
-`isolation_cases_test.go`, `bulk_archive_test.go`. E2E: `frontend/e2e/platform.spec.ts`
-(создание и поиск записи).
+`internal/analytics/scenario_test.go`, `internal/idempotency/idempotency_test.go`
+(буферизация и область ключа). Integration: `internal/api/tenant_isolation_test.go`,
+`isolation_cases_test.go`, `bulk_archive_test.go`, `idempotency_integration_test.go`
+(повтор не создаёт дубль, ключ привязан к вызывающему, неудача освобождает ключ).
+E2E: `frontend/e2e/platform.spec.ts` (создание и поиск записи).
 
 ## 10. Наблюдаемость и ошибки
 Аудит пишется в `audit_log` на каждое изменение сущности; события — в `outbox_events`

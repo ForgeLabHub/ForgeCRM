@@ -547,6 +547,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
 <tr><td><code>entity_type</code></td><td>query</td><td>string — one of account, contact, deal, ticket, task</td><td>yes</td><td>The kind of record the identifier names.</td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-aiassistrequest"><code>AiAssistRequest</code></a></p>
@@ -679,6 +680,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
 <tr><td><code>entity_type</code></td><td>query</td><td>string — one of account, contact, deal, ticket, task</td><td>yes</td><td>The kind of record the identifier names.</td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-aistreamassistrequest"><code>AiStreamAssistRequest</code></a></p>
@@ -707,6 +709,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a chat</p>
 <div class="op-desc"><p>Requires the `ai.tools.execute` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-aistreamchatrequest"><code>AiStreamChatRequest</code></a></p>
 <h4>Responses</h4>
@@ -769,6 +775,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a task</p>
 <div class="op-desc"><p>Requires the `ai.tools.execute` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-createaitaskrequest"><code>CreateAITaskRequest</code></a></p>
 <h4>Responses</h4>
@@ -796,6 +806,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a mcp</p>
 <div class="op-desc"><p>Requires the `ai.tools.execute` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p>A JSON-RPC 2.0 request. Methods: `initialize`, `notifications/initialized`, `notifications/cancelled`, `ping`, `tools/list`, `tools/call`. Omit `id` to send a notification; the server answers 202 with no body. A failed tool call is returned as a JSON-RPC error with the HTTP status in `data`.</p>
 <p class="ref">See <a href="#schema-mcprequest"><code>MCPRequest</code></a></p>
@@ -824,6 +838,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a call</p>
 <div class="op-desc"><p>Requires the `ai.tools.execute` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p>Invokes one tool. Equivalent to a `tools/call` JSON-RPC request; `name` and `arguments` are shorthand for the same fields inside `params`. A mutating tool requires `confirm: true`.</p>
 <p class="ref">See <a href="#schema-mcpcallrequest"><code>McpCallRequest</code></a></p>
@@ -887,6 +905,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a credential</p>
 <div class="op-desc"><p>Requires the `mcp.credentials.manage` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p>Mints a scoped MCP client credential. `permissions` must be a non-empty subset of the permissions the caller holds — a credential narrows authority, it never widens it — and every entry must be a permission in the catalog. The response is the only time the token is returned; only its hash is stored, and a lost token is replaced by rotating the credential, not recovered.</p>
 <p class="ref">See <a href="#schema-createmcpcredentialinput"><code>CreateMCPCredentialInput</code></a></p>
@@ -918,6 +940,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">204</span> The operation succeeded. No body is returned.</div></div>
@@ -946,6 +969,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success.</div><p class="ref">See <a href="#schema-created"><code>Created</code></a></p>
@@ -1081,6 +1105,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a send</p>
 <div class="op-desc"><p>Requires the `email.manage` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p>`purpose` is one of `marketing`, `transactional`, `product_updates` or `research`, and defaults to `marketing` when omitted. An unrecognised value is refused rather than treated as transactional. Consent is checked for every address in `to`, and the send is refused with 403 before the transport is consulted if any recipient lacks a grant the purpose requires.</p>
 <p class="ref">See <a href="#schema-sendemailrequest"><code>SendEmailRequest</code></a></p>
@@ -1146,6 +1174,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a test</p>
 <div class="op-desc"><p>Requires the `email.manage` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">201</span> Success. This operation&#39;s response body is not yet described by a schema; the shape is whatever the handler returns.</div><table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
 </tbody></table>
@@ -1281,6 +1313,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>key</code></td><td>query</td><td>string</td><td>yes</td><td>The setting to write. Required; a request without it is rejected.</td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-updatesettingrequest"><code>UpdateSettingRequest</code></a></p>
@@ -1344,6 +1377,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a provider</p>
 <div class="op-desc"><p>Requires the `sso.manage` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-oidcproviderinput"><code>OidcProviderInput</code></a></p>
 <h4>Responses</h4>
@@ -1374,6 +1411,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-oidcproviderinput"><code>OidcProviderInput</code></a></p>
@@ -1405,6 +1443,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">204</span> The operation succeeded. No body is returned.</div></div>
@@ -1430,6 +1469,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Archive or delete a link</p>
 <div class="op-desc"><p>Requires the `email.manage` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">204</span> The operation succeeded. No body is returned.</div></div>
 <div class="resp"><div class="resp-head"><span class="code c-client">400</span> The request was malformed: bad JSON, an unknown field, or a missing required parameter.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
@@ -1454,6 +1497,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a link-code</p>
 <div class="op-desc"><p>Requires the `email.manage` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">201</span> Success. This operation&#39;s response body is not yet described by a schema; the shape is whatever the handler returns.</div><table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
 </tbody></table>
@@ -1612,6 +1659,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Sign out and revoke the current session.</p>
 <div class="op-desc"><p>Sign out and revoke the current session.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success. This operation&#39;s response body is not yet described by a schema; the shape is whatever the handler returns.</div><table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
 </tbody></table>
@@ -1672,6 +1723,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Confirm a second factor enrolment.</p>
 <div class="op-desc"><p>Confirm a second factor enrolment.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-mfaconfirmrequest"><code>MfaConfirmRequest</code></a></p>
 <h4>Responses</h4>
@@ -1701,6 +1756,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Disable the caller&#39;s second factor.</p>
 <div class="op-desc"><p>Disable the caller&#39;s second factor.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">201</span> Success. This operation&#39;s response body is not yet described by a schema; the shape is whatever the handler returns.</div><table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
 </tbody></table>
@@ -1728,6 +1787,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Begin enrolling a second factor for the caller.</p>
 <div class="op-desc"><p>Begin enrolling a second factor for the caller.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">201</span> Success. This operation&#39;s response body is not yet described by a schema; the shape is whatever the handler returns.</div><table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
 </tbody></table>
@@ -1873,6 +1936,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Change the caller&#39;s own password.</p>
 <div class="op-desc"><p>Change the caller&#39;s own password.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-passwordchangerequest"><code>PasswordChangeRequest</code></a></p>
 <h4>Responses</h4>
@@ -1992,6 +2059,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">204</span> The operation succeeded. No body is returned.</div></div>
@@ -2017,6 +2085,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Re-present a factor to refresh the second-factor window a destructive agent decision requires.</p>
 <div class="op-desc"><p>Re-present a factor to refresh the second-factor window a destructive agent decision requires.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-stepuprequest"><code>StepUpRequest</code></a></p>
 <h4>Responses</h4>
@@ -2081,6 +2153,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create an account</p>
 <div class="op-desc"><p>Requires the `accounts.create` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-accountinput"><code>AccountInput</code></a></p>
 <h4>Responses</h4>
@@ -2108,6 +2184,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a bulk-archive</p>
 <div class="op-desc"><p>Requires the `accounts.archive` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-bulkarchiveinput"><code>BulkArchiveInput</code></a></p>
 <h4>Responses</h4>
@@ -2167,6 +2247,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-accountinput"><code>AccountInput</code></a></p>
@@ -2198,6 +2279,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">204</span> The operation succeeded. No body is returned.</div></div>
@@ -2343,6 +2425,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create an activity</p>
 <div class="op-desc"><p>Requires the `activities.create` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p>The activity must reference at least one of `account_id`, `contact_id`, `deal_id` or `ticket_id`.</p>
 <p class="ref">See <a href="#schema-activityinput"><code>ActivityInput</code></a></p>
@@ -2471,6 +2557,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success. This operation&#39;s response body is not yet described by a schema; the shape is whatever the handler returns.</div><table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
@@ -2534,6 +2621,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a run</p>
 <div class="op-desc"><p>Requires the `agent.run` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">201</span> Success. This operation&#39;s response body is not yet described by a schema; the shape is whatever the handler returns.</div><table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
 </tbody></table>
@@ -2595,6 +2686,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success. This operation&#39;s response body is not yet described by a schema; the shape is whatever the handler returns.</div><table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
@@ -2626,6 +2718,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success. This operation&#39;s response body is not yet described by a schema; the shape is whatever the handler returns.</div><table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
@@ -2687,6 +2780,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a comment</p>
 <div class="op-desc"><p>Requires the `comments.create` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-createcommentrequest"><code>CreateCommentRequest</code></a></p>
 <h4>Responses</h4>
@@ -2749,6 +2846,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a consent</p>
 <div class="op-desc"><p>Requires the `consent.manage` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p>Records a consent decision. Exactly one of `contact_id` or `subject_email` names the person; passing both, or neither, is refused with 422. `state` is `granted`, `denied` or `withdrawn`; a missing record is never read as permission, so an absent decision blocks a send rather than allowing it. Recording a new decision supersedes the previous one for the same subject, purpose and channel without overwriting it, so the history is kept.</p>
 <p class="ref">See <a href="#schema-consentinput"><code>ConsentInput</code></a></p>
@@ -2886,6 +2987,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a withdraw</p>
 <div class="op-desc"><p>Requires the `consent.manage` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p>Withdraws consent for one subject, purpose and channel. It is the same write as recording a decision with state `withdrawn`, named for the act.</p>
 <p class="ref">See <a href="#schema-withdrawconsentrequest"><code>WithdrawConsentRequest</code></a></p>
@@ -2947,6 +3052,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a contact</p>
 <div class="op-desc"><p>Requires the `contacts.create` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p>At least one of `first_name`, `last_name` or `email` is required. `external_source` and `external_id` must be supplied together or not at all.</p>
 <p class="ref">See <a href="#schema-contactinput"><code>ContactInput</code></a></p>
@@ -2975,6 +3084,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a bulk-archive</p>
 <div class="op-desc"><p>Requires the `contacts.archive` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-bulkarchiveinput"><code>BulkArchiveInput</code></a></p>
 <h4>Responses</h4>
@@ -3034,6 +3147,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p>At least one of `first_name`, `last_name` or `email` is required. `external_source` and `external_id` must be supplied together or not at all.</p>
@@ -3066,6 +3180,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">204</span> The operation succeeded. No body is returned.</div></div>
@@ -3126,6 +3241,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a custom-field</p>
 <div class="op-desc"><p>Requires the `custom_fields.manage` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-customfielddefinitioninput"><code>CustomFieldDefinitionInput</code></a></p>
 <h4>Responses</h4>
@@ -3186,6 +3305,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a deal</p>
 <div class="op-desc"><p>Requires the `deals.create` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-dealinput"><code>DealInput</code></a></p>
 <h4>Responses</h4>
@@ -3213,6 +3336,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a bulk-archive</p>
 <div class="op-desc"><p>Requires the `deals.archive` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-bulkarchiveinput"><code>BulkArchiveInput</code></a></p>
 <h4>Responses</h4>
@@ -3272,6 +3399,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-dealinput"><code>DealInput</code></a></p>
@@ -3303,6 +3431,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">204</span> The operation succeeded. No body is returned.</div></div>
@@ -3362,6 +3491,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-movestagerequest"><code>MoveStageRequest</code></a></p>
@@ -3423,6 +3553,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a document</p>
 <div class="op-desc"><p>Requires the `documents.create` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">201</span> Success.</div><p class="ref">See <a href="#schema-documentresponse"><code>DocumentResponse</code></a></p>
 </div>
@@ -3480,6 +3614,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">204</span> The operation succeeded. No body is returned.</div></div>
@@ -3629,6 +3764,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a run</p>
 <div class="op-desc"><p>Requires the `forecast.run` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p>Compute and store a revenue forecast. `method` is `mean`, `moving_average` or `trend`; `horizon` is how many future periods to project. `window` is required for `moving_average`. The reply carries the projected points, the observed series they were computed from, and the measured out-of-sample accuracy next to a naive baseline. Too little history is reported as a 422 with the reason, never as a fabricated number.</p>
 <p class="ref">See <a href="#schema-createforecastrunrequest"><code>CreateForecastRunRequest</code></a></p>
@@ -3719,6 +3858,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a lead</p>
 <div class="op-desc"><p>Requires the `leads.create` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-leadinput"><code>LeadInput</code></a></p>
 <h4>Responses</h4>
@@ -3778,6 +3921,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-leadinput"><code>LeadInput</code></a></p>
@@ -3809,6 +3953,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success.</div><p class="ref">See <a href="#schema-leadconversionresponse"><code>LeadConversionResponse</code></a></p>
@@ -3868,6 +4013,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a pipeline</p>
 <div class="op-desc"><p>Requires the `pipelines.manage` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-createpipelinerequest"><code>CreatePipelineRequest</code></a></p>
 <h4>Responses</h4>
@@ -3990,6 +4139,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a scan</p>
 <div class="op-desc"><p>Requires the `risk.read` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">201</span> Success.</div><p class="ref">See <a href="#schema-riskscanresponse"><code>RiskScanResponse</code></a></p>
 </div>
@@ -4084,6 +4237,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p>Move a signal to `acknowledged`, `dismissed` or `resolved`. Any other value is refused. The move is recorded in the audit log.</p>
@@ -4146,6 +4300,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Replace a threshold</p>
 <div class="op-desc"><p>Requires the `risk.manage` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p>The organization&#39;s risk thresholds. A day count or a ratio left at zero keeps the default. Ratios are basis points (10000 = 1.0), matching the detector&#39;s own representation.</p>
 <p class="ref">See <a href="#schema-riskthresholdsresponseinput"><code>RiskThresholdsResponseInput</code></a></p>
@@ -4278,6 +4436,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a preview</p>
 <div class="op-desc"><p>Requires the `simulation.run` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p>An unsaved parameter set to compute without persisting. Same parameter document as a saved scenario. The reply carries the comparison, the baseline it was computed against, and any warnings. Insufficient CRM history is reported as a 422 with the reason, never as a fabricated number.</p>
 <p class="ref">See <a href="#schema-previewrequest"><code>PreviewRequest</code></a></p>
@@ -4339,6 +4501,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a scenario</p>
 <div class="op-desc"><p>Requires the `simulation.manage` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p>A saved scenario. `params` is the scenario parameter document; percentages are changes relative to the current value (20 means 20% more). Parameters are validated on save, so a stored scenario cannot hold a value that will fail at run time. The scenario kind must be one of `funnel`, `revenue` or `retention`.</p>
 <p class="ref">See <a href="#schema-createscenariorequest"><code>CreateScenarioRequest</code></a></p>
@@ -4399,6 +4565,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">204</span> The operation succeeded. No body is returned.</div></div>
@@ -4456,6 +4623,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p>Optional. `pipeline_id` restricts the funnel baseline; `from` and `to` restrict the period. An empty body uses the defaults.</p>
@@ -4518,6 +4686,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a tag</p>
 <div class="op-desc"><p>Requires the `tags.manage` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-createtagrequest"><code>CreateTagRequest</code></a></p>
 <h4>Responses</h4>
@@ -4581,6 +4753,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-attachtagrequest"><code>AttachTagRequest</code></a></p>
@@ -4644,6 +4817,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a task</p>
 <div class="op-desc"><p>Requires the `tasks.create` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-taskinput"><code>TaskInput</code></a></p>
 <h4>Responses</h4>
@@ -4674,6 +4851,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-taskinput"><code>TaskInput</code></a></p>
@@ -4735,6 +4913,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a ticket</p>
 <div class="op-desc"><p>Requires the `tickets.create` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-ticketinput"><code>TicketInput</code></a></p>
 <h4>Responses</h4>
@@ -4794,6 +4976,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-ticketinput"><code>TicketInput</code></a></p>
@@ -4856,6 +5039,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a view</p>
 <div class="op-desc"><p>Requires the `views.manage` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p>A saved list view. `entity_type` and `name` are required; `filters` is the same parameter set the corresponding list endpoint accepts. A name the caller already uses for the same screen is refused with 422 rather than silently creating a second view.</p>
 <p class="ref">See <a href="#schema-savedviewinput"><code>SavedViewInput</code></a></p>
@@ -4916,6 +5103,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-savedviewinput"><code>SavedViewInput</code></a></p>
@@ -4947,6 +5135,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">204</span> The operation succeeded. No body is returned.</div></div>
@@ -5095,6 +5284,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success.</div><p class="ref">See <a href="#schema-workflow"><code>Workflow</code></a></p>
@@ -5154,6 +5344,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a workflow</p>
 <div class="op-desc"><p>Requires the `workflows.manage` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-createinput"><code>CreateInput</code></a></p>
 <h4>Responses</h4>
@@ -5181,6 +5375,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create an import</p>
 <div class="op-desc"><p>Requires the `workflows.manage` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p>A portable workflow document, as produced by `GET /api/v1/workflows/{id}/export`. The `definition` is the same document the workflow stores, so an import is not a second format. A document whose `format` is not `forgecrm.workflow`, whose `format_version` is newer than this server understands, or whose trigger names an event the platform does not emit is refused with the reason.</p>
 <p class="ref">See <a href="#schema-exportdocumentinput"><code>ExportDocumentInput</code></a></p>
@@ -5241,6 +5439,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-createinput"><code>CreateInput</code></a></p>
@@ -5272,6 +5471,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">204</span> The operation succeeded. No body is returned.</div></div>
@@ -5300,6 +5500,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success. This operation&#39;s response body is not yet described by a schema; the shape is whatever the handler returns.</div><table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
@@ -5360,6 +5561,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success.</div><p class="ref">See <a href="#schema-runresult"><code>RunResult</code></a></p>
@@ -5489,6 +5691,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a webhook</p>
 <div class="op-desc"><p>Requires the `webhooks.manage` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-createsubscriptionrequest"><code>CreateSubscriptionRequest</code></a></p>
 <h4>Responses</h4>
@@ -5551,6 +5757,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
 <tr><td><code>deliveryId</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success. This operation&#39;s response body is not yet described by a schema; the shape is whatever the handler returns.</div><table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
@@ -5582,6 +5789,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-setwebhookenabledrequest"><code>SetWebhookEnabledRequest</code></a></p>
@@ -5615,6 +5823,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success. This operation&#39;s response body is not yet described by a schema; the shape is whatever the handler returns.</div><table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
@@ -5647,6 +5856,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create an export</p>
 <div class="op-desc"><p>Requires the `exports.execute` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-createexportrequest"><code>CreateExportRequest</code></a></p>
 <h4>Responses</h4>
@@ -5707,6 +5920,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create an import</p>
 <div class="op-desc"><p>Requires the `imports.create` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-createimportrequest"><code>CreateImportRequest</code></a></p>
 <h4>Responses</h4>
@@ -5801,6 +6018,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-importrequest"><code>ImportRequest</code></a></p>
@@ -5832,6 +6050,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success. This operation&#39;s response body is not yet described by a schema; the shape is whatever the handler returns.</div><table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
@@ -5863,6 +6082,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-importrequest"><code>ImportRequest</code></a></p>
@@ -5925,6 +6145,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-importrequest"><code>ImportRequest</code></a></p>
@@ -6018,6 +6239,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success.</div><p class="ref">See <a href="#schema-importuploadresponse"><code>ImportUploadResponse</code></a></p>
@@ -6047,6 +6269,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-importrequest"><code>ImportRequest</code></a></p>
@@ -6114,6 +6337,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create an integration</p>
 <div class="op-desc"><p>Requires the `integrations.configure` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-createrequest"><code>CreateRequest</code></a></p>
 <h4>Responses</h4>
@@ -6208,6 +6435,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">204</span> The operation succeeded. No body is returned.</div></div>
@@ -6296,6 +6524,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-setintegrationstatusrequest"><code>SetIntegrationStatusRequest</code></a></p>
@@ -6329,6 +6558,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success. This operation&#39;s response body is not yet described by a schema; the shape is whatever the handler returns.</div><table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
@@ -6463,6 +6693,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success. This operation&#39;s response body is not yet described by a schema; the shape is whatever the handler returns.</div><table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
@@ -6494,6 +6725,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success. This operation&#39;s response body is not yet described by a schema; the shape is whatever the handler returns.</div><table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
@@ -6561,6 +6793,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a migration</p>
 <div class="op-desc"><p>Requires the `migrations.manage` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-createmigrationrequest"><code>CreateMigrationRequest</code></a></p>
 <h4>Responses</h4>
@@ -6620,6 +6856,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success.</div><p class="ref">See <a href="#schema-schemadiscoveryresponse"><code>SchemaDiscoveryResponse</code></a></p>
@@ -6680,6 +6917,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-reconcilerequest"><code>ReconcileRequest</code></a></p>
@@ -6750,6 +6988,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success. This operation&#39;s response body is not yet described by a schema; the shape is whatever the handler returns.</div><table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
@@ -6947,6 +7186,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create an organization</p>
 <div class="op-desc"><p>Requires the `organizations.manage` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-createorganizationrequest"><code>CreateOrganizationRequest</code></a></p>
 <h4>Responses</h4>
@@ -7009,6 +7252,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a role</p>
 <div class="op-desc"><p>Requires the `roles.manage` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-createrolerequest"><code>CreateRoleRequest</code></a></p>
 <h4>Responses</h4>
@@ -7074,6 +7321,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-setrolepermissionsrequest"><code>SetRolePermissionsRequest</code></a></p>
@@ -7139,6 +7387,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create a team</p>
 <div class="op-desc"><p>Requires the `teams.manage` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-createteamrequest"><code>CreateTeamRequest</code></a></p>
 <h4>Responses</h4>
@@ -7169,6 +7421,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-addteammemberrequest"><code>AddTeamMemberRequest</code></a></p>
@@ -7232,6 +7485,10 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="summary">Create an user</p>
 <div class="op-desc"><p>Requires the `users.manage` permission.</p>
 </div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-inviteuserrequest"><code>InviteUserRequest</code></a></p>
 <h4>Responses</h4>
@@ -7291,6 +7548,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-updateuserrequest"><code>UpdateUserRequest</code></a></p>
@@ -7324,6 +7582,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success. This operation&#39;s response body is not yet described by a schema; the shape is whatever the handler returns.</div><table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
@@ -7355,6 +7614,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Request body <span class="req">required</span></h4>
 <p class="ref">See <a href="#schema-assignrolerequest"><code>AssignRoleRequest</code></a></p>
@@ -7389,6 +7649,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
 <tr><td><code>roleId</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">204</span> The operation succeeded. No body is returned.</div></div>
@@ -7417,6 +7678,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success. This operation&#39;s response body is not yet described by a schema; the shape is whatever the handler returns.</div><table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
@@ -7448,6 +7710,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success. This operation&#39;s response body is not yet described by a schema; the shape is whatever the handler returns.</div><table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>

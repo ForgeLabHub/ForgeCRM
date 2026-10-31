@@ -181,6 +181,7 @@ func run() error {
 		Views:          services.Views,
 		Consent:        services.Consent,
 		MCPCredentials: services.MCPCredentials,
+		Idempotency:    services.Idempotency,
 		StartedAt:      time.Now(),
 		Version:        version,
 		BuildCommit:    commit,

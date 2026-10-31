@@ -15,6 +15,7 @@ import {
   errorMessage,
   fieldErrors,
   filenameFromDisposition,
+  newIdempotencyKey,
 } from './client'
 
 /** Builds a client whose fetch returns one canned response. */
@@ -34,6 +35,66 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 afterEach(() => {
   csrfTokenStore.clear()
+})
+
+describe('Idempotency-Key handling', () => {
+  it('sends the header on a mutation when a key is given', async () => {
+    const { client, fetchMock } = clientWithResponse(jsonResponse({ ok: true }))
+
+    await client.post('/api/v1/contacts', { name: 'Acme' }, { idempotencyKey: 'key-1' })
+
+    const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>
+    expect(headers['Idempotency-Key']).toBe('key-1')
+  })
+
+  it('omits the header when no key is given, so the feature stays opt-in', async () => {
+    const { client, fetchMock } = clientWithResponse(jsonResponse({ ok: true }))
+
+    await client.post('/api/v1/contacts', { name: 'Acme' })
+
+    const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>
+    expect(headers['Idempotency-Key']).toBeUndefined()
+  })
+
+  it('never sends the header on a GET', async () => {
+    const { client, fetchMock } = clientWithResponse(jsonResponse({ items: [] }))
+
+    // A key on a read would be ignored by the server, so the client must not send one.
+    await client.request('/api/v1/contacts', { method: 'GET', idempotencyKey: 'key-1' })
+
+    const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>
+    expect(headers['Idempotency-Key']).toBeUndefined()
+  })
+
+  it('sends the header on PUT and DELETE', async () => {
+    // Each response body can only be read once, so the stub must return a fresh
+    // one per call.
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ ok: true }))
+      .mockResolvedValueOnce(jsonResponse({ ok: true }))
+    vi.stubGlobal('fetch', fetchMock)
+    const client = new ApiClient()
+
+    await client.put('/api/v1/contacts/1', { name: 'Acme' }, { idempotencyKey: 'put-1' })
+    await client.delete('/api/v1/contacts/1', undefined, { idempotencyKey: 'del-1' })
+
+    const putHeaders = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>
+    const delHeaders = (fetchMock.mock.calls[1][1] as RequestInit).headers as Record<string, string>
+    expect(putHeaders['Idempotency-Key']).toBe('put-1')
+    expect(delHeaders['Idempotency-Key']).toBe('del-1')
+  })
+})
+
+describe('newIdempotencyKey', () => {
+  it('returns a non-empty value', () => {
+    expect(newIdempotencyKey().length).toBeGreaterThan(0)
+  })
+
+  it('returns a different value on each call, so distinct intents do not collide', () => {
+    const keys = new Set(Array.from({ length: 100 }, () => newIdempotencyKey()))
+    expect(keys.size).toBe(100)
+  })
 })
 
 describe('CSRF handling', () => {

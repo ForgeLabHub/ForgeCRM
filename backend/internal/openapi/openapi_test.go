@@ -327,6 +327,66 @@ func TestPathParametersAreTyped(t *testing.T) {
 	}
 }
 
+// TestIdempotencyKeyIsDocumentedOnMutations checks the specification describes the
+// header the middleware actually accepts, and only where it is accepted.
+//
+// Documenting it on a read would tell a client to send a header the server ignores;
+// omitting it from a mutation would hide a real capability. Both are contract bugs,
+// so both directions are asserted.
+func TestIdempotencyKeyIsDocumentedOnMutations(t *testing.T) {
+	var doc struct {
+		Paths map[string]map[string]struct {
+			Parameters []struct {
+				Name string `json:"name"`
+				In   string `json:"in"`
+			} `json:"parameters"`
+		} `json:"paths"`
+	}
+	if err := json.Unmarshal(generate(t), &doc); err != nil {
+		t.Fatal(err)
+	}
+
+	hasKey := func(params []struct {
+		Name string `json:"name"`
+		In   string `json:"in"`
+	}) bool {
+		for _, p := range params {
+			if p.Name == "Idempotency-Key" && p.In == "header" {
+				return true
+			}
+		}
+		return false
+	}
+
+	// The middleware is mounted on every authenticated group, so the header belongs on
+	// every mutation that has a caller to scope it to. An anonymous route has no
+	// principal, so the server cannot honour a key there and must not document one.
+	anonymous := map[string]bool{}
+	for key := range openapi.Anonymous {
+		parts := strings.SplitN(key, " ", 2)
+		if len(parts) == 2 {
+			anonymous[strings.ToLower(parts[1])] = true
+		}
+	}
+
+	mutating := map[string]bool{"post": true, "put": true, "patch": true, "delete": true}
+	for path, ops := range doc.Paths {
+		// A path is anonymous only when every operation on it is; the auth group mixes
+		// an anonymous login with session-only siblings under one prefix.
+		pathIsAnonymous := anonymous[path]
+		for method, op := range ops {
+			switch {
+			case mutating[method] && !pathIsAnonymous && !hasKey(op.Parameters):
+				t.Errorf("%s %s changes state but does not document Idempotency-Key", method, path)
+			case mutating[method] && pathIsAnonymous && hasKey(op.Parameters):
+				t.Errorf("%s %s is anonymous but documents Idempotency-Key", method, path)
+			case !mutating[method] && hasKey(op.Parameters):
+				t.Errorf("%s %s is a read but documents Idempotency-Key", method, path)
+			}
+		}
+	}
+}
+
 // TestOperationIDsAreUnique protects the generated SDK.
 //
 // Most code generators name a method after the operationId. Duplicates silently

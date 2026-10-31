@@ -118,6 +118,16 @@ interface RequestOptions {
   signal?: AbortSignal
   /** Set for requests that must not carry the CSRF header, such as login. */
   skipCSRF?: boolean
+  /**
+   * Makes a mutating request safe to retry.
+   *
+   * When set, the server runs the operation at most once for this key: a repeat
+   * returns the first result instead of creating a second record. Callers that
+   * retry on a network failure should pass a key that is stable across the retry
+   * (generate it once per user intent, not once per attempt), otherwise the retry
+   * is a second request and the protection is lost.
+   */
+  idempotencyKey?: string
 }
 
 /**
@@ -186,6 +196,9 @@ export class ApiClient {
     if (isMutation && !options.skipCSRF) {
       const token = csrfTokenStore.get()
       if (token) headers['X-CSRF-Token'] = token
+    }
+    if (isMutation && options.idempotencyKey) {
+      headers['Idempotency-Key'] = options.idempotencyKey
     }
 
     let body: BodyInit | undefined
@@ -318,8 +331,13 @@ export class ApiClient {
     return { blob: await response.blob(), filename: filenameFromDisposition(response.headers.get('Content-Disposition')) }
   }
 
-  post<T>(path: string, body?: unknown, options: { skipCSRF?: boolean } = {}): Promise<T> {
-    return this.request<T>(path, { method: 'POST', body, skipCSRF: options.skipCSRF })
+  post<T>(path: string, body?: unknown, options: MutationOptions = {}): Promise<T> {
+    return this.request<T>(path, {
+      method: 'POST',
+      body,
+      skipCSRF: options.skipCSRF,
+      idempotencyKey: options.idempotencyKey,
+    })
   }
 
   /**
@@ -422,13 +440,50 @@ export class ApiClient {
     }
   }
 
-  put<T>(path: string, body?: unknown): Promise<T> {
-    return this.request<T>(path, { method: 'PUT', body })
+  put<T>(path: string, body?: unknown, options: MutationOptions = {}): Promise<T> {
+    return this.request<T>(path, {
+      method: 'PUT',
+      body,
+      idempotencyKey: options.idempotencyKey,
+    })
   }
 
-  delete<T>(path: string, query?: PaginationParams): Promise<T> {
-    return this.request<T>(path, { method: 'DELETE', query })
+  delete<T>(path: string, query?: PaginationParams, options: MutationOptions = {}): Promise<T> {
+    return this.request<T>(path, {
+      method: 'DELETE',
+      query,
+      idempotencyKey: options.idempotencyKey,
+    })
   }
+}
+
+/**
+ * Options common to the mutating helpers.
+ *
+ * `idempotencyKey` is accepted here rather than only on `request` so callers use
+ * the named helpers and still get the retry guarantee; a bare `request` call is
+ * the exception, not the rule.
+ */
+export interface MutationOptions {
+  skipCSRF?: boolean
+  idempotencyKey?: string
+}
+
+/**
+ * Generates a key for one user intent.
+ *
+ * `crypto.randomUUID` is available in every browser this application targets and
+ * in the Node test environment. The key is generated once per intent and reused
+ * across retries of that intent, which is what makes the retry safe: a new key per
+ * attempt would be a new request and would defeat the mechanism.
+ */
+export function newIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  // A fallback for a runtime without Web Crypto: uniqueness only needs to hold
+  // within one caller's in-flight requests, not globally.
+  return `idem-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }
 
 /** The application client. Tests construct their own instance with a stub fetch. */

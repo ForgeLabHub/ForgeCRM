@@ -43,6 +43,22 @@ func pathParams(path string) []string {
 	return out
 }
 
+// idempotencyParam is the header a creating request may carry to make a retry safe.
+//
+// It is declared once, like the list parameters, because the middleware enforces the
+// same contract everywhere. Documenting it is what turns the behaviour from an
+// implementation detail into something a generated client can use.
+func idempotencyParam() parameter {
+	return parameter{
+		Name: "Idempotency-Key", In: "header",
+		Schema: map[string]any{"type": "string", "maxLength": 255},
+		Description: "Makes a mutating request replayable. A repeat with the same key " +
+			"returns the first result (marked with the `Idempotent-Replay` header) instead " +
+			"of performing the operation again. The key is scoped to the caller and the " +
+			"operation. A concurrent request with the same key is refused with 409.",
+	}
+}
+
 // listParams is the shared collection query contract.
 //
 // It is declared once because the middleware enforces the same set everywhere;

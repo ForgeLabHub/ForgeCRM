@@ -279,6 +279,9 @@ func (s *Server) handleInviteUser(w http.ResponseWriter, r *http.Request) {
 		} else if !s.deps.Config.IsProduction() {
 			// Development convenience only; never returned in production.
 			response["reset_token"] = token
+			// The response now carries a one-time token, so it must not be stored —
+			// including by the idempotency layer, which reads this header.
+			w.Header().Set("Cache-Control", "no-store")
 		}
 	}
 	httpx.WriteJSONStatus(w, http.StatusCreated, response)
