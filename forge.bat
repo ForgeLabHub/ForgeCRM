@@ -54,7 +54,9 @@ rem .env читается до диспетчера: он влияет на по
 call :load_env
 if not defined PORT set "PORT=%PORT_DEFAULT%"
 if not defined FRONTEND_PORT set "FRONTEND_PORT=%FRONTEND_PORT_DEFAULT%"
-if not defined URL set "URL=http://localhost:%PORT%/healthz"
+if not defined URL set "URL=http://localhost:%PORT%"
+if not defined HEALTH_PATH set "HEALTH_PATH=/health"
+if not defined READY_PATH set "READY_PATH=/ready"
 if not defined FRONTEND_URL set "FRONTEND_URL=http://localhost:%PORT%"
 
 if /i "%CMD%"=="help"   goto :help
@@ -75,6 +77,16 @@ if /i "%CMD%"=="verify" goto :verify
 if /i "%CMD%"=="logs"   goto :logs
 if /i "%CMD%"=="open"   goto :open
 if /i "%CMD%"=="db"     goto :db
+if /i "%CMD%"=="migrate" goto :migrate
+if /i "%CMD%"=="backup" goto :backup
+if /i "%CMD%"=="restore" goto :restore
+if /i "%CMD%"=="api"    goto :api
+if /i "%CMD%"=="web"    goto :web
+if /i "%CMD%"=="dev"    goto :dev
+if /i "%CMD%"=="prod"   goto :prod
+if /i "%CMD%"=="scale"  goto :scale
+if /i "%CMD%"=="smoke"  goto :smoke
+if /i "%CMD%"=="admin"  goto :admin
 if /i "%CMD%"=="docker" goto :docker
 if /i "%CMD%"=="env"     goto :env
 if /i "%CMD%"=="config"  goto :env
@@ -100,6 +112,10 @@ echo   open      открыть в браузере       install  зависи�
 echo   migrate^|backup^|restore  база
 echo   db backup^|restore  база            clean    убрать артефакты
 echo   docker up^|down^|logs              version  версия
+echo.
+echo   api^|web   только бэкенд или фронтенд  dev   полный стек разработки
+echo   prod      стек в контейнерах          scale N  N реплик API (N^>=2)
+echo   smoke     проверка живого инстанса    admin email  первый администратор
 echo.
 echo   env show^|init^|set^|check^|edit^|path^|reload   работа с .env
 echo.
@@ -265,9 +281,66 @@ exit /b 0
 
 :db
 if /i "%~1"=="backup" make backup
-if /i "%~1"=="restore" make restore FILE=%~2
+if /i "%~1"=="restore" make restore DUMP=%~2
 if /i "%~1"=="migrate" make migrate
 if not defined CMD echo db migrate^|backup^|restore
+exit /b 0
+
+:migrate
+make migrate
+exit /b 0
+
+:backup
+make backup
+exit /b 0
+
+:restore
+make restore DUMP=%~1
+exit /b 0
+
+:api
+call :start_services
+goto :status
+
+:web
+if not exist frontend\node_modules ( echo   fail  frontend: нет node_modules ^(forge.bat install^) & exit /b 1 )
+start "web" cmd /c "cd frontend && npm run dev"
+echo   ok    web запущен ^(порт %FRONTEND_PORT%^)
+exit /b 0
+
+:dev
+call :start_services
+call :smoke
+goto :status
+
+:prod
+if not exist "%ENVFILE%" ( echo   fail  .env не найден — forge.bat env init & exit /b 1 )
+docker compose -f docker-compose.yml up -d --build
+echo   ok    стек поднят; проверьте forge.bat status
+exit /b 0
+
+:scale
+set "N=%~1"
+if "%N%"=="" set "N=2"
+if %N% LSS 2 ( echo   fail  scale имеет смысл от 2 реплик; для одной используйте forge.bat start & exit /b 1 )
+docker compose -f docker-compose.yml -f docker-compose.multireplica.yml up -d --scale api=%N%
+echo   ok    запущено реплик: %N%
+exit /b 0
+
+:smoke
+powershell -NoProfile -Command "try { $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 'http://localhost:%PORT%%HEALTH_PATH%'; if ($r.StatusCode -eq 200) { Write-Host '  ok    GET %HEALTH_PATH% 200' } else { Write-Host '  fail  GET %HEALTH_PATH%' ; exit 1 } } catch { Write-Host '  fail  GET %HEALTH_PATH% не отвечает'; exit 1 }"
+exit /b %ERRORLEVEL%
+
+:admin
+set "EMAIL=%~1"
+if "%EMAIL%"=="" ( echo   fail  укажите адрес администратора: forge.bat admin ^<email^> & exit /b 1 )
+if "%FORGECRM_BOOTSTRAP_PASSWORD%"=="" (
+  echo   fail  FORGECRM_BOOTSTRAP_PASSWORD не задан
+  echo   пароль берётся из окружения, чтобы не попасть в историю команд:
+  echo     set FORGECRM_BOOTSTRAP_PASSWORD=^<сильный пароль^> ^&^& forge.bat admin %EMAIL%
+  exit /b 1
+)
+docker compose run --rm --no-deps api -bootstrap-admin -bootstrap-email "%EMAIL%"
 exit /b 0
 
 :docker

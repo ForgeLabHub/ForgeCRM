@@ -243,8 +243,14 @@ forge.bat status
 | `restart`, `logs [имя] [-f]`, `open` | обычные операции |
 | `doctor` | инструменты, версии, `.env`, `.env` в git, занятость порта |
 | `install`, `test`, `lint`, `build`, `verify` | через `make`, если он есть |
+| `api` / `web` | запустить только бэкенд или только фронтенд |
+| `dev` | полный стек разработки: база + API + фронтенд, затем smoke |
 | `migrate` | применить миграции |
-
+| `backup` / `restore` | резервная копия и восстановление базы |
+| `admin <email>` | создать первого администратора (пароль из `FORGECRM_BOOTSTRAP_PASSWORD`) |
+| `prod` | поднять стек в контейнерах (production Compose) |
+| `scale <N>` | N реплик API за балансировщиком (N ≥ 2) |
+| `smoke` | проверить живой инстанс по HTTP |
 | `db migrate\|backup\|restore` | база: миграции, копия, восстановление |
 | `docker up\|down\|logs\|reset` | контейнеры (`down` данные не удаляет) |
 | `clean [--hard]` | артефакты и логи; `--hard` ещё `.venv` и `node_modules` |
@@ -261,7 +267,7 @@ forge.bat status
 - **Venv главнее системы.** Если есть `.venv`, им пользуются `make`, `pytest`
   и uvicorn — чтобы `install` и `test` не расходились.
 
-Текущий способ запуска без скрипта: `cd backend && go run ./cmd/forgecrm-api` — адрес `http://localhost:8080/healthz`.
+Текущий способ запуска без скрипта: `cd backend && go run ./cmd/forgecrm-api` — приложение на `http://localhost:8080`, проверка живости на `http://localhost:8080/health`, готовности — на `http://localhost:8080/ready`.
 
 ### Конфигурация: `.env`
 

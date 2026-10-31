@@ -18,7 +18,9 @@ FILE_VERSION="1.1.0"
 # Значения по умолчанию. Реальные берутся так: аргумент окружения > .env > это.
 PORT_DEFAULT="8080"
 FRONTEND_PORT_DEFAULT="5173"
-URL_TEMPLATE="http://localhost:@PORT@/healthz"
+URL_TEMPLATE="http://localhost:@PORT@"
+HEALTH_PATH="/health"
+READY_PATH="/ready"
 FRONTEND_URL_TEMPLATE="http://localhost:@PORT@"
 
 QUIET=0
@@ -459,7 +461,7 @@ cmd_completion() {
 # Дополнение для bash: eval "$(./forge.sh completion bash)"
 _forge() {
   local cur="${COMP_WORDS[COMP_CWORD]}"
-  local cmds="status start stop restart logs open doctor install test lint build verify docker db env admin clean version help menu completion"
+  local cmds="status start stop restart logs open doctor install test lint build verify docker db env admin clean version help menu completion migrate backup restore api web dev prod scale smoke"
   if [ "$COMP_CWORD" -eq 1 ]; then
     COMPREPLY=( $(compgen -W "$cmds" -- "$cur") )
   fi
@@ -470,7 +472,7 @@ COMP
     zsh)
       cat <<'COMP'
 # Дополнение для zsh: ./forge.sh completion zsh > ~/.zfunc/_forge
-_arguments '1:command:(status start stop restart logs open doctor install test lint build verify docker db env admin clean version help menu completion)'
+_arguments '1:command:(status start stop restart logs open doctor install test lint build verify docker db env admin clean version help menu completion migrate backup restore api web dev prod scale smoke)'
 COMP
       ;;
     *) echo "bash | zsh" ;;
@@ -501,8 +503,15 @@ ${C_B}${NAME}${C_0} — управление проектом
   verify              lint + test + проверка документации
 
   api / web           запустить только бэкенд или только фронтенд
+  dev                 поднять полный стек разработки (db + API + web) и проверить
   migrate             применить миграции
   backup / restore    резервная копия и восстановление БД
+  admin <email>       создать первого администратора (пароль из FORGECRM_BOOTSTRAP_PASSWORD)
+
+Развёртывание
+  prod                поднять стек в контейнерах (production Compose)
+  scale <N>           запустить N реплик API за балансировщиком (N >= 2)
+  smoke               проверить живой инстанс по HTTP
 
 Служебное
   docker up|down|logs|reset   контейнеры (данные сохраняются)
@@ -580,7 +589,7 @@ cmd_status() {
   say "$NAME"
   local running=0
   if port_busy "$PORT"; then ok "API: порт $PORT слушается"; running=1
-    http_ok "http://localhost:$PORT/healthz" && ok "API: /healthz 200" || warn "API: /healthz не отвечает"; fi
+    http_ok "http://localhost:$PORT$HEALTH_PATH" && ok "API: $HEALTH_PATH 200" || warn "API: $HEALTH_PATH не отвечает"; fi
   if port_busy "$FRONTEND_PORT"; then ok "web: порт $FRONTEND_PORT слушается"; running=1; fi
   if has docker && docker compose ps --status running 2>/dev/null | grep -q .; then
     ok "docker: контейнеры запущены"; running=1; else warn "docker: контейнеры не запущены"; fi
@@ -708,13 +717,20 @@ cmd_install() {
 }
 
 start_services() {
+  start_db
+  _spawn api "cd backend && FORGECRM_LOG_LEVEL=debug go run ./cmd/forgecrm-api"
+  wait_http "http://localhost:$PORT$HEALTH_PATH" 120 api || return 1
+  if [ -d frontend/node_modules ]; then _spawn web "cd frontend && npm run dev"; fi
+}
+
+# start_db brings the database container up and waits for it to accept
+# connections. It is shared by `start`, `dev` and `api` so the readiness wait is
+# not duplicated with a different timeout in each.
+start_db() {
   if has docker && ! docker compose ps --status running 2>/dev/null | grep -q .; then
     say "База данных"; docker compose up -d db && ok "db запущена"
     for _ in $(seq 1 30); do docker compose exec -T db pg_isready -U forgecrm >/dev/null 2>&1 && break; sleep 1; done
   fi
-  _spawn api "cd backend && FORGECRM_LOG_LEVEL=debug go run ./cmd/forgecrm-api"
-  wait_http "http://localhost:$PORT/healthz" 120 api || return 1
-  if [ -d frontend/node_modules ]; then _spawn web "cd frontend && npm run dev"; fi
 }
 
 stop_services() {
@@ -778,6 +794,168 @@ clean_extra() {
 }
 
 
+# cmd_migrate applies pending migrations through the API binary. It goes through
+# `make migrate` so the Compose project, the database name and the migration
+# runner stay in one place; a second copy of that command here could drift.
+cmd_migrate() {
+  say "Миграции"
+  run_make migrate
+}
+
+# cmd_backup writes a database dump and a tar of uploaded files. It delegates to
+# scripts/backup.sh, which is the implementation the operations docs describe.
+cmd_backup() {
+  say "Резервная копия"
+  [ -f scripts/backup.sh ] || die "scripts/backup.sh не найден"
+  bash scripts/backup.sh "$@"
+}
+
+# cmd_restore restores a dump. scripts/restore.sh refuses to run without an
+# explicit confirmation flag, and this wrapper does not add one: restoring over a
+# live database destroys the current data, so the human decision stays the
+# caller's, exactly as the script intends.
+cmd_restore() {
+  say "Восстановление"
+  [ -f scripts/restore.sh ] || die "scripts/restore.sh не найден"
+  bash scripts/restore.sh "$@"
+}
+
+# cmd_admin creates the first platform administrator. It mirrors scripts/setup.sh:
+# the password comes from the environment (FORGECRM_BOOTSTRAP_PASSWORD) so it is
+# never passed on a command line where it would land in the shell history, and the
+# command is idempotent — creating an administrator that already exists is refused
+# by the binary, not silently overwritten.
+cmd_admin() {
+  local email="${1:-}"
+  if [ -z "$email" ]; then
+    die "укажите адрес администратора: ./forge.sh admin <email>"
+  fi
+  if [ -z "${FORGECRM_BOOTSTRAP_PASSWORD:-}" ]; then
+    bad "FORGECRM_BOOTSTRAP_PASSWORD не задан"
+    note "пароль берётся из окружения, чтобы не попасть в историю команд:"
+    note "  FORGECRM_BOOTSTRAP_PASSWORD='<сильный пароль>' ./forge.sh admin $email"
+    return 2
+  fi
+  say "Администратор"
+  has docker || die "docker не найден (создание администратора идёт через контейнер api)"
+  docker compose run --rm --no-deps api -bootstrap-admin -bootstrap-email "$email"
+}
+
+# cmd_api / cmd_web run one side of the stack on its own. They exist because the
+# development loop often needs the API without the frontend (or the reverse), and
+# starting both to then stop one is wasted work.
+cmd_api() {
+  require_tools || die "не хватает инструментов"
+  start_db
+  say "API"
+  _spawn api "cd backend && FORGECRM_LOG_LEVEL=debug go run ./cmd/forgecrm-api"
+  wait_http "http://localhost:$PORT$HEALTH_PATH" 120 api || return 1
+  ok "API отвечает на http://localhost:$PORT$HEALTH_PATH"
+}
+
+cmd_web() {
+  if [ ! -d frontend/node_modules ]; then die "frontend: нет node_modules (./forge.sh install)"; fi
+  say "Frontend"
+  _spawn web "cd frontend && npm run dev"
+  ok "frontend запускается на http://localhost:$FRONTEND_PORT"
+}
+
+# cmd_smoke checks a running instance over HTTP, without touching the database.
+cmd_smoke() {
+  say "Smoke"
+  local okall=0
+  if http_ok "http://localhost:$PORT$HEALTH_PATH"; then ok "GET $HEALTH_PATH 200"; else bad "GET $HEALTH_PATH не отвечает"; okall=1; fi
+  if http_ok "http://localhost:$PORT$READY_PATH"; then ok "GET $READY_PATH 200"; else warn "GET $READY_PATH не отвечает (нет готовности)"; fi
+  if [ -n "${FRONTEND_PORT:-}" ] && port_busy "$FRONTEND_PORT"; then
+    ok "web: порт $FRONTEND_PORT слушается"
+  else
+    warn "web не запущен на порту $FRONTEND_PORT"
+  fi
+  return $okall
+}
+
+# cmd_dev brings up the full development stack (database + API + frontend).
+cmd_dev() {
+  require_tools || die "не хватает инструментов"
+  start_db
+  start_services "$@" || die "запуск не удался (смотрите .run/*.log)"
+  cmd_status
+  cmd_smoke || warn "smoke нашёл замечания"
+}
+
+# cmd_prod runs the containers the way a deployment does: the production Compose
+# file, detached. It refuses to invent a password, so a missing .env is an error
+# rather than a silently insecure stack.
+cmd_prod() {
+  has docker || die "docker не найден"
+  if [ ! -f .env ]; then die ".env не найден — ./forge.sh env init"; fi
+  say "Production"
+  docker compose -f docker-compose.yml up -d --build
+  ok "стек поднят; проверьте ./forge.sh status"
+}
+
+# cmd_scale runs several stateless API replicas behind the reverse proxy. It uses
+# the multi-replica Compose file, because a single-file Compose project cannot
+# scale a service that publishes a fixed host port.
+cmd_scale() {
+  local n="${1:-2}"
+  has docker || die "docker не найден"
+  case "$n" in ''|*[!0-9]*) die "укажите число реплик: ./forge.sh scale 3";; esac
+  if [ "$n" -lt 2 ]; then die "scale имеет смысл от 2 реплик; для одной используйте ./forge.sh start"; fi
+  [ -f docker-compose.multireplica.yml ] || die "docker-compose.multireplica.yml не найден"
+  say "Масштабирование API до $n реплик"
+  docker compose -f docker-compose.yml -f docker-compose.multireplica.yml up -d --scale api="$n"
+  ok "запущено реплик: $n"
+}
+
+
+# cmd_commands prints every command the dispatcher accepts, one per line. It
+# exists so a check can compare the help text with the dispatcher: the two used to
+# drift (`migrate`, `backup`, `restore`, `api`, `web` were documented but not
+# dispatched), and a command a user can read about but not run is a defect.
+cmd_commands() {
+  cat <<'CMDS'
+help
+menu
+status
+ps
+start
+up
+stop
+down
+restart
+logs
+log
+open
+doctor
+install
+setup
+test
+lint
+build
+verify
+docker
+db
+migrate
+backup
+restore
+api
+web
+dev
+prod
+scale
+smoke
+admin
+env
+config
+completion
+clean
+version
+commands
+CMDS
+}
+
+
 main() {
   local cmd="" a
   while [ $# -gt 0 ]; do
@@ -823,9 +1001,19 @@ main() {
     verify)         cmd_verify ;;
     docker)         cmd_docker "$@" ;;
     db)             cmd_db "$@" ;;
+    migrate)        cmd_migrate ;;
+    backup)         cmd_backup "$@" ;;
+    restore)        cmd_restore "$@" ;;
+    api)            cmd_api ;;
+    web)            cmd_web ;;
+    smoke)          cmd_smoke ;;
+    dev)            cmd_dev "$@" ;;
+    prod)           cmd_prod ;;
+    scale)          cmd_scale "$@" ;;
+    admin)          cmd_admin "$@" ;;
     env|config)     cmd_env "$@" ;;
     completion)     cmd_completion "$@" ;;
-    admin)          cmd_admin 2>/dev/null || warn "команда admin не поддерживается" ;;
+    commands)       cmd_commands ;;
     clean)          cmd_clean "$@" ;;
     version)        cmd_version ;;
     *) bad "неизвестная команда: $cmd"; note "справка: ./forge.sh help"; exit 2 ;;
