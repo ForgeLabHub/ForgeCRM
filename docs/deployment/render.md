@@ -39,7 +39,7 @@
 | `FORGECRM_DATABASE_URL` | *внедряется* | Строка подключения к управляемому PostgreSQL. Приложение читает сначала `FORGECRM_DATABASE_URL` и падает обратно на `DATABASE_URL`. |
 | `FORGECRM_SECRET_KEY` | `generateValue: true` | Обязательна. Шифрует сохранённые учётные данные интеграций; её потеря делает их невосстановимыми. |
 | `FORGECRM_BASE_URL` | `https://your-app.onrender.com` | Обязательна. Используется для абсолютных ссылок. |
-| `FORGECRM_MIGRATE_ON_START` | `true` | Задаётся на сервисе **forgecrm-api**. API применяет миграции перед обслуживанием. |
+| `FORGECRM_MIGRATE_ON_START` | `true` | Задаётся на сервисе **forgecrm-api**. По умолчанию флаг выключен; включите его, чтобы API применил миграции перед обслуживанием. |
 | `PORT` | *внедряется* | Его задаёт Render; API слушает `0.0.0.0:$PORT`. |
 | `FORGECRM_DATABASE_MAX_CONNS` | `6` (api), `4` (worker) | Держите пулы небольшими на тарифе starter. |
 | `FORGECRM_RATE_LIMIT_STORE` | `memory` | Одна реплика, поэтому лимитер в процессе корректен. |
