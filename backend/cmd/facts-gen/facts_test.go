@@ -164,8 +164,10 @@ func TestScanAppRoutesSplitsByTree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if total != 5 || unique != 4 {
-		t.Fatalf("total=%d unique=%d, want 5/4", total, unique)
+	// /login and * legitimately repeat across the two mutually exclusive
+	// trees; distinct paths are /login, *, /dashboard.
+	if total != 5 || unique != 3 {
+		t.Fatalf("total=%d unique=%d, want 5/3", total, unique)
 	}
 	if len(dups) != 0 {
 		t.Fatalf("cross-tree repeats must not count as duplicates: %v", dups)

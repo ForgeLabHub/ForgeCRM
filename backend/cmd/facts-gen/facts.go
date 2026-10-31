@@ -455,8 +455,7 @@ func scanAppRoutes(src string) (total, unique int, dupWithinTree map[string]stri
 		return 0, 0, nil, fmt.Errorf("App.tsx: ни одного <Routes> не найдено")
 	}
 	dupWithinTree = map[string]string{}
-	seenGlobal := map[string]bool{} // for the distinct-path count
-	treeNames := []string{"anonymous", "authenticated"}
+	seenGlobal := map[string]struct{}{} // for the distinct-path count
 	for i, b := range bounds {
 		start := b[0]
 		end := len(src)
@@ -464,9 +463,6 @@ func scanAppRoutes(src string) (total, unique int, dupWithinTree map[string]stri
 			end = bounds[i+1][0]
 		}
 		name := fmt.Sprintf("tree#%d", i+1)
-		if i < len(treeNames) {
-			name = treeNames[i]
-		}
 		seenInTree := map[string]bool{} // uniqueness is a per-tree property
 		for _, m := range routeRe.FindAllStringSubmatch(src[start:end], -1) {
 			total++
@@ -478,8 +474,8 @@ func scanAppRoutes(src string) (total, unique int, dupWithinTree map[string]stri
 			} else {
 				seenInTree[path] = true
 			}
-			if !seenGlobal[path] {
-				seenGlobal[path] = true
+			if _, ok := seenGlobal[path]; !ok {
+				seenGlobal[path] = struct{}{}
 				unique++
 			}
 		}
