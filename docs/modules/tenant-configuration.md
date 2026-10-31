@@ -104,8 +104,12 @@ Go-контракт — `internal/tenantconfig`: `Definition`, `Setting`, `Revis
 ## 8. Сборка, запуск, локальная отладка
 Собирается в составе бэкенда (`make build-api`, `make build-worker`). Оба процесса
 собирают сервис: API — для маршрутов, worker — чтобы созданные автоматизацией
-сделки и задачи получали те же дефолты арендатора. Точечная отладка — unit-тесты
-пакета:
+сделки и задачи получали те же дефолты арендатора. **Оба** движка workflow тоже
+получают порт: `internal/wiring` собирает движок дважды, и подключение лишь к
+воркеру оставляло расписание, созданное через `POST /api/v1/workflows`, в UTC,
+хотя организация выбрала другую зону. Регрессия —
+`TestTenantDefaultTimezoneReachesAWorkflowCreatedOverHTTP`. Точечная отладка —
+unit-тесты пакета:
 
 ```bash
 cd backend && go test ./internal/tenantconfig/ -v
