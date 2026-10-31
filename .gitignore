@@ -1,1 +1,59 @@
-(empty output)
+# Secrets and local configuration.
+#
+# .env holds FORGECRM_SECRET_KEY, which decrypts stored integration credentials.
+# Committing it would expose every credential in the database to anyone with
+# repository access, and would do so permanently in the Git history.
+.env
+.env.*
+!.env.example
+
+# Local overrides
+*.local
+docker-compose.override.yml
+
+# Backups and dumps contain real data.
+backups/
+*.dump
+*.sql.gz
+
+# Go
+backend/bin/
+*.test
+*.out
+coverage.out
+coverage.html
+
+# Node (frontend, when it exists)
+node_modules/
+frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+
+# Python tooling used by scripts
+__pycache__/
+*.pyc
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+
+# Agent and build scratch
+.agent_tmp/
+/tmp/
+
+# Compiled binaries produced by `go build` in the repository root
+/bin/
+/backend/forgecrm
+/backend/forgecrm-api
+/backend/forgecrm-worker
+
+# Playwright artifacts: failure traces, screenshots and the HTML report
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+frontend/playwright/.cache/
+
+# Состояние forge.sh/forge.bat: PID-файлы и логи запусков
+.run/
