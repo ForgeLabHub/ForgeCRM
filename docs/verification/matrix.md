@@ -18,6 +18,7 @@
 | Интеграционные тесты | транзакции, RBAC, изоляция на реальной БД | `make test-integration` | `ci.yml` → `backend` |
 | Tenant isolation и RBAC | пользователи не получают чужие данные | `make test-integration` | `ci.yml` → `backend` |
 | Одноразовые секреты не сохраняются | семя второго фактора, токен MCP и код привязки не остаются в `idempotency_keys` | `make test-integration` | `ci.yml` → `backend` |
+| Брошенный ключ идемпотентности освобождается | запрос, погибший без ответа, не блокирует повтор навсегда: аренда истёкшего claim передаётся, паника освобождает claim сразу | `make test-integration` | `ci.yml` → `backend` |
 | Compose smoke test | сервисы действительно взаимодействуют | `./scripts/smoke-test.sh` | `portability.yml` → `compose-smoke` |
 | Backup → restore → smoke | данные восстанавливаются, а не только копируются | `make backup` → `make restore` → `make smoke-test` | `portability.yml` → `backup-restore` |
 | E2E в Chromium | основные сценарии работают в браузере | `make test-e2e` | `ci.yml` → `e2e` |
