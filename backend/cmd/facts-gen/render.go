@@ -2,22 +2,28 @@ package main
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
 // Markdown between these markers is owned by facts-gen. Human prose lives
 // outside them and survives regeneration; -check compares only the block.
+// The block is self-delimiting: RenderMarkdown emits autoBegin ... autoEnd,
+// so callers can paste its output into a document verbatim and MetricsBlockMatch
+// can compare two rendered blocks without extra scaffolding.
 const (
 	autoBegin = "<!-- FACTS:AUTO BEGIN — генерируется backend/cmd/facts-gen, не редактировать вручную -->"
 	autoEnd   = "<!-- FACTS:AUTO END -->"
 )
 
-// RenderMarkdown produces the body of the FACTS:AUTO block: every metric table.
-// commit is stamped inside the block; CI regenerates with the checked-out SHA,
-// so a stale document fails -check exactly like openapi-check does.
+// RenderMarkdown produces the full FACTS:AUTO block (markers included): every
+// metric table. commit is stamped inside the block; CI regenerates with the
+// checked-out SHA, so a stale document fails -check exactly like openapi-check
+// does. The commit-stamp line is exempt from comparison (see MetricsBlockMatch).
 func RenderMarkdown(rep *Report, commit string) string {
 	f := rep.Facts
 	var b strings.Builder
+	b.WriteString(autoBegin + "\n")
 	b.WriteString(fmt.Sprintf("<!-- измерено на HEAD `%s` -->\n\n", commit))
 
 	b.WriteString("## Backend / Architecture\n\n")
@@ -97,16 +103,38 @@ func mdFlag(b *strings.Builder, name string, ok bool) {
 	b.WriteString(fmt.Sprintf("| %s | %s |\n", name, v))
 }
 
+// commitStampRe matches the generated "измерено на HEAD" line inside the auto
+// block. The stamp legitimately differs between the committed document (SHA at
+// generation time) and a fresh render (current checkout SHA), so it is skipped
+// when comparing; every other line — all metrics, definitions, consistency
+// flags — must match exactly.
+var commitStampRe = regexp.MustCompile("^<!-- измерено на HEAD `([0-9a-f]+|\\(SHA недоступен\\))` -->$")
+
 // MetricsBlockMatch reports whether the committed document's FACTS:AUTO block
-// agrees with a freshly rendered one on every metric value line. The header
-// (commit stamp/date) outside the block is intentionally not compared.
+// agrees with a freshly rendered one on every metric value line. The commit
+// stamp line inside the block is intentionally not compared.
 func MetricsBlockMatch(committed, rendered string) bool {
 	cb, err1 := extractBlock(committed)
 	rb, err2 := extractBlock(rendered)
 	if err1 != nil || err2 != nil {
 		return false
 	}
-	return cb == rb
+	cl := strings.Split(strings.TrimRight(cb, "\n"), "\n")
+	rl := strings.Split(strings.TrimRight(rb, "\n"), "\n")
+	if len(cl) != len(rl) {
+		return false
+	}
+	for i := range cl {
+		cs := commitStampRe.MatchString(strings.TrimSpace(cl[i]))
+		rs := commitStampRe.MatchString(strings.TrimSpace(rl[i]))
+		if cs && rs {
+			continue
+		}
+		if cl[i] != rl[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func extractBlock(s string) (string, error) {

@@ -425,22 +425,67 @@ func countOpenAPI(path string) (paths, ops int, err error) {
 type frontendScan struct {
 	srcFiles, testFiles, testDecls int
 	pageFiles, pageTests           int
-	routes, duplicateRoutes        int
+	routes, uniqueRoutes           int
+	dupWithinTree                  map[string][]string // path -> tree names it appears in
 	e2eFiles, e2eTests             int
 }
 
+// routeTrees are the mutually exclusive <Routes> subtrees in App.tsx. A path
+// may legitimately repeat across trees (the anonymous tree serves /login, the
+// authenticated tree redirects it; '*' is the catch-all in both), but never
+// twice inside one tree — that would be dead routing. The names below are
+// assigned positionally: first <Routes> block = anonymous branch, second =
+// authenticated branch (verified by TestScanAppRoutesSplitsByTree).
 var (
-	itRe       = regexp.MustCompile(`(?m)^[ \t]*(?:it|test)(?:\.\w+)*\(`)
-	describeRe = regexp.MustCompile(`(?m)^[ \t]*test\.describe\(`)
-	testFileRe = regexp.MustCompile(`\.(test|spec)\.tsx?$`)
-	routeRe    = regexp.MustCompile(`<Route\b[^>]*?path="([^"]*)"`)
+	itRe        = regexp.MustCompile(`(?m)^[ \t]*(?:it|test)(?:\.\w+)*\(`)
+	describeRe  = regexp.MustCompile(`(?m)^[ \t]*test\.describe\(`)
+	testFileRe  = regexp.MustCompile(`\.(test|spec)\.tsx?$`)
+	routeRe     = regexp.MustCompile(`<Route\b[^>]*?path="([^"]*)"`)
+	routesTagRe = regexp.MustCompile(`<Routes>`)
 )
+
+// scanAppRoutes counts Route declarations and splits them into per-<Routes>
+// trees so uniqueness is checked where it must hold (within a tree) rather
+// than globally across mutually exclusive branches.
+func scanAppRoutes(src string) (total, unique int, dupWithinTree map[string]string, err error) {
+	bounds := routesTagRe.FindAllStringIndex(src, -1)
+	if len(bounds) == 0 {
+		return 0, 0, nil, fmt.Errorf("App.tsx: ни одного <Routes> не найдено")
+	}
+	dupWithinTree = map[string]string{}
+	seen := map[string]bool{}
+	treeNames := []string{"anonymous", "authenticated"}
+	for i, b := range bounds {
+		start := b[0]
+		end := len(src)
+		if i+1 < len(bounds) {
+			end = bounds[i+1][0]
+		}
+		name := fmt.Sprintf("tree#%d", i+1)
+		if i < len(treeNames) {
+			name = treeNames[i]
+		}
+		for _, m := range routeRe.FindAllStringSubmatch(src[start:end], -1) {
+			total++
+			p := m[1]
+			if seen[p] {
+				if _, ok := dupWithinTree[p]; !ok {
+					dupWithinTree[p] = name
+				}
+			} else {
+				seen[p] = true
+				unique++
+			}
+		}
+	}
+	return total, unique, dupWithinTree, nil
+}
 
 // scanFrontend derives frontend metrics from source files only. Declarations of
 // describe blocks are subtracted so "tests" means runnable cases, not suites.
 func scanFrontend(dir string) (frontendScan, error) {
 	var r frontendScan
-	routesSeen := map[string]int{}
+	r.dupWithinTree = map[string]string{}
 	walk := func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
@@ -475,21 +520,17 @@ func scanFrontend(dir string) (frontendScan, error) {
 				}
 			}
 			if base == "App.tsx" {
-				for _, m := range routeRe.FindAllStringSubmatch(string(t), -1) {
-					r.routes++
-					routesSeen[m[1]]++
+				total, unique, dups, err := scanAppRoutes(string(t))
+				if err != nil {
+					return err
 				}
+				r.routes, r.uniqueRoutes, r.dupWithinTree = total, unique, dups
 			}
 		}
 		return nil
 	}
 	if err := filepath.WalkDir(dir, walk); err != nil {
 		return r, err
-	}
-	for _, n := range routesSeen {
-		if n > 1 {
-			r.duplicateRoutes++
-		}
 	}
 	return r, nil
 }

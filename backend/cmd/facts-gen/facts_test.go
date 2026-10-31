@@ -70,9 +70,15 @@ func TestMetricsBlockMatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	block := RenderMarkdown(rep, "abc123")
-	doc := "# заголовок\n\nвступление человека\n\n" + autoBegin + "\n\n" + block + "\n" + autoEnd + "\n\nэпилог\n"
+	doc := "# заголовок\n\nвступление человека\n\n" + block + "\nэпилог\n"
 	if !MetricsBlockMatch(doc, block) {
 		t.Error("freshly generated doc must match itself")
+	}
+	// The commit stamp legitimately changes between the committed SHA and a
+	// fresh CI checkout; every other line must still match.
+	freshSHA := RenderMarkdown(rep, "def456")
+	if !MetricsBlockMatch(doc, freshSHA) {
+		t.Error("commit stamp differences inside the block must not fail -check")
 	}
 	// Tamper with a metric value inside the committed document: the check must fail.
 	i := strings.Index(doc, "**")
@@ -81,9 +87,10 @@ func TestMetricsBlockMatch(t *testing.T) {
 	if MetricsBlockMatch(tampered, block) {
 		t.Error("tampered metric value must fail -check")
 	}
-	wrongSHA := RenderMarkdown(rep, "ffffffff")
-	if MetricsBlockMatch(doc, wrongSHA) {
-		t.Error("commit stamp inside the block must be part of the comparison")
+	// Tampering with a definition/row text (not just the number) must fail too.
+	dropped := strings.Replace(doc, "\n", "", 5) // structural change inside block
+	if MetricsBlockMatch(dropped, block) {
+		t.Error("dropped lines must fail -check")
 	}
 	if MetricsBlockMatch("plain text", block) {
 		t.Error("missing markers must fail the check")
