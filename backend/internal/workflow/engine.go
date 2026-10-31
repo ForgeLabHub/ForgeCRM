@@ -42,6 +42,10 @@ type Config struct {
 	Audit  *audit.Logger
 	Outbox *outbox.Store
 	Log    *slog.Logger
+	// Defaults is the organization configuration, read for the timezone a schedule
+	// runs in when the workflow names none. Optional: a nil value leaves the model
+	// default (UTC) in force.
+	Defaults OrgDefaults
 }
 
 // NewEngine builds an engine.
@@ -51,9 +55,11 @@ func NewEngine(cfg Config) *Engine {
 	// an engine — the API and the worker — has it, without either importing the
 	// outbox package into this one (which would be a cycle).
 	RegisterKnownEvents(outbox.EventTypes())
+	store := NewStore(cfg.DB)
+	store.SetOrgDefaults(cfg.Defaults)
 	return &Engine{
 		db:     cfg.DB,
-		store:  NewStore(cfg.DB),
+		store:  store,
 		crm:    cfg.CRM,
 		rbac:   cfg.RBAC,
 		audit:  cfg.Audit,

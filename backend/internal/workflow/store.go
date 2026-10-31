@@ -82,7 +82,27 @@ type StepRun struct {
 // guessed id from another tenant returns not-found rather than data.
 type Store struct {
 	db *database.DB
+	// defaults is the organization's own configuration, read for the timezone a
+	// schedule runs in when the workflow does not name one. It is a narrow local
+	// interface, so the store holds no dependency on the configuration service.
+	defaults OrgDefaults
 }
+
+// OrgDefaults answers the organization's effective configuration. It is the one
+// question this package asks: the default timezone for a schedule.
+type OrgDefaults interface {
+	EffectiveString(ctx context.Context, orgID uuid.UUID, key string) string
+}
+
+// SetOrgDefaults attaches the organization configuration. A nil port leaves the
+// model default (UTC) in force, so existing callers and the extraction harness are
+// unaffected.
+func (s *Store) SetOrgDefaults(d OrgDefaults) { s.defaults = d }
+
+// SettingDefaultTimezone is the key read for a schedule that names no timezone. It
+// is spelled here so this package imports no configuration code; the spelling is
+// pinned to the catalog by a test.
+const SettingDefaultTimezone = "workflow.default_timezone"
 
 // NewStore builds a workflow store.
 func NewStore(db *database.DB) *Store { return &Store{db: db} }
@@ -129,6 +149,7 @@ func (s *Store) Create(ctx context.Context, p *rbac.Principal, in CreateInput) (
 	if _, err := ParseDefinition(in.Definition); err != nil {
 		return nil, httpx.ValidationError(map[string]string{"definition": err.Error()})
 	}
+	in.ScheduleTimezone = s.resolveTimezone(ctx, p.OrganizationID, in.ScheduleTimezone)
 	next, err := s.validateTrigger(in)
 	if err != nil {
 		return nil, err
@@ -199,6 +220,22 @@ func scheduleLocation(tz *string) (*time.Location, error) {
 	return loc, nil
 }
 
+// resolveTimezone fills in the organization's default timezone for a schedule that
+// named none, so the stored row carries the zone the run was actually scheduled in.
+// A workflow with its own schedule_timezone keeps it, and a nil port leaves the
+// model default in force.
+func (s *Store) resolveTimezone(ctx context.Context, orgID uuid.UUID, tz *string) *string {
+	if tz != nil && *tz != "" {
+		return tz
+	}
+	if s.defaults != nil {
+		if v := s.defaults.EffectiveString(ctx, orgID, SettingDefaultTimezone); v != "" {
+			return &v
+		}
+	}
+	return tz
+}
+
 // Get returns one workflow scoped to the caller's organization.
 func (s *Store) Get(ctx context.Context, p *rbac.Principal, id uuid.UUID) (*Workflow, error) {
 	const q = `SELECT` + workflowColumns + ` FROM workflows WHERE id = $1 AND organization_id = $2`
@@ -248,6 +285,7 @@ func (s *Store) Update(ctx context.Context, p *rbac.Principal, id uuid.UUID, in 
 	if _, err := ParseDefinition(in.Definition); err != nil {
 		return nil, httpx.ValidationError(map[string]string{"definition": err.Error()})
 	}
+	in.ScheduleTimezone = s.resolveTimezone(ctx, p.OrganizationID, in.ScheduleTimezone)
 	next, err := s.validateTrigger(in)
 	if err != nil {
 		return nil, err

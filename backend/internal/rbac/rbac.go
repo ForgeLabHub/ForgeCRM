@@ -182,6 +182,14 @@ const (
 	// is about a person, not a change to their CRM record.
 	PermConsentRead   Permission = "consent.read"
 	PermConsentManage Permission = "consent.manage"
+
+	// Tenant configuration. A setting is a default the whole organization inherits —
+	// the currency a deal is denominated in, the timezone a scheduled workflow runs
+	// in. Reading which values apply (read) is what an auditor or an analyst needs to
+	// interpret the numbers; changing one (manage) affects every user in the
+	// organization, so the two are separate rights.
+	PermTenantSettingsRead   Permission = "tenant.settings.read"
+	PermTenantSettingsManage Permission = "tenant.settings.manage"
 )
 
 // All returns every permission in the catalog, sorted.
@@ -232,6 +240,7 @@ var catalog = map[Permission]struct{}{
 	PermViewsRead: {}, PermViewsManage: {},
 	PermMCPCredentialsRead: {}, PermMCPCredentialsManage: {},
 	PermConsentRead: {}, PermConsentManage: {},
+	PermTenantSettingsRead: {}, PermTenantSettingsManage: {},
 }
 
 // Known reports whether p is part of the catalog.

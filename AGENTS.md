@@ -288,17 +288,17 @@ FORGECRM_ENV=development FORGECRM_HTTP_PORT=8080 \
   Archtest и набор независимы, поэтому ни устаревшая проверка, ни пропущенное задание CI не
   могут скрыть нарушение.
 
-Сегодня доказаны тридцать три модуля: `netguard`, `analytics`, `ratelimit`,
+Сегодня доказаны тридцать шесть модулей: `netguard`, `analytics`, `ratelimit`,
 `objectstore`, `secrets`, `logging`, `httpx`, два листа `importx` —
 `importx/safe` (распаковка недоверенных архивов) и `importx/parsers` (разбор табличных
 источников), — и `database`, `rbac`, `audit`, `outbox`, `retention`, `agent`, `jobs`,
 `crm`, `storage`, `integrations`, `config`, `workflow`, `events`, `migratex`, `simulate`,
-`forecast`, `risk`, `notify`, `ai`, `importx`, `migrations`, `migrate`, `authn` и
-`constructor` (каждый со своими доказанными зависимостями: `database`, а где нужно
-`logging`, `audit`, `httpx`, `outbox`, `objectstore`, `netguard`, `ratelimit`, `rbac`,
-`secrets`, `analytics`, `crm`, `agent`, `config`, `retention`, `integrations`, `jobs` и
-два листа `importx`). `docs/MODULES.md` и `docs/EXTRACT_READY.md` записывают статус и
-должны совпадать с набором.
+`forecast`, `risk`, `notify`, `ai`, `importx`, `migrations`, `migrate`, `authn`, `oidc`,
+`views`, `constructor` и `tenantconfig` (каждый со своими доказанными зависимостями:
+`database`, а где нужно `logging`, `audit`, `httpx`, `outbox`, `objectstore`, `netguard`,
+`ratelimit`, `rbac`, `secrets`, `analytics`, `crm`, `agent`, `config`, `retention`,
+`integrations`, `jobs` и два листа `importx`). `docs/MODULES.md` и `docs/EXTRACT_READY.md`
+записывают статус и должны совпадать с набором.
 
 Написание первых тестов модуля само является шагом поиска багов: выделение `parsers` — это
 то, что вскрыло, что XLSX отклонялся проверкой UTF-8, применённой ко всем форматам, и что

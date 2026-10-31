@@ -557,6 +557,32 @@
   `logging` и движет набор типов сущностей и круговой рейс фильтра в чистом модуле.
 - **Cut lines:** переезжает с `audit`/`database`/`rbac`.
 
+### internal/tenantconfig  — конфигурация арендатора
+- **Ответственность:** собственные настройки организации поверх дефолтов платформы.
+  Закрытый каталог ключей, версионированный в коде (`crm.default_currency`,
+  `tasks.default_priority`, `workflow.default_timezone`), значения валидируются по
+  типу ключа, неизвестный ключ отвергается на записи. Дефолты не материализуются:
+  отсутствие строки — «действует дефолт каталога». Изменение и сброс пишутся в
+  историю ревизий и в аудит в одной транзакции.
+- **Public API:** `Service`, `NewService`, `Definition`, `Setting`, `Revision`,
+  `Kind`, `Catalog`, `Lookup`, `Keys`, `SchemaVersion`, `ValidationError`,
+  `ErrNotFound`; методы `List`, `Get`, `Set`, `Reset`, `History`,
+  `Effective`/`EffectiveString`/`EffectiveInt`/`EffectiveBool`.
+- **Internal deps:** `audit, database, rbac`.
+- **External deps:** `github.com/google/uuid`.
+- **Fake:** не нужен; изоляция арендатора — предикат SQL по `organization_id` из
+  принципала. Потребители (`crm`, `workflow`) объявляют собственный узкий порт
+  `OrgDefaults` и **не** импортируют пакет, поэтому стрелка зависимости идёт от
+  конфигурации к домену.
+- **Tests:** `tenantconfig_test.go` (модуль) + `api/tenantconfig_integration_test.go`
+  и `testsupport/tenantconfig_test.go` (PostgreSQL) + `archtest` (совпадение
+  написания ключей с потребителями).
+- **Extract:** `yes` — доказан `scripts/extract-test/tenantconfig`, который выделяет
+  его с `audit`, `database`, `rbac` и `logging` и прогоняет каталог, валидацию по
+  каждому типу и отказ на неизвестный ключ в чистом модуле.
+- **Cut lines:** переезжает с `audit`/`database`/`rbac`; потребители следуют за ним
+  через объявленный порт, а не через импорт.
+
 ### internal/netguard  — исходящая защита SSRF
 - **Ответственность:** единственное место, которое решает, безопасно ли назначение
   исходящего запроса: отклоняет loopback, приватные, link-local, multicast и
@@ -765,12 +791,12 @@
 | **Import pages** | UI Центра импорта, экспорт CSV/JSONL | `pages/{ImportCenter,ImportDetail}Page.tsx`, `api/imports.ts` | `api/imports.ts` | `ImportCenterPage.test.tsx`, E2E | `no` |
 | **Integrations/Webhooks/Events/Jobs pages** | поверхности администрирования | `pages/{Integrations,Webhooks,Events,Jobs,Migrations}Page.tsx` + соответствующие клиенты api | их клиенты api | E2E | `no` |
 | **Notifications page** | входящие уведомления workflow | `pages/NotificationsPage.tsx` | `api/crm.ts` | `NotificationsPage.test.tsx` | `almost` |
-| **Admin pages** | аудит, пользователи, роли, организации, команды, безопасность, диагностика (+ настройки платформы), почта, telegram, SSO, согласие | `pages/admin/*.tsx`, `api/admin.ts` | `api/admin.ts` | `SecurityPage.test.tsx`, `DiagnosticsPage.test.tsx`, `SSOPage.test.tsx`, `ConsentPanel.test.tsx` | `no` |
+| **Admin pages** | аудит, пользователи, роли, организации, команды, безопасность, диагностика (+ настройки платформы), почта, telegram, SSO, согласие, конфигурация организации | `pages/admin/*.tsx`, `api/admin.ts`, `api/tenantSettings.ts` | `api/admin.ts`, `api/tenantSettings.ts` | `SecurityPage.test.tsx`, `DiagnosticsPage.test.tsx`, `SSOPage.test.tsx`, `ConsentPanel.test.tsx`, `TenantSettingsPage.test.tsx` | `no` |
 | **Attachments** | загрузка/скачивание документов | `components/AttachmentPanel.tsx`, `api/documents.ts` | `api/documents.ts` | `AttachmentPanel.test.tsx` | `almost` |
 | **Saved views** | именованные фильтры списка на экран | `components/SavedViewsBar.tsx`, `api/views.ts` | `api/views.ts` | `SavedViewsBar.test.tsx`, E2E | `almost` |
 
-**Итоги фронтенда:** 98 файлов `.ts`/`.tsx`; 24 файла модульных тестов (159 тестов);
-E2E в `frontend/e2e/platform.spec.ts` — 59 тестов, из них часть пропускается по
+**Итоги фронтенда:** 101 файл `.ts`/`.tsx`; 25 файлов модульных тестов (170 тестов);
+E2E в `frontend/e2e/platform.spec.ts` — 61 тест, из них часть пропускается по
 конфигурации окружения (например, ветки, зависящие от настроенного AI-провайдера).
 
 ---
@@ -789,12 +815,12 @@ E2E в `frontend/e2e/platform.spec.ts` — 59 тестов, из них част
   Документированные швы внедрения без поставляемого фейка: `ai.Provider`,
   `events.Poster`, `integrations.Adapter`, `migratex.Source`, `agent.Executor`,
   `database.Querier`, `objectstore.ObjectStore`, `ratelimit.Store`.
-- **Статус Extract:** тридцать три модуля — `yes` — `analytics`, `ratelimit`,
+- **Статус Extract:** тридцать шесть модулей — `yes` — `analytics`, `ratelimit`,
   `netguard`, `objectstore`, `secrets`, `logging`, `httpx`, `importx/safe`,
   `importx/parsers`, `database`, `rbac`, `audit`, `outbox`, `retention`, `agent`,
   `jobs`, `crm`, `storage`, `integrations`, `config`, `workflow`, `events`,
   `migratex`, `simulate`, `forecast`, `risk`, `notify`, `ai`, `importx`,
-  `migrations`, `migrate`, `authn` и `constructor` —
+  `migrations`, `migrate`, `authn`, `oidc`, `views`, `constructor` и `tenantconfig` —
   потому что они были
   действительно выделены, собраны, протестированы и запущены в чистом модуле, теперь
   автоматизированным набором в `scripts/extract-test/`. Статусы здесь в точности

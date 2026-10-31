@@ -213,7 +213,7 @@ func TestCoreDoesNotImportCompositionOrHTTP(t *testing.T) {
 // graph, so a regression is caught by `go test ./...` and not only by the heavier
 // extraction harness in scripts/extract-test.
 //
-// Thirty modules are pinned:
+// Thirty-four modules are pinned:
 //
 //   - netguard is the SSRF guard. It is a leaf: it must depend on nothing inside
 //     this module and nothing outside the standard library. That is what lets the
@@ -293,6 +293,21 @@ func TestCoreDoesNotImportCompositionOrHTTP(t *testing.T) {
 //     and copies modules out of the tree by path, importing none of them. It is a
 //     leaf, but it carries data as well as code — the recipes/ directory is
 //     embedded — so an extraction must copy the recipes too.
+//   - views is the saved list-view service: a named filter/sort/column selection
+//     over the database handle, the audit trail and the caller's principal. It
+//     touches no CRM table.
+//   - consent records what a person agreed to and answers whether a channel may
+//     contact them: its own table, the audit trail and the caller's principal.
+//   - tenantconfig holds an organization's own configuration: a closed, versioned
+//     catalog of settings and the overrides stored against it. It reads and writes
+//     only its own two tables, writes the audit trail and reads the caller's
+//     principal. The domains that read a default — crm and workflow — declare their
+//     own narrow port and import nothing from it, so the arrow points here, not back.
+//   - idempotency is the retry guard for mutating HTTP requests: its own table and
+//     the shared HTTP error type, and nothing else.
+//   - oidc is the single sign-on service: the authorization-code flow and the
+//     provider registry, over the audit trail, the environment loader, the database
+//     handle and the secret keyring. It holds no CRM data and reads no principal.
 //
 // This is the cheap, always-on half of the check. The extraction harness is the
 // expensive half that actually compiles the module on its own; the two are
@@ -415,6 +430,12 @@ func TestExtractionBoundaryHolds(t *testing.T) {
 		// trail, and reads the caller's principal; it holds no CRM data and calls
 		// no sibling domain, so those three are the whole boundary.
 		"consent": {"audit": true, "database": true, "rbac": true},
+		// tenantconfig holds an organization's own configuration: a closed, versioned
+		// catalog of settings and the overrides stored against it. It reads and writes
+		// only its own two tables, writes the audit trail and reads the caller's
+		// principal. It touches no CRM table and calls no sibling domain, so those
+		// three are the whole boundary.
+		"tenantconfig": {"audit": true, "database": true, "rbac": true},
 		// idempotency is the retry guard for mutating HTTP requests. It reads and
 		// writes its own table and renders the shared HTTP error type, so those two
 		// are the whole boundary; it holds no domain data and calls no service.

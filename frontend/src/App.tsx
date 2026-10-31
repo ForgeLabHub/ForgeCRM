@@ -36,6 +36,7 @@ import { EmailPage } from './pages/admin/EmailPage'
 import { TelegramPage } from './pages/admin/TelegramPage'
 import { SSOPage } from './pages/admin/SSOPage'
 import { MCPCredentialsPage } from './pages/admin/MCPCredentialsPage'
+import { TenantSettingsPage } from './pages/admin/TenantSettingsPage'
 import { AccountPage } from './pages/AccountPage'
 import { ForbiddenPage, NotFoundPage } from './pages/ErrorPages'
 import { RequirePermission } from './components/RequirePermission'
@@ -359,6 +360,14 @@ export function App() {
           element={
             <RequirePermission permission="mcp.credentials.read">
               <MCPCredentialsPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="admin/configuration"
+          element={
+            <RequirePermission permission="tenant.settings.read">
+              <TenantSettingsPage />
             </RequirePermission>
           }
         />

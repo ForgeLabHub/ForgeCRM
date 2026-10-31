@@ -43,6 +43,7 @@
 # oidc          single sign-on: the authorization-code flow and the provider registry
 # views         saved list views: named filters stored per user and screen
 # constructor   the recipe catalog and generator; embeds recipes/ and copies modules by path
+# tenantconfig  per-organization configuration: a closed, versioned setting catalog over the platform defaults
 
 netguard
 analytics
@@ -79,3 +80,4 @@ authn
 oidc
 views
 constructor
+tenantconfig
