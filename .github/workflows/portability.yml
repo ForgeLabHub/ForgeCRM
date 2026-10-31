@@ -243,3 +243,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check documentation
         run: ./scripts/docs-check.sh
+
+      # forge.sh — часть продукта: через него проект запускают, проверяют и
+      # восстанавливают. Его справка и диспетчер уже расходились (команды были
+      # описаны, но не работали), поэтому соответствие проверяется, а не
+      # подразумевается.
+      - name: Check forge.sh commands
+        run: ./scripts/forge-check.sh

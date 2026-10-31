@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -10,6 +11,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/audit"
 	"github.com/geff1778/forgecrm/internal/consent"
 	"github.com/geff1778/forgecrm/internal/httpx"
+	"github.com/geff1778/forgecrm/internal/notify"
 	"github.com/geff1778/forgecrm/internal/rbac"
 )
 
@@ -116,20 +118,34 @@ func (s *Server) handleEmailSend(w http.ResponseWriter, r *http.Request) {
 	if req.Purpose == "" {
 		purpose = consent.PurposeMarketing
 	}
-	// Consent is checked here, at the one point a manual message leaves the platform,
-	// against the recipient's address. The check is not optional and does not depend on
-	// the caller remembering it: a blocked send is refused with 403 and the reason, and
-	// the refusal is audited by Enforce. Transactional mail is not gated; marketing is.
-	decision, err := s.deps.Consent.Enforce(r.Context(), p.OrganizationID, &p.UserID,
-		consent.SubjectForEmail(req.To[0]), purpose, consent.ChannelEmail)
-	if err != nil {
-		s.respondDomainError(w, r, err)
+	// The purpose is what selects the rule, so it must be one the platform knows.
+	// An unrecognised value is refused here rather than passed to the policy: a
+	// caller that wrote "newsletter" would otherwise be asking a question the model
+	// cannot answer, and a policy that guessed would be guessing in the permissive
+	// direction for a marketing message.
+	if !purpose.Valid() {
+		httpx.WriteError(w, r, httpx.ValidationError(map[string]string{
+			"purpose": "is not a supported purpose"}))
 		return
 	}
-	if !decision.Allowed {
-		httpx.WriteError(w, r, httpx.NewError(403, httpx.CodeForbidden,
-			"consent blocks this send: "+decision.Reason))
-		return
+	// Consent is checked here, at the one point a manual message leaves the platform,
+	// against every recipient's address. Checking only the first would let a caller put
+	// an address with a recorded grant first and an address without one second: the
+	// first would answer the question for both. Each recipient is its own subject, so
+	// each is asked, and the first refusal stops the send before any of them is reached.
+	// The refusal is audited by Enforce. Transactional mail is not gated; marketing is.
+	for _, to := range req.To {
+		decision, err := s.deps.Consent.Enforce(r.Context(), p.OrganizationID, &p.UserID,
+			consent.SubjectForEmail(to), purpose, consent.ChannelEmail)
+		if err != nil {
+			s.respondDomainError(w, r, err)
+			return
+		}
+		if !decision.Allowed {
+			httpx.WriteError(w, r, httpx.NewError(403, httpx.CodeForbidden,
+				"consent blocks this send: "+decision.Reason))
+			return
+		}
 	}
 	// The transport check comes after the consent answer. A message consent forbids
 	// is refused with 403 whether or not SMTP is configured; reporting "SMTP is not
@@ -138,14 +154,20 @@ func (s *Server) handleEmailSend(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, httpx.NewError(503, httpx.CodeDisabled, "SMTP is not configured"))
 		return
 	}
-	if err := s.deps.Email.Send(r.Context(), notifyMessage(req.To[0], req.Subject, req.Body, "manual")); err != nil {
+	msg := notify.Message{
+		To:       req.To,
+		Subject:  req.Subject,
+		HTMLBody: req.Body,
+		Template: "manual",
+	}
+	if err := s.deps.Email.Send(r.Context(), msg); err != nil {
 		s.respondDomainError(w, r, err)
 		return
 	}
 	_ = s.deps.Audit.Record(r.Context(), audit.Entry{
 		OrganizationID: &p.OrganizationID, ActorUserID: &p.UserID,
-		Action: "notifications.email_sent_manual", EntityType: "email", EntityID: req.To[0],
-		Metadata: map[string]any{"purpose": string(purpose)},
+		Action: "notifications.email_sent_manual", EntityType: "email", EntityID: strings.Join(req.To, ","),
+		Metadata: map[string]any{"purpose": string(purpose), "recipients": len(req.To)},
 	})
 	httpx.WriteJSON(w, map[string]any{"status": "the server accepted the message for delivery"})
 }

@@ -146,7 +146,7 @@ func (s *EmailService) Send(ctx context.Context, msg Message) error {
 	if len(msg.To) == 0 {
 		return errors.New("at least one recipient is required")
 	}
-	entryID, err := s.logQueued(ctx, msg)
+	entryIDs, err := s.logQueued(ctx, msg)
 	if err != nil {
 		return err
 	}
@@ -157,7 +157,7 @@ func (s *EmailService) Send(ctx context.Context, msg Message) error {
 	dialer := &net.Dialer{Timeout: s.cfg.Timeout}
 	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
-		s.markFailed(ctx, entryID, err)
+		s.markFailed(ctx, entryIDs, err)
 		return fmt.Errorf("connect to SMTP server: %w", err)
 	}
 	defer conn.Close()
@@ -165,7 +165,7 @@ func (s *EmailService) Send(ctx context.Context, msg Message) error {
 	if s.cfg.UseTLS && !s.cfg.StartTLS {
 		tlsConn := tls.Client(conn, &tls.Config{ServerName: s.cfg.Host, MinVersion: tls.VersionTLS12})
 		if err := tlsConn.HandshakeContext(ctx); err != nil {
-			s.markFailed(ctx, entryID, err)
+			s.markFailed(ctx, entryIDs, err)
 			return fmt.Errorf("TLS handshake: %w", err)
 		}
 		conn = tlsConn
@@ -173,7 +173,7 @@ func (s *EmailService) Send(ctx context.Context, msg Message) error {
 
 	client, err := smtp.NewClient(conn, s.cfg.Host)
 	if err != nil {
-		s.markFailed(ctx, entryID, err)
+		s.markFailed(ctx, entryIDs, err)
 		return fmt.Errorf("start SMTP session: %w", err)
 	}
 	defer client.Close()
@@ -181,7 +181,7 @@ func (s *EmailService) Send(ctx context.Context, msg Message) error {
 	if s.cfg.StartTLS {
 		if ok, _ := client.Extension("STARTTLS"); ok {
 			if err := client.StartTLS(&tls.Config{ServerName: s.cfg.Host, MinVersion: tls.VersionTLS12}); err != nil {
-				s.markFailed(ctx, entryID, err)
+				s.markFailed(ctx, entryIDs, err)
 				return fmt.Errorf("STARTTLS: %w", err)
 			}
 		}
@@ -189,69 +189,81 @@ func (s *EmailService) Send(ctx context.Context, msg Message) error {
 	if s.cfg.Username != "" {
 		auth := smtp.PlainAuth("", s.cfg.Username, s.cfg.Password, s.cfg.Host)
 		if err := client.Auth(auth); err != nil {
-			s.markFailed(ctx, entryID, err)
+			s.markFailed(ctx, entryIDs, err)
 			return fmt.Errorf("SMTP authentication failed: %w", err)
 		}
 	}
 	if err := client.Mail(s.cfg.From); err != nil {
-		s.markFailed(ctx, entryID, err)
+		s.markFailed(ctx, entryIDs, err)
 		return fmt.Errorf("SMTP MAIL FROM rejected: %w", err)
 	}
 	for _, rcpt := range msg.To {
 		if err := client.Rcpt(rcpt); err != nil {
-			s.markFailed(ctx, entryID, err)
+			s.markFailed(ctx, entryIDs, err)
 			return fmt.Errorf("SMTP RCPT TO %s rejected: %w", rcpt, err)
 		}
 	}
 	wc, err := client.Data()
 	if err != nil {
-		s.markFailed(ctx, entryID, err)
+		s.markFailed(ctx, entryIDs, err)
 		return fmt.Errorf("SMTP DATA rejected: %w", err)
 	}
 	if _, err := wc.Write(body); err != nil {
 		wc.Close()
-		s.markFailed(ctx, entryID, err)
+		s.markFailed(ctx, entryIDs, err)
 		return fmt.Errorf("write message body: %w", err)
 	}
 	if err := wc.Close(); err != nil {
-		s.markFailed(ctx, entryID, err)
+		s.markFailed(ctx, entryIDs, err)
 		return fmt.Errorf("finish message body: %w", err)
 	}
 	if err := client.Quit(); err != nil {
-		s.markFailed(ctx, entryID, err)
+		s.markFailed(ctx, entryIDs, err)
 		return fmt.Errorf("SMTP QUIT: %w", err)
 	}
 
-	s.markSent(ctx, entryID)
+	s.markSent(ctx, entryIDs)
 	return nil
 }
 
-func (s *EmailService) logQueued(ctx context.Context, msg Message) (int64, error) {
+// logQueued writes one row per recipient. The log is read by an operator asking
+// "who did we email", and one row naming only the first of several recipients
+// would answer that question wrongly. Each address is its own row so the record
+// matches the set the message actually went to.
+func (s *EmailService) logQueued(ctx context.Context, msg Message) ([]int64, error) {
 	const q = `
 		INSERT INTO email_log (organization_id, to_address, subject, template, status)
 		VALUES ($1, $2, $3, $4, 'queued') RETURNING id`
-	var id int64
-	if err := s.db.Pool().QueryRow(ctx, q, msg.OrgID, msg.To[0], msg.Subject, msg.Template).Scan(&id); err != nil {
-		return 0, fmt.Errorf("log email: %w", err)
+	ids := make([]int64, 0, len(msg.To))
+	for _, to := range msg.To {
+		var id int64
+		if err := s.db.Pool().QueryRow(ctx, q, msg.OrgID, to, msg.Subject, msg.Template).Scan(&id); err != nil {
+			return nil, fmt.Errorf("log email: %w", err)
+		}
+		ids = append(ids, id)
 	}
-	return id, nil
+	return ids, nil
 }
 
-func (s *EmailService) markSent(ctx context.Context, id int64) {
+func (s *EmailService) markSent(ctx context.Context, ids []int64) {
 	const q = `UPDATE email_log SET status='sent', sent_at=now(), attempts=attempts+1 WHERE id=$1`
-	if _, err := s.db.Pool().Exec(ctx, q, id); err != nil {
-		s.log.Warn("could not mark email as sent", "email_log_id", id, "error", err)
+	for _, id := range ids {
+		if _, err := s.db.Pool().Exec(ctx, q, id); err != nil {
+			s.log.Warn("could not mark email as sent", "email_log_id", id, "error", err)
+		}
 	}
 }
 
-func (s *EmailService) markFailed(ctx context.Context, id int64, cause error) {
+func (s *EmailService) markFailed(ctx context.Context, ids []int64, cause error) {
 	msg := cause.Error()
 	if len(msg) > 1000 {
 		msg = msg[:1000]
 	}
 	const q = `UPDATE email_log SET status='failed', error=$2, attempts=attempts+1 WHERE id=$1`
-	if _, err := s.db.Pool().Exec(ctx, q, id, msg); err != nil {
-		s.log.Warn("could not mark email as failed", "email_log_id", id, "error", err)
+	for _, id := range ids {
+		if _, err := s.db.Pool().Exec(ctx, q, id, msg); err != nil {
+			s.log.Warn("could not mark email as failed", "email_log_id", id, "error", err)
+		}
 	}
 }
 

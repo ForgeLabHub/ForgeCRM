@@ -2221,6 +2221,7 @@
         "description": "Requires the `email.manage` permission.",
         "requestBody": {
           "required": true,
+          "description": "`purpose` is one of `marketing`, `transactional`, `product_updates` or `research`, and defaults to `marketing` when omitted. An unrecognised value is refused rather than treated as transactional. Consent is checked for every address in `to`, and the send is refused with 403 before the transport is consulted if any recipient lacks a grant the purpose requires.",
           "content": {
             "application/json": {
               "schema": {

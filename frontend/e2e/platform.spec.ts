@@ -930,6 +930,45 @@ test.describe('consent', () => {
     const body = await send.json()
     expect(JSON.stringify(body)).toMatch(/consent/i)
   })
+
+  test('consent is recorded for an address that is not a contact yet', async ({
+    authedPage: page,
+  }) => {
+    // A distinct address per run, so a rerun does not see the previous grant.
+    const address = `e2e-lead-${RUN_ID}@consent.test`
+
+    await page.goto('/admin/consent')
+    await page.getByLabel('Email address').fill(address)
+    await page.getByRole('button', { name: 'Look up' }).click()
+
+    // Nothing is on record, and the page says so for the address it is about.
+    await expect(page.getByText(new RegExp(`No consent on record for ${address}`, 'i'))).toBeVisible()
+
+    await page.getByLabel('Decision').selectOption('granted')
+    await page.getByLabel('Basis').fill('signed up on the site')
+    await page.getByRole('button', { name: 'Record decision' }).click()
+
+    await expect(page.getByRole('row', { name: /marketing.*email.*Granted/i })).toBeVisible()
+
+    // The decision is what the API answers with, addressed by email.
+    const allowed = await page.request.get(
+      `/api/v1/consent/decide?email=${address}&purpose=marketing&channel=email`,
+    )
+    expect(allowed.status()).toBe(200)
+    expect((await allowed.json()).allowed).toBe(true)
+
+    // And it is what the send endpoint acts on: the same address is no longer
+    // blocked, so the grant really reached the policy.
+    const me = await page.request.get('/api/v1/auth/me')
+    const csrf = (await me.json()).csrf_token as string
+    const send = await page.request.post('/api/v1/admin/email/send', {
+      headers: { 'X-CSRF-Token': csrf },
+      data: { to: [address], subject: 'E2E allowed send', body: 'Allowed.', purpose: 'marketing' },
+    })
+    // Not 403: consent is granted. The transport may still refuse (503 when SMTP is
+    // unconfigured), which is a different answer and the point of checking first.
+    expect(send.status()).not.toBe(403)
+  })
 })
 
 test.describe('health endpoints', () => {

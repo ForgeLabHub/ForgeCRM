@@ -64,7 +64,18 @@ function renderPanel() {
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <ConsentPanel contactId="c1" email="person@example.com" />
+        <ConsentPanel subject={{ contact_id: 'c1' }} />
+      </AuthProvider>
+    </QueryClientProvider>,
+  )
+}
+
+function renderPanelForEmail(email: string) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <ConsentPanel subject={{ email }} subjectLabel={email} />
       </AuthProvider>
     </QueryClientProvider>,
   )
@@ -156,5 +167,27 @@ describe('ConsentPanel', () => {
 
     expect(await screen.findByRole('cell', { name: 'marketing' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Record decision' })).not.toBeInTheDocument()
+  })
+
+  // The subject is a contact id or a bare address, never both. A decision recorded
+  // for an address that is not a contact yet must carry the address, or it would be
+  // filed against a contact that does not exist.
+  it('records a decision against a bare address, not a contact id', async () => {
+    const writes: { url: string; method: string; body: Record<string, unknown> }[] = []
+    stubFetch({ current: [], onWrite: (url, method, body) => writes.push({ url, method, body }) })
+    renderPanelForEmail('lead@example.com')
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Record decision' }))
+
+    await waitFor(() => expect(writes).toHaveLength(1))
+    expect(writes[0].body).toMatchObject({ subject_email: 'lead@example.com' })
+    expect(writes[0].body).not.toHaveProperty('contact_id')
+  })
+
+  it('names the address it has no record for', async () => {
+    stubFetch({ current: [] })
+    renderPanelForEmail('lead@example.com')
+
+    expect(await screen.findByText(/No consent on record for lead@example\.com/i)).toBeInTheDocument()
   })
 })

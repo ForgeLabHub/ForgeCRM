@@ -67,6 +67,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/admin/teams', label: 'Teams', permission: 'teams.manage' },
       { to: '/admin/email', label: 'Email', permission: 'email.manage' },
       { to: '/admin/telegram', label: 'Telegram', permission: 'email.manage' },
+      { to: '/admin/consent', label: 'Consent', permission: 'consent.read' },
       { to: '/admin/sso', label: 'Single sign-on', permission: 'sso.read' },
       { to: '/admin/mcp-credentials', label: 'MCP credentials', permission: 'mcp.credentials.read' },
       { to: '/admin/audit', label: 'Audit log', permission: 'audit.read' },

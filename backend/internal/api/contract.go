@@ -387,6 +387,12 @@ func APIContract() openapi.Contract {
 	// --- Notifications and email --------------------------------------------
 	c.RequestBodies["POST /api/v1/admin/email/send"] = reflect.TypeOf(sendEmailRequest{})
 	c.RequiredBody["SendEmailRequest"] = []string{"to", "subject"}
+	c.BodyDescriptions["POST /api/v1/admin/email/send"] = "`purpose` is one of " +
+		"`marketing`, `transactional`, `product_updates` or `research`, and defaults to " +
+		"`marketing` when omitted. An unrecognised value is refused rather than treated " +
+		"as transactional. Consent is checked for every address in `to`, and the send is " +
+		"refused with 403 before the transport is consulted if any recipient lacks a " +
+		"grant the purpose requires."
 
 	// --- Workflows ------------------------------------------------------------
 	// The workflow CRUD routes are served but were never given contract rows; the

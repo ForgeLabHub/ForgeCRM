@@ -765,12 +765,13 @@
 | **Import pages** | UI Центра импорта, экспорт CSV/JSONL | `pages/{ImportCenter,ImportDetail}Page.tsx`, `api/imports.ts` | `api/imports.ts` | `ImportCenterPage.test.tsx`, E2E | `no` |
 | **Integrations/Webhooks/Events/Jobs pages** | поверхности администрирования | `pages/{Integrations,Webhooks,Events,Jobs,Migrations}Page.tsx` + соответствующие клиенты api | их клиенты api | E2E | `no` |
 | **Notifications page** | входящие уведомления workflow | `pages/NotificationsPage.tsx` | `api/crm.ts` | `NotificationsPage.test.tsx` | `almost` |
-| **Admin pages** | аудит, пользователи, роли, организации, команды, безопасность, диагностика (+ настройки платформы), почта, telegram, SSO | `pages/admin/*.tsx`, `api/admin.ts` | `api/admin.ts` | `SecurityPage.test.tsx`, `DiagnosticsPage.test.tsx`, `SSOPage.test.tsx` | `no` |
+| **Admin pages** | аудит, пользователи, роли, организации, команды, безопасность, диагностика (+ настройки платформы), почта, telegram, SSO, согласие | `pages/admin/*.tsx`, `api/admin.ts` | `api/admin.ts` | `SecurityPage.test.tsx`, `DiagnosticsPage.test.tsx`, `SSOPage.test.tsx`, `ConsentPanel.test.tsx` | `no` |
 | **Attachments** | загрузка/скачивание документов | `components/AttachmentPanel.tsx`, `api/documents.ts` | `api/documents.ts` | `AttachmentPanel.test.tsx` | `almost` |
 | **Saved views** | именованные фильтры списка на экран | `components/SavedViewsBar.tsx`, `api/views.ts` | `api/views.ts` | `SavedViewsBar.test.tsx`, E2E | `almost` |
 
-**Итоги фронтенда:** 90 файлов `.ts`/`.tsx`; 21 файл модульных тестов (144 теста);
-E2E в `frontend/e2e/platform.spec.ts` (52 проходят, 1 условно пропущен).
+**Итоги фронтенда:** 98 файлов `.ts`/`.tsx`; 24 файла модульных тестов (159 тестов);
+E2E в `frontend/e2e/platform.spec.ts` — 59 тестов, из них часть пропускается по
+конфигурации окружения (например, ветки, зависящие от настроенного AI-провайдера).
 
 ---
 
