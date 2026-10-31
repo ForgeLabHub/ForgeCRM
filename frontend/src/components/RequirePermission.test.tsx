@@ -13,6 +13,8 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from '../hooks/useAuth'
 import { RequirePermission } from './RequirePermission'
 import { LoginPage } from '../pages/LoginPage'
+import { I18nProvider } from '../i18n'
+import { ThemeProvider } from '../theme'
 import { csrfTokenStore } from '../api/client'
 import type { MeResponse } from '../types/api'
 
@@ -63,8 +65,10 @@ function renderApp(routes: Record<string, () => Response | Promise<Response>>, p
   })
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[path]}>
-        <AuthProvider>
+      <I18nProvider>
+        <ThemeProvider>
+          <MemoryRouter initialEntries={[path]}>
+            <AuthProvider>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route
@@ -83,9 +87,11 @@ function renderApp(routes: Record<string, () => Response | Promise<Response>>, p
                 </RequirePermission>
               }
             />
-          </Routes>
-        </AuthProvider>
-      </MemoryRouter>
+              </Routes>
+            </AuthProvider>
+          </MemoryRouter>
+        </ThemeProvider>
+      </I18nProvider>
     </QueryClientProvider>,
   )
 }
@@ -134,7 +140,7 @@ describe('sign-in', () => {
     }, '/login')
 
     await user.type(await screen.findByLabelText(/email/i), 'sales@example.com')
-    await user.type(screen.getByLabelText(/password/i), 'correct-horse-battery')
+    await user.type(screen.getByLabelText(/^password$/i), 'correct-horse-battery')
     await user.click(screen.getByRole('button', { name: /sign in/i }))
 
     await waitFor(() => expect(csrfTokenStore.get()).toBe('csrf-from-me'))
@@ -157,7 +163,7 @@ describe('sign-in', () => {
     }, '/login')
 
     await user.type(await screen.findByLabelText(/email/i), 'sales@example.com')
-    await user.type(screen.getByLabelText(/password/i), 'correct-horse-battery')
+    await user.type(screen.getByLabelText(/^password$/i), 'correct-horse-battery')
     await user.click(screen.getByRole('button', { name: /sign in/i }))
 
     expect(await screen.findByText(/two-factor verification/i)).toBeInTheDocument()
@@ -176,7 +182,7 @@ describe('sign-in', () => {
     }, '/login')
 
     await user.type(await screen.findByLabelText(/email/i), 'sales@example.com')
-    await user.type(screen.getByLabelText(/password/i), 'wrong')
+    await user.type(screen.getByLabelText(/^password$/i), 'wrong')
     await user.click(screen.getByRole('button', { name: /sign in/i }))
 
     expect(await screen.findByText(/invalid email or password/i)).toBeInTheDocument()

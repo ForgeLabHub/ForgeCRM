@@ -45,6 +45,22 @@ import (
 
 var version = "0.1.0-dev"
 
+// commit is overridden at build time with -ldflags, with the same FORGECRM_COMMIT
+// fallback the API uses for hosts that do not pass build args.
+var commit = "unknown"
+
+// buildVersion returns the effective version, preferring the linker-set value and
+// falling back to FORGECRM_VERSION when the build host supplied neither.
+func buildVersion() string {
+	if version != "" && version != "0.1.0-dev" && version != "dev" {
+		return version
+	}
+	if env := strings.TrimSpace(os.Getenv("FORGECRM_VERSION")); env != "" {
+		return env
+	}
+	return version
+}
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "forgecrm-worker: "+err.Error())
@@ -58,7 +74,7 @@ func run() error {
 		return fmt.Errorf("load configuration: %w", err)
 	}
 	log := logging.New(cfg.LogLevel, cfg.LogFormat)
-	log.Info("starting forgecrm-worker", "version", version, "concurrency", cfg.WorkerConcurrency)
+	log.Info("starting forgecrm-worker", "version", buildVersion(), "commit", commit, "concurrency", cfg.WorkerConcurrency)
 
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)

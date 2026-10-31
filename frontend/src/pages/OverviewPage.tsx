@@ -5,6 +5,7 @@ import { systemApi } from '../api/admin'
 import { errorMessage } from '../api/client'
 import { useAuth } from '../hooks/useAuth'
 import { Alert, Badge, Card, ErrorState, PageHeader, StatusBadge, Timestamp } from '../components/ui'
+import { useI18n } from '../i18n'
 
 /** A single count tile backed by its own query, so one failure does not blank the page. */
 function CountStat({
@@ -42,6 +43,7 @@ function CountStat({
 
 export function OverviewPage() {
   const { session, can } = useAuth()
+  const { t } = useI18n()
 
   const info = useQuery({ queryKey: ['system', 'info'], queryFn: systemApi.info })
   const recentTasks = useQuery({
@@ -58,19 +60,17 @@ export function OverviewPage() {
   return (
     <>
       <PageHeader
-        title={`Welcome back, ${session?.user.display_name ?? ''}`}
-        meta={
-          <>
-            Signed in to <strong>{session?.organization.name}</strong> with{' '}
-            {session?.permissions.length ?? 0} permissions
-          </>
-        }
+        title={t('overview.greeting', { name: session?.user.display_name ?? '' })}
+        meta={t('overview.meta', {
+          org: session?.organization.name ?? '',
+          count: session?.permissions.length ?? 0,
+        })}
       />
 
       {info.isError ? (
         <div style={{ marginBottom: 'var(--space-4)' }}>
           <Alert tone="error">
-            Could not load system information: {errorMessage(info.error)}
+              {t('overview.loadError', { detail: errorMessage(info.error) })}
           </Alert>
         </div>
       ) : null}
@@ -78,7 +78,7 @@ export function OverviewPage() {
       <div className="grid grid--stats" style={{ marginBottom: 'var(--space-5)' }}>
         {can('accounts.read') ? (
           <CountStat
-            label="Accounts"
+            label={t('overview.statAccounts')}
             queryKey="accounts"
             link="/accounts"
             fetchCount={async () => (await accountsApi.list({ limit: 1 })).total}
@@ -86,16 +86,16 @@ export function OverviewPage() {
         ) : null}
         {can('deals.read') ? (
           <CountStat
-            label="Open deals"
+            label={t('overview.statOpenDeals')}
             queryKey="deals-open"
             link="/deals"
-            hint="Deals not yet won or lost"
+            hint={t('overview.statOpenDealsHint')}
             fetchCount={async () => (await dealsApi.list({ limit: 1, status: 'open' })).total}
           />
         ) : null}
         {can('leads.read') ? (
           <CountStat
-            label="Leads"
+            label={t('overview.statLeads')}
             queryKey="leads"
             link="/leads"
             fetchCount={async () => (await leadsApi.list({ limit: 1 })).total}
@@ -103,7 +103,7 @@ export function OverviewPage() {
         ) : null}
         {can('tasks.read') ? (
           <CountStat
-            label="Open tasks"
+            label={t('overview.statOpenTasks')}
             queryKey="tasks-open"
             link="/tasks"
             fetchCount={async () => (await tasksApi.list({ limit: 1, status: 'open' })).total}
@@ -111,7 +111,7 @@ export function OverviewPage() {
         ) : null}
         {can('tickets.read') ? (
           <CountStat
-            label="Open tickets"
+            label={t('overview.statOpenTickets')}
             queryKey="tickets-open"
             link="/tickets"
             fetchCount={async () => (await ticketsApi.list({ limit: 1, status: 'open' })).total}
@@ -122,10 +122,10 @@ export function OverviewPage() {
       <div className="grid grid--split">
         {can('tasks.read') ? (
           <Card
-            title="Your open tasks"
+            title={t('overview.yourOpenTasks')}
             actions={
               <Link to="/tasks" className="btn btn--ghost btn--sm">
-                View all
+                {t('overview.viewAll')}
               </Link>
             }
           >
@@ -138,7 +138,7 @@ export function OverviewPage() {
                     <div style={{ minWidth: 0 }}>
                       <div className="truncate table__primary">{task.title}</div>
                       <div className="table__secondary">
-                        Due <Timestamp value={task.due_at} withTime={false} />
+                        {t('overview.due')} <Timestamp value={task.due_at} withTime={false} />
                       </div>
                     </div>
                     <Badge tone={task.priority === 'urgent' ? 'danger' : 'neutral'}>
@@ -148,17 +148,17 @@ export function OverviewPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-muted text-sm">No open tasks.</p>
+              <p className="text-muted text-sm">{t('overview.noOpenTasks')}</p>
             )}
           </Card>
         ) : null}
 
         {can('tickets.read') ? (
           <Card
-            title="Open support tickets"
+            title={t('overview.openSupportTickets')}
             actions={
               <Link to="/tickets" className="btn btn--ghost btn--sm">
-                View all
+                {t('overview.viewAll')}
               </Link>
             }
           >
@@ -171,7 +171,7 @@ export function OverviewPage() {
                     <div style={{ minWidth: 0 }}>
                       <div className="truncate table__primary">{ticket.subject}</div>
                       <div className="table__secondary">
-                        Opened <Timestamp value={ticket.created_at} />
+                        {t('overview.opened')} <Timestamp value={ticket.created_at} />
                       </div>
                     </div>
                     <StatusBadge status={ticket.priority} />
@@ -179,37 +179,37 @@ export function OverviewPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-muted text-sm">No open tickets.</p>
+              <p className="text-muted text-sm">{t('overview.noOpenTickets')}</p>
             )}
           </Card>
         ) : null}
       </div>
 
       <div style={{ marginTop: 'var(--space-5)' }}>
-        <Card title="Platform">
+        <Card title={t('overview.platform')}>
           {info.data ? (
             <dl className="dl">
-              <dt>Version</dt>
+              <dt>{t('overview.version')}</dt>
               <dd>{info.data.version}</dd>
-              <dt>Environment</dt>
+              <dt>{t('overview.environment')}</dt>
               <dd>
                 <Badge tone={info.data.environment === 'production' ? 'accent' : 'neutral'}>
                   {info.data.environment}
                 </Badge>
               </dd>
-              <dt>Started</dt>
+              <dt>{t('overview.started')}</dt>
               <dd>
                 <Timestamp value={info.data.started_at} />
               </dd>
               {info.data.commit ? (
                 <>
-                  <dt>Build</dt>
+                  <dt>{t('overview.build')}</dt>
                   <dd className="mono">{info.data.commit.slice(0, 12)}</dd>
                 </>
               ) : null}
             </dl>
           ) : (
-            <p className="text-muted text-sm">Loading…</p>
+            <p className="text-muted text-sm">{t('overview.loading')}</p>
           )}
         </Card>
       </div>

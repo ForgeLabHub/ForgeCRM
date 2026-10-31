@@ -14,7 +14,7 @@ test.describe('authentication', () => {
   test('refuses a wrong password without revealing whether the account exists', async ({ page }) => {
     await page.goto('/login')
     await page.getByLabel('Email').fill(E2E_EMAIL)
-    await page.getByLabel('Password').fill('definitely-not-the-password')
+    await page.getByLabel('Password', { exact: true }).fill('definitely-not-the-password')
     await page.getByRole('button', { name: 'Sign in' }).click()
 
     // An alert is shown and the user stays on the login page.

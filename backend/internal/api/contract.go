@@ -765,4 +765,9 @@ type healthResponse struct {
 type readyResponse struct {
 	Status string `json:"status"`
 	Reason string `json:"reason,omitempty"`
+	Detail string `json:"detail,omitempty"`
+	// Version and Commit are reported on the success path so a deployment can
+	// confirm which build is serving without a second request.
+	Version string `json:"version,omitempty"`
+	Commit  string `json:"commit,omitempty"`
 }

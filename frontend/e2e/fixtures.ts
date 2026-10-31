@@ -14,7 +14,7 @@ export const RUN_ID = `${Date.now().toString(36)}-${Math.random().toString(36).s
 export async function signIn(page: Page, email = E2E_EMAIL, password = E2E_PASSWORD) {
   await page.goto('/login')
   await page.getByLabel('Email').fill(email)
-  await page.getByLabel('Password').fill(password)
+  await page.getByLabel('Password', { exact: true }).fill(password)
   await page.getByRole('button', { name: 'Sign in' }).click()
 
   // The login page also renders an <h1>, so waiting on a heading alone can

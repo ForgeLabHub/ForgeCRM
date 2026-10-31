@@ -4,7 +4,30 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#2f5bea" />
     <title>ForgeCRM</title>
+    <script>
+      /*
+       * Applies the saved theme before the first paint so the page never flashes
+       * the wrong colours. It is inline and runs before the bundle because any
+       * deferred script would run after the first frame. It mirrors the logic in
+       * src/theme: the stored mode wins, "system" follows the OS, and anything
+       * unreadable falls back to the system preference. A failure here must not
+       * break the page, so it is wrapped in try/catch.
+       */
+      (function () {
+        try {
+          var stored = localStorage.getItem('forgecrm.theme');
+          var mode = stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+          var dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var resolved = mode === 'system' ? (dark ? 'dark' : 'light') : mode;
+          document.documentElement.setAttribute('data-theme', resolved);
+          document.documentElement.style.colorScheme = resolved;
+        } catch (e) {
+          /* storage unavailable: the stylesheet default applies */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
