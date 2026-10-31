@@ -49,6 +49,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/secrets"
 	"github.com/geff1778/forgecrm/internal/simulate"
 	"github.com/geff1778/forgecrm/internal/storage"
+	"github.com/geff1778/forgecrm/internal/tenantconfig"
 	"github.com/geff1778/forgecrm/internal/views"
 	"github.com/geff1778/forgecrm/internal/workflow"
 )
@@ -104,6 +105,10 @@ type Deps struct {
 	// Consent records what a person agreed to be contacted about and answers whether
 	// an outbound channel may contact them. It never touches CRM data.
 	Consent *consent.Service
+	// TenantConfig holds the organization's own configuration: the defaults it chooses
+	// over the platform's. It never touches CRM data; the consumers that need a default
+	// ask it.
+	TenantConfig *tenantconfig.Service
 	// MCPCredentials is the scoped, revocable credential store for external MCP
 	// clients. It resolves a bearer token to a principal carrying only the
 	// credential's own permission list.
@@ -408,6 +413,7 @@ func (s *Server) buildRouter() chi.Router {
 			s.mountDocuments(r)
 			s.mountViews(r)
 			s.mountConsent(r)
+			s.mountTenantConfig(r)
 			s.mountMCPCredentials(r)
 			s.mountNotifications(r)
 		})
@@ -794,6 +800,8 @@ func (s *Server) respondDomainError(w http.ResponseWriter, r *http.Request, err 
 		httpx.WriteError(w, r, httpx.ErrNotFound)
 	case errors.Is(err, consent.ErrNotFound):
 		httpx.WriteError(w, r, httpx.ErrNotFound)
+	case errors.Is(err, tenantconfig.ErrNotFound):
+		httpx.WriteError(w, r, httpx.ErrNotFound)
 	// A transport refuses a send for two reasons of its own, both of which are answers
 	// rather than faults: consent forbids it (403, with the policy's reason), or the
 	// transport is switched off (503). Neither is a 500, and the consent case must not
@@ -831,6 +839,11 @@ func (s *Server) respondDomainError(w http.ResponseWriter, r *http.Request, err 
 		var consentErr *consent.ValidationError
 		if errors.As(err, &consentErr) {
 			httpx.WriteError(w, r, httpx.ValidationError(consentErr.Fields))
+			return
+		}
+		var tenantErr *tenantconfig.ValidationError
+		if errors.As(err, &tenantErr) {
+			httpx.WriteError(w, r, httpx.ValidationError(tenantErr.Fields))
 			return
 		}
 		var apiErr *httpx.APIError

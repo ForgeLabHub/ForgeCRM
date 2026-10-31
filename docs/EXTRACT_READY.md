@@ -612,6 +612,38 @@ scripts/extract-test/views/setup.sh
 
 ---
 
+## Кандидат 20 — `internal/tenantconfig` — **READY**
+
+Конфигурация арендатора: закрытый, версионированный каталог настроек и хранимые поверх
+него переопределения организации. Он читает принципала вызывающего из `rbac` и пишет
+журнал аудита, поэтому переезжает с `rbac` и `audit`; `audit` достигает `logging`.
+
+Стрелка зависимости — то, что этот кандидат доказывает. Домены, читающие дефолт, —
+`crm` и `workflow` — объявляют собственный узкий порт `OrgDefaults` и **не** импортируют
+этот пакет, поэтому он поднимается, не таща CRM за собой. Совпадение написания ключей
+между каталогом и потребителями — межмодульный инвариант, поэтому он живёт в
+`internal/archtest`, а не в тестах пакета: пакет, импортирующий домен, который он
+настраивает, — ровно та связь, которую запрещает граница выделения.
+
+```bash
+scripts/extract-test/tenantconfig/setup.sh
+#   copied internal/tenantconfig -> . (2 files)
+#   copied internal/{audit,database,logging,rbac}
+#   ok    no import of the ForgeCRM monolith
+#   ok    go build ./...
+#   ok    go test ./...          # tenantconfig_test.go: каталог закрыт и корректен,
+#                                # валидация по каждому типу, ошибка называет ключ,
+#                                # поиск ключа регистрозависим
+#   ok    go run ./cmd/smoke     # каталог непуст, дефолт каждого ключа валиден,
+#                                # неизвестный ключ отвергнут, Keys() отсортирован
+#   ok    tenantconfig extracts cleanly
+```
+
+**Файлы, которые переезжают:** `internal/tenantconfig/*.go` (2 файла),
+`internal/{audit,database,logging,rbac}`.
+
+---
+
 ## Кандидаты, оценённые, но не выделенные
 
 Они были оценены из графа зависимостей и помечены без прогона выделения, потому что у
@@ -661,6 +693,8 @@ scripts/extract-test/views/setup.sh
 | `authn` | **READY** | Самый широкий доказанный модуль: выделен с `audit`, `config`, `database`, `httpx`, `logging`, `migrate`, `migrations`, `ratelimit`, `rbac`, `retention` и `secrets`; smoke закрепил политику паролей и окно step-up. |
 | `oidc` | **READY** | Выделен с `audit`, `config`, `database`, `secrets`, `logging`, `httpx`, `ratelimit` и `retention`; smoke доказал, что `Public()` не несёт секрета и `Enabled()` nil-безопасен. |
 | `views` | **READY** | Выделен с `audit`, `database`, `rbac` и `logging`; smoke доказал, что набор типов сущностей закрыт и документ фильтра проходит через JSON без изменений. |
+| `constructor` | **READY** | Лист, несущий данные наравне с кодом: выделен с встроенным `recipes/`, собран; `scripts/constructor-test/run.sh` генерирует проект, собирает, тестирует и дважды запускает демо. |
+| `tenantconfig` | **READY** | Выделен с `audit`, `database`, `rbac` и `logging`; smoke доказал, что каталог закрыт, дефолт каждого ключа валиден, неизвестный ключ отвергнут. |
 | всё остальное | **ALMOST** / **NOT READY** | Конкретный блокер перечислен выше. |
 
 **Ни один модуль не помечен `READY` без записанного здесь прогона выделения**, и прогон
@@ -669,6 +703,6 @@ scripts/extract-test/views/setup.sh
 `secrets`, `logging`, `httpx`, `importx/safe` и `importx/parsers` проходят эту планку
 сегодня.
 
-Тридцать четыре модуля `READY` доказаны набором, а не этим документом. Если набор
+Тридцать шесть модулей `READY` доказаны набором, а не этим документом. Если набор
 когда-либо упадёт для одного из них, статус здесь неверен, а набор прав.
 

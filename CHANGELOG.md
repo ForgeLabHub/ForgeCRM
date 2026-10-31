@@ -10,6 +10,43 @@
 
 ### Added
 
+- **Конфигурация арендатора и страница `/admin/configuration`.** Модуль
+  `internal/tenantconfig` хранит собственные настройки организации поверх дефолтов
+  платформы (миграция `0028_tenant_configuration`): каталог ключей закрыт и
+  версионирован в коде (`crm.default_currency`, `tasks.default_priority`,
+  `workflow.default_timezone`), значения валидируются по типу ключа, а неверный
+  ключ отвергается на записи. Дефолты не материализуются: отсутствие строки в
+  `tenant_settings` означает «действует дефолт каталога», а не «настройки нет».
+  Каждое изменение и сброс пишутся в `tenant_setting_revisions` и в аудит
+  (`tenant.settings.updated`, `tenant.settings.reset`) в одной транзакции, поэтому
+  «почему это значение такое» остаётся отвечаемым и после окна retention аудита.
+  Права разделены: `tenant.settings.read` видят аудитор и аналитик,
+  `tenant.settings.manage` — только `platform_owner`, `platform_admin`,
+  `tenant_admin`. Потребители — `crm` и `workflow` — объявляют узкий интерфейс
+  `OrgDefaults` и **не** импортируют модуль, поэтому домен не знает, как дефолт
+  хранится. API: `GET /api/v1/settings`, `/settings/catalog`, `/settings/{key}`,
+  `/settings/{key}/history`, `PUT`/`DELETE /settings/{key}`; маршруты привязаны к
+  организации из сессии, а не к `organization_id` в пути.
+- **Страница конфигурации организации в интерфейсе.** Эндпоинты конфигурации
+  существовали на сервере, но ни один экран их не достигал, поэтому организация не
+  могла выбрать свои дефолты без запроса вручную. `frontend/src/pages/admin/TenantSettingsPage.tsx`
+  (клиент `frontend/src/api/tenantSettings.ts`, маршрут `/admin/configuration`,
+  пункт навигации под правом `tenant.settings.read`) строит редактор из ответа
+  `/settings`, а не из списка ключей в коде: ключ, добавленный на сервере,
+  появляется без правки интерфейса. Различие «организация выбрала» и «дефолт
+  платформы» читается из `has_override`, а не сравнением значений; сохранение
+  показывает значение из ответа сервера, а не отправленное; сброс запрашивает
+  подтверждение и называет удаляемое значение. Покрыто
+  `frontend/src/pages/admin/TenantSettingsPage.test.tsx` (5 тестов) и E2E-разделом
+  «organization configuration» в `frontend/e2e/platform.spec.ts`.
+- **Выделяемость конфигурации арендатора доказана.** `scripts/extract-test/tenantconfig`
+  копирует `internal/tenantconfig` в чистый модуль Go с `audit`, `database`, `rbac` и
+  `logging`, собирает его, прогоняет тесты пакета и smoke. Он зарегистрирован в
+  `scripts/extract-test/modules.txt`, поэтому прогоняется на каждом прогоне CI, и
+  модуль помечен `yes` в `docs/MODULES.md` и `docs/EXTRACT_READY.md`. Совпадение
+  написания ключей между каталогом и потребителями (`crm`, `workflow`) переехало из
+  тестов пакета в `internal/archtest`, потому что для проверки нужно импортировать
+  домен, а пакет, импортирующий домен, который он настраивает, не выделяется.
 - **Эндпоинт `/metrics` в формате Prometheus.** Руководство по эксплуатации
   описывало `GET /metrics` с алертом на dead letter вебхуков, но такого маршрута не
   было: существовал только JSON `GET /api/v1/admin/metrics` за сессией, а скрейпер
@@ -75,6 +112,23 @@
   согласием отправка отвечает `403` с причиной независимо от состояния транспорта.
   Покрыто `TestEmailSendRefusesOnConsentBeforeTransport` и
   `TestEmailSendAllowsTransactionalWithoutConsent`.
+- **Дефолт часового пояса организации доходит до workflow, созданного через API.**
+  Настройка `workflow.default_timezone` читается движком, который её создаёт, но
+  `internal/wiring` собирает движок дважды — для API и для воркера — и порт
+  конфигурации был подключён только к воркеру. Расписание, созданное через
+  `POST /api/v1/workflows`, молча сохранялось в UTC, хотя организация выбрала другую
+  зону: настройка читалась как заданная и не действовала на том пути, которым
+  пользуется человек. Теперь порт подключён к обоим движкам, и регрессия покрыта
+  `TestTenantDefaultTimezoneReachesAWorkflowCreatedOverHTTP` (интеграционный, через
+  реальный роутер и БД).
+- **Интеграционный harness больше не оставляет сервисы без проводки.** `newHarnessWithStore`
+  собирал `api.Deps` вручную из `wiring.Services` и не передавал `Workflows`,
+  `Simulation`, `Forecast`, `Risk`, `Storage` и `Views`, поэтому все их маршруты
+  падали на nil-зависимости: recovery-middleware превращал панику в непрозрачный
+  `500`, и поверхность выглядела непокрытой, а не сломанной. Теперь harness передаёт
+  те же сервисы, что и продакшн, а `TestTestHarnessWiresTheSameServicesAsProduction`
+  (статический, без БД) падает, если список снова разойдётся, — та же проверка, что
+  уже охраняла `main.go`.
 
 ### Added
 

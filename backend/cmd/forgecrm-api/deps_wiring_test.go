@@ -89,14 +89,84 @@ func structFields(t *testing.T, path, typeName string) []string {
 // in the api.New(&api.Deps{...}) literal.
 func apiDepsCopiedFields(t *testing.T, file *ast.File) map[string]bool {
 	t.Helper()
+	return depsFieldsFrom(t, file, "services")
+}
+
+// TestTestHarnessWiresTheSameServicesAsProduction guards the mirror of the defect
+// above on the test side. The integration harness builds the same api.Deps by hand
+// from wiring.Services, and a service it forgets leaves its routes panicking on a
+// nil dependency. The recovery middleware turns that panic into an opaque 500, so
+// the surface reads as an untested feature rather than a missing harness field —
+// exactly how the automation, simulation, forecast, risk, storage and saved-view
+// routes came to have no HTTP coverage.
+//
+// The check is that every field production copies from a service object is copied in
+// the harness too. It is static, so it runs in the ordinary unit suite with no
+// database, and it fails on the omission that motivated it.
+func TestTestHarnessWiresTheSameServicesAsProduction(t *testing.T) {
+	root := filepath.Join("..", "..")
+
+	prod, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatalf("read main.go: %v", err)
+	}
+	prodFile, err := parser.ParseFile(token.NewFileSet(), "main.go", prod, 0)
+	if err != nil {
+		t.Fatalf("parse main.go: %v", err)
+	}
+	want := apiDepsCopiedFields(t, prodFile)
+
+	harnessPath := filepath.Join(root, "internal", "api", "tenant_isolation_test.go")
+	harness, err := os.ReadFile(harnessPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", harnessPath, err)
+	}
+	harnessFile, err := parser.ParseFile(token.NewFileSet(), harnessPath, harness, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", harnessPath, err)
+	}
+	// The harness assigns from `svcs.X` rather than `services.X`.
+	got := depsFieldsFrom(t, harnessFile, "svcs")
+	if len(got) == 0 {
+		t.Fatal("found no svcs.X entries in the harness Deps literal; the parser is wrong, not the code")
+	}
+
+	var missing []string
+	for name := range want {
+		if !got[name] {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		t.Fatalf("services wired in production but not in the integration harness: %v\n"+
+			"A service the harness omits makes its routes panic on a nil dependency, "+
+			"recovered as an opaque 500 with no coverage. Wire it in newHarnessWithStore.", missing)
+	}
+}
+
+// depsFieldsFrom returns the set of field names assigned from `<recv>.X` in any
+// composite literal whose type is named Deps.
+func depsFieldsFrom(t *testing.T, file *ast.File, recv string) map[string]bool {
+	t.Helper()
 	out := map[string]bool{}
 	ast.Inspect(file, func(n ast.Node) bool {
 		lit, ok := n.(*ast.CompositeLit)
 		if !ok {
 			return true
 		}
-		sel, ok := lit.Type.(*ast.SelectorExpr)
-		if !ok || sel.Sel.Name != "Deps" {
+		// The type is `api.Deps` in main.go and a bare `Deps` in the same-package
+		// harness, so both forms are accepted.
+		switch t := lit.Type.(type) {
+		case *ast.SelectorExpr:
+			if t.Sel.Name != "Deps" {
+				return true
+			}
+		case *ast.Ident:
+			if t.Name != "Deps" {
+				return true
+			}
+		default:
 			return true
 		}
 		for _, el := range lit.Elts {
@@ -108,9 +178,9 @@ func apiDepsCopiedFields(t *testing.T, file *ast.File) map[string]bool {
 			if !ok {
 				continue
 			}
-			// Only count a field assigned from the services object.
+			// Only count a field assigned from the named receiver object.
 			if vs, ok := kv.Value.(*ast.SelectorExpr); ok {
-				if id, ok := vs.X.(*ast.Ident); ok && id.Name == "services" {
+				if id, ok := vs.X.(*ast.Ident); ok && id.Name == recv {
 					out[key.Name] = true
 				}
 			}

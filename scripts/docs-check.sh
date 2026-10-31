@@ -88,6 +88,56 @@ if [ -s "$schema" ]; then
     || bad "schema.md говорит «$doc_tables таблиц», в коде $real_tables"
 fi
 
+printf '\nМодули выделения\n'
+# Число «READY»-модулей повторяется в нескольких документах. Оно уже отставало от
+# набора на несколько модулей, поэтому проверяется здесь: набор
+# `scripts/extract-test/modules.txt` — источник истины, а каждый список в
+# документации обязан с ним совпадать. Пропущенный или лишний модуль ловится в CI,
+# а не живёт до следующего ревью.
+extract_harness="scripts/extract-test/modules.txt"
+if [ -s "$extract_harness" ]; then
+  real_modules=$(grep -vcE '^\s*#|^\s*$' "$extract_harness")
+  # modules.txt хранит листья importx как `safe`/`parsers`; документы называют их
+  # полным путём `importx/safe`/`importx/parsers`, поэтому нормализуем для сравнения.
+  norm='s/^safe$/importx\/safe/;s/^parsers$/importx\/parsers/'
+  listed=$(grep -vE '^\s*#|^\s*$' "$extract_harness" | sed "$norm" | sort -u)
+
+  # check_module_list <doc> <label> — сравнивает список модулей, извлечённый из
+  # stdin, с набором и печатает результат. Пустой ввод означает, что список не
+  # найден: это тоже расхождение, потому что документ обещает его содержать.
+  check_module_list() {
+    local doc="$1" label="$2" doc_list
+    doc_list=$(sed "$norm" | sort -u)
+    if [ -z "$doc_list" ]; then
+      bad "$doc: список модулей «$label» не найден"
+      return
+    fi
+    local missing extra
+    missing=$(comm -23 <(printf '%s\n' "$listed") <(printf '%s\n' "$doc_list") | tr '\n' ' ')
+    extra=$(comm -13 <(printf '%s\n' "$listed") <(printf '%s\n' "$doc_list") | tr '\n' ' ')
+    if [ -z "$missing" ] && [ -z "$extra" ]; then
+      ok "$doc: список модулей совпадает с набором ($real_modules)"
+    else
+      bad "$doc: расхождение с набором (нет: ${missing:-—}; лишние: ${extra:-—})"
+    fi
+  }
+
+  # MODULES.md: прозаический список между «Статус Extract» и ссылкой на EXTRACT_READY.
+  check_module_list docs/MODULES.md "Статус Extract" < <(
+    sed -n '/Статус Extract/,/EXTRACT_READY\.md/p' docs/MODULES.md 2>/dev/null \
+      | grep -oE '`[a-z][a-z/-]*`' | tr -d '`' | grep -vxE 'yes|scripts/.*')
+
+  # EXTRACT_READY.md: строки сводной таблицы, помеченные READY.
+  check_module_list docs/EXTRACT_READY.md "сводка READY" < <(
+    awk '/^## Сводка/,0' docs/EXTRACT_READY.md 2>/dev/null \
+      | grep -E '^\| `[^`]+` \| \*\*READY' | sed -E 's/^\| `([^`]+)`.*/\1/')
+
+  # EXTRACTION_TESTING.md: прозаический список после «перечисляет сегодня».
+  check_module_list docs/EXTRACTION_TESTING.md "перечисляет сегодня" < <(
+    sed -n '/перечисляет сегодня/,/extract-test\/README/p' docs/EXTRACTION_TESTING.md 2>/dev/null \
+      | grep -oE '`[a-z][a-z/-]*`' | tr -d '`' | grep -vxE 'yes|scripts/.*')
+fi
+
 printf '\nМатрица проверок\n'
 matrix=docs/verification/matrix.md
 if [ -s "$matrix" ]; then

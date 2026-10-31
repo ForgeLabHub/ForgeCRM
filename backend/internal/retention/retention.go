@@ -254,6 +254,17 @@ var policies = []Policy{
 			"sender's retry horizon, and a failed event is kept because it may still " +
 			"be reprocessed",
 	},
+	{
+		Key: "tenant_setting_revisions", Table: "tenant_setting_revisions",
+		TimeColumn: "created_at",
+		Default:    365 * 24 * time.Hour, Min: 90 * 24 * time.Hour, BatchSize: 5000,
+		Reason: "a revision of an organization setting is the history of a shared default: " +
+			"who changed the currency, when, and from what. It is not CRM data and it is " +
+			"not operational noise, so it is kept far longer than a log — a year by " +
+			"default — because the question it answers ('why is this value what it is') " +
+			"is asked long after the change. The current value in tenant_settings is " +
+			"never swept; only superseded history ages out",
+	},
 
 	// --- Intelligence history: stored analysis, not CRM data -----------------
 	//

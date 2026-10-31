@@ -327,11 +327,17 @@ SSRF уже вынесена; остальному нужны `secrets` и `audi
 сообщить о нарушении, а добавление внутреннего импорта в `logging` заставило archtest
 упасть.
 
-`modules.txt` перечисляет сегодня тридцать три модуля: `netguard`, `analytics`,
+`modules.txt` перечисляет сегодня тридцать шесть модулей: `netguard`, `analytics`,
 `ratelimit`, `objectstore`, `secrets`, `logging`, `httpx`, `safe`
 (internal/importx/safe), `parsers` (internal/importx/parsers), `database`, `rbac`,
 `audit`, `outbox`, `retention`, `agent`, `jobs`, `crm`, `storage`, `integrations`,
 `config`, `workflow`, `events`, `migratex`, `simulate`, `forecast`, `risk`,
-`notify`, `ai`, `importx`, `migrations`, `migrate`, `authn` и `constructor`.
+`notify`, `ai`, `importx`, `migrations`, `migrate`, `authn`, `oidc`, `views`,
+`constructor` и `tenantconfig`.
+
+Списки модулей в `docs/MODULES.md`, `docs/EXTRACT_READY.md` и этом файле сверяются с
+`modules.txt` в `scripts/docs-check.sh`. Число здесь отставало от набора на несколько
+модулей, потому что было только прозой; теперь расхождение — красный CI, а не
+замечание ревьюера.
 
 О том, как добавить модуль, см. `scripts/extract-test/README.md`.

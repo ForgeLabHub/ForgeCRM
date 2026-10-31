@@ -20,6 +20,16 @@ func pathParamSchema(name string) map[string]any {
 		"eventId", "taskId", "documentId", "ticketId", "dealId", "contactId",
 		"accountId", "leadId", "pipelineId", "notificationId":
 		return map[string]any{"type": "string", "format": "uuid"}
+	case "key":
+		// A configuration key is not an identifier and not free text: it is one of a
+		// closed catalog of dotted, lower-case names. The pattern lets a client reject
+		// a malformed key before sending it, and the format names the vocabulary so a
+		// generator can pick a string type rather than a bare one.
+		return map[string]any{
+			"type":    "string",
+			"format":  "setting-key",
+			"pattern": `^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$`,
+		}
 	default:
 		return map[string]any{"type": "string"}
 	}

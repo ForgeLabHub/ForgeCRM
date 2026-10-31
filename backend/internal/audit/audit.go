@@ -244,6 +244,14 @@ const (
 	// absent, denied, withdrawn or expired. It is a system action, not a user one, and it
 	// is what makes "we blocked N sends this week" answerable.
 	ActionConsentBlockedSend Action = "consent.send_blocked"
+
+	// Tenant configuration. A setting is a default the whole organization inherits, so a
+	// change to one is recorded with the value it replaced. The revision chain in
+	// tenant_setting_revisions carries the same history; the audit entry is what makes the
+	// change visible in the trail an auditor already reads, and it is written in the same
+	// transaction as the value.
+	ActionTenantSettingUpdated Action = "tenant.settings.updated"
+	ActionTenantSettingReset   Action = "tenant.settings.reset"
 )
 
 func marshalJSONOrNil(v any) ([]byte, error) {
