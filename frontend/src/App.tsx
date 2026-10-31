@@ -29,6 +29,7 @@ import { RolesPage } from './pages/admin/RolesPage'
 import { OrganizationsPage } from './pages/admin/OrganizationsPage'
 import { TeamsPage } from './pages/admin/TeamsPage'
 import { AuditPage } from './pages/admin/AuditPage'
+import { ConsentPage } from './pages/admin/ConsentPage'
 import { SecurityPage } from './pages/admin/SecurityPage'
 import { DiagnosticsPage } from './pages/admin/DiagnosticsPage'
 import { EmailPage } from './pages/admin/EmailPage'
@@ -302,6 +303,14 @@ export function App() {
           element={
             <RequirePermission permission="audit.read">
               <AuditPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="admin/consent"
+          element={
+            <RequirePermission permission="consent.read">
+              <ConsentPage />
             </RequirePermission>
           }
         />

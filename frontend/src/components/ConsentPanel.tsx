@@ -1,11 +1,17 @@
 /**
- * Consent for one contact.
+ * Consent for one subject.
  *
  * The backend has the record and the policy; this panel is the surface an operator
  * uses to answer two questions the API already answers: "may we contact this person
  * about this?" and "why did the last send succeed or fail?". It shows the current
- * decisions for the contact, lets a permitted user record or withdraw one, and
+ * decisions for the subject, lets a permitted user record or withdraw one, and
  * renders the history so a withdrawal is visible as a decision, not a blank.
+ *
+ * A subject is a contact or a bare email address. The email case matters because a
+ * message can be sent to someone who is not in the CRM yet: refusing to record their
+ * answer would leave "never asked" as the only reachable state, and the policy blocks
+ * that. Both forms are one record addressed two ways, so they share this panel rather
+ * than growing a second copy that drifts.
  *
  * It is read-only without `consent.read` and cannot change anything without
  * `consent.manage`; both are enforced on the server, so this is presentation.
@@ -21,6 +27,7 @@ import {
   type ConsentPurpose,
   type ConsentRecord,
   type ConsentState,
+  type ConsentSubject,
 } from '../api/consent'
 import { errorMessage } from '../api/client'
 import { useAuth } from '../hooks/useAuth'
@@ -38,18 +45,34 @@ const STATE_LABEL: Record<ConsentState, string> = {
   withdrawn: 'Withdrawn',
 }
 
-/** A purpose the operator can ask about. */
-export interface ConsentPanelProps {
-  /** The contact the panel is about. */
-  contactId: string
-  /** The contact's email, used to record a decision against the person. */
-  email?: string
+/**
+ * A stable query key for a subject. A contact id and an email are different
+ * subjects, so they must not collide in the cache.
+ */
+function subjectKey(subject: ConsentSubject): string {
+  return 'contact_id' in subject ? `contact:${subject.contact_id}` : `email:${subject.email}`
 }
 
-export function ConsentPanel({ contactId, email }: ConsentPanelProps) {
+/** The body a write carries: a contact id or a bare address, never both. */
+function subjectBody(subject: ConsentSubject): { contact_id?: string; subject_email?: string } {
+  return 'contact_id' in subject
+    ? { contact_id: subject.contact_id }
+    : { subject_email: subject.email }
+}
+
+/** A purpose the operator can ask about. */
+export interface ConsentPanelProps {
+  /** Whose consent this panel is about. */
+  subject: ConsentSubject
+  /** What to call the subject in the empty state, e.g. an email address. */
+  subjectLabel?: string
+}
+
+export function ConsentPanel({ subject, subjectLabel }: ConsentPanelProps) {
   const { can } = useAuth()
   const canRead = can('consent.read')
   const canManage = can('consent.manage')
+  const key = subjectKey(subject)
 
   // Without the read permission there is nothing to show and nothing to offer.
   if (!canRead) return null
@@ -57,19 +80,27 @@ export function ConsentPanel({ contactId, email }: ConsentPanelProps) {
   return (
     <div style={{ marginTop: 'var(--space-5)' }}>
       <Card title="Consent">
-        <CurrentDecisions contactId={contactId} />
-        {canManage ? <RecordDecisionForm contactId={contactId} email={email} /> : null}
-        <HistorySection contactId={contactId} />
+        <CurrentDecisions subject={subject} subjectKey={key} subjectLabel={subjectLabel} />
+        {canManage ? <RecordDecisionForm subject={subject} subjectKey={key} /> : null}
+        <HistorySection subject={subject} subjectKey={key} />
       </Card>
     </div>
   )
 }
 
-/** The decisions still in force for the contact, with the reason for each. */
-function CurrentDecisions({ contactId }: { contactId: string }) {
+/** The decisions still in force for the subject, with the reason for each. */
+function CurrentDecisions({
+  subject,
+  subjectKey: key,
+  subjectLabel,
+}: {
+  subject: ConsentSubject
+  subjectKey: string
+  subjectLabel?: string
+}) {
   const current = useQuery({
-    queryKey: ['consent', 'current', contactId],
-    queryFn: () => consentApi.current({ contact_id: contactId }),
+    queryKey: ['consent', 'current', key],
+    queryFn: () => consentApi.current(subject),
   })
 
   if (current.isError) {
@@ -81,8 +112,9 @@ function CurrentDecisions({ contactId }: { contactId: string }) {
   if (items.length === 0) {
     return (
       <p className="text-muted text-sm">
-        No consent on record. Marketing and product messages are blocked until a decision is
-        recorded; transactional messages are still allowed.
+        No consent on record{subjectLabel ? ` for ${subjectLabel}` : ''}. Marketing and product
+        messages are blocked until a decision is recorded; transactional messages are still
+        allowed.
       </p>
     )
   }
@@ -120,7 +152,13 @@ function CurrentDecisions({ contactId }: { contactId: string }) {
 }
 
 /** Records a decision, or withdraws the current one. */
-function RecordDecisionForm({ contactId, email }: { contactId: string; email?: string }) {
+function RecordDecisionForm({
+  subject,
+  subjectKey: key,
+}: {
+  subject: ConsentSubject
+  subjectKey: string
+}) {
   const queryClient = useQueryClient()
   const [purpose, setPurpose] = useState<ConsentPurpose>('marketing')
   const [channel, setChannel] = useState<ConsentChannel>('email')
@@ -135,9 +173,10 @@ function RecordDecisionForm({ contactId, email }: { contactId: string; email?: s
   const record = useMutation({
     mutationFn: () =>
       consentApi.record({
-        // A contact is keyed by its id, so the decision follows the person even if
-        // the address changes; the email is a fallback for a contact with none.
-        ...(contactId ? { contact_id: contactId } : { subject_email: email ?? '' }),
+        // The subject decides which key the write carries: a contact is keyed by
+        // its id so the decision follows the person even if the address changes,
+        // a bare address is keyed by the address because there is no person yet.
+        ...subjectBody(subject),
         purpose,
         channel,
         state,
@@ -152,8 +191,7 @@ function RecordDecisionForm({ contactId, email }: { contactId: string; email?: s
   })
 
   const withdraw = useMutation({
-    mutationFn: () =>
-      consentApi.withdraw({ contact_id: contactId }, purpose, channel, 'withdrawn from contact page'),
+    mutationFn: () => consentApi.withdraw(subject, purpose, channel, 'withdrawn by an operator'),
     onSuccess: () => {
       setError(null)
       invalidate()
@@ -174,9 +212,9 @@ function RecordDecisionForm({ contactId, email }: { contactId: string; email?: s
 
   return (
     <form className="form-grid" onSubmit={onSubmit} style={{ marginTop: 'var(--space-4)' }}>
-      <Field label="Purpose" htmlFor="consent-purpose">
+      <Field label="Purpose" htmlFor={`consent-purpose-${key}`}>
         <select
-          id="consent-purpose"
+          id={`consent-purpose-${key}`}
           className="input"
           value={purpose}
           onChange={(e) => setPurpose(e.target.value as ConsentPurpose)}
@@ -189,9 +227,9 @@ function RecordDecisionForm({ contactId, email }: { contactId: string; email?: s
         </select>
       </Field>
 
-      <Field label="Channel" htmlFor="consent-channel">
+      <Field label="Channel" htmlFor={`consent-channel-${key}`}>
         <select
-          id="consent-channel"
+          id={`consent-channel-${key}`}
           className="input"
           value={channel}
           onChange={(e) => setChannel(e.target.value as ConsentChannel)}
@@ -204,9 +242,9 @@ function RecordDecisionForm({ contactId, email }: { contactId: string; email?: s
         </select>
       </Field>
 
-      <Field label="Decision" htmlFor="consent-state">
+      <Field label="Decision" htmlFor={`consent-state-${key}`}>
         <select
-          id="consent-state"
+          id={`consent-state-${key}`}
           className="input"
           value={state}
           onChange={(e) => setState(e.target.value as ConsentState)}
@@ -217,9 +255,13 @@ function RecordDecisionForm({ contactId, email }: { contactId: string; email?: s
         </select>
       </Field>
 
-      <Field label="Basis" htmlFor="consent-basis" hint="On what grounds, in your words. Optional.">
+      <Field
+        label="Basis"
+        htmlFor={`consent-basis-${key}`}
+        hint="On what grounds, in your words. Optional."
+      >
         <input
-          id="consent-basis"
+          id={`consent-basis-${key}`}
           className="input"
           value={basis}
           onChange={(e) => setBasis(e.target.value)}
@@ -243,13 +285,19 @@ function RecordDecisionForm({ contactId, email }: { contactId: string; email?: s
 }
 
 /** The revision chain for one purpose and channel: why the current answer is what it is. */
-function HistorySection({ contactId }: { contactId: string }) {
+function HistorySection({
+  subject,
+  subjectKey: key,
+}: {
+  subject: ConsentSubject
+  subjectKey: string
+}) {
   const [purpose, setPurpose] = useState<ConsentPurpose>('marketing')
   const [channel, setChannel] = useState<ConsentChannel>('email')
 
   const history = useQuery({
-    queryKey: ['consent', 'history', contactId, purpose, channel],
-    queryFn: () => consentApi.history({ contact_id: contactId }, purpose, channel),
+    queryKey: ['consent', 'history', key, purpose, channel],
+    queryFn: () => consentApi.history(subject, purpose, channel),
   })
 
   return (
@@ -257,9 +305,9 @@ function HistorySection({ contactId }: { contactId: string }) {
       <summary className="text-sm">History</summary>
       <div className="stack stack--sm" style={{ marginTop: 'var(--space-3)' }}>
         <div className="form-grid">
-          <Field label="History purpose" htmlFor="consent-history-purpose">
+          <Field label="History purpose" htmlFor={`consent-history-purpose-${key}`}>
             <select
-              id="consent-history-purpose"
+              id={`consent-history-purpose-${key}`}
               className="input"
               value={purpose}
               onChange={(e) => setPurpose(e.target.value as ConsentPurpose)}
@@ -271,9 +319,9 @@ function HistorySection({ contactId }: { contactId: string }) {
               ))}
             </select>
           </Field>
-          <Field label="History channel" htmlFor="consent-history-channel">
+          <Field label="History channel" htmlFor={`consent-history-channel-${key}`}>
             <select
-              id="consent-history-channel"
+              id={`consent-history-channel-${key}`}
               className="input"
               value={channel}
               onChange={(e) => setChannel(e.target.value as ConsentChannel)}

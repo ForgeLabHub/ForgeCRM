@@ -441,7 +441,7 @@ export function ContactDetailPage() {
         onSave={(next) => saveCustomFields.mutateAsync(next)}
       />
 
-      <ConsentPanel contactId={id} email={data.email ?? undefined} />
+      <ConsentPanel subject={{ contact_id: id }} />
 
       <AttachmentPanel entityType="contact" entityId={id} />
 
