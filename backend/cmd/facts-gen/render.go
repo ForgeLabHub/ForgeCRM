@@ -67,6 +67,7 @@ func RenderMarkdown(rep *Report, commit string) string {
 	row(&b, "Файлы страниц", f.FEPageFiles, "компоненты в frontend/src/pages (без admin/, без тестов)")
 	row(&b, "Тесты страниц", f.FEPageTests, "*.test.tsx рядом со страницами")
 	row(&b, "Маршрутов <Route path>", f.FERoutes, "объявления в frontend/src/App.tsx (регистр маршрутизации SPA)")
+	row(&b, "Уникальных путей маршрутов", f.FEUniqueRoutes, "различающиеся path по всем <Routes>-деревьям App.tsx; повторения внутри одного дерева запрещены (гейт route_paths_unique)")
 	row(&b, "E2E спецификации", f.E2EFiles, "*.spec.ts в frontend/e2e")
 	row(&b, "E2E тесты", f.E2ETests, "объявления test() Playwright; test.describe вычитается")
 	b.WriteString("\n")

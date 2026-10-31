@@ -145,6 +145,42 @@ func TestScanCISectionTracking(t *testing.T) {
 	}
 }
 
+func TestScanAppRoutesSplitsByTree(t *testing.T) {
+	src := `
+	const anonymous = (
+	  <Routes>
+	    <Route path="/login" element={A}/>
+	    <Route path="*" element={B}/>
+	  </Routes>
+	)
+	const authed = (
+	  <Routes>
+	    <Route path="/dashboard" element={C}/>
+	    <Route path="/login" element={<Navigate to="/"/>}/>
+	    <Route path="*" element={D}/>
+	  </Routes>
+	)`
+	total, unique, dups, err := scanAppRoutes(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 5 || unique != 4 {
+		t.Fatalf("total=%d unique=%d, want 5/4", total, unique)
+	}
+	if len(dups) != 0 {
+		t.Fatalf("cross-tree repeats must not count as duplicates: %v", dups)
+	}
+
+	dupInOneTree := `<Routes><Route path="/a"/><Route path="/a"/></Routes>`
+	_, _, dups2, err := scanAppRoutes(dupInOneTree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tree, ok := dups2["/a"]; !ok || tree != "tree#1" {
+		t.Fatalf("within-tree duplicate not detected: %v", dups2)
+	}
+}
+
 func TestParseRBACRejectsUnknownCatalogKey(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "rbac.go")

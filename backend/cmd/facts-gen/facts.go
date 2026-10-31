@@ -18,34 +18,35 @@ import (
 // Facts holds every metric the generator reports. Field order defines rendering
 // order; all slices are sorted before output so runs are byte-for-byte identical.
 type Facts struct {
-	GoPackagesTotal    int      `json:"go_packages_total"`    // distinct dirs with .go files under backend/
-	GoPackagesInternal int      `json:"go_packages_internal"` // same, restricted to backend/internal/
-	GoFiles            int      `json:"go_files"`             // non-test .go files under backend/
-	GoTestFiles        int      `json:"go_test_files"`        // *_test.go files under backend/
-	GoTestFuncs        int      `json:"go_test_funcs"`        // top-level func TestXxx (excluding TestMain)
-	GoBenchmarks       int      `json:"go_benchmarks"`        // top-level func BenchmarkXxx
-	GoFuzzers          int      `json:"go_fuzzers"`           // top-level func FuzzXxx
-	GoExamples         int      `json:"go_examples"`          // top-level func ExampleXxx
-	MigrationsUp       int      `json:"migrations_up"`        // *.up.sql in internal/migrations
-	MigrationsDown     int      `json:"migrations_down"`      // *.down.sql in internal/migrations
-	DBTables           int      `json:"db_tables"`            // unique CREATE TABLE names across up migrations
-	RbacConsts         int      `json:"rbac_consts"`          // Permission-typed string constants in rbac.go
-	RbacCatalog        int      `json:"rbac_catalog"`         // entries of the catalog map in rbac.go
-	RbacSeeded         int      `json:"rbac_seeded"`          // permission codes seeded via INSERT INTO permissions
-	SystemRoles        int      `json:"system_roles"`         // role tuples inserted with is_system = true
-	OpenAPIPaths       int      `json:"openapi_paths"`        // paths in docs/api/openapi.json
-	OpenAPIOperations  int      `json:"openapi_operations"`   // operations in docs/api/openapi.json
-	FESrcFiles         int      `json:"frontend_src_files"`   // .ts/.tsx under frontend/src
-	FETestFiles        int      `json:"frontend_test_files"`  // *.test.*/*.spec.* under frontend/src
-	FETestDecls        int      `json:"frontend_test_decls"`  // it()/test() declarations in frontend/src (describe excluded)
-	FEPageFiles        int      `json:"frontend_page_files"`  // component files under frontend/src/pages
-	FEPageTests        int      `json:"frontend_page_tests"`  // test files under frontend/src/pages
-	FERoutes           int      `json:"frontend_routes"`      // <Route path="..."> declarations in App.tsx
-	E2EFiles           int      `json:"e2e_spec_files"`       // *.spec.ts under frontend/e2e
-	E2ETests           int      `json:"e2e_tests"`            // test() declarations under frontend/e2e (describe excluded)
-	CIWorkflows        int      `json:"ci_workflows"`         // workflow files in .github/workflows
-	CIJobs             int      `json:"ci_jobs"`              // jobs across all workflows
-	CIJobNames         []string `json:"ci_job_names"`         // sorted "workflow.yml/job" pairs
+	GoPackagesTotal    int      `json:"go_packages_total"`      // distinct dirs with .go files under backend/
+	GoPackagesInternal int      `json:"go_packages_internal"`   // same, restricted to backend/internal/
+	GoFiles            int      `json:"go_files"`               // non-test .go files under backend/
+	GoTestFiles        int      `json:"go_test_files"`          // *_test.go files under backend/
+	GoTestFuncs        int      `json:"go_test_funcs"`          // top-level func TestXxx (excluding TestMain)
+	GoBenchmarks       int      `json:"go_benchmarks"`          // top-level func BenchmarkXxx
+	GoFuzzers          int      `json:"go_fuzzers"`             // top-level func FuzzXxx
+	GoExamples         int      `json:"go_examples"`            // top-level func ExampleXxx
+	MigrationsUp       int      `json:"migrations_up"`          // *.up.sql in internal/migrations
+	MigrationsDown     int      `json:"migrations_down"`        // *.down.sql in internal/migrations
+	DBTables           int      `json:"db_tables"`              // unique CREATE TABLE names across up migrations
+	RbacConsts         int      `json:"rbac_consts"`            // Permission-typed string constants in rbac.go
+	RbacCatalog        int      `json:"rbac_catalog"`           // entries of the catalog map in rbac.go
+	RbacSeeded         int      `json:"rbac_seeded"`            // permission codes seeded via INSERT INTO permissions
+	SystemRoles        int      `json:"system_roles"`           // role tuples inserted with is_system = true
+	OpenAPIPaths       int      `json:"openapi_paths"`          // paths in docs/api/openapi.json
+	OpenAPIOperations  int      `json:"openapi_operations"`     // operations in docs/api/openapi.json
+	FESrcFiles         int      `json:"frontend_src_files"`     // .ts/.tsx under frontend/src
+	FETestFiles        int      `json:"frontend_test_files"`    // *.test.*/*.spec.* under frontend/src
+	FETestDecls        int      `json:"frontend_test_decls"`    // it()/test() declarations in frontend/src (describe excluded)
+	FEPageFiles        int      `json:"frontend_page_files"`    // component files under frontend/src/pages
+	FEPageTests        int      `json:"frontend_page_tests"`    // test files under frontend/src/pages
+	FERoutes           int      `json:"frontend_routes"`        // <Route path="..."> declarations in App.tsx
+	FEUniqueRoutes     int      `json:"frontend_unique_routes"` // distinct route paths across all trees in App.tsx
+	E2EFiles           int      `json:"e2e_spec_files"`         // *.spec.ts under frontend/e2e
+	E2ETests           int      `json:"e2e_tests"`              // test() declarations under frontend/e2e (describe excluded)
+	CIWorkflows        int      `json:"ci_workflows"`           // workflow files in .github/workflows
+	CIJobs             int      `json:"ci_jobs"`                // jobs across all workflows
+	CIJobNames         []string `json:"ci_job_names"`           // sorted "workflow.yml/job" pairs
 }
 
 // Consistency records whether independent sources agree. Any false value means
@@ -155,7 +156,8 @@ func Compute(repo string) (*Report, error) {
 	}
 	f.FESrcFiles, f.FETestFiles, f.FETestDecls = res.srcFiles, res.testFiles, res.testDecls
 	f.FEPageFiles, f.FEPageTests, f.FERoutes = res.pageFiles, res.pageTests, res.routes
-	c.RoutePathsUnique = res.duplicateRoutes == 0
+	f.FEUniqueRoutes = res.uniqueRoutes
+	c.RoutePathsUnique = len(res.dupWithinTree) == 0
 	f.E2EFiles, f.E2ETests = res.e2eFiles, res.e2eTests
 
 	// --- CI ----------------------------------------------------------------------------
@@ -426,7 +428,7 @@ type frontendScan struct {
 	srcFiles, testFiles, testDecls int
 	pageFiles, pageTests           int
 	routes, uniqueRoutes           int
-	dupWithinTree                  map[string][]string // path -> tree names it appears in
+	dupWithinTree                  map[string]string // path -> tree where a within-tree repeat was seen
 	e2eFiles, e2eTests             int
 }
 
@@ -453,7 +455,7 @@ func scanAppRoutes(src string) (total, unique int, dupWithinTree map[string]stri
 		return 0, 0, nil, fmt.Errorf("App.tsx: ни одного <Routes> не найдено")
 	}
 	dupWithinTree = map[string]string{}
-	seen := map[string]bool{}
+	seenGlobal := map[string]bool{} // for the distinct-path count
 	treeNames := []string{"anonymous", "authenticated"}
 	for i, b := range bounds {
 		start := b[0]
@@ -465,15 +467,19 @@ func scanAppRoutes(src string) (total, unique int, dupWithinTree map[string]stri
 		if i < len(treeNames) {
 			name = treeNames[i]
 		}
+		seenInTree := map[string]bool{} // uniqueness is a per-tree property
 		for _, m := range routeRe.FindAllStringSubmatch(src[start:end], -1) {
 			total++
-			p := m[1]
-			if seen[p] {
-				if _, ok := dupWithinTree[p]; !ok {
-					dupWithinTree[p] = name
+			path := m[1]
+			if seenInTree[path] {
+				if _, ok := dupWithinTree[path]; !ok {
+					dupWithinTree[path] = name
 				}
 			} else {
-				seen[p] = true
+				seenInTree[path] = true
+			}
+			if !seenGlobal[path] {
+				seenGlobal[path] = true
 				unique++
 			}
 		}
