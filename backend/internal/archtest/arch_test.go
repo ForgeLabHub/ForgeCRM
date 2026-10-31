@@ -410,6 +410,11 @@ func TestExtractionBoundaryHolds(t *testing.T) {
 		// database handle, writes to the audit trail and reads the caller's
 		// principal for visibility and ownership. It touches no CRM table.
 		"views": {"audit": true, "database": true, "rbac": true},
+		// consent records what a person agreed to and answers whether a channel may
+		// contact them. It reads and writes only its own table, writes the audit
+		// trail, and reads the caller's principal; it holds no CRM data and calls
+		// no sibling domain, so those three are the whole boundary.
+		"consent": {"audit": true, "database": true, "rbac": true},
 		// oidc is the single sign-on service: the authorization-code flow and the
 		// provider registry. It verifies ID tokens, seals each client secret with
 		// the keyring and writes the audit trail, so those four are declared. It

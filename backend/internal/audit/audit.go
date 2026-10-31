@@ -233,6 +233,17 @@ const (
 	ActionMCPCredentialCreated Action = "mcp.credentials.created"
 	ActionMCPCredentialRevoked Action = "mcp.credentials.revoked"
 	ActionMCPCredentialRotated Action = "mcp.credentials.rotated"
+
+	// Consent. Recording a decision changes whether a person may be contacted, so the
+	// trail records it. The entry names the purpose, channel and state but not the
+	// evidence text, which may quote the person and belongs in the record, not in a log
+	// that is read more widely.
+	ActionConsentRecorded  Action = "consent.recorded"
+	ActionConsentWithdrawn Action = "consent.withdrawn"
+	// ActionConsentBlockedSend records a send that a channel refused because consent was
+	// absent, denied, withdrawn or expired. It is a system action, not a user one, and it
+	// is what makes "we blocked N sends this week" answerable.
+	ActionConsentBlockedSend Action = "consent.send_blocked"
 )
 
 func marshalJSONOrNil(v any) ([]byte, error) {

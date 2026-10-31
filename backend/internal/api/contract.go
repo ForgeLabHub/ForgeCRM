@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/geff1778/forgecrm/internal/ai"
+	"github.com/geff1778/forgecrm/internal/consent"
 	"github.com/geff1778/forgecrm/internal/crm"
 	"github.com/geff1778/forgecrm/internal/events"
 	"github.com/geff1778/forgecrm/internal/forecast"
@@ -441,6 +442,60 @@ func APIContract() openapi.Contract {
 	c.BodyDescriptions["POST /api/v1/views"] = "A saved list view. `entity_type` and `name` are required; " +
 		"`filters` is the same parameter set the corresponding list endpoint accepts. A name the caller " +
 		"already uses for the same screen is refused with 422 rather than silently creating a second view."
+
+	// --- Consent ----------------------------------------------------------------
+	// A consent record is a decision about one subject, purpose and channel, so the
+	// request body is the record's writable projection. The subject is either
+	// `contact_id` or `subject_email`; that exclusivity is a conditional rule the
+	// required list cannot express, so it is described in the body text. The reads
+	// take the subject as a query parameter for the same reason the body carries it
+	// either way: a subject is an id or an address, not a path segment.
+	c.RequestBodies["POST /api/v1/consent"] = reflect.TypeOf(consent.Input{})
+	c.Responses["POST /api/v1/consent"] = reflect.TypeOf(consent.Record{})
+	c.SuccessStatus["POST /api/v1/consent"] = 201
+	c.Responses["GET /api/v1/consent"] = reflect.TypeOf(httpx.ListResponse[consent.Record]{})
+	c.Responses["GET /api/v1/consent/current"] = reflect.TypeOf(httpx.ListResponse[consent.Record]{})
+	c.Responses["GET /api/v1/consent/history"] = reflect.TypeOf(httpx.ListResponse[consent.Record]{})
+	c.Responses["GET /api/v1/consent/decide"] = reflect.TypeOf(consent.Decision{})
+	c.RequestBodies["POST /api/v1/consent/withdraw"] = reflect.TypeOf(withdrawConsentRequest{})
+	c.Responses["POST /api/v1/consent/withdraw"] = reflect.TypeOf(consent.Record{})
+	c.SuccessStatus["POST /api/v1/consent/withdraw"] = 201
+	// `Input` is a bare name a second type could share, so the component is renamed and
+	// the required set is keyed by that name. `subject_email` is required in effect but
+	// only when `contact_id` is absent, which is the conditional rule described below.
+	c.BodyNames["POST /api/v1/consent"] = "ConsentInput"
+	c.TypeNames[reflect.TypeOf(consent.Input{})] = "ConsentInput"
+	c.RequiredBody["ConsentInput"] = []string{"purpose", "channel", "state"}
+	for _, op := range []string{
+		"GET /api/v1/consent", "GET /api/v1/consent/current",
+		"GET /api/v1/consent/history", "GET /api/v1/consent/decide",
+	} {
+		c.QueryParams[op] = []openapi.QueryParam{
+			{Name: "contact_id", Description: "The contact the decision is about. Pass this or `email`, not both."},
+			{Name: "email", Description: "The email address the decision is about, for a person not in the CRM."},
+		}
+	}
+	c.QueryParams["GET /api/v1/consent/history"] = append(c.QueryParams["GET /api/v1/consent/history"],
+		openapi.QueryParam{Name: "purpose", Required: true,
+			Schema:      map[string]any{"type": "string", "enum": []string{"marketing", "transactional", "product_updates", "research"}},
+			Description: "The purpose to show the history of."},
+		openapi.QueryParam{Name: "channel", Required: true,
+			Schema:      map[string]any{"type": "string", "enum": []string{"email", "telegram", "webhook"}},
+			Description: "The channel to show the history of."})
+	c.QueryParams["GET /api/v1/consent/decide"] = append(c.QueryParams["GET /api/v1/consent/decide"],
+		openapi.QueryParam{Name: "purpose", Required: true,
+			Schema:      map[string]any{"type": "string", "enum": []string{"marketing", "transactional", "product_updates", "research"}},
+			Description: "The purpose to decide for."},
+		openapi.QueryParam{Name: "channel", Required: true,
+			Schema:      map[string]any{"type": "string", "enum": []string{"email", "telegram", "webhook"}},
+			Description: "The channel to decide for."})
+	c.BodyDescriptions["POST /api/v1/consent"] = "Records a consent decision. Exactly one of `contact_id` " +
+		"or `subject_email` names the person; passing both, or neither, is refused with 422. `state` is " +
+		"`granted`, `denied` or `withdrawn`; a missing record is never read as permission, so an absent " +
+		"decision blocks a send rather than allowing it. Recording a new decision supersedes the previous " +
+		"one for the same subject, purpose and channel without overwriting it, so the history is kept."
+	c.BodyDescriptions["POST /api/v1/consent/withdraw"] = "Withdraws consent for one subject, purpose and " +
+		"channel. It is the same write as recording a decision with state `withdrawn`, named for the act."
 
 		// --- MCP client credentials ------------------------------------------------
 	// A credential is minted once and its token is returned exactly once; the list

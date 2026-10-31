@@ -179,6 +179,7 @@ func run() error {
 		Storage:        services.Storage,
 		OIDC:           services.OIDC,
 		Views:          services.Views,
+		Consent:        services.Consent,
 		MCPCredentials: services.MCPCredentials,
 		StartedAt:      time.Now(),
 		Version:        version,
