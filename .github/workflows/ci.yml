@@ -360,6 +360,7 @@ jobs:
             docs/ROADMAP.md
             docs/ACCEPTANCE_CRITERIA.md
             docs/development/frontend.md
+            docs/deployment/environment-variables.md
           )
           for f in "${required[@]}"; do
             if [[ -s "${f}" ]]; then

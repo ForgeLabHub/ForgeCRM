@@ -10,6 +10,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -91,6 +92,7 @@ type Config struct {
 	// are run as a separate step.
 	RunMigrationsOnStart bool
 
+	Bootstrap BootstrapConfig
 	Email     EmailConfig
 	Telegram  TelegramConfig
 	AI        AIConfig
@@ -209,6 +211,20 @@ type StorageConfig struct {
 	Timeout time.Duration
 }
 
+// BootstrapConfig carries the first-administrator provisioning values.
+//
+// They are read from the environment so the password never appears in the
+// process list. The API only acts on them when no platform owner exists yet; an
+// operator can leave them set, and they cannot be used to overwrite an owner
+// that already exists.
+type BootstrapConfig struct {
+	// AdminEmail and AdminPassword provision the first platform owner. Both must
+	// be set together; setting only one is a configuration error, because a
+	// half-specified account is a typo rather than a request.
+	AdminEmail    string
+	AdminPassword string
+}
+
 // OIDCConfig configures optional corporate SSO.
 type OIDCConfig struct {
 	Enabled      bool
@@ -217,6 +233,17 @@ type OIDCConfig struct {
 	ClientSecret string
 	RedirectURL  string
 	Scopes       []string
+}
+
+// firstEnv returns the first of the named variables that is set to a non-empty
+// value, so a renamed setting can keep accepting its old name during a migration.
+func firstEnv(names ...string) string {
+	for _, name := range names {
+		if v := os.Getenv(name); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func env(key, def string) string {
@@ -320,6 +347,14 @@ func Load() (*Config, error) {
 		RateLimitStore:       env("FORGECRM_RATE_LIMIT_STORE", "memory"),
 		RedisURL:             env("FORGECRM_REDIS_URL", ""),
 		TrustedProxies:       env("FORGECRM_TRUSTED_PROXIES", ""),
+
+		Bootstrap: BootstrapConfig{
+			AdminEmail: env("FORGECRM_BOOTSTRAP_ADMIN_EMAIL", ""),
+			// FORGECRM_BOOTSTRAP_PASSWORD is the original name and is still
+			// accepted so an existing deploy script keeps working; the new name
+			// wins when both are present.
+			AdminPassword: firstEnv("FORGECRM_BOOTSTRAP_ADMIN_PASSWORD", "FORGECRM_BOOTSTRAP_PASSWORD"),
+		},
 
 		LogLevel:     env("FORGECRM_LOG_LEVEL", "info"),
 		LogFormat:    env("FORGECRM_LOG_FORMAT", "json"),
@@ -607,7 +642,157 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("FORGECRM_TRUSTED_PROXIES is invalid: %w", err)
 	}
 
+	// URLs are parsed, not merely checked for emptiness, so a typo ("htp://",
+	// a missing host) is a startup failure rather than a redirect or connection
+	// error at the first request that uses it.
+	if err := validateHTTPURL("FORGECRM_BASE_URL", c.BaseURL); err != nil {
+		return err
+	}
+	if err := validatePostgresURL("FORGECRM_DATABASE_URL", c.DatabaseURL); err != nil {
+		return err
+	}
+	if c.RedisURL != "" {
+		if err := validateRedisURL("FORGECRM_REDIS_URL", c.RedisURL); err != nil {
+			return err
+		}
+	}
+	if c.Storage.Enabled && c.Storage.Endpoint != "" {
+		if err := validateHTTPURL("FORGECRM_STORAGE_ENDPOINT", c.Storage.Endpoint); err != nil {
+			return err
+		}
+	}
+	if c.OIDC.Enabled && c.OIDC.Issuer != "" {
+		if err := validateHTTPURL("FORGECRM_OIDC_ISSUER", c.OIDC.Issuer); err != nil {
+			return err
+		}
+	}
+
+	// Production hardenings. These are errors, not warnings, because each one is a
+	// silent downgrade of a security property if it slips through.
+	if c.IsProduction() {
+		if len(c.SecretKey) < 32 {
+			// The value is never printed; only its length is mentioned.
+			return fmt.Errorf("FORGECRM_SECRET_KEY must be at least 32 characters in production (got %d)", len(c.SecretKey))
+		}
+		if !c.CookieSecure {
+			return fmt.Errorf("FORGECRM_COOKIE_SECURE must be true when FORGECRM_ENV=production, so the session cookie is never sent over plain HTTP")
+		}
+		if strings.HasPrefix(c.BaseURL, "http://") {
+			return fmt.Errorf("FORGECRM_BASE_URL must use https in production, got %q", c.BaseURL)
+		}
+	}
+
 	return nil
+}
+
+// validateHTTPURL rejects a value that is not an absolute http(s) URL with a host.
+func validateHTTPURL(name, raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("%s is not a valid URL: %w", name, err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("%s must be an http or https URL, got scheme %q", name, u.Scheme)
+	}
+	if u.Host == "" {
+		return fmt.Errorf("%s is missing a host", name)
+	}
+	return nil
+}
+
+// validatePostgresURL rejects a database URL that is not a PostgreSQL connection
+// string. The password is never included in the error.
+func validatePostgresURL(name, raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("%s is not a valid URL: %w", name, err)
+	}
+	switch u.Scheme {
+	case "postgres", "postgresql":
+	default:
+		return fmt.Errorf("%s must be a postgres:// or postgresql:// URL, got scheme %q", name, u.Scheme)
+	}
+	if u.Host == "" {
+		return fmt.Errorf("%s is missing a host", name)
+	}
+	return nil
+}
+
+// validateRedisURL rejects a rate-limit store URL that is not redis://.
+func validateRedisURL(name, raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("%s is not a valid URL: %w", name, err)
+	}
+	if u.Scheme != "redis" && u.Scheme != "rediss" {
+		return fmt.Errorf("%s must be a redis:// or rediss:// URL, got scheme %q", name, u.Scheme)
+	}
+	if u.Host == "" {
+		return fmt.Errorf("%s is missing a host", name)
+	}
+	return nil
+}
+
+// Redacted is a log-safe rendering of the configuration: which optional
+// subsystems are on, and whether each secret-bearing setting is present, never
+// its value.
+//
+// Key names deliberately avoid the substrings the logging package treats as
+// sensitive (password, secret, token, key, credential, ...). That is not
+// cosmetic: the logger replaces the value of any field whose name looks
+// sensitive, so a key like "secret_key" would be printed as [REDACTED] and the
+// useful fact — present or absent — would be lost. Naming the field for the fact
+// ("signing_material_configured") keeps the diagnostic and still never carries a
+// secret.
+func (c *Config) Redacted() []any {
+	state := func(v string) string {
+		if v == "" {
+			return "absent"
+		}
+		return "present"
+	}
+	return []any{
+		"env", c.Env,
+		"http_addr", c.HTTPAddr,
+		"base_url", c.BaseURL,
+		"log_level", c.LogLevel,
+		"log_format", c.LogFormat,
+		"migrate_on_start", c.RunMigrationsOnStart,
+		"rate_limit_store", c.RateLimitStore,
+		"trusted_proxies", c.TrustedProxies,
+		"signing_material_configured", state(c.SecretKey),
+		"metrics_access_configured", state(c.MetricsToken),
+		"smtp_enabled", c.Email.Enabled,
+		"smtp_auth_configured", state(c.Email.Password),
+		"telegram_enabled", c.Telegram.Enabled,
+		"telegram_auth_configured", state(c.Telegram.BotToken),
+		"ai_enabled", c.AI.Enabled,
+		"ai_auth_configured", state(c.AI.APIKey),
+		"storage_enabled", c.Storage.Enabled,
+		"storage_auth_configured", state(c.Storage.SecretAccessKey),
+		"oidc_enabled", c.OIDC.Enabled,
+		"oidc_auth_configured", state(c.OIDC.ClientSecret),
+		"shared_limiter_configured", state(c.RedisURL),
+		"bootstrap_admin_configured", state(c.Bootstrap.AdminEmail),
+	}
+}
+
+// ValidateBootstrap checks the environment-driven bootstrap pairing. It is a
+// separate step from Validate because the pairing rule describes what the process
+// will do, not whether the configuration is well-formed: the one-off
+// `-bootstrap-admin` command supplies the address through a flag and the password
+// through the environment, a valid combination that an all-or-nothing rule in
+// Validate would reject before the command ever runs. The server-start path calls
+// this; the command path relies on bootstrap.Admin, which performs the same check.
+func (c *Config) ValidateBootstrap() error {
+	if (c.Bootstrap.AdminEmail == "") == (c.Bootstrap.AdminPassword == "") {
+		return nil
+	}
+	missing := "FORGECRM_BOOTSTRAP_ADMIN_PASSWORD"
+	if c.Bootstrap.AdminPassword != "" {
+		missing = "FORGECRM_BOOTSTRAP_ADMIN_EMAIL"
+	}
+	return fmt.Errorf("FORGECRM_BOOTSTRAP_ADMIN_EMAIL and FORGECRM_BOOTSTRAP_ADMIN_PASSWORD must be set together; %s is missing", missing)
 }
 
 // IsProduction reports whether the process runs in production mode.

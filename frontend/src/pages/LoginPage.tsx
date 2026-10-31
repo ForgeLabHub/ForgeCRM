@@ -1,26 +1,30 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Alert, Field } from '../components/ui'
+import { Alert } from '../components/ui'
+import { BrandMark } from '../components/BrandMark'
+import { LoginControls } from '../components/LoginControls'
 import { useAuth } from '../hooks/useAuth'
 import { errorMessage, fieldErrors } from '../api/client'
 import { ssoApi, type SSOProvider } from '../api/auth'
+import { useI18n } from '../i18n'
 
-// The codes the callback redirects with, mapped to something a person can act on.
-// A bare code on screen would be unhelpful; a wrong guess about the cause would be
-// worse, so each code states only what is known.
-const SSO_ERROR_MESSAGES: Record<string, string> = {
-  no_account:
-    'Your identity was verified, but no ForgeCRM account is linked to it. Ask an administrator to invite you.',
-  account_inactive: 'This account is not active. Contact an administrator.',
-  no_organization:
-    'Your identity is verified, but it is not a member of any organization in this deployment.',
-  provider_error: 'The identity provider reported an error. Try again or use a password.',
-  sign_in_failed: 'Single sign-on could not be completed. Try again or use a password.',
-}
-
+/**
+ * Sign-in page.
+ *
+ * The layout is two panes on a wide screen: a branded panel that states what the
+ * product is, and a focused form. On a narrow screen the brand panel collapses to
+ * a compact header so the form is not pushed below the fold. All copy comes from
+ * the dictionary, and every control is a real control — there is no decorative
+ * button or placeholder link.
+ *
+ * Client-side validation runs on submit only (never on every keystroke, which
+ * makes a form feel broken) and the server's own field errors replace it when the
+ * request fails, so the two never disagree on screen.
+ */
 export function LoginPage() {
   const { signIn, completeMFA } = useAuth()
+  const { t } = useI18n()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [ssoProviders, setSsoProviders] = useState<SSOProvider[]>([])
@@ -30,12 +34,18 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [mfaCode, setMfaCode] = useState('')
   const [mfaTicket, setMfaTicket] = useState<string | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [formError, setFormError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  // Load the available providers once. A failure here must not break password
-  // sign-in, so it is swallowed: the password form is the fallback.
+  const emailId = useId()
+  const passwordId = useId()
+  const mfaId = useId()
+  const formErrorRef = useRef<HTMLDivElement | null>(null)
+
+  // The provider list is anonymous and optional. A failure must not break
+  // password sign-in, so it is swallowed and the form remains the fallback.
   useEffect(() => {
     let cancelled = false
     ssoApi
@@ -51,8 +61,36 @@ export function LoginPage() {
     }
   }, [])
 
+  // Move focus to the error region so a screen-reader user hears the failure
+  // without hunting for it after a submit.
+  useEffect(() => {
+    if (formError) formErrorRef.current?.focus()
+  }, [formError])
+
+  function validate(): Record<string, string> {
+    const next: Record<string, string> = {}
+    if (mfaTicket) {
+      if (mfaCode.trim() === '') next.mfa = t('login.errorPasswordRequired')
+      return next
+    }
+    if (email.trim() === '') {
+      next.email = t('login.errorEmailRequired')
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      next.email = t('login.errorEmailInvalid')
+    }
+    if (password === '') next.password = t('login.errorPasswordRequired')
+    return next
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
+    const clientErrors = validate()
+    if (Object.keys(clientErrors).length > 0) {
+      setErrors(clientErrors)
+      setFormError(null)
+      return
+    }
+
     setBusy(true)
     setFormError(null)
     setErrors({})
@@ -69,8 +107,6 @@ export function LoginPage() {
       }
       navigate('/', { replace: true })
     } catch (error) {
-      // The server reports validation problems per field, so surface those
-      // inline instead of collapsing everything into one message.
       setErrors(fieldErrors(error))
       setFormError(errorMessage(error))
     } finally {
@@ -78,131 +114,218 @@ export function LoginPage() {
     }
   }
 
+  const ssoMessage = ssoError
+    ? t(`login.errors.${ssoError}` as 'login.errors.sign_in_failed') || t('login.errors.sign_in_failed')
+    : null
+
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'grid',
-        placeItems: 'center',
-        padding: 'var(--space-5)',
-      }}
-    >
-      <div style={{ width: '100%', maxWidth: 380 }}>
-        <div className="row" style={{ justifyContent: 'center', marginBottom: 'var(--space-5)' }}>
-          <span className="sidebar__mark" aria-hidden="true">F</span>
-          <h1 style={{ fontSize: 20 }}>ForgeCRM</h1>
+    <div className="login">
+      <aside className="login__aside" aria-hidden="false">
+        <div className="login__aside-inner">
+          <div className="login__brand">
+            <BrandMark size={30} />
+            <span className="login__brand-name">{t('brand.name')}</span>
+          </div>
+          <p className="login__tagline">{t('brand.tagline')}</p>
+          <p className="login__description">{t('brand.description')}</p>
+          <ul className="login__features">
+            {(['feature1', 'feature2', 'feature3'] as const).map((key) => (
+              <li key={key} className="login__feature">
+                <span className="login__feature-dot" aria-hidden="true" />
+                {t(`brand.${key}`)}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <ul className="login__trust">
+          {(['selfHosted', 'encrypted', 'audit'] as const).map((key) => (
+            <li key={key}>{t(`login.trust.${key}`)}</li>
+          ))}
+        </ul>
+      </aside>
+
+      <main className="login__main">
+        <div className="login__topbar">
+          <div className="login__brand login__brand--compact">
+            <BrandMark size={24} />
+            <span className="login__brand-name">{t('brand.name')}</span>
+          </div>
+          <LoginControls />
         </div>
 
-        <div className="card">
-          <div className="card__body">
-            <form onSubmit={handleSubmit} className="stack" noValidate>
-              <h2 style={{ marginBottom: 'var(--space-2)' }}>
-                {mfaTicket ? 'Two-factor verification' : 'Sign in'}
-              </h2>
+        <div className="login__panel">
+          <header className="login__header">
+            <h1 className="login__title">{mfaTicket ? t('login.mfaTitle') : t('login.title')}</h1>
+            {!mfaTicket ? <p className="login__subtitle">{t('login.subtitle')}</p> : null}
+          </header>
 
-              {formError ? <Alert tone="error">{formError}</Alert> : null}
+          <div ref={formErrorRef} tabIndex={-1} className="login__error-slot">
+            {formError ? <Alert tone="error">{formError}</Alert> : null}
+            {!mfaTicket && ssoMessage ? <Alert tone="error">{ssoMessage}</Alert> : null}
+          </div>
 
-              {!mfaTicket && ssoError ? (
-                <Alert tone="error">
-                  {SSO_ERROR_MESSAGES[ssoError] ?? SSO_ERROR_MESSAGES.sign_in_failed}
-                </Alert>
-              ) : null}
-
-              {mfaTicket ? (
-                <Field
-                  label="Authentication code"
-                  htmlFor="mfa-code"
-                  required
-                  hint="Enter the code from your authenticator app."
-                >
+          <form onSubmit={handleSubmit} className="login__form" noValidate>
+            {mfaTicket ? (
+              <div className="login-field">
+                <label className="login-field__label" htmlFor={mfaId}>
+                  {t('login.mfaLabel')}
+                </label>
+                <input
+                  id={mfaId}
+                  className={`login-field__input${errors.mfa ? ' login-field__input--invalid' : ''}`}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  autoFocus
+                  value={mfaCode}
+                  onChange={(event) => setMfaCode(event.target.value)}
+                  aria-invalid={errors.mfa ? true : undefined}
+                />
+                <span className="login-field__hint">{t('login.mfaHint')}</span>
+                {errors.mfa ? (
+                  <span className="login-field__error" role="alert">
+                    {errors.mfa}
+                  </span>
+                ) : null}
+              </div>
+            ) : (
+              <>
+                <div className="login-field">
+                  <label className="login-field__label" htmlFor={emailId}>
+                    {t('common.email')}
+                  </label>
                   <input
-                    id="mfa-code"
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
+                    id={emailId}
+                    className={`login-field__input${errors.email ? ' login-field__input--invalid' : ''}`}
+                    type="email"
+                    name="email"
+                    autoComplete="username"
                     autoFocus
-                    value={mfaCode}
-                    onChange={(event) => setMfaCode(event.target.value)}
-                    required
+                    spellCheck={false}
+                    autoCapitalize="none"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    aria-invalid={errors.email ? true : undefined}
+                    aria-describedby={errors.email ? `${emailId}-error` : undefined}
                   />
-                </Field>
-              ) : (
-                <>
-                  <Field label="Email" htmlFor="email" required error={errors.email}>
+                  {errors.email ? (
+                    <span className="login-field__error" id={`${emailId}-error`} role="alert">
+                      {errors.email}
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="login-field">
+                  <label className="login-field__label" htmlFor={passwordId}>
+                    {t('common.password')}
+                  </label>
+                  <div className="login-field__control">
                     <input
-                      id="email"
-                      type="email"
-                      autoComplete="username"
-                      autoFocus
-                      value={email}
-                      onChange={(event) => setEmail(event.target.value)}
-                      required
-                    />
-                  </Field>
-                  <Field label="Password" htmlFor="password" required error={errors.password}>
-                    <input
-                      id="password"
-                      type="password"
+                      id={passwordId}
+                      className={`login-field__input${errors.password ? ' login-field__input--invalid' : ''}`}
+                      type={showPassword ? 'text' : 'password'}
+                      name="password"
                       autoComplete="current-password"
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
-                      required
+                      aria-invalid={errors.password ? true : undefined}
+                      aria-describedby={errors.password ? `${passwordId}-error` : undefined}
                     />
-                  </Field>
-                </>
-              )}
-
-              <button type="submit" className="btn btn--primary" disabled={busy}>
-                {busy ? 'Signing in…' : mfaTicket ? 'Verify' : 'Sign in'}
-              </button>
-
-              {mfaTicket ? (
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--sm"
-                  onClick={() => {
-                    setMfaTicket(null)
-                    setMfaCode('')
-                    setFormError(null)
-                  }}
-                >
-                  Back to sign in
-                </button>
-              ) : null}
-            </form>
-
-            {!mfaTicket && ssoProviders.length > 0 ? (
-              <div className="stack" style={{ marginTop: 'var(--space-4)' }}>
-                <div
-                  role="separator"
-                  aria-label="or"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 'var(--space-3)',
-                    color: 'var(--color-text-muted)',
-                    fontSize: 12,
-                  }}
-                >
-                  <span style={{ flex: 1, height: 1, background: 'var(--color-border)' }} />
-                  or
-                  <span style={{ flex: 1, height: 1, background: 'var(--color-border)' }} />
+                    <button
+                      type="button"
+                      className="login-field__reveal"
+                      onClick={() => setShowPassword((value) => !value)}
+                      aria-pressed={showPassword}
+                      aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')}
+                      title={showPassword ? t('login.hidePassword') : t('login.showPassword')}
+                    >
+                      {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                    </button>
+                  </div>
+                  {errors.password ? (
+                    <span className="login-field__error" id={`${passwordId}-error`} role="alert">
+                      {errors.password}
+                    </span>
+                  ) : null}
                 </div>
-                {ssoProviders.map((provider) => (
-                  <button
-                    key={provider.id}
-                    type="button"
-                    className="btn btn--secondary"
-                    onClick={() => ssoApi.start(provider.key)}
-                  >
-                    Continue with {provider.display_name}
-                  </button>
-                ))}
-              </div>
+              </>
+            )}
+
+            <button type="submit" className="btn btn--primary login__submit" disabled={busy}>
+              {busy
+                ? mfaTicket
+                  ? t('login.mfaSubmitting')
+                  : t('login.submitting')
+                : mfaTicket
+                  ? t('login.mfaSubmit')
+                  : t('login.submit')}
+            </button>
+
+            {mfaTicket ? (
+              <button
+                type="button"
+                className="btn btn--ghost login__back"
+                onClick={() => {
+                  setMfaTicket(null)
+                  setMfaCode('')
+                  setFormError(null)
+                }}
+              >
+                {t('login.backToSignIn')}
+              </button>
             ) : null}
-          </div>
+          </form>
+
+          {!mfaTicket && ssoProviders.length > 0 ? (
+            <div className="login__sso">
+              <div className="login__divider" role="separator" aria-label={t('common.or')}>
+                <span />
+                {t('common.or')}
+                <span />
+              </div>
+              {ssoProviders.map((provider) => (
+                <button
+                  key={provider.id}
+                  type="button"
+                  className="btn btn--secondary login__sso-button"
+                  onClick={() => ssoApi.start(provider.key)}
+                >
+                  {t('login.ssoContinue', { provider: provider.display_name })}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
-      </div>
+      </main>
     </div>
+  )
+}
+
+
+/**
+ * The reveal-password control is an icon, not a text button: the Russian label
+ * ("Показать пароль") is wide enough to overlap the typed password inside the
+ * field. The accessible name is supplied by aria-label, so the glyph is purely
+ * decorative and hidden from assistive technology.
+ */
+function EyeIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M12 5c-5 0-9 4.5-10 7 1 2.5 5 7 10 7s9-4.5 10-7c-1-2.5-5-7-10-7zm0 11a4 4 0 110-8 4 4 0 010 8zm0-2a2 2 0 100-4 2 2 0 000 4z"
+        fill="currentColor"
+      />
+    </svg>
+  )
+}
+
+function EyeOffIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M3 4.3 4.3 3l16.7 16.7-1.3 1.3-3-3A10.6 10.6 0 0112 19c-5 0-9-4.5-10-7a12 12 0 013.2-4.4L3 4.3zM12 7a4 4 0 013.9 5l-1.6-1.6a2 2 0 00-2.7-2.7L9.9 6.1A5 5 0 0112 7zm-6.5.9 1.5 1.5A10 10 0 002.3 12c1 2.5 5 7 9.7 7 1.2 0 2.3-.3 3.3-.7l1.5 1.5A10.5 10.5 0 0112 21c-5 0-9-4.5-10-7a12.6 12.6 0 013.5-6.1z"
+        fill="currentColor"
+      />
+    </svg>
   )
 }

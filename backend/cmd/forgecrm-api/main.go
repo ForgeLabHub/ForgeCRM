@@ -20,26 +20,45 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/google/uuid"
-
 	"github.com/geff1778/forgecrm/internal/api"
-	"github.com/geff1778/forgecrm/internal/audit"
-	"github.com/geff1778/forgecrm/internal/authn"
+	"github.com/geff1778/forgecrm/internal/bootstrap"
 	"github.com/geff1778/forgecrm/internal/config"
 	"github.com/geff1778/forgecrm/internal/database"
 	"github.com/geff1778/forgecrm/internal/httpx"
 	"github.com/geff1778/forgecrm/internal/logging"
 	"github.com/geff1778/forgecrm/internal/migrate"
-	"github.com/geff1778/forgecrm/internal/rbac"
 	"github.com/geff1778/forgecrm/internal/secrets"
 	"github.com/geff1778/forgecrm/internal/wiring"
 )
 
-// version is overridden at build time with -ldflags.
+// version is overridden at build time with -ldflags. When a build host does not
+// pass the linker flags (a platform that builds the repository root and has no
+// notion of build args), FORGECRM_VERSION is used instead, so the value reported
+// by /ready and `-version` is the deployed version rather than the placeholder.
 var version = "0.1.0-dev"
 
-// commit is overridden at build time with -ldflags.
+// commit is overridden at build time with -ldflags, and falls back to
+// FORGECRM_COMMIT for the same reason as version. An empty or "dev" value is
+// replaced, so a missing flag cannot masquerade as a real build.
 var commit = "unknown"
+
+// buildInfo returns the effective version and commit. Linker-set values win; the
+// environment is the fallback; a placeholder is replaced by an explicit marker so
+// an operator can tell "no metadata supplied" from a genuine value.
+func buildInfo() (string, string) {
+	v, c := version, commit
+	if v == "" || v == "0.1.0-dev" || v == "dev" {
+		if env := strings.TrimSpace(os.Getenv("FORGECRM_VERSION")); env != "" {
+			v = env
+		}
+	}
+	if c == "" || c == "unknown" || c == "dev" {
+		if env := strings.TrimSpace(os.Getenv("FORGECRM_COMMIT")); env != "" {
+			c = env
+		}
+	}
+	return v, c
+}
 
 func main() {
 	if err := run(); err != nil {
@@ -53,13 +72,15 @@ func run() error {
 	var (
 		runMigrations  = flag.Bool("migrate", false, "apply database migrations and exit")
 		showVersion    = flag.Bool("version", false, "print the version and exit")
-		bootstrap      = flag.Bool("bootstrap-admin", false, "create the first platform administrator and exit")
+		bootstrapCmd   = flag.Bool("bootstrap-admin", false, "create the first platform administrator and exit")
 		bootstrapEmail = flag.String("bootstrap-email", "", "email address for the bootstrap administrator")
+		bootstrapName  = flag.String("bootstrap-name", "", "display name for the bootstrap administrator")
 	)
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Printf("forgecrm-api %s (%s)\n", version, commit)
+		v, c := buildInfo()
+		fmt.Printf("forgecrm-api %s (%s)\n", v, c)
 		return nil
 	}
 
@@ -68,12 +89,17 @@ func run() error {
 		return fmt.Errorf("load configuration: %w", err)
 	}
 	log := logging.New(cfg.LogLevel, cfg.LogFormat)
+	buildVersion, buildCommit := buildInfo()
 	log.Info("starting forgecrm-api",
-		"version", version, "commit", commit, "env", cfg.Env)
+		"version", buildVersion, "commit", buildCommit, "env", cfg.Env)
 
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)
 	}
+	// Log which settings are present and which subsystems are on, so a deployment
+	// can be inspected without a secret value ever reaching the log. The password
+	// and every other secret is reported as "set" or "unset", never echoed.
+	log.Info("configuration resolved", cfg.Redacted()...)
 
 	if *runMigrations {
 		applied, err := migrate.Up(cfg.DatabaseURL, log)
@@ -103,13 +129,49 @@ func run() error {
 		log.Info("migrations applied on startup", "count", applied)
 	}
 
+	// The schema gate. A reachable database is not a migrated database, and
+	// serving before the schema exists is exactly what produced the production
+	// failure this guard prevents: the process listened, the readiness probe
+	// passed, and the first login died on `relation "users" does not exist`.
+	// The check runs before the listener opens, so an un-migrated deployment fails
+	// fast and loudly instead of accepting traffic it cannot serve.
+	if err := verifySchema(ctx, db, cfg, log); err != nil {
+		return err
+	}
+
 	keyring, err := secrets.NewKeyring(cfg.SecretKey)
 	if err != nil {
 		return fmt.Errorf("initialise the encryption keyring: %w", err)
 	}
 
-	if *bootstrap {
-		return bootstrapAdmin(ctx, db, keyring, cfg, log, *bootstrapEmail)
+	// The bootstrap command runs the same code path the environment-driven
+	// bootstrap uses, so a one-off invocation and a deployment variable cannot
+	// diverge. Flags win over the environment for a single explicit run.
+	if *bootstrapCmd {
+		opts := bootstrap.Options{
+			Email:       firstNonEmpty(*bootstrapEmail, cfg.Bootstrap.AdminEmail),
+			Password:    cfg.Bootstrap.AdminPassword,
+			DisplayName: *bootstrapName,
+		}
+		if strings.TrimSpace(opts.Email) == "" {
+			return errors.New("-bootstrap-email is required (or set FORGECRM_BOOTSTRAP_ADMIN_EMAIL)")
+		}
+		_, err := bootstrap.Admin(ctx, db, log, opts)
+		return err
+	}
+
+	// A deployment that sets the bootstrap variables expects the first owner to
+	// exist after startup. Running it here means a fresh database becomes usable
+	// without a separate manual step, and the no-op when an owner already exists
+	// makes a restart harmless.
+	if err := cfg.ValidateBootstrap(); err != nil {
+		return fmt.Errorf("invalid bootstrap configuration: %w", err)
+	}
+	if _, err := bootstrap.Admin(ctx, db, log, bootstrap.Options{
+		Email:    cfg.Bootstrap.AdminEmail,
+		Password: cfg.Bootstrap.AdminPassword,
+	}); err != nil {
+		return fmt.Errorf("bootstrap the first administrator: %w", err)
 	}
 
 	// The limiter store is built before the services so that an unreachable Redis is
@@ -184,8 +246,8 @@ func run() error {
 		MCPCredentials: services.MCPCredentials,
 		Idempotency:    services.Idempotency,
 		StartedAt:      time.Now(),
-		Version:        version,
-		BuildCommit:    commit,
+		Version:        buildVersion,
+		BuildCommit:    buildCommit,
 	}, limiterStore, trustedProxies)
 	if err != nil {
 		return err
@@ -233,86 +295,53 @@ func run() error {
 	return nil
 }
 
-// bootstrapAdmin creates the first platform administrator.
+// verifySchema refuses to start when the database does not yet carry the schema
+// the binary expects.
 //
-// Design choices:
-//   - the account is created only if no platform owner exists, so the command is
-//     safe to leave in a deployment script;
-//   - the password is read from the environment, never from an argument, so it
-//     does not appear in the process list or shell history;
-//   - a password is never defaulted: an operator must supply one.
-func bootstrapAdmin(ctx context.Context, db *database.DB, keyring *secrets.Keyring,
-	cfg *config.Config, log *slog.Logger, email string) error {
+// This is the guard that closes the production failure this change set is about.
+// Before it, the API connected, applied migrations only when told to, and then
+// listened regardless: with FORGECRM_MIGRATE_ON_START unset on a fresh database
+// the process served happily while every query failed with `relation "users" does
+// not exist`. The distinction it enforces is between "the database is reachable"
+// and "the schema is ready", which the readiness probe alone did not make.
+//
+// When migrations are configured to run on startup they have already run by the
+// time this is called, so a failure here is a real schema problem and not a
+// missing flag. When they are not, the error names the two ways to apply them.
+func verifySchema(ctx context.Context, db *database.DB, cfg *config.Config, log *slog.Logger) error {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
 
-	if strings.TrimSpace(email) == "" {
-		return errors.New("--bootstrap-email is required")
-	}
-	password := os.Getenv("FORGECRM_BOOTSTRAP_PASSWORD")
-	if password == "" {
-		return errors.New("FORGECRM_BOOTSTRAP_PASSWORD must be set; there is no default password")
-	}
-	if err := authn.ValidatePassword(password); err != nil {
-		return fmt.Errorf("the bootstrap password is not acceptable: %w", err)
+	if err := migrate.Check(ctx, db.Pool()); err != nil {
+		if migrate.IsSchemaNotReady(err) && !cfg.RunMigrationsOnStart {
+			return fmt.Errorf("%w (FORGECRM_MIGRATE_ON_START is false, so the API did not apply them; "+
+				"set it to true or run `forgecrm-api -migrate` as a deploy step)", err)
+		}
+		return err
 	}
 
-	var existing int64
-	if err := db.Pool().QueryRow(ctx,
-		`SELECT count(*) FROM users WHERE is_platform_owner`).Scan(&existing); err != nil {
-		return fmt.Errorf("check for an existing platform owner: %w", err)
-	}
-	if existing > 0 {
-		log.Info("a platform owner already exists; nothing to do")
+	state, err := migrate.Status(cfg.DatabaseURL)
+	if err != nil {
+		// The tables exist, so this is informational rather than fatal: the version
+		// table may be absent when the schema was built by another tool.
+		log.Warn("schema is present but its migration version could not be read", "error", err)
 		return nil
 	}
-
-	hash, err := secrets.HashPassword(password)
-	if err != nil {
-		return fmt.Errorf("hash the bootstrap password: %w", err)
+	if state.Dirty {
+		return fmt.Errorf("database schema is dirty at version %d; a migration failed partway "+
+			"and must be repaired before the API can serve", state.Version)
 	}
+	log.Info("schema ready", "version", state.Version)
+	return nil
+}
 
-	auditLog := audit.New(db)
-	rbacSvc := rbac.NewService(db)
-	email = strings.ToLower(strings.TrimSpace(email))
-
-	return db.WithTx(ctx, func(ctx context.Context, _ database.Tx) error {
-		var userID uuid.UUID
-		const insUser = `
-			INSERT INTO users (email, password_hash, display_name, status, is_platform_owner)
-			VALUES ($1, $2, $3, 'active', true)
-			RETURNING id`
-		if err := db.Q(ctx).QueryRow(ctx, insUser, email, hash, "Platform owner").Scan(&userID); err != nil {
-			return fmt.Errorf("create the bootstrap user: %w", err)
+// firstNonEmpty returns the first non-blank value, used to let an explicit flag
+// override an environment variable without repeating the blank check.
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return v
 		}
-
-		// Give the owner its own organization so the platform is usable at once.
-		var orgID uuid.UUID
-		const insOrg = `
-			INSERT INTO organizations (name, slug) VALUES ('Default organization', 'default')
-			ON CONFLICT (slug) DO UPDATE SET name = organizations.name
-			RETURNING id`
-		if err := db.Q(ctx).QueryRow(ctx, insOrg).Scan(&orgID); err != nil {
-			return fmt.Errorf("create the default organization: %w", err)
-		}
-		const insMember = `
-			INSERT INTO memberships (user_id, organization_id, is_org_owner)
-			VALUES ($1, $2, true) ON CONFLICT (user_id, organization_id) DO UPDATE SET is_org_owner = true`
-		if _, err := db.Q(ctx).Exec(ctx, insMember, userID, orgID); err != nil {
-			return fmt.Errorf("add the owner to the organization: %w", err)
-		}
-		if _, err := rbacSvc.ClonePlatformRoles(ctx, orgID); err != nil {
-			return fmt.Errorf("seed tenant roles: %w", err)
-		}
-		const grant = `
-			INSERT INTO user_roles (user_id, role_id, organization_id)
-			SELECT $1, r.id, $2 FROM roles r
-			WHERE r.organization_id = $2 AND r.key = 'tenant_admin'
-			ON CONFLICT (user_id, role_id) DO NOTHING`
-		if _, err := db.Q(ctx).Exec(ctx, grant, userID, orgID); err != nil {
-			return fmt.Errorf("grant the tenant administrator role: %w", err)
-		}
-		return auditLog.Record(ctx, audit.Entry{
-			OrganizationID: &orgID, ActorUserID: &userID, ActorType: "system",
-			Action: "platform.bootstrap_owner_created", EntityType: "user", EntityID: userID.String(),
-		})
-	})
+	}
+	return ""
 }

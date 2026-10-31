@@ -3,15 +3,19 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { GlobalSearch } from './GlobalSearch'
 import { useGlobalSearchShortcut } from '../hooks/useGlobalSearch'
+import { useI18n, type TranslationKey } from '../i18n'
+import { useTheme, type ThemeMode } from '../theme'
 
 interface NavEntry {
   to: string
-  label: string
+  /** Translation key for the label, resolved at render so a language change
+   *  relabels the whole sidebar without a reload. */
+  labelKey: TranslationKey
   permission?: string
 }
 
 interface NavGroup {
-  label: string
+  labelKey: TranslationKey
   items: NavEntry[]
 }
 
@@ -20,66 +24,73 @@ interface NavGroup {
  * reads as a product rather than as a route table. Each entry declares the
  * permission it needs and is hidden without it, but the server enforces the
  * same permission independently: hiding a link is convenience, not security.
+ *
+ * Labels are translation keys, not literals, so switching language relabels the
+ * navigation as one unit instead of leaving half the sidebar in the old tongue.
  */
 const NAV_GROUPS: NavGroup[] = [
   {
-    label: 'Workspace',
+    labelKey: 'nav.workspace',
     items: [
-      { to: '/', label: 'Overview' },
-      { to: '/accounts', label: 'Accounts', permission: 'accounts.read' },
-      { to: '/contacts', label: 'Contacts', permission: 'contacts.read' },
-      { to: '/leads', label: 'Leads', permission: 'leads.read' },
-      { to: '/deals', label: 'Deals', permission: 'deals.read' },
-      { to: '/tasks', label: 'Tasks', permission: 'tasks.read' },
-      { to: '/tickets', label: 'Support', permission: 'tickets.read' },
-      { to: '/reports', label: 'Reports', permission: 'reports.read' },
-      { to: '/simulation', label: 'Simulation Lab', permission: 'simulation.read' },
-      { to: '/forecast', label: 'Forecasting', permission: 'forecast.read' },
-      { to: '/risk', label: 'Risk', permission: 'risk.read' },
+      { to: '/', labelKey: 'nav.overview' },
+      { to: '/accounts', labelKey: 'nav.accounts', permission: 'accounts.read' },
+      { to: '/contacts', labelKey: 'nav.contacts', permission: 'contacts.read' },
+      { to: '/leads', labelKey: 'nav.leads', permission: 'leads.read' },
+      { to: '/deals', labelKey: 'nav.deals', permission: 'deals.read' },
+      { to: '/tasks', labelKey: 'nav.tasks', permission: 'tasks.read' },
+      { to: '/tickets', labelKey: 'nav.support', permission: 'tickets.read' },
+      { to: '/reports', labelKey: 'nav.reports', permission: 'reports.read' },
+      { to: '/simulation', labelKey: 'nav.simulation', permission: 'simulation.read' },
+      { to: '/forecast', labelKey: 'nav.forecasting', permission: 'forecast.read' },
+      { to: '/risk', labelKey: 'nav.risk', permission: 'risk.read' },
     ],
   },
   {
-    label: 'Data',
+    labelKey: 'nav.data',
     items: [
-      { to: '/imports', label: 'Import Center', permission: 'imports.read' },
-      { to: '/migrations', label: 'Migrations', permission: 'migrations.read' },
-      { to: '/integrations', label: 'Integrations', permission: 'integrations.read' },
+      { to: '/imports', labelKey: 'nav.importCenter', permission: 'imports.read' },
+      { to: '/migrations', labelKey: 'nav.migrations', permission: 'migrations.read' },
+      { to: '/integrations', labelKey: 'nav.integrations', permission: 'integrations.read' },
     ],
   },
   {
-    label: 'Platform',
+    labelKey: 'nav.platform',
     items: [
-      { to: '/webhooks', label: 'Webhooks', permission: 'webhooks.manage' },
-      { to: '/events', label: 'Events', permission: 'events.read' },
-      { to: '/workflows', label: 'Workflows', permission: 'workflows.read' },
-      { to: '/jobs', label: 'Background jobs', permission: 'jobs.read' },
-      { to: '/approvals', label: 'Agent approvals', permission: 'approvals.read' },
-      { to: '/notifications', label: 'Notifications', permission: 'notifications.read' },
-      { to: '/ai', label: 'AI & MCP', permission: 'ai.read' },
+      { to: '/webhooks', labelKey: 'nav.webhooks', permission: 'webhooks.manage' },
+      { to: '/events', labelKey: 'nav.events', permission: 'events.read' },
+      { to: '/workflows', labelKey: 'nav.workflows', permission: 'workflows.read' },
+      { to: '/jobs', labelKey: 'nav.jobs', permission: 'jobs.read' },
+      { to: '/approvals', labelKey: 'nav.approvals', permission: 'approvals.read' },
+      { to: '/notifications', labelKey: 'nav.notifications', permission: 'notifications.read' },
+      { to: '/ai', labelKey: 'nav.ai', permission: 'ai.read' },
     ],
   },
   {
-    label: 'Administration',
+    labelKey: 'nav.administration',
     items: [
-      { to: '/admin/users', label: 'Users', permission: 'users.read' },
-      { to: '/admin/roles', label: 'Roles', permission: 'roles.read' },
-      { to: '/admin/organizations', label: 'Organizations', permission: 'organizations.read' },
-      { to: '/admin/teams', label: 'Teams', permission: 'teams.manage' },
-      { to: '/admin/email', label: 'Email', permission: 'email.manage' },
-      { to: '/admin/telegram', label: 'Telegram', permission: 'email.manage' },
-      { to: '/admin/consent', label: 'Consent', permission: 'consent.read' },
-      { to: '/admin/sso', label: 'Single sign-on', permission: 'sso.read' },
-      { to: '/admin/mcp-credentials', label: 'MCP credentials', permission: 'mcp.credentials.read' },
-      { to: '/admin/configuration', label: 'Configuration', permission: 'tenant.settings.read' },
-      { to: '/admin/audit', label: 'Audit log', permission: 'audit.read' },
-      { to: '/admin/security', label: 'Security', permission: 'security.read' },
-      { to: '/admin/diagnostics', label: 'Diagnostics', permission: 'logs.read' },
+      { to: '/admin/users', labelKey: 'nav.users', permission: 'users.read' },
+      { to: '/admin/roles', labelKey: 'nav.roles', permission: 'roles.read' },
+      { to: '/admin/organizations', labelKey: 'nav.organizations', permission: 'organizations.read' },
+      { to: '/admin/teams', labelKey: 'nav.teams', permission: 'teams.manage' },
+      { to: '/admin/email', labelKey: 'nav.email', permission: 'email.manage' },
+      { to: '/admin/telegram', labelKey: 'nav.telegram', permission: 'email.manage' },
+      { to: '/admin/consent', labelKey: 'nav.consent', permission: 'consent.read' },
+      { to: '/admin/sso', labelKey: 'nav.sso', permission: 'sso.read' },
+      { to: '/admin/mcp-credentials', labelKey: 'nav.mcpCredentials', permission: 'mcp.credentials.read' },
+      { to: '/admin/configuration', labelKey: 'nav.configuration', permission: 'tenant.settings.read' },
+      { to: '/admin/audit', labelKey: 'nav.audit', permission: 'audit.read' },
+      { to: '/admin/security', labelKey: 'nav.security', permission: 'security.read' },
+      { to: '/admin/diagnostics', labelKey: 'nav.diagnostics', permission: 'logs.read' },
     ],
   },
 ]
 
+const THEME_ICON: Record<ThemeMode, string> = { light: '☀', dark: '☾', system: '◐' }
+
 export function AppShell() {
   const { session, signOut, can } = useAuth()
+  const { t } = useI18n()
+  const { mode, cycle } = useTheme()
   const [menuOpen, setMenuOpen] = useState(false)
   const search = useGlobalSearchShortcut()
 
@@ -93,12 +104,12 @@ export function AppShell() {
       <aside className={menuOpen ? 'sidebar sidebar--open' : 'sidebar'}>
         <div className="sidebar__brand">
           <span className="sidebar__mark" aria-hidden="true">F</span>
-          <span>ForgeCRM</span>
+          <span>{t('brand.name')}</span>
         </div>
-        <nav aria-label="Main navigation">
+        <nav aria-label={t('nav.mainNavigation')}>
           {groups.map((group) => (
-            <div key={group.label}>
-              <div className="sidebar__group-label">{group.label}</div>
+            <div key={group.labelKey}>
+              <div className="sidebar__group-label">{t(group.labelKey)}</div>
               {group.items.map((item) => (
                 <NavLink
                   key={item.to}
@@ -107,7 +118,7 @@ export function AppShell() {
                   className={({ isActive }) => (isActive ? 'nav-item nav-item--active' : 'nav-item')}
                   onClick={() => setMenuOpen(false)}
                 >
-                  {item.label}
+                  {t(item.labelKey)}
                 </NavLink>
               ))}
             </div>
@@ -121,14 +132,14 @@ export function AppShell() {
             <button
               type="button"
               className="btn btn--ghost btn--sm sidebar-toggle"
-              aria-label="Toggle navigation"
+              aria-label={t('nav.menu')}
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen((open) => !open)}
             >
-              Menu
+              {t('nav.menu')}
             </button>
             <span className="topbar__org">
-              {session?.organization?.name || 'ForgeCRM'}
+              {session?.organization?.name || t('brand.name')}
             </span>
             <button
               type="button"
@@ -136,8 +147,18 @@ export function AppShell() {
               onClick={() => search.setOpen(true)}
               aria-keyshortcuts="Control+K Meta+K"
             >
-              Search
+              {t('nav.search')}
               <kbd className="kbd">Ctrl K</kbd>
+            </button>
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm theme-toggle"
+              onClick={cycle}
+              aria-label={t('theme.cycle', { mode: t(`theme.${mode}` as 'theme.light') })}
+              title={t('theme.cycle', { mode: t(`theme.${mode}` as 'theme.light') })}
+            >
+              <span aria-hidden="true">{THEME_ICON[mode]}</span>
+              <span className="theme-toggle__text">{t(`theme.${mode}` as 'theme.light')}</span>
             </button>
           </div>
           <div className="topbar__user">
@@ -150,10 +171,10 @@ export function AppShell() {
               </div>
             </div>
             <NavLink to="/account" className="btn btn--ghost btn--sm">
-              Account
+              {t('nav.account')}
             </NavLink>
             <button type="button" className="btn btn--secondary btn--sm" onClick={() => void signOut()}>
-              Sign out
+              {t('common.signOut')}
             </button>
           </div>
         </header>

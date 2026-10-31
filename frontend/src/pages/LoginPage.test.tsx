@@ -13,6 +13,8 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { LoginPage } from './LoginPage'
 import { AuthProvider } from '../hooks/useAuth'
+import { I18nProvider } from '../i18n'
+import { ThemeProvider } from '../theme'
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -23,11 +25,15 @@ function json(body: unknown, status = 200): Response {
 
 function renderLogin(initialEntry = '/login') {
   return render(
-    <MemoryRouter initialEntries={[initialEntry]}>
-      <AuthProvider>
-        <LoginPage />
-      </AuthProvider>
-    </MemoryRouter>,
+    <I18nProvider>
+      <ThemeProvider>
+        <MemoryRouter initialEntries={[initialEntry]}>
+          <AuthProvider>
+            <LoginPage />
+          </AuthProvider>
+        </MemoryRouter>
+      </ThemeProvider>
+    </I18nProvider>,
   )
 }
 

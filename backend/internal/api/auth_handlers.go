@@ -9,6 +9,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/audit"
 	"github.com/geff1778/forgecrm/internal/authn"
 	"github.com/geff1778/forgecrm/internal/httpx"
+	"github.com/geff1778/forgecrm/internal/migrate"
 	"github.com/geff1778/forgecrm/internal/rbac"
 )
 
@@ -21,8 +22,20 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleReady is a readiness probe: it reports whether the database is reachable.
-// A 503 here keeps traffic away from an instance that cannot serve requests.
+// handleReady is a readiness probe: it reports whether this instance can serve
+// requests, which is a stricter question than "is the database reachable".
+//
+// It checks two things, in order, and reports the specific one that failed so a
+// failing probe is diagnosable from its body:
+//
+//   - the database answers a ping;
+//   - the schema the binary expects is present.
+//
+// The second check is the one that was missing. A reachable but un-migrated
+// database passed the old probe, so an orchestrator routed traffic to an instance
+// whose every query failed with `relation "users" does not exist`. Readiness now
+// means "this process can actually answer requests", which is what the probe is
+// for.
 func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
@@ -33,7 +46,19 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	httpx.WriteJSON(w, map[string]any{"status": "ready"})
+	if err := migrate.Check(ctx, s.deps.DB.Pool()); err != nil {
+		httpx.WriteJSONStatus(w, http.StatusServiceUnavailable, map[string]any{
+			"status": "unavailable",
+			"reason": "database schema is not ready",
+			"detail": err.Error(),
+		})
+		return
+	}
+	httpx.WriteJSON(w, map[string]any{
+		"status":  "ready",
+		"version": s.deps.Version,
+		"commit":  s.deps.BuildCommit,
+	})
 }
 
 // ---------------------------------------------------------------------------

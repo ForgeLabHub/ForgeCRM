@@ -4,10 +4,12 @@ import { useMutation } from '@tanstack/react-query'
 import { authApi } from '../api/auth'
 import { errorMessage, fieldErrors } from '../api/client'
 import { useAuth } from '../hooks/useAuth'
+import { useT } from '../i18n'
 import { Alert, Badge, Card, Field, PageHeader } from '../components/ui'
 
 export function AccountPage() {
   const { session } = useAuth()
+  const t = useT()
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -37,7 +39,7 @@ export function AccountPage() {
     setErrors({})
     setChanged(false)
     if (newPassword !== confirmPassword) {
-      setErrors({ confirm_password: 'The two passwords do not match.' })
+      setErrors({ confirm_password: t('profile.mismatch') })
       return
     }
     changePassword.mutate()
@@ -45,26 +47,26 @@ export function AccountPage() {
 
   return (
     <>
-      <PageHeader title="Account" meta="Your profile, permissions and password." />
+      <PageHeader title={t('profile.title')} meta={t('profile.meta')} />
 
       <div className="grid grid--split">
-        <Card title="Profile">
+        <Card title={t('profile.card')}>
           <dl className="dl">
-            <dt>Name</dt>
+            <dt>{t('fields.name')}</dt>
             <dd>{session?.user.display_name}</dd>
-            <dt>Email</dt>
+            <dt>{t('fields.email')}</dt>
             <dd>{session?.user.email}</dd>
-            <dt>Organization</dt>
+            <dt>{t('profile.organization')}</dt>
             <dd>{session?.organization.name}</dd>
-            <dt>Second factor</dt>
+            <dt>{t('profile.secondFactor')}</dt>
             <dd>
               {session?.user.mfa_enabled ? (
-                <Badge tone="success">enabled</Badge>
+                <Badge tone="success">{t('profile.enabled')}</Badge>
               ) : (
-                <Badge tone="warning">not enabled</Badge>
+                <Badge tone="warning">{t('profile.notEnabled')}</Badge>
               )}
             </dd>
-            <dt>Teams</dt>
+            <dt>{t('profile.teams')}</dt>
             <dd>
               {session?.teams.length ? (
                 <div className="row row--wrap">
@@ -75,16 +77,15 @@ export function AccountPage() {
                   ))}
                 </div>
               ) : (
-                <span className="text-subtle">None</span>
+                <span className="text-subtle">{t('profile.none')}</span>
               )}
             </dd>
           </dl>
         </Card>
 
-        <Card title="Permissions">
+        <Card title={t('profile.permissions')}>
           <p className="text-muted text-sm" style={{ marginBottom: 'var(--space-3)' }}>
-            These are the permissions your account currently holds. They are enforced on the server
-            for every request, not only by what the interface shows.
+            {t('profile.permissionsHint')}
           </p>
           <div className="row row--wrap">
             {(session?.permissions ?? []).map((permission) => (
@@ -97,14 +98,14 @@ export function AccountPage() {
       </div>
 
       <div style={{ marginTop: 'var(--space-5)' }}>
-        <Card title="Change password">
+        <Card title={t('profile.changePassword')}>
           <form onSubmit={handleSubmit}>
             <div className="stack" style={{ maxWidth: 420 }}>
               {formError ? <Alert tone="error">{formError}</Alert> : null}
-              {changed ? <Alert tone="success">Your password has been changed.</Alert> : null}
+              {changed ? <Alert tone="success">{t('profile.changed')}</Alert> : null}
 
               <Field
-                label="Current password"
+                label={t('profile.currentPassword')}
                 htmlFor="current-password"
                 required
                 error={errors.current_password}
@@ -120,11 +121,11 @@ export function AccountPage() {
               </Field>
 
               <Field
-                label="New password"
+                label={t('profile.newPassword')}
                 htmlFor="new-password"
                 required
                 error={errors.new_password}
-                hint="At least 12 characters. A longer passphrase is stronger than a short complex one."
+                hint={t('profile.passwordHint')}
               >
                 <input
                   id="new-password"
@@ -137,7 +138,7 @@ export function AccountPage() {
               </Field>
 
               <Field
-                label="Confirm new password"
+                label={t('profile.confirmPassword')}
                 htmlFor="confirm-password"
                 required
                 error={errors.confirm_password}
@@ -155,7 +156,7 @@ export function AccountPage() {
 
             <div className="form-actions">
               <button type="submit" className="btn btn--primary" disabled={changePassword.isPending}>
-                {changePassword.isPending ? 'Changing…' : 'Change password'}
+                {changePassword.isPending ? t('profile.changing') : t('profile.changePassword')}
               </button>
             </div>
           </form>

@@ -4,6 +4,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter } from 'react-router-dom'
 import { App } from './App'
 import { AuthProvider } from './hooks/useAuth'
+import { I18nProvider } from './i18n'
+import { ThemeProvider } from './theme'
 import { ApiError } from './api/client'
 import './index.css'
 
@@ -28,11 +30,15 @@ if (!rootElement) throw new Error('Root element #root is missing from index.html
 createRoot(rootElement).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
-      </BrowserRouter>
+      <I18nProvider>
+        <ThemeProvider>
+          <BrowserRouter>
+            <AuthProvider>
+              <App />
+            </AuthProvider>
+          </BrowserRouter>
+        </ThemeProvider>
+      </I18nProvider>
     </QueryClientProvider>
   </StrictMode>,
 )

@@ -3,7 +3,9 @@
 #   cp .env.example .env && edit .env
 #   docker compose up -d
 #
-# The API applies migrations on start when FORGECRM_MIGRATE_ON_START=true.
+# The API applies migrations on start only when FORGECRM_MIGRATE_ON_START=true;
+# the code default is false. .env.example sets it to true so a local
+# `docker compose up` migrates in one step; .env is read below via env_file.
 # Create the first administrator once, after the API is healthy. The password is
 # supplied through the environment so it never lands in the process list:
 #   FORGECRM_BOOTSTRAP_PASSWORD='...' docker compose run --rm --no-deps \
