@@ -17,7 +17,7 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/geff1778/forgecrm/internal/migrations"
 )
@@ -127,8 +127,16 @@ var RequiredTables = []string{"users", "organizations", "sessions", "schema_migr
 //
 // It is deliberately cheap — one catalog query — so the readiness probe can run
 // it on every poll without measuring a table scan.
-func Check(ctx context.Context, pool *pgxpool.Pool) error {
-	rows, err := pool.Query(ctx,
+// Queryer is the narrow slice of a connection pool Check needs: one query.
+// It is defined here rather than importing *pgxpool so this package keeps a
+// single third-party dependency (golang-migrate) and lifts out of the
+// monolith on its own; *pgxpool.Pool satisfies it as-is.
+type Queryer interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+}
+
+func Check(ctx context.Context, db Queryer) error {
+	rows, err := db.Query(ctx,
 		`SELECT c.relname
    FROM pg_class c
    JOIN pg_namespace n ON n.oid = c.relnamespace
