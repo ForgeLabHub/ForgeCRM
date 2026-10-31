@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -121,20 +122,62 @@ func Status(databaseURL string) (State, error) {
 // failure on whichever handler happened to run first.
 var RequiredTables = []string{"users", "organizations", "sessions", "schema_migrations"}
 
-// Check verifies, against a live connection, that the schema is present and
-// usable: every RequiredTable exists. It is the check the API and worker use to
-// refuse to serve before the schema is ready.
+// ExpectedVersion is the highest migration version compiled into this binary.
+// A database below it is missing schema the running code was built against, so a
+// handler added by a newer migration would fail the same way an absent table
+// does.
 //
-// It is deliberately cheap — one catalog query — so the readiness probe can run
-// it on every poll without measuring a table scan.
-// Queryer is the narrow slice of a connection pool Check needs: one query.
-// It is defined here rather than importing *pgxpool so this package keeps a
-// single third-party dependency (golang-migrate) and lifts out of the
-// monolith on its own; *pgxpool.Pool satisfies it as-is.
-type Queryer interface {
-	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+// The answer is fixed for the life of the process, so it is computed once: the
+// readiness probe calls this on every poll.
+func ExpectedVersion() (uint, error) {
+	return expectedVersionOnce()
 }
 
+var expectedVersionOnce = sync.OnceValues(func() (uint, error) {
+	src, err := iofs.New(migrations.FS, ".")
+	if err != nil {
+		return 0, fmt.Errorf("load embedded migrations: %w", err)
+	}
+	defer func() { _ = src.Close() }()
+
+	first, err := src.First()
+	if err != nil {
+		return 0, fmt.Errorf("read first migration: %w", err)
+	}
+	highest := first
+	for cur := first; ; {
+		next, err := src.Next(cur)
+		if err != nil {
+			break
+		}
+		highest = next
+		cur = next
+	}
+	return highest, nil
+})
+
+// Queryer is the narrow slice of a connection pool this package reads through.
+// It is defined here rather than importing *pgxpool so the package keeps a
+// single third-party dependency (golang-migrate) and lifts out of the monolith
+// on its own; *pgxpool.Pool satisfies it as-is.
+type Queryer interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+// Check verifies, against a live connection, that the schema is present, usable
+// and current: every RequiredTable exists and the applied migration version is
+// not behind this binary. It is the check the API and worker use to refuse to
+// serve before the schema is ready.
+//
+// Checking the version as well as the tables closes a gap the table list cannot:
+// a database one migration behind has every listed table, so the probe reported
+// ready while a feature added by the newer migration answered 500 with
+// `relation "..." does not exist`. That is the same failure the table check
+// exists to prevent, just one migration later.
+//
+// It stays cheap — one catalog query and one version read — so the readiness
+// probe can run it on every poll without measuring a table scan.
 func Check(ctx context.Context, db Queryer) error {
 	rows, err := db.Query(ctx,
 		`SELECT c.relname
@@ -168,6 +211,33 @@ func Check(ctx context.Context, db Queryer) error {
 	if len(missing) > 0 {
 		return &SchemaNotReadyError{Missing: missing}
 	}
+	return checkVersionDrift(ctx, db)
+}
+
+// checkVersionDrift refuses a database older than the binary. A database ahead
+// of the binary is allowed: applying migrations before rolling out the new code
+// is the normal, zero-downtime order, and an older process reading a slightly
+// newer schema is the safe direction.
+//
+// When no version is recorded — a schema assembled by another tool — the check
+// stands down rather than guess, because the table check above is then the only
+// reliable signal.
+func checkVersionDrift(ctx context.Context, db Queryer) error {
+	var applied uint
+	err := db.QueryRow(ctx, `SELECT version FROM schema_migrations LIMIT 1`).Scan(&applied)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return nil
+	}
+	expected, err := ExpectedVersion()
+	if err != nil {
+		return nil
+	}
+	if applied < expected {
+		return &SchemaBehindError{Applied: applied, Expected: expected}
+	}
 	return nil
 }
 
@@ -181,10 +251,26 @@ func (e *SchemaNotReadyError) Error() string {
 		"run migrations first (FORGECRM_MIGRATE_ON_START=true or `forgecrm-api -migrate`)", e.Missing)
 }
 
-// IsSchemaNotReady reports whether err is a schema-readiness failure.
+// SchemaBehindError reports a schema that exists but predates this binary.
+type SchemaBehindError struct {
+	Applied  uint
+	Expected uint
+}
+
+func (e *SchemaBehindError) Error() string {
+	return fmt.Sprintf("database schema is behind this build: applied migration %d, this build expects %d; "+
+		"run migrations first (FORGECRM_MIGRATE_ON_START=true or `forgecrm-api -migrate`)", e.Applied, e.Expected)
+}
+
+// IsSchemaNotReady reports whether err is a schema-readiness failure, whether the
+// schema is absent or merely behind.
 func IsSchemaNotReady(err error) bool {
-	var e *SchemaNotReadyError
-	return errors.As(err, &e)
+	var notReady *SchemaNotReadyError
+	if errors.As(err, &notReady) {
+		return true
+	}
+	var behind *SchemaBehindError
+	return errors.As(err, &behind)
 }
 
 func open(databaseURL string) (*migrate.Migrate, error) {

@@ -13,6 +13,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/geff1778/forgecrm/internal/bootstrap"
@@ -70,6 +71,55 @@ func TestReadySucceedsOnAMigratedDatabase(t *testing.T) {
 	}
 	if body.Status != "ready" {
 		t.Fatalf("/ready status = %q, want ready", body.Status)
+	}
+}
+
+// TestReadyRefusesASchemaBehindTheBuild is the second half of the readiness
+// contract. A database that has every required table but is missing a later
+// migration passes the table check, yet a handler added by that migration fails
+// with `relation "..." does not exist` — the same 500 the probe exists to keep
+// traffic away from. The probe must therefore also refuse a schema that is
+// behind, and say so, rather than reporting ready.
+func TestReadyRefusesASchemaBehindTheBuild(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+
+	// Rewind the recorded version one step without touching the schema. This is
+	// exactly what an operator sees after adding a migration and deploying code
+	// that expects it before the migration has run.
+	var current uint
+	if err := h.db.Pool().QueryRow(ctx, `SELECT version FROM schema_migrations LIMIT 1`).Scan(&current); err != nil {
+		t.Fatalf("read the applied version: %v", err)
+	}
+	if current == 0 {
+		t.Fatal("the harness left no applied migration version")
+	}
+	if _, err := h.db.Pool().Exec(ctx,
+		`UPDATE schema_migrations SET version = version - 1`); err != nil {
+		t.Fatalf("rewind the recorded version: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = h.db.Pool().Exec(context.Background(),
+			`UPDATE schema_migrations SET version = $1`, current)
+	})
+
+	ready := h.do(nil, http.MethodGet, "/ready", "")
+	if ready.Code != http.StatusServiceUnavailable {
+		t.Fatalf("/ready with a behind schema = %d, want 503 (body %s)", ready.Code, ready.Body.String())
+	}
+	var body struct {
+		Status string `json:"status"`
+		Reason string `json:"reason"`
+		Detail string `json:"detail"`
+	}
+	if err := json.Unmarshal(ready.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode /ready: %v (body %s)", err, ready.Body.String())
+	}
+	if body.Status != "unavailable" || body.Reason != "database schema is not ready" {
+		t.Fatalf("/ready body = %+v, want an unavailable status naming the schema", body)
+	}
+	if !strings.Contains(body.Detail, "behind this build") {
+		t.Fatalf("/ready detail does not explain the drift: %q", body.Detail)
 	}
 }
 
