@@ -24,6 +24,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/ai"
 	"github.com/geff1778/forgecrm/internal/audit"
 	"github.com/geff1778/forgecrm/internal/config"
+	"github.com/geff1778/forgecrm/internal/consent"
 	"github.com/geff1778/forgecrm/internal/crm"
 	"github.com/geff1778/forgecrm/internal/database"
 	"github.com/geff1778/forgecrm/internal/events"
@@ -86,8 +87,13 @@ func run() error {
 	queue := jobs.NewQueue(db, log)
 	outboxStore := outbox.NewStore(db)
 	dispatcher := events.NewDispatcher(db, auditLog)
-	emailSvc := notify.NewEmailService(&cfg.Email, db, log)
-	telegramSvc := notify.NewTelegramService(&cfg.Telegram, db, log, auditLog, keyring)
+	// The worker builds the same consent gate the API does, so a queued send is
+	// subject to the same policy as a manual one. Without it the queue was a door
+	// around the check the endpoint performed.
+	consentSvc := consent.NewService(db, auditLog)
+	consentGate := wiring.NewConsentGate(consentSvc)
+	emailSvc := notify.NewEmailService(&cfg.Email, db, log, consentGate)
+	telegramSvc := notify.NewTelegramService(&cfg.Telegram, db, log, auditLog, keyring, consentGate)
 	hub := integrations.NewHub(db, auditLog, keyring)
 
 	// The attachment store is optional and reports itself off when unconfigured, so the
@@ -310,20 +316,45 @@ func (r *handlerRegistry) handle(ctx context.Context, queue *jobs.Queue, job *jo
 			TextBody string     `json:"text_body"`
 			Template string     `json:"template"`
 			OrgID    *uuid.UUID `json:"organization_id"`
+			// Purpose and ActorUserID travel with the job so the consent policy is
+			// asked the same question a manual send would ask. A job enqueued without a
+			// purpose gets the strict default, so an old payload cannot become a
+			// marketing send that skipped the rule.
+			Purpose     string     `json:"purpose"`
+			ActorUserID *uuid.UUID `json:"actor_user_id"`
 		}
 		if err := json.Unmarshal(job.Payload, &payload); err != nil {
 			return fmt.Errorf("decode email payload: %w", err)
 		}
-		if !r.email.Enabled() {
-			// A queued email with email disabled is dropped with a log line, not an
-			// error: the platform is expected to run without SMTP.
-			r.log.Info("dropping queued email because SMTP is not configured", "job_id", job.ID)
-			return nil
-		}
-		return r.email.Send(ctx, notify.Message{
+		// The transport is called even when SMTP is off, so the consent policy is
+		// consulted first and a forbidden message is refused on the policy rather than
+		// being dropped silently because mail is unconfigured. The two refusals are then
+		// separated below: both are answers, neither is retried.
+		err := r.email.Send(ctx, notify.Message{
 			To: payload.To, Subject: payload.Subject, HTMLBody: payload.HTMLBody,
 			TextBody: payload.TextBody, Template: payload.Template, OrgID: payload.OrgID,
+			Purpose: payload.Purpose, ActorUserID: payload.ActorUserID,
 		})
+		switch {
+		case err == nil:
+			return nil
+		// A send the policy refuses is refused for a reason that will not change by
+		// trying again: retrying it spends the whole backoff budget and then reports a
+		// "failed" job, which reads as a broken transport rather than a correct refusal.
+		// It is dropped here, visibly, and the refusal is already in the audit trail
+		// because the gate records it.
+		case errors.Is(err, notify.ErrConsentBlocked):
+			r.log.Info("dropping queued email that consent forbids",
+				"job_id", job.ID, "reason", err.Error())
+			return nil
+		// A queued email with email disabled is dropped with a log line, not an error:
+		// the platform is expected to run without SMTP.
+		case errors.Is(err, notify.ErrDisabled):
+			r.log.Info("dropping queued email because SMTP is not configured", "job_id", job.ID)
+			return nil
+		default:
+			return err
+		}
 
 	case jobs.KindRetentionSweep:
 		return r.retentionSweep(ctx)

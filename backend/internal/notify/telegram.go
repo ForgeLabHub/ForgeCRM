@@ -32,13 +32,18 @@ type TelegramService struct {
 	audit   *audit.Logger
 	keyring *secrets.Keyring
 	client  *http.Client
+	gate    ConsentGate
 }
 
 // NewTelegramService builds the Telegram service.
+//
+// The gate is taken here for the same reason as the email transport's: building a
+// transport is the same act as deciding who it must ask before it messages a
+// person, so no caller can reach Telegram without the policy having answered.
 func NewTelegramService(cfg *config.TelegramConfig, db *database.DB, log *slog.Logger,
-	auditLog *audit.Logger, keyring *secrets.Keyring) *TelegramService {
+	auditLog *audit.Logger, keyring *secrets.Keyring, gate ConsentGate) *TelegramService {
 	return &TelegramService{
-		cfg: cfg, db: db, log: log, audit: auditLog, keyring: keyring,
+		cfg: cfg, db: db, log: log, audit: auditLog, keyring: keyring, gate: gate,
 		client: &http.Client{Timeout: 15 * time.Second},
 	}
 }
@@ -324,8 +329,11 @@ func (s *TelegramService) listOwnTasks(ctx context.Context, p *rbac.Principal) (
 	return b.String(), rows.Err()
 }
 
-// SendMessage posts a message to a chat. Used for notifications.
-func (s *TelegramService) SendMessage(ctx context.Context, chatID int64, text string) error {
+// sendMessage posts a message to a chat. It is unexported on purpose: every
+// message this transport sends to a person must pass the consent gate, and the only
+// gated path is NotifyUser. Leaving a public SendMessage would be an ungated door
+// beside a gated one, which is exactly the shape of bypass the gate exists to end.
+func (s *TelegramService) sendMessage(ctx context.Context, chatID int64, text string) error {
 	if !s.Enabled() {
 		return ErrTelegramDisabled
 	}
@@ -355,16 +363,33 @@ func (s *TelegramService) SendMessage(ctx context.Context, chatID int64, text st
 
 // NotifyUser sends a notification to a user's linked Telegram account, if any.
 // The absence of a link is not an error.
-func (s *TelegramService) NotifyUser(ctx context.Context, userID uuid.UUID, text string) error {
+//
+// Consent is checked before the message is sent, against the linked user's own
+// email address and on the telegram channel. The subject is the person, not the
+// chat: a decision recorded for someone's address applies whether they are reached
+// by mail or by bot, and a Telegram message is not exempt because the transport
+// happens to be a bot the user linked themselves. The purpose is transactional: a
+// notification addressed to a member of staff is about the work they are doing, not
+// a marketing message, so it does not require a recorded grant — but an explicit
+// denial or withdrawal still stops it, which is the case this gate is here for.
+func (s *TelegramService) NotifyUser(ctx context.Context, orgID uuid.UUID, userID uuid.UUID, text string) error {
 	if !s.Enabled() {
 		return nil
 	}
 	const q = `
-		SELECT telegram_user_id FROM telegram_links
-		WHERE user_id = $1 AND linked_at IS NOT NULL AND revoked_at IS NULL LIMIT 1`
+		SELECT l.telegram_user_id, u.email
+		FROM telegram_links l
+		JOIN users u ON u.id = l.user_id
+		WHERE l.user_id = $1 AND l.linked_at IS NOT NULL AND l.revoked_at IS NULL LIMIT 1`
 	var chatID int64
-	if err := s.db.Q(ctx).QueryRow(ctx, q, userID).Scan(&chatID); err != nil {
+	var email string
+	if err := s.db.Q(ctx).QueryRow(ctx, q, userID).Scan(&chatID, &email); err != nil {
 		return nil
 	}
-	return s.SendMessage(ctx, chatID, text)
+	// The gate is asked before the bot is contacted, so a message consent forbids is
+	// never sent, rather than being sent and then explained away.
+	if err := enforce(ctx, s.gate, &orgID, &userID, email, string(PurposeTransactional), ChannelTelegram); err != nil {
+		return err
+	}
+	return s.sendMessage(ctx, chatID, text)
 }

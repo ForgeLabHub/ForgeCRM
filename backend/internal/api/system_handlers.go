@@ -16,13 +16,17 @@ import (
 // naturally while still passing an explicit context to the database layer.
 func ctxOrBackground(r *http.Request) context.Context { return r.Context() }
 
-// notifyMessage builds an email message.
+// notifyMessage builds an email message for an account-level send: mail to the
+// person themselves about their own account, with no organization in context. The
+// purpose must not require a recorded grant, which is why these callers say
+// transactional and the transport enforces that choice.
 func notifyMessage(to, subject, htmlBody, template string) notify.Message {
 	return notify.Message{
 		To:       []string{to},
 		Subject:  subject,
 		HTMLBody: htmlBody,
 		Template: template,
+		Purpose:  notify.PurposeTransactional,
 	}
 }
 

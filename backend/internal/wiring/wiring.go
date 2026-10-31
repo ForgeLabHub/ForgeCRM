@@ -129,6 +129,11 @@ func Build(cfg *config.Config, db *database.DB, keyring *secrets.Keyring, log *s
 	rbacSvc := rbac.NewService(db)
 	crmSvc := crm.NewService(db, auditLog, outbox.NewStore(db))
 	queue := jobs.NewQueue(db, log)
+	consentSvc := consent.NewService(db, auditLog)
+	// The transports take the consent gate at construction, so a transport that
+	// exists is a transport that asks before it sends to a person. See
+	// internal/notify/consent.go for why the check lives in the transport.
+	gate := NewConsentGate(consentSvc)
 
 	imports, err := importx.NewService(db, cfg, auditLog, outbox.NewStore(db), crmSvc, queue, cfg.ImportStorageDir)
 	if err != nil {
@@ -167,8 +172,8 @@ func Build(cfg *config.Config, db *database.DB, keyring *secrets.Keyring, log *s
 		Integrations:   integrations.NewHub(db, auditLog, keyring),
 		Events:         events.NewGateway(db, auditLog),
 		Dispatcher:     events.NewDispatcher(db, auditLog),
-		Email:          notify.NewEmailService(&cfg.Email, db, log),
-		Telegram:       notify.NewTelegramService(&cfg.Telegram, db, log, auditLog, keyring),
+		Email:          notify.NewEmailService(&cfg.Email, db, log, gate),
+		Telegram:       notify.NewTelegramService(&cfg.Telegram, db, log, auditLog, keyring, gate),
 		AI:             ai.NewService(&cfg.AI, db, auditLog, crmSvc, log, aiLimiter),
 		Tools:          tools,
 		MCP:            ai.NewMCPServer(tools),
@@ -178,7 +183,7 @@ func Build(cfg *config.Config, db *database.DB, keyring *secrets.Keyring, log *s
 		Risk:           risk.NewService(db, crmSvc, auditLog),
 		OIDC:           oidc.NewService(db, cfg, keyring, auditLog, log),
 		Views:          views.NewService(db, auditLog),
-		Consent:        consent.NewService(db, auditLog),
+		Consent:        consentSvc,
 		MCPCredentials: mcpcred.NewService(db, auditLog),
 		Workflows: workflow.NewEngine(workflow.Config{
 			DB:     db,
