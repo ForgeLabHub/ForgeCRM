@@ -302,6 +302,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <li data-op><a href="#op-get-api-v1-system-capabilities"><span class="m m-get">GET</span><span class="p">/api/v1/system/capabilities</span></a></li>
 <li data-op><a href="#op-get-api-v1-system-info"><span class="m m-get">GET</span><span class="p">/api/v1/system/info</span></a></li>
 <li data-op><a href="#op-get-health"><span class="m m-get">GET</span><span class="p">/health</span></a></li>
+<li data-op><a href="#op-get-metrics"><span class="m m-get">GET</span><span class="p">/metrics</span></a></li>
 <li data-op><a href="#op-get-ready"><span class="m m-get">GET</span><span class="p">/ready</span></a></li>
 </ul>
 <div class="nav-group" data-group>users-and-permissions</div>
@@ -7110,6 +7111,32 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <div class="resp"><div class="resp-head"><span class="code c-client">429</span> Too many requests. Retry after the interval in `Retry-After`.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
 </div>
 <div class="resp"><div class="resp-head"><span class="code c-server">500</span> Unexpected failure. The detail is deliberately generic; the cause is in the server log.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+</article>
+<article class="op" id="op-get-metrics" data-op>
+<h3><span class="m m-get">GET</span> <code class="path">/metrics</code></h3>
+<p class="summary">Prometheus metrics in the text exposition format. Reachable without a session, so it is closed unless `FORGECRM_METRICS_TOKEN` is set; a scrape must present that token in the `X-Metrics-Token` header. With no token configured it answers 503 `disabled`.</p>
+<div class="op-desc"><p>Prometheus metrics in the text exposition format. Reachable without a session, so it is closed unless `FORGECRM_METRICS_TOKEN` is set; a scrape must present that token in the `X-Metrics-Token` header. With no token configured it answers 503 `disabled`.</p>
+</div>
+<p class="auth anonymous">No authentication required.</p>
+<h4>Responses</h4>
+<div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Metrics in the Prometheus text exposition format (version 0.0.4), one `# HELP`/`# TYPE` block per metric. Reachable without a session, so it requires `FORGECRM_METRICS_TOKEN` in the `X-Metrics-Token` header; with no token configured the server answers 503 `disabled`. Unlabelled by tenant: a tenant id or target URL in a label would multiply the series without bound and leak a customer&#39;s endpoint into a monitoring system.</div><p class="ref">Type: string</p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">400</span> The request was malformed: bad JSON, an unknown field, or a missing required parameter.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">401</span> The `X-Metrics-Token` header is missing or does not match `FORGECRM_METRICS_TOKEN`.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">404</span> No such resource, or none visible to the caller&#39;s organization.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">409</span> The request conflicts with current state, such as a duplicate external identifier.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">422</span> A field failed validation. `error.details` names each field.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">429</span> Too many requests. Retry after the interval in `Retry-After`.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-server">500</span> Unexpected failure. The detail is deliberately generic; the cause is in the server log.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-server">503</span> Metrics scraping is not enabled: no `FORGECRM_METRICS_TOKEN` is configured. Set it to enable the endpoint.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
 </div>
 </article>
 <article class="op" id="op-get-ready" data-op>

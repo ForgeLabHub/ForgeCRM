@@ -79,7 +79,7 @@ func Routes(r chi.Routes) ([]Route, error) {
 // in "Other" is a signal that its path is surprising.
 func Group(path string) string {
 	switch {
-	case path == "/health", path == "/ready", strings.HasPrefix(path, "/api/v1/system"):
+	case path == "/health", path == "/ready", path == "/metrics", strings.HasPrefix(path, "/api/v1/system"):
 		return "System"
 	case strings.HasPrefix(path, "/api/v1/auth"):
 		return "Authentication"
@@ -170,6 +170,7 @@ type Server struct {
 var Anonymous = map[string]string{
 	"GET /health":                       "Liveness probe. Returns 200 while the process is running.",
 	"GET /ready":                        "Readiness probe. Returns 200 only when the database is reachable.",
+	"GET /metrics":                      "Prometheus metrics in the text exposition format. Reachable without a session, so it is closed unless `FORGECRM_METRICS_TOKEN` is set; a scrape must present that token in the `X-Metrics-Token` header. With no token configured it answers 503 `disabled`.",
 	"POST /api/v1/auth/login":           "Sign in and receive a session cookie.",
 	"POST /api/v1/auth/password/forgot": "Request a password reset. The response is identical whether or not the account exists.",
 	"POST /api/v1/auth/password/reset":  "Complete a password reset with a single-use token.",
@@ -434,7 +435,14 @@ func operationFor(rt Route, group string, perms map[string]string, c Contract, r
 
 	// Collection query parameters: the shared pagination contract plus anything the
 	// resource declares.
-	if rt.Method == http.MethodGet && !strings.Contains(rt.Path, "{") {
+	//
+	// A route whose success body is not JSON is not a collection: a metrics scrape or
+	// a file download has no pages to skip. Adding `limit` and `offset` to one would
+	// document a filter the server ignores, which is the kind of promise a generated
+	// client acts on.
+	_, isStreaming := c.StreamingSuccessFor(rt.Key())
+	_, isText := c.TextSuccessFor(rt.Key())
+	if rt.Method == http.MethodGet && !strings.Contains(rt.Path, "{") && !isStreaming && !isText {
 		op.Parameters = append(op.Parameters, listParams()...)
 	}
 	// A mutating request may carry an idempotency key. It is documented on every

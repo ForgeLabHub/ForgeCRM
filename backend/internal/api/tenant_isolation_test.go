@@ -62,6 +62,23 @@ func newHarness(t *testing.T) *harness {
 	return newHarnessWithStore(t, testConfig(t), ratelimit.NewMemoryStore(), url)
 }
 
+// newHarnessWithConfig is newHarness with a caller-supplied configuration.
+//
+// It exists for tests that exercise a setting the default test config does not
+// carry — a metrics token, a trusted proxy list, a tighter rate limit — without
+// rebuilding the whole service graph by hand.
+func newHarnessWithConfig(t *testing.T, cfg *config.Config) *harness {
+	t.Helper()
+
+	url := os.Getenv("FORGECRM_TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("FORGECRM_TEST_DATABASE_URL is not set; skipping integration test")
+	}
+
+	resetSchema(t, url)
+	return newHarnessWithStore(t, cfg, ratelimit.NewMemoryStore(), url)
+}
+
 // resetSchema drops and rebuilds the public schema and applies every migration.
 // It is separate from newHarness because a test that builds more than one server
 // over one database — the cross-replica tests — must reset exactly once, before
@@ -184,6 +201,31 @@ func (h *harness) do(a *actor, method, path, body string) *httptest.ResponseReco
 		if method != http.MethodGet && method != http.MethodHead {
 			req.Header.Set(h.cfg.CSRFHeader, a.csrf)
 		}
+	}
+
+	rec := httptest.NewRecorder()
+	h.server.ServeHTTP(rec, req)
+	return rec
+}
+
+// doWithHeaders is h.do with extra request headers.
+//
+// It exists for the routes that take a header rather than a cookie: the metrics
+// endpoint's shared token, a webhook's signature. h.do carries only the session
+// and CSRF headers, so those routes need this variant.
+func (h *harness) doWithHeaders(a *actor, method, path, body string, headers map[string]string) *httptest.ResponseRecorder {
+	h.t.Helper()
+
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	if a != nil {
+		req.AddCookie(&http.Cookie{Name: h.cfg.SessionCookieName, Value: a.token})
+		if method != http.MethodGet && method != http.MethodHead {
+			req.Header.Set(h.cfg.CSRFHeader, a.csrf)
+		}
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
 	}
 
 	rec := httptest.NewRecorder()
