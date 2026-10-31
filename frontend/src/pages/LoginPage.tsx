@@ -237,8 +237,9 @@ export function LoginPage() {
                       onClick={() => setShowPassword((value) => !value)}
                       aria-pressed={showPassword}
                       aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')}
+                      title={showPassword ? t('login.hidePassword') : t('login.showPassword')}
                     >
-                      {showPassword ? t('login.hidePassword') : t('login.showPassword')}
+                      {showPassword ? <EyeOffIcon /> : <EyeIcon />}
                     </button>
                   </div>
                   {errors.password ? (
@@ -297,5 +298,34 @@ export function LoginPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+
+/**
+ * The reveal-password control is an icon, not a text button: the Russian label
+ * ("Показать пароль") is wide enough to overlap the typed password inside the
+ * field. The accessible name is supplied by aria-label, so the glyph is purely
+ * decorative and hidden from assistive technology.
+ */
+function EyeIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M12 5c-5 0-9 4.5-10 7 1 2.5 5 7 10 7s9-4.5 10-7c-1-2.5-5-7-10-7zm0 11a4 4 0 110-8 4 4 0 010 8zm0-2a2 2 0 100-4 2 2 0 000 4z"
+        fill="currentColor"
+      />
+    </svg>
+  )
+}
+
+function EyeOffIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M3 4.3 4.3 3l16.7 16.7-1.3 1.3-3-3A10.6 10.6 0 0112 19c-5 0-9-4.5-10-7a12 12 0 013.2-4.4L3 4.3zM12 7a4 4 0 013.9 5l-1.6-1.6a2 2 0 00-2.7-2.7L9.9 6.1A5 5 0 0112 7zm-6.5.9 1.5 1.5A10 10 0 002.3 12c1 2.5 5 7 9.7 7 1.2 0 2.3-.3 3.3-.7l1.5 1.5A10.5 10.5 0 0112 21c-5 0-9-4.5-10-7a12.6 12.6 0 013.5-6.1z"
+        fill="currentColor"
+      />
+    </svg>
   )
 }

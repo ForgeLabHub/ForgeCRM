@@ -1001,7 +1001,7 @@ tbody tr:last-child td { border-bottom: none; }
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
-.login-field__control .login-field__input { padding-right: 92px; }
+.login-field__control .login-field__input { padding-right: 40px; }
 
 .login-field__input::placeholder { color: var(--color-text-subtle); }
 
@@ -1023,10 +1023,11 @@ tbody tr:last-child td { border-bottom: none; }
   top: 50%;
   right: 6px;
   transform: translateY(-50%);
-  padding: 5px 8px;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 550;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   color: var(--color-text-muted);
   background: transparent;
   border: none;
@@ -1035,6 +1036,11 @@ tbody tr:last-child td { border-bottom: none; }
 }
 
 .login-field__reveal:hover { color: var(--color-text); }
+
+.login-field__reveal:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
 
 .login-field__error {
   font-size: 12.5px;

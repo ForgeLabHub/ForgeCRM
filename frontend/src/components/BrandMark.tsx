@@ -18,10 +18,10 @@ export function BrandMark({ size = 28 }: { size?: number }) {
       <rect width="32" height="32" rx="8" fill="var(--color-accent)" />
       <path
         d="M10 9.5h12v2.6h-8.7v2.6H20v2.6h-6.7v6.2H10z"
-        fill="#fff"
+        fill="var(--color-on-accent)"
         fillRule="evenodd"
       />
-      <circle cx="22.4" cy="21.6" r="2.1" fill="#fff" opacity="0.55" />
+      <circle cx="22.4" cy="21.6" r="2.1" fill="var(--color-on-accent)" opacity="0.55" />
     </svg>
   )
 }
