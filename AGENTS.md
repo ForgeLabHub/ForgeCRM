@@ -219,6 +219,19 @@ FORGECRM_ENV=development FORGECRM_HTTP_PORT=8080 \
   становится сбоем модульного теста. Маршруты интеллекта также монтируются за
   `requireService`, который отвечает 503, называя подсистему, когда её сервис nil, а не
   паникует.
+- **Тот же список ведёт и интеграционный harness, и он тоже ошибается молча.**
+  `newHarnessWithStore` собирает `api.Deps` вручную из `wiring.Services`, поэтому сервис,
+  забытый там, оставляет маршруты падающими на nil — тем же непрозрачным 500, — и
+  поверхность выглядит непокрытой, а не сломанной. Так `Workflows`, `Simulation`,
+  `Forecast`, `Risk`, `Storage` и `Views` не имели ни одного HTTP-теста, а дефект дефолта
+  часового пояса на API-пути не поймал ни один тест. Второй страж,
+  `TestTestHarnessWiresTheSameServicesAsProduction`, сравнивает оба списка статически, без
+  БД. Мораль общая: когда один список ведут в двух местах, оба места получают стража.
+- **Порт конфигурации подключается к каждому движку, который его читает.**
+  `internal/wiring` собирает движок workflow дважды — для API и для воркера. Подключение
+  `Defaults` только к воркеру оставляло расписание, созданное через `POST /api/v1/workflows`,
+  в UTC: настройка читалась как заданная и не действовала на том пути, которым пользуется
+  человек. Потребитель дефолтов — это каждый экземпляр движка, а не «движок» вообще.
 
 - **Согласие — это свойство получателя, а не сообщения.** `POST /api/v1/admin/email/send`
   принимает `to` как список, но проверка согласия долго спрашивала только `to[0]`. Этого
@@ -288,17 +301,17 @@ FORGECRM_ENV=development FORGECRM_HTTP_PORT=8080 \
   Archtest и набор независимы, поэтому ни устаревшая проверка, ни пропущенное задание CI не
   могут скрыть нарушение.
 
-Сегодня доказаны тридцать три модуля: `netguard`, `analytics`, `ratelimit`,
+Сегодня доказаны тридцать шесть модулей: `netguard`, `analytics`, `ratelimit`,
 `objectstore`, `secrets`, `logging`, `httpx`, два листа `importx` —
 `importx/safe` (распаковка недоверенных архивов) и `importx/parsers` (разбор табличных
 источников), — и `database`, `rbac`, `audit`, `outbox`, `retention`, `agent`, `jobs`,
 `crm`, `storage`, `integrations`, `config`, `workflow`, `events`, `migratex`, `simulate`,
-`forecast`, `risk`, `notify`, `ai`, `importx`, `migrations`, `migrate`, `authn` и
-`constructor` (каждый со своими доказанными зависимостями: `database`, а где нужно
-`logging`, `audit`, `httpx`, `outbox`, `objectstore`, `netguard`, `ratelimit`, `rbac`,
-`secrets`, `analytics`, `crm`, `agent`, `config`, `retention`, `integrations`, `jobs` и
-два листа `importx`). `docs/MODULES.md` и `docs/EXTRACT_READY.md` записывают статус и
-должны совпадать с набором.
+`forecast`, `risk`, `notify`, `ai`, `importx`, `migrations`, `migrate`, `authn`, `oidc`,
+`views`, `constructor` и `tenantconfig` (каждый со своими доказанными зависимостями:
+`database`, а где нужно `logging`, `audit`, `httpx`, `outbox`, `objectstore`, `netguard`,
+`ratelimit`, `rbac`, `secrets`, `analytics`, `crm`, `agent`, `config`, `retention`,
+`integrations`, `jobs` и два листа `importx`). `docs/MODULES.md` и `docs/EXTRACT_READY.md`
+записывают статус и должны совпадать с набором.
 
 Написание первых тестов модуля само является шагом поиска багов: выделение `parsers` — это
 то, что вскрыло, что XLSX отклонялся проверкой UTF-8, применённой ко всем форматам, и что

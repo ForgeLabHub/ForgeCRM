@@ -242,6 +242,7 @@ func run() error {
 		OIDC:           services.OIDC,
 		Views:          services.Views,
 		Consent:        services.Consent,
+		TenantConfig:   services.TenantConfig,
 		MCPCredentials: services.MCPCredentials,
 		Idempotency:    services.Idempotency,
 		StartedAt:      time.Now(),

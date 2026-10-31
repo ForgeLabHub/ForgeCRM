@@ -199,6 +199,7 @@ export const en = {
     telegram: 'Telegram',
     sso: 'Single sign-on',
     mcpCredentials: 'MCP credentials',
+    configuration: 'Configuration',
     account: 'My account',
     search: 'Search',
     menu: 'Menu',

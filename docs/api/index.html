@@ -196,6 +196,12 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <li data-op><a href="#op-put-api-v1-risk-thresholds"><span class="m m-put">PUT</span><span class="p">/api/v1/risk/thresholds</span></a></li>
 <li data-op><a href="#op-get-api-v1-search"><span class="m m-get">GET</span><span class="p">/api/v1/search</span></a></li>
 <li data-op><a href="#op-get-api-v1-security-events"><span class="m m-get">GET</span><span class="p">/api/v1/security-events</span></a></li>
+<li data-op><a href="#op-get-api-v1-settings"><span class="m m-get">GET</span><span class="p">/api/v1/settings</span></a></li>
+<li data-op><a href="#op-get-api-v1-settings-catalog"><span class="m m-get">GET</span><span class="p">/api/v1/settings/catalog</span></a></li>
+<li data-op><a href="#op-get-api-v1-settings-key"><span class="m m-get">GET</span><span class="p">/api/v1/settings/{key}</span></a></li>
+<li data-op><a href="#op-put-api-v1-settings-key"><span class="m m-put">PUT</span><span class="p">/api/v1/settings/{key}</span></a></li>
+<li data-op><a href="#op-delete-api-v1-settings-key"><span class="m m-delete">DELETE</span><span class="p">/api/v1/settings/{key}</span></a></li>
+<li data-op><a href="#op-get-api-v1-settings-key-history"><span class="m m-get">GET</span><span class="p">/api/v1/settings/{key}/history</span></a></li>
 <li data-op><a href="#op-get-api-v1-simulation-catalog"><span class="m m-get">GET</span><span class="p">/api/v1/simulation/catalog</span></a></li>
 <li data-op><a href="#op-post-api-v1-simulation-preview"><span class="m m-post">POST</span><span class="p">/api/v1/simulation/preview</span></a></li>
 <li data-op><a href="#op-get-api-v1-simulation-scenarios"><span class="m m-get">GET</span><span class="p">/api/v1/simulation/scenarios</span></a></li>
@@ -423,6 +429,8 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <li data-op><a href="#schema-listresponseimportxjob">ListResponseImportxJob</a></li>
 <li data-op><a href="#schema-listresponsemap-string-interface">ListResponseMap[string]interface {}</a></li>
 <li data-op><a href="#schema-listresponsemcpcredcredential">ListResponseMcpcredCredential</a></li>
+<li data-op><a href="#schema-listresponsetenantconfigrevision">ListResponseTenantconfigRevision</a></li>
+<li data-op><a href="#schema-listresponsetenantconfigsetting">ListResponseTenantconfigSetting</a></li>
 <li data-op><a href="#schema-listresponseviewsview">ListResponseViewsView</a></li>
 <li data-op><a href="#schema-listresponseworkflowrun">ListResponseWorkflowRun</a></li>
 <li data-op><a href="#schema-listresponseworkflowsteprun">ListResponseWorkflowStepRun</a></li>
@@ -468,6 +476,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <li data-op><a href="#schema-reconciliation">Reconciliation</a></li>
 <li data-op><a href="#schema-record">Record</a></li>
 <li data-op><a href="#schema-report">Report</a></li>
+<li data-op><a href="#schema-revision">Revision</a></li>
 <li data-op><a href="#schema-riskscanresponse">RiskScanResponse</a></li>
 <li data-op><a href="#schema-risksignallistresponse">RiskSignalListResponse</a></li>
 <li data-op><a href="#schema-risksignalresponse">RiskSignalResponse</a></li>
@@ -488,7 +497,9 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <li data-op><a href="#schema-setintegrationstatusrequest">SetIntegrationStatusRequest</a></li>
 <li data-op><a href="#schema-setriskstatusrequest">SetRiskStatusRequest</a></li>
 <li data-op><a href="#schema-setrolepermissionsrequest">SetRolePermissionsRequest</a></li>
+<li data-op><a href="#schema-settenantsettingrequest">SetTenantSettingRequest</a></li>
 <li data-op><a href="#schema-setwebhookenabledrequest">SetWebhookEnabledRequest</a></li>
+<li data-op><a href="#schema-setting">Setting</a></li>
 <li data-op><a href="#schema-simulationrunrequest">SimulationRunRequest</a></li>
 <li data-op><a href="#schema-ssoprovidersresponse">SsoProvidersResponse</a></li>
 <li data-op><a href="#schema-stagesnapshot">StageSnapshot</a></li>
@@ -4381,6 +4392,193 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success. This operation&#39;s response body is not yet described by a schema; the shape is whatever the handler returns.</div><table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
 </tbody></table>
 <p class="muted">No declared fields.</p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">400</span> The request was malformed: bad JSON, an unknown field, or a missing required parameter.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">401</span> No valid session, or the session has expired. Sign in again.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">403</span> Authenticated, but the caller lacks the required permission.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">404</span> No such resource, or none visible to the caller&#39;s organization.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">409</span> The request conflicts with current state, such as a duplicate external identifier.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">422</span> A field failed validation. `error.details` names each field.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">429</span> Too many requests. Retry after the interval in `Retry-After`.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-server">500</span> Unexpected failure. The detail is deliberately generic; the cause is in the server log.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+</article>
+<article class="op" id="op-get-api-v1-settings" data-op>
+<h3><span class="m m-get">GET</span> <code class="path">/api/v1/settings</code></h3>
+<p class="summary">List settings</p>
+<div class="op-desc"><p>Requires the `tenant.settings.read` permission.</p>
+</div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>limit</code></td><td>query</td><td>integer — 1..200</td><td>no</td><td>Page size. Values above the server maximum are clamped, not rejected.</td></tr>
+<tr><td><code>offset</code></td><td>query</td><td>integer — ≥ 0</td><td>no</td><td></td></tr>
+<tr><td><code>q</code></td><td>query</td><td>string</td><td>no</td><td>Free-text filter.</td></tr>
+<tr><td><code>sort</code></td><td>query</td><td>string</td><td>no</td><td>Field to sort by. An unknown field is rejected.</td></tr>
+<tr><td><code>order</code></td><td>query</td><td>string — one of asc, desc</td><td>no</td><td></td></tr>
+</tbody></table>
+<h4>Responses</h4>
+<div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success.</div><p class="ref">See <a href="#schema-listresponsetenantconfigsetting"><code>ListResponseTenantconfigSetting</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">400</span> The request was malformed: bad JSON, an unknown field, or a missing required parameter.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">401</span> No valid session, or the session has expired. Sign in again.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">403</span> Authenticated, but the caller lacks the required permission.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">404</span> No such resource, or none visible to the caller&#39;s organization.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">409</span> The request conflicts with current state, such as a duplicate external identifier.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">422</span> A field failed validation. `error.details` names each field.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">429</span> Too many requests. Retry after the interval in `Retry-After`.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-server">500</span> Unexpected failure. The detail is deliberately generic; the cause is in the server log.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+</article>
+<article class="op" id="op-get-api-v1-settings-catalog" data-op>
+<h3><span class="m m-get">GET</span> <code class="path">/api/v1/settings/catalog</code></h3>
+<p class="summary">List catalogs</p>
+<div class="op-desc"><p>Requires the `tenant.settings.read` permission.</p>
+</div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>limit</code></td><td>query</td><td>integer — 1..200</td><td>no</td><td>Page size. Values above the server maximum are clamped, not rejected.</td></tr>
+<tr><td><code>offset</code></td><td>query</td><td>integer — ≥ 0</td><td>no</td><td></td></tr>
+<tr><td><code>q</code></td><td>query</td><td>string</td><td>no</td><td>Free-text filter.</td></tr>
+<tr><td><code>sort</code></td><td>query</td><td>string</td><td>no</td><td>Field to sort by. An unknown field is rejected.</td></tr>
+<tr><td><code>order</code></td><td>query</td><td>string — one of asc, desc</td><td>no</td><td></td></tr>
+</tbody></table>
+<h4>Responses</h4>
+<div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success.</div><p class="ref">See <a href="#schema-listresponsetenantconfigsetting"><code>ListResponseTenantconfigSetting</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">400</span> The request was malformed: bad JSON, an unknown field, or a missing required parameter.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">401</span> No valid session, or the session has expired. Sign in again.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">403</span> Authenticated, but the caller lacks the required permission.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">404</span> No such resource, or none visible to the caller&#39;s organization.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">409</span> The request conflicts with current state, such as a duplicate external identifier.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">422</span> A field failed validation. `error.details` names each field.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">429</span> Too many requests. Retry after the interval in `Retry-After`.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-server">500</span> Unexpected failure. The detail is deliberately generic; the cause is in the server log.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+</article>
+<article class="op" id="op-get-api-v1-settings-key" data-op>
+<h3><span class="m m-get">GET</span> <code class="path">/api/v1/settings/{key}</code></h3>
+<p class="summary">Get one setting by id</p>
+<div class="op-desc"><p>Requires the `tenant.settings.read` permission.</p>
+</div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>key</code></td><td>path</td><td>string (setting-key)</td><td>yes</td><td></td></tr>
+</tbody></table>
+<h4>Responses</h4>
+<div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success.</div><p class="ref">See <a href="#schema-setting"><code>Setting</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">400</span> The request was malformed: bad JSON, an unknown field, or a missing required parameter.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">401</span> No valid session, or the session has expired. Sign in again.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">403</span> Authenticated, but the caller lacks the required permission.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">404</span> No such resource, or none visible to the caller&#39;s organization.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">409</span> The request conflicts with current state, such as a duplicate external identifier.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">422</span> A field failed validation. `error.details` names each field.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">429</span> Too many requests. Retry after the interval in `Retry-After`.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-server">500</span> Unexpected failure. The detail is deliberately generic; the cause is in the server log.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+</article>
+<article class="op" id="op-put-api-v1-settings-key" data-op>
+<h3><span class="m m-put">PUT</span> <code class="path">/api/v1/settings/{key}</code></h3>
+<p class="summary">Replace a setting</p>
+<div class="op-desc"><p>Requires the `tenant.settings.manage` permission.</p>
+</div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>key</code></td><td>path</td><td>string (setting-key)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
+<h4>Request body <span class="req">required</span></h4>
+<p>Sets one setting for the caller&#39;s organization. The key must be in the published catalog; an unknown key is a 404, because the catalog is the platform&#39;s and a setting nothing reads would be a control that does nothing. `value` is validated against the key&#39;s kind and bounds, and the reply carries the effective value that now applies, together with the default it was layered over. The write appends a revision recording the value it replaced, so a change to a shared default is not a silent one.</p>
+<p class="ref">See <a href="#schema-settenantsettingrequest"><code>SetTenantSettingRequest</code></a></p>
+<h4>Responses</h4>
+<div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success.</div><p class="ref">See <a href="#schema-setting"><code>Setting</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">400</span> The request was malformed: bad JSON, an unknown field, or a missing required parameter.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">401</span> No valid session, or the session has expired. Sign in again.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">403</span> Authenticated, but the caller lacks the required permission.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">404</span> No such resource, or none visible to the caller&#39;s organization.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">409</span> The request conflicts with current state, such as a duplicate external identifier.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">422</span> A field failed validation. `error.details` names each field.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">429</span> Too many requests. Retry after the interval in `Retry-After`.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-server">500</span> Unexpected failure. The detail is deliberately generic; the cause is in the server log.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+</article>
+<article class="op" id="op-delete-api-v1-settings-key" data-op>
+<h3><span class="m m-delete">DELETE</span> <code class="path">/api/v1/settings/{key}</code></h3>
+<p class="summary">Archive or delete a setting</p>
+<div class="op-desc"><p>Requires the `tenant.settings.manage` permission.</p>
+</div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>key</code></td><td>path</td><td>string (setting-key)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
+<h4>Responses</h4>
+<div class="resp"><div class="resp-head"><span class="code c-ok">204</span> The operation succeeded. No body is returned.</div></div>
+<div class="resp"><div class="resp-head"><span class="code c-client">400</span> The request was malformed: bad JSON, an unknown field, or a missing required parameter.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">401</span> No valid session, or the session has expired. Sign in again.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">403</span> Authenticated, but the caller lacks the required permission.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">404</span> No such resource, or none visible to the caller&#39;s organization.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">409</span> The request conflicts with current state, such as a duplicate external identifier.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">422</span> A field failed validation. `error.details` names each field.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">429</span> Too many requests. Retry after the interval in `Retry-After`.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-server">500</span> Unexpected failure. The detail is deliberately generic; the cause is in the server log.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+</article>
+<article class="op" id="op-get-api-v1-settings-key-history" data-op>
+<h3><span class="m m-get">GET</span> <code class="path">/api/v1/settings/{key}/history</code></h3>
+<p class="summary">Get one history by id</p>
+<div class="op-desc"><p>Requires the `tenant.settings.read` permission.</p>
+</div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>key</code></td><td>path</td><td>string (setting-key)</td><td>yes</td><td></td></tr>
+<tr><td><code>limit</code></td><td>query</td><td>integer — 1..200</td><td>no</td><td>How many revisions to return, newest first. Defaults to 50.</td></tr>
+</tbody></table>
+<h4>Responses</h4>
+<div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success.</div><p class="ref">See <a href="#schema-listresponsetenantconfigrevision"><code>ListResponseTenantconfigRevision</code></a></p>
 </div>
 <div class="resp"><div class="resp-head"><span class="code c-client">400</span> The request was malformed: bad JSON, an unknown field, or a missing required parameter.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
 </div>
@@ -8896,6 +9094,24 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <tr><td><code>total</code> <span class="req">required</span></td><td>integer</td><td></td></tr>
 </tbody></table>
 </article>
+<article class="op schema" id="schema-listresponsetenantconfigrevision" data-op>
+<h3><code>ListResponseTenantconfigRevision</code></h3>
+<table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>items</code> <span class="req">required</span></td><td>array of <a href="#schema-revision"><code>Revision</code></a></td><td></td></tr>
+<tr><td><code>limit</code> <span class="req">required</span></td><td>integer</td><td></td></tr>
+<tr><td><code>offset</code> <span class="req">required</span></td><td>integer</td><td></td></tr>
+<tr><td><code>total</code> <span class="req">required</span></td><td>integer</td><td></td></tr>
+</tbody></table>
+</article>
+<article class="op schema" id="schema-listresponsetenantconfigsetting" data-op>
+<h3><code>ListResponseTenantconfigSetting</code></h3>
+<table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>items</code> <span class="req">required</span></td><td>array of <a href="#schema-setting"><code>Setting</code></a></td><td></td></tr>
+<tr><td><code>limit</code> <span class="req">required</span></td><td>integer</td><td></td></tr>
+<tr><td><code>offset</code> <span class="req">required</span></td><td>integer</td><td></td></tr>
+<tr><td><code>total</code> <span class="req">required</span></td><td>integer</td><td></td></tr>
+</tbody></table>
+</article>
 <article class="op schema" id="schema-listresponseviewsview" data-op>
 <h3><code>ListResponseViewsView</code></h3>
 <table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
@@ -9354,6 +9570,21 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <tr><td><code>updated</code> <span class="req">required</span></td><td>integer</td><td></td></tr>
 </tbody></table>
 </article>
+<article class="op schema" id="schema-revision" data-op>
+<h3><code>Revision</code></h3>
+<table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>changed_by</code></td><td>string, nullable</td><td></td></tr>
+<tr><td><code>created_at</code></td><td>string (date-time)</td><td></td></tr>
+<tr><td><code>id</code></td><td>string (uuid)</td><td></td></tr>
+<tr><td><code>key</code></td><td>string</td><td></td></tr>
+<tr><td><code>organization_id</code></td><td>string (uuid)</td><td></td></tr>
+<tr><td><code>previous_value</code></td><td>unspecified</td><td>Arbitrary JSON value.</td></tr>
+<tr><td><code>reset_to_default</code></td><td>boolean</td><td></td></tr>
+<tr><td><code>revision</code></td><td>integer</td><td></td></tr>
+<tr><td><code>schema_version</code></td><td>integer</td><td></td></tr>
+<tr><td><code>value</code></td><td>unspecified</td><td>Arbitrary JSON value.</td></tr>
+</tbody></table>
+</article>
 <article class="op schema" id="schema-riskscanresponse" data-op>
 <h3><code>RiskScanResponse</code></h3>
 <table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
@@ -9554,10 +9785,37 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <tr><td><code>permissions</code> <span class="req">required</span></td><td>array of string</td><td></td></tr>
 </tbody></table>
 </article>
+<article class="op schema" id="schema-settenantsettingrequest" data-op>
+<h3><code>SetTenantSettingRequest</code></h3>
+<table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>value</code> <span class="req">required</span></td><td>unspecified</td><td>Arbitrary JSON value.</td></tr>
+</tbody></table>
+</article>
 <article class="op schema" id="schema-setwebhookenabledrequest" data-op>
 <h3><code>SetWebhookEnabledRequest</code></h3>
 <table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>enabled</code></td><td>boolean</td><td></td></tr>
+</tbody></table>
+</article>
+<article class="op schema" id="schema-setting" data-op>
+<h3><code>Setting</code></h3>
+<table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>default</code> <span class="req">required</span></td><td>unspecified</td><td>Arbitrary JSON value.</td></tr>
+<tr><td><code>description</code> <span class="req">required</span></td><td>string</td><td></td></tr>
+<tr><td><code>effective</code> <span class="req">required</span></td><td>unspecified</td><td>Arbitrary JSON value.</td></tr>
+<tr><td><code>enum</code></td><td>array of string</td><td></td></tr>
+<tr><td><code>has_override</code> <span class="req">required</span></td><td>boolean</td><td></td></tr>
+<tr><td><code>key</code> <span class="req">required</span></td><td>string</td><td></td></tr>
+<tr><td><code>kind</code> <span class="req">required</span></td><td>string</td><td></td></tr>
+<tr><td><code>max</code></td><td>integer, nullable</td><td></td></tr>
+<tr><td><code>max_length</code></td><td>integer</td><td></td></tr>
+<tr><td><code>min</code></td><td>integer, nullable</td><td></td></tr>
+<tr><td><code>override</code></td><td>unspecified</td><td>Arbitrary JSON value.</td></tr>
+<tr><td><code>override_updated_at</code></td><td>string, nullable</td><td></td></tr>
+<tr><td><code>override_updated_by</code></td><td>string, nullable</td><td></td></tr>
+<tr><td><code>schema_version</code> <span class="req">required</span></td><td>integer</td><td></td></tr>
+<tr><td><code>stored_under_older_schema</code></td><td>boolean</td><td></td></tr>
+<tr><td><code>title</code> <span class="req">required</span></td><td>string</td><td></td></tr>
 </tbody></table>
 </article>
 <article class="op schema" id="schema-simulationrunrequest" data-op>

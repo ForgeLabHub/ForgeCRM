@@ -177,6 +177,11 @@ func (s *Service) GetTask(ctx context.Context, p *rbac.Principal, id uuid.UUID) 
 
 // CreateTask inserts a task.
 func (s *Service) CreateTask(ctx context.Context, p *rbac.Principal, in TaskInput) (*Task, error) {
+	// The organization's default priority fills an unset one before validation, so a
+	// task created without naming a priority lands on the tenant's chosen value rather
+	// than the model default. Validation still runs afterwards, so a default that is
+	// somehow not a permitted priority is refused rather than stored.
+	in.Priority = s.resolvePriority(ctx, p.OrganizationID, in.Priority)
 	if err := in.Validate(); err != nil {
 		return nil, err
 	}
@@ -218,6 +223,9 @@ func (s *Service) CreateTask(ctx context.Context, p *rbac.Principal, in TaskInpu
 // UpdateTask applies a partial update. Completing a task records the time and
 // emits a completion event.
 func (s *Service) UpdateTask(ctx context.Context, p *rbac.Principal, id uuid.UUID, in TaskInput) (*Task, error) {
+	// An update replaces the editable fields, so an unset priority resolves the same
+	// way a create does rather than silently resetting to the model default.
+	in.Priority = s.resolvePriority(ctx, p.OrganizationID, in.Priority)
 	if err := in.Validate(); err != nil {
 		return nil, err
 	}

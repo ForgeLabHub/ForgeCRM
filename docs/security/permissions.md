@@ -2,7 +2,7 @@
 
 ## Модель
 
-- **Каталог прав** — `internal/rbac/rbac.go`: **87 прав** вида `<домен>.<действие>`
+- **Каталог прав** — `internal/rbac/rbac.go`: **103 права** вида `<домен>.<действие>`
   (`deals.read`, `deals.write`, `imports.run`, `webhooks.manage`, …).
 - **Системные роли** — 14: `platform_owner`, `platform_admin`, `tenant_admin`,
   `sales_manager`, `sales_representative`, `support_manager`, `support_agent`,
@@ -11,8 +11,9 @@
 - **Права назначаются ролям** (`role_permissions`), роли — пользователям
   (`user_roles`) внутри организации.
 - Каталог синхронизирован с миграциями: `0004_rbac_seed`, `0006_seed_webhooks_manage`,
-  `0010_seed_agent_permissions`, `0013_seed_workflow_permissions`. Расхождение ловится
-  unit-тестами.
+  `0010_seed_agent_permissions`, `0013_seed_workflow_permissions`, `0019_simulation_lab`,
+  `0020_forecasting_risk`, `0022_sso_oidc`, `0023_saved_views`, `0025_mcp_credentials`,
+  `0027_consent`, `0028_tenant_configuration`. Расхождение ловится unit-тестами.
 
 ## Где проверяется
 

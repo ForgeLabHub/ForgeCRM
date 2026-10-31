@@ -16,6 +16,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/mcpcred"
 	"github.com/geff1778/forgecrm/internal/migratex"
 	"github.com/geff1778/forgecrm/internal/openapi"
+	"github.com/geff1778/forgecrm/internal/tenantconfig"
 	"github.com/geff1778/forgecrm/internal/views"
 	"github.com/geff1778/forgecrm/internal/workflow"
 )
@@ -525,6 +526,44 @@ func APIContract() openapi.Contract {
 		"one for the same subject, purpose and channel without overwriting it, so the history is kept."
 	c.BodyDescriptions["POST /api/v1/consent/withdraw"] = "Withdraws consent for one subject, purpose and " +
 		"channel. It is the same write as recording a decision with state `withdrawn`, named for the act."
+
+	// --- Tenant configuration ---------------------------------------------------
+	// The configuration surface is a closed catalog plus the overrides stored against
+	// it. The key is a path segment rather than a body field because it names the
+	// resource: reading, changing and resetting one setting are three operations on
+	// the same address, and a body-keyed write would make "which setting" a property
+	// of the payload rather than of the target.
+	//
+	// `tenantconfig.Setting.Value` is `any`: the catalog declares the kind, so the
+	// shape of a value is a property of its key, not of the type. Publishing it as a
+	// typed component would describe one kind and be wrong for the other three. The
+	// catalog endpoint carries the same type, which is what lets a client render the
+	// right editor per key from one document.
+	c.Responses["GET /api/v1/settings"] = reflect.TypeOf(httpx.ListResponse[tenantconfig.Setting]{})
+	c.Responses["GET /api/v1/settings/catalog"] = reflect.TypeOf(httpx.ListResponse[tenantconfig.Setting]{})
+	c.Responses["GET /api/v1/settings/{key}"] = reflect.TypeOf(tenantconfig.Setting{})
+	c.Responses["GET /api/v1/settings/{key}/history"] = reflect.TypeOf(httpx.ListResponse[tenantconfig.Revision]{})
+	c.RequestBodies["PUT /api/v1/settings/{key}"] = reflect.TypeOf(setTenantSettingRequest{})
+	c.Responses["PUT /api/v1/settings/{key}"] = reflect.TypeOf(tenantconfig.Setting{})
+	c.Responses["DELETE /api/v1/settings/{key}"] = reflect.TypeOf(tenantconfig.Setting{})
+	c.BodyNames["PUT /api/v1/settings/{key}"] = "SetTenantSettingRequest"
+	c.TypeNames[reflect.TypeOf(setTenantSettingRequest{})] = "SetTenantSettingRequest"
+	c.RequiredBody["SetTenantSettingRequest"] = []string{"value"}
+	c.QueryParams["GET /api/v1/settings/{key}/history"] = append(
+		c.QueryParams["GET /api/v1/settings/{key}/history"],
+		openapi.QueryParam{Name: "limit",
+			Schema:      map[string]any{"type": "integer", "minimum": 1, "maximum": 200, "default": 50},
+			Description: "How many revisions to return, newest first. Defaults to 50."})
+	c.BodyDescriptions["PUT /api/v1/settings/{key}"] = "Sets one setting for the caller's organization. " +
+		"The key must be in the published catalog; an unknown key is a 404, because the catalog is the " +
+		"platform's and a setting nothing reads would be a control that does nothing. `value` is validated " +
+		"against the key's kind and bounds, and the reply carries the effective value that now applies, " +
+		"together with the default it was layered over. The write appends a revision recording the value it " +
+		"replaced, so a change to a shared default is not a silent one."
+	c.BodyDescriptions["DELETE /api/v1/settings/{key}"] = "Removes the organization's override so the " +
+		"catalog default applies again. It is recorded as a revision with the removed value as its " +
+		"predecessor, so a reset is part of the history rather than an erasure of it. The reply carries the " +
+		"key's state after the reset."
 
 		// --- MCP client credentials ------------------------------------------------
 	// A credential is minted once and its token is returned exactly once; the list

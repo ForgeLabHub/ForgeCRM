@@ -30,6 +30,64 @@ type Service struct {
 	db     *database.DB
 	audit  *audit.Logger
 	outbox *outbox.Store
+	// defaults is the organization's own configuration, used to resolve a default the
+	// caller left unset. It is an interface declared here rather than a dependency on
+	// the configuration service, so the arrow points from the configuration to the
+	// domain and not the other way: the domain stays ignorant of how a default is
+	// stored or versioned, and a test can supply a fixed one. A nil port means the
+	// model-level defaults apply, which is what the extraction harness and a
+	// single-tenant test want.
+	defaults OrgDefaults
+}
+
+// OrgDefaults answers the organization's effective configuration.
+//
+// It is the narrow question the domain needs — "what is this organization's value
+// for this key" — and not the whole configuration surface, so the domain cannot
+// change a setting by accident and a second implementation stays trivial.
+type OrgDefaults interface {
+	EffectiveString(ctx context.Context, orgID uuid.UUID, key string) string
+}
+
+// SetOrgDefaults attaches the organization configuration. It is a setter rather
+// than a constructor parameter because the configuration service is built after
+// the domain it configures, and because every existing caller — including the test
+// harness — must keep working with the model defaults when it is not set.
+func (s *Service) SetOrgDefaults(d OrgDefaults) { s.defaults = d }
+
+// Setting keys the domain reads. They are spelled here rather than imported from
+// the configuration package so the domain holds no dependency on it; the two
+// spellings are pinned together by a test.
+const (
+	SettingDefaultCurrency     = "crm.default_currency"
+	SettingDefaultTaskPriority = "tasks.default_priority"
+)
+
+// resolveCurrency returns the currency to use for a deal: the caller's value when
+// it named one, otherwise the organization's default, otherwise the model default.
+func (s *Service) resolveCurrency(ctx context.Context, orgID uuid.UUID, given string) string {
+	if strings.TrimSpace(given) != "" {
+		return given
+	}
+	if s.defaults != nil {
+		if v := s.defaults.EffectiveString(ctx, orgID, SettingDefaultCurrency); v != "" {
+			return v
+		}
+	}
+	return "USD"
+}
+
+// resolvePriority returns the priority to use for a task.
+func (s *Service) resolvePriority(ctx context.Context, orgID uuid.UUID, given string) string {
+	if strings.TrimSpace(given) != "" {
+		return given
+	}
+	if s.defaults != nil {
+		if v := s.defaults.EffectiveString(ctx, orgID, SettingDefaultTaskPriority); v != "" {
+			return v
+		}
+	}
+	return "normal"
 }
 
 // NewService builds the CRM service.

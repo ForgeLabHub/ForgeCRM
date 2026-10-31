@@ -148,8 +148,19 @@ func newHarnessWithStore(t *testing.T, cfg *config.Config, store ratelimit.Store
 		OIDC:           svcs.OIDC,
 		MCPCredentials: svcs.MCPCredentials,
 		Consent:        svcs.Consent,
+		TenantConfig:   svcs.TenantConfig,
 		Idempotency:    svcs.Idempotency,
-		Version:        "test",
+		// The automation, simulation, forecast, risk, storage and saved-view surfaces
+		// are wired from the same services production builds. Leaving one out makes its
+		// routes panic on a nil service, which reads as an untested feature rather than
+		// a missing harness field.
+		Workflows:  svcs.Workflows,
+		Simulation: svcs.Simulation,
+		Forecast:   svcs.Forecast,
+		Risk:       svcs.Risk,
+		Storage:    svcs.Storage,
+		Views:      svcs.Views,
+		Version:    "test",
 	}, store, trusted)
 	if err != nil {
 		t.Fatalf("build server: %v", err)

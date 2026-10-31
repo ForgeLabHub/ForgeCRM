@@ -38,6 +38,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/retention"
 	"github.com/geff1778/forgecrm/internal/secrets"
 	"github.com/geff1778/forgecrm/internal/storage"
+	"github.com/geff1778/forgecrm/internal/tenantconfig"
 	"github.com/geff1778/forgecrm/internal/tracectx"
 	"github.com/geff1778/forgecrm/internal/wiring"
 	"github.com/geff1778/forgecrm/internal/workflow"
@@ -112,6 +113,11 @@ func run() error {
 
 	auditLog := audit.New(db)
 	crmSvc := crm.NewService(db, auditLog, outbox.NewStore(db))
+	// The worker resolves the same tenant defaults the API does, so a task or deal
+	// created by an automation lands on the same currency and priority as one created
+	// by hand. The configuration service is built here too, not only in the API.
+	tenantConfigSvc := tenantconfig.NewService(db, auditLog)
+	crmSvc.SetOrgDefaults(tenantConfigSvc)
 	queue := jobs.NewQueue(db, log)
 	outboxStore := outbox.NewStore(db)
 	dispatcher := events.NewDispatcher(db, auditLog)
@@ -186,12 +192,13 @@ func run() error {
 	// crm.Service the API uses, so a workflow action is authorized exactly like the
 	// equivalent API call.
 	wfEngine := workflow.NewEngine(workflow.Config{
-		DB:     db,
-		CRM:    crmSvc,
-		RBAC:   rbac.NewService(db),
-		Audit:  auditLog,
-		Outbox: outboxStore,
-		Log:    log,
+		DB:       db,
+		CRM:      crmSvc,
+		RBAC:     rbac.NewService(db),
+		Audit:    auditLog,
+		Outbox:   outboxStore,
+		Log:      log,
+		Defaults: tenantConfigSvc,
 	})
 	registry.workflows = wfEngine
 

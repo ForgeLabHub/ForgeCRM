@@ -77,6 +77,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/admin/consent', labelKey: 'nav.consent', permission: 'consent.read' },
       { to: '/admin/sso', labelKey: 'nav.sso', permission: 'sso.read' },
       { to: '/admin/mcp-credentials', labelKey: 'nav.mcpCredentials', permission: 'mcp.credentials.read' },
+      { to: '/admin/configuration', labelKey: 'nav.configuration', permission: 'tenant.settings.read' },
       { to: '/admin/audit', labelKey: 'nav.audit', permission: 'audit.read' },
       { to: '/admin/security', labelKey: 'nav.security', permission: 'security.read' },
       { to: '/admin/diagnostics', labelKey: 'nav.diagnostics', permission: 'logs.read' },

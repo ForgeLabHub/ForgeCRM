@@ -329,6 +329,7 @@ test.describe('workspace pages render live data', () => {
     { path: '/admin/audit', title: 'Audit & logs' },
     { path: '/admin/users', title: 'Users' },
     { path: '/admin/sso', title: 'Single sign-on' },
+    { path: '/admin/configuration', title: 'Organization configuration' },
   ]
 
   for (const { path, title } of pages) {
@@ -968,6 +969,52 @@ test.describe('consent', () => {
     // Not 403: consent is granted. The transport may still refuse (503 when SMTP is
     // unconfigured), which is a different answer and the point of checking first.
     expect(send.status()).not.toBe(403)
+  })
+})
+
+test.describe('organization configuration', () => {
+  test('an override chosen on the page reaches the API and reset restores the default', async ({
+    authedPage: page,
+  }) => {
+    await page.goto('/admin/configuration')
+
+    // The editor is built from the catalog, so the key the platform ships is
+    // present without the interface having been told about it.
+    const currencyInput = page.locator('#setting-crm\\.default_currency')
+    await expect(currencyInput).toBeVisible({ timeout: 15_000 })
+
+    // The scratch database starts with no override, so the page says the platform
+    // default is in force. That is the state a reset must return to.
+    const currencyCard = page.locator('.card', { hasText: 'crm.default_currency' })
+    await expect(currencyCard.getByText(/Effective now:/)).toContainText('USD')
+
+    await currencyInput.fill('EUR')
+    await currencyCard.getByRole('button', { name: 'Save' }).click()
+
+    // The value is the one the server resolved, and the API agrees: this is the
+    // same default a new deal resolves, not a display-only echo.
+    await expect(currencyCard.getByText(/Effective now:/)).toContainText('EUR')
+    await expect(currencyCard.getByText('organization override')).toBeVisible()
+    await expect
+      .poll(async () => {
+        const res = await page.request.get('/api/v1/settings/crm.default_currency')
+        const body = (await res.json()) as { effective: unknown; has_override: boolean }
+        return `${body.has_override}:${body.effective}`
+      })
+      .toBe('true:EUR')
+
+    // Reset asks first, then removes the override so the platform default applies.
+    await currencyCard.getByRole('button', { name: 'Reset to default' }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Reset' }).click()
+
+    await expect(currencyCard.getByText(/Effective now:/)).toContainText('USD')
+    await expect
+      .poll(async () => {
+        const res = await page.request.get('/api/v1/settings/crm.default_currency')
+        const body = (await res.json()) as { effective: unknown; has_override: boolean }
+        return `${body.has_override}:${body.effective}`
+      })
+      .toBe('false:USD')
   })
 })
 

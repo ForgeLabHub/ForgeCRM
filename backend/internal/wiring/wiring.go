@@ -39,6 +39,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/secrets"
 	"github.com/geff1778/forgecrm/internal/simulate"
 	"github.com/geff1778/forgecrm/internal/storage"
+	"github.com/geff1778/forgecrm/internal/tenantconfig"
 	"github.com/geff1778/forgecrm/internal/views"
 	"github.com/geff1778/forgecrm/internal/workflow"
 )
@@ -94,6 +95,9 @@ type Services struct {
 	// Consent records what a person agreed to be contacted about and answers whether
 	// an outbound channel may contact them. It never touches CRM data.
 	Consent *consent.Service
+	// TenantConfig holds the organization's own configuration: the defaults it chooses
+	// over the platform's.
+	TenantConfig *tenantconfig.Service
 	// MCPCredentials mints and resolves the scoped, revocable credentials an external
 	// MCP client uses in place of a browser session.
 	MCPCredentials *mcpcred.Service
@@ -133,6 +137,11 @@ func Build(cfg *config.Config, db *database.DB, keyring *secrets.Keyring, log *s
 	auditLog := audit.New(db)
 	rbacSvc := rbac.NewService(db)
 	crmSvc := crm.NewService(db, auditLog, outbox.NewStore(db))
+	// The organization's configuration is built before the domain services it feeds,
+	// so the defaults a tenant sets are the ones the domain resolves. The domain holds
+	// only a narrow port, so it does not import the configuration package.
+	tenantConfigSvc := tenantconfig.NewService(db, auditLog)
+	crmSvc.SetOrgDefaults(tenantConfigSvc)
 	queue := jobs.NewQueue(db, log)
 	consentSvc := consent.NewService(db, auditLog)
 	// The transports take the consent gate at construction, so a transport that
@@ -189,15 +198,17 @@ func Build(cfg *config.Config, db *database.DB, keyring *secrets.Keyring, log *s
 		OIDC:           oidc.NewService(db, cfg, keyring, auditLog, log),
 		Views:          views.NewService(db, auditLog),
 		Consent:        consentSvc,
+		TenantConfig:   tenantConfigSvc,
 		MCPCredentials: mcpcred.NewService(db, auditLog),
 		Idempotency:    idempotency.NewStore(db),
 		Workflows: workflow.NewEngine(workflow.Config{
-			DB:     db,
-			CRM:    crmSvc,
-			RBAC:   rbacSvc,
-			Audit:  auditLog,
-			Outbox: outbox.NewStore(db),
-			Log:    log,
+			DB:       db,
+			CRM:      crmSvc,
+			RBAC:     rbacSvc,
+			Audit:    auditLog,
+			Outbox:   outbox.NewStore(db),
+			Log:      log,
+			Defaults: tenantConfigSvc,
 		}),
 	}, nil
 }

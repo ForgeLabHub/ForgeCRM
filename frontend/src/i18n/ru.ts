@@ -193,6 +193,7 @@ export const ru: Dictionary = {
     telegram: 'Telegram',
     sso: 'Единый вход',
     mcpCredentials: 'Учётные данные MCP',
+    configuration: 'Конфигурация',
     account: 'Мой аккаунт',
     search: 'Поиск',
     menu: 'Меню',

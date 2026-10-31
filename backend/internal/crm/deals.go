@@ -354,6 +354,10 @@ func (s *Service) GetDeal(ctx context.Context, p *rbac.Principal, id uuid.UUID) 
 
 // CreateDeal inserts a deal and records the initial stage in the history.
 func (s *Service) CreateDeal(ctx context.Context, p *rbac.Principal, in DealInput) (*Deal, error) {
+	// The organization's default currency is applied before validation, so an empty
+	// field resolves to the tenant's choice rather than to the model default. A caller
+	// that named a currency keeps it.
+	in.Currency = s.resolveCurrency(ctx, p.OrganizationID, in.Currency)
 	if err := in.Validate(); err != nil {
 		return nil, err
 	}
@@ -405,6 +409,7 @@ func (s *Service) CreateDeal(ctx context.Context, p *rbac.Principal, in DealInpu
 // UpdateDeal applies a partial update. Moving to a different stage is handled by
 // MoveDealStage so that the change is always recorded in the history.
 func (s *Service) UpdateDeal(ctx context.Context, p *rbac.Principal, id uuid.UUID, in DealInput) (*Deal, error) {
+	in.Currency = s.resolveCurrency(ctx, p.OrganizationID, in.Currency)
 	if err := in.Validate(); err != nil {
 		return nil, err
 	}
