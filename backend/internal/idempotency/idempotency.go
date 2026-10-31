@@ -16,6 +16,17 @@
 // the handler. A failed request releases the key, so a client can correct the
 // request and retry.
 //
+// A claim is a lease, not a permanent lock. A request that dies without finishing —
+// the process is killed, the host loses power, a handler panics past the release
+// path — would otherwise leave a row with no stored response, and every retry with
+// that key would be refused with 409 until the retention sweep removed it seven days
+// later. So a claim whose row is older than the lease may be taken over: the new
+// request resets the claim and proceeds. The lease is longer than the server's
+// write timeout, so a takeover cannot collide with a handler that is still running.
+// A panic is handled immediately rather than by waiting for the lease — the
+// middleware releases the claim as the panic unwinds — and the lease remains the
+// backstop for the cases where no Go code runs at all.
+//
 // The key is scoped to the caller and the operation — organization, user, method
 // and path — so one tenant's key cannot collide with another's, and a key reused
 // against a different resource is a different key. The scope is built from values
@@ -29,6 +40,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/geff1778/forgecrm/internal/database"
 	"github.com/geff1778/forgecrm/internal/httpx"
@@ -54,6 +66,16 @@ const maxKeyLen = 255
 // turn the retry guard into a memory amplifier. A client that retries such a
 // request re-runs it, which is the behaviour it had before the header existed.
 const maxBuffer = 1 << 20
+
+// ClaimLease bounds how long a claim may be held without a result before another
+// request may take it over.
+//
+// It must exceed the longest a handler can legitimately run, or a takeover would
+// start a second execution while the first is still writing. The API's write
+// timeout is 120s (cmd/forgecrm-api), so the lease is set above it; a request that
+// has not answered within its own write timeout is not going to. The value is a
+// package variable so a test can shorten it without waiting.
+var ClaimLease = 5 * time.Minute
 
 // Store is the persistence for idempotency claims.
 type Store struct {
@@ -110,11 +132,15 @@ func (s *Store) Claim(ctx context.Context, scope, key string) (Outcome, *storedR
 		return 0, nil, fmt.Errorf("claim idempotency key: %w", err)
 	}
 
-	// The insert lost. Read the existing row to decide between a replay and a
-	// still-running request.
-	const read = `SELECT response FROM idempotency_keys WHERE scope = $1 AND key = $2`
-	var existing []byte
-	if err := s.db.Q(ctx).QueryRow(ctx, read, scope, key).Scan(&existing); err != nil {
+	// The insert lost. Read the existing row to decide between a replay, a claim
+	// that is still running, and a claim that has been abandoned.
+	const read = `SELECT response, created_at < now() - make_interval(secs => $3) AS stale
+		FROM idempotency_keys WHERE scope = $1 AND key = $2`
+	var (
+		existing []byte
+		stale    bool
+	)
+	if err := s.db.Q(ctx).QueryRow(ctx, read, scope, key, ClaimLease.Seconds()).Scan(&existing, &stale); err != nil {
 		if database.IsNoRows(err) {
 			// The row was swept by retention between the insert and the read. Treating
 			// it as in-flight is the safe answer: it refuses the request rather than
@@ -123,24 +149,55 @@ func (s *Store) Claim(ctx context.Context, scope, key string) (Outcome, *storedR
 		}
 		return 0, nil, fmt.Errorf("read idempotency key: %w", err)
 	}
-	if existing == nil {
+	if existing != nil {
+		var resp storedResponse
+		if err := json.Unmarshal(existing, &resp); err != nil {
+			return 0, nil, fmt.Errorf("decode stored idempotent response: %w", err)
+		}
+		return Replayed, &resp, nil
+	}
+
+	// No stored response: a claim is in flight. It is only still in flight if it is
+	// within its lease; a claim that has outlived the lease belongs to a request that
+	// died without finishing, and holding it would refuse every retry with this key
+	// until retention swept it. Take it over.
+	if !stale {
 		return InFlight, nil, nil
 	}
-	var resp storedResponse
-	if err := json.Unmarshal(existing, &resp); err != nil {
-		return 0, nil, fmt.Errorf("decode stored idempotent response: %w", err)
+	// The takeover re-checks staleness in the same statement that resets the claim,
+	// so two requests racing for the same abandoned claim cannot both win: the
+	// second finds the row already refreshed and affects no row. The comparison is
+	// done in SQL against `now()`, so it uses one clock and a skewed application
+	// clock cannot expire a claim early or hold one too long.
+	const takeOver = `
+		UPDATE idempotency_keys SET created_at = now()
+		WHERE scope = $1 AND key = $2 AND response IS NULL
+		  AND created_at < now() - make_interval(secs => $3)`
+	tag, err := s.db.Q(ctx).Exec(ctx, takeOver, scope, key, ClaimLease.Seconds())
+	if err != nil {
+		return 0, nil, fmt.Errorf("take over idempotency key: %w", err)
 	}
-	return Replayed, &resp, nil
+	if tag.RowsAffected() == 0 {
+		// Another request took the stale claim over, or completed it, between the read
+		// and here. Refuse this one rather than run a third execution.
+		return InFlight, nil, nil
+	}
+	return Claimed, nil, nil
 }
 
 // Complete stores the response for a key the caller claimed, so later requests are
 // answered from it.
+//
+// The update only fills a claim that has no response yet, so it is the first
+// completed execution that wins. A request whose claim was taken over after the
+// lease expired cannot overwrite the response the newer owner stored: the row it
+// would write is already answered, and RowsAffected reports 0.
 func (s *Store) Complete(ctx context.Context, scope, key string, status int, contentType string, body []byte) error {
 	payload, err := json.Marshal(storedResponse{Status: status, ContentType: contentType, Body: body})
 	if err != nil {
 		return fmt.Errorf("encode idempotent response: %w", err)
 	}
-	const q = `UPDATE idempotency_keys SET response = $3 WHERE scope = $1 AND key = $2`
+	const q = `UPDATE idempotency_keys SET response = $3 WHERE scope = $1 AND key = $2 AND response IS NULL`
 	if _, err := s.db.Q(ctx).Exec(ctx, q, scope, key, payload); err != nil {
 		return fmt.Errorf("store idempotent response: %w", err)
 	}
@@ -152,8 +209,11 @@ func (s *Store) Complete(ctx context.Context, scope, key string, status int, con
 // It is called when the handler did not succeed. A failure means the operation did
 // not take effect in a way worth remembering, so holding the key would turn a
 // correctable request into one that can never be retried with the same key.
+//
+// The delete only touches a claim without a stored response, so releasing a failed
+// attempt can never erase a response another request already stored for the key.
 func (s *Store) Release(ctx context.Context, scope, key string) error {
-	const q = `DELETE FROM idempotency_keys WHERE scope = $1 AND key = $2`
+	const q = `DELETE FROM idempotency_keys WHERE scope = $1 AND key = $2 AND response IS NULL`
 	if _, err := s.db.Q(ctx).Exec(ctx, q, scope, key); err != nil {
 		return fmt.Errorf("release idempotency key: %w", err)
 	}
@@ -175,13 +235,23 @@ func ScopeKey(orgID, userID, method, path string) string {
 // authenticated caller is in the context.
 type Identity func(ctx context.Context) (orgID, userID string, ok bool)
 
+// Claimer is the persistence the middleware needs. It is an interface so the
+// middleware can be tested against a recording double — the lease and the race are
+// properties of the store's SQL and are covered there, while the middleware's own
+// behaviour (pass-through, replay, release on panic) does not need a database.
+type Claimer interface {
+	Claim(ctx context.Context, scope, key string) (Outcome, *storedResponse, error)
+	Complete(ctx context.Context, scope, key string, status int, contentType string, body []byte) error
+	Release(ctx context.Context, scope, key string) error
+}
+
 // Middleware applies idempotency to the mutating requests that carry a key.
 //
 // A request without the header is passed through untouched, so the feature is
 // opt-in per request and costs nothing when unused. The identity used for the scope
 // is read from the context, so the middleware must be mounted after the session
 // middleware that establishes it.
-func Middleware(store *Store, identity Identity) func(http.Handler) http.Handler {
+func Middleware(store Claimer, identity Identity) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if store == nil || !isMutation(r.Method) {
@@ -229,6 +299,17 @@ func Middleware(store *Store, identity Identity) func(http.Handler) http.Handler
 			// the handler turns out to stream or the body grows past the cap, in which
 			// case the buffer is abandoned and bytes flow straight through.
 			rw := &replayWriter{w: w}
+			// A handler that panics never reaches the release below, and the panic is
+			// recovered by an outer middleware that knows nothing about the claim. Release
+			// it here as the stack unwinds, so a panic does not leave the key held until
+			// the lease expires; the lease stays as the backstop for a process that dies
+			// without running any Go code at all.
+			defer func() {
+				if rec := recover(); rec != nil {
+					_ = store.Release(r.Context(), scope, key)
+					panic(rec)
+				}
+			}()
 			next.ServeHTTP(rw, r)
 			rw.finish()
 
