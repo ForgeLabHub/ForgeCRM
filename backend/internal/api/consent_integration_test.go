@@ -270,3 +270,53 @@ func TestEmailSendAllowsTransactionalWithoutConsent(t *testing.T) {
 		t.Fatalf("a transactional send was blocked on consent: %s", rec.Body.String())
 	}
 }
+
+// TestEmailSendChecksConsentForEveryRecipient is the multi-recipient bypass check.
+//
+// The request body accepts a list of recipients, but the handler once asked consent
+// only about the first address. A caller could therefore put an address with a
+// recorded grant first and a withdrawn address second: the first answered the
+// consent question and the second received marketing mail nobody agreed to. The
+// rule is that every recipient is a subject, so every one of them is checked.
+func TestEmailSendChecksConsentForEveryRecipient(t *testing.T) {
+	c := newConsentHarness(t)
+
+	// The first address is granted marketing; the second is not on record at all.
+	if rec := c.record(t, c.manager, "granted@consent.test", "marketing", "email", "granted"); rec.Code != http.StatusCreated {
+		t.Fatalf("record granted: status %d, body %s", rec.Code, rec.Body.String())
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"to":      []string{"granted@consent.test", "stranger@consent.test"},
+		"subject": "Bulk mail",
+		"body":    "One of these people never agreed to this",
+		"purpose": "marketing",
+	})
+	rec := c.do(c.emailer, http.MethodPost, "/api/v1/admin/email/send", string(body))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("a recipient without consent was not blocked: status %d, body %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "consent") {
+		t.Fatalf("the refusal does not mention consent: %s", rec.Body.String())
+	}
+}
+
+// TestEmailSendRefusesUnknownPurpose checks that a purpose outside the closed set is
+// refused rather than treated as transactional. Purpose is what selects the rule, so
+// an unrecognised value must not fall through to the permissive one: a caller could
+// otherwise name a marketing send "newsletter" and have it treated as a receipt.
+func TestEmailSendRefusesUnknownPurpose(t *testing.T) {
+	c := newConsentHarness(t)
+
+	body, _ := json.Marshal(map[string]any{
+		"to": []string{"stranger@consent.test"}, "subject": "Not a receipt",
+		"body": "Marketed as something else", "purpose": "newsletter",
+	})
+	rec := c.do(c.emailer, http.MethodPost, "/api/v1/admin/email/send", string(body))
+	if rec.Code == http.StatusOK {
+		t.Fatalf("an unknown purpose was accepted: %s", rec.Body.String())
+	}
+	if rec.Code != http.StatusUnprocessableEntity && rec.Code != http.StatusBadRequest {
+		t.Fatalf("unknown purpose: status %d, want 422 or 400, body %s", rec.Code, rec.Body.String())
+	}
+}

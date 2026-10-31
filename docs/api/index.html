@@ -1082,6 +1082,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <div class="op-desc"><p>Requires the `email.manage` permission.</p>
 </div>
 <h4>Request body <span class="req">required</span></h4>
+<p>`purpose` is one of `marketing`, `transactional`, `product_updates` or `research`, and defaults to `marketing` when omitted. An unrecognised value is refused rather than treated as transactional. Consent is checked for every address in `to`, and the send is refused with 403 before the transport is consulted if any recipient lacks a grant the purpose requires.</p>
 <p class="ref">See <a href="#schema-sendemailrequest"><code>SendEmailRequest</code></a></p>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">201</span> Success. This operation&#39;s response body is not yet described by a schema; the shape is whatever the handler returns.</div><table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
