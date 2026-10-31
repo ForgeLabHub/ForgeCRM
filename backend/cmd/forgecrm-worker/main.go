@@ -61,6 +61,18 @@ func buildVersion() string {
 	return version
 }
 
+// buildCommit mirrors buildVersion for the commit SHA, so a host that sets
+// FORGECRM_COMMIT without passing build args still reports a real revision.
+func buildCommit() string {
+	if commit != "" && commit != "unknown" && commit != "dev" {
+		return commit
+	}
+	if env := strings.TrimSpace(os.Getenv("FORGECRM_COMMIT")); env != "" {
+		return env
+	}
+	return commit
+}
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "forgecrm-worker: "+err.Error())
@@ -74,7 +86,7 @@ func run() error {
 		return fmt.Errorf("load configuration: %w", err)
 	}
 	log := logging.New(cfg.LogLevel, cfg.LogFormat)
-	log.Info("starting forgecrm-worker", "version", buildVersion(), "commit", commit, "concurrency", cfg.WorkerConcurrency)
+	log.Info("starting forgecrm-worker", "version", buildVersion(), "commit", buildCommit(), "concurrency", cfg.WorkerConcurrency)
 
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)

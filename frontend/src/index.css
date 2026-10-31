@@ -21,6 +21,9 @@
   --color-accent: #2f5bea;
   --color-accent-hover: #2549c4;
   --color-accent-soft: #eaefff;
+  /* Foreground for text sitting on --color-accent. It is a token because the
+     accent lightens in dark mode, where white would fall below 4.5:1. */
+  --color-on-accent: #ffffff;
   --color-danger: #c0362c;
   --color-danger-soft: #fdecea;
   --color-success: #1f7a4d;
@@ -66,6 +69,7 @@
   --color-accent: #6c8cf5;
   --color-accent-hover: #8aa4f8;
   --color-accent-soft: #1d2740;
+  --color-on-accent: #0d1017;
   --color-danger: #f08b81;
   --color-danger-soft: #3a1f1c;
   --color-success: #6cd39c;
@@ -94,6 +98,7 @@
     --color-accent: #6c8cf5;
     --color-accent-hover: #8aa4f8;
     --color-accent-soft: #1d2740;
+    --color-on-accent: #0d1017;
     --color-danger: #f08b81;
     --color-danger-soft: #3a1f1c;
     --color-success: #6cd39c;
@@ -198,7 +203,7 @@ pre {
   height: 26px;
   border-radius: var(--radius-sm);
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-on-accent);
   font-size: 13px;
   font-weight: 700;
 }
@@ -383,7 +388,7 @@ pre {
 
 .btn--primary {
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-on-accent);
 }
 
 .btn--primary:hover:not(:disabled) { background: var(--color-accent-hover); }

@@ -43257,10 +43257,19 @@
       },
       "ReadyResponse": {
         "properties": {
+          "commit": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
           "reason": {
             "type": "string"
           },
           "status": {
+            "type": "string"
+          },
+          "version": {
             "type": "string"
           }
         },

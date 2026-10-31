@@ -23,6 +23,7 @@ required=(
   docs/database/schema.md docs/database/migrations.md docs/database/backup-restore.md
   docs/api/conventions.md
   docs/operations/deployment.md docs/operations/monitoring.md docs/operations/upgrades.md
+  docs/deployment/environment-variables.md
   docs/security/threat-model.md docs/security/permissions.md
   docs/modules/module-template.md docs/modules/crm.md
   docs/verification/matrix.md

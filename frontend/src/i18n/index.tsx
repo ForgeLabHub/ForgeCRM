@@ -121,3 +121,6 @@ export function useT() {
 }
 
 export type { Dictionary }
+
+/** The translator signature, for helpers that build content outside a component. */
+export type TFunction = I18nValue['t']

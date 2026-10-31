@@ -6,6 +6,7 @@ import { accountsApi, tasksApi } from '../api/crm'
 import { errorMessage, fieldErrors } from '../api/client'
 import type { Account, AccountInput } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
+import { useT, type TFunction } from '../i18n'
 import { ResourceList, type Column } from '../components/ResourceList'
 import { AssistPanel } from '../components/AssistPanel'
 import { AttachmentPanel } from '../components/AttachmentPanel'
@@ -23,70 +24,77 @@ import {
   formatMoney,
 } from '../components/ui'
 
-const columns: Column<Account>[] = [
-  {
-    key: 'name',
-    header: 'Name',
-    render: (row) => (
-      <div>
-        <div className="table__primary">{row.name}</div>
-        {row.website ? <div className="table__secondary truncate">{row.website}</div> : null}
-      </div>
-    ),
-  },
-  {
-    key: 'industry',
-    header: 'Industry',
-    render: (row) => row.industry ?? <span className="text-subtle">—</span>,
-  },
-  {
-    key: 'employees',
-    header: 'Employees',
-    numeric: true,
-    render: (row) => row.employee_count ?? <span className="text-subtle">—</span>,
-  },
-  {
-    key: 'revenue',
-    header: 'Annual revenue',
-    numeric: true,
-    render: (row) =>
-      row.annual_revenue !== undefined ? formatMoney(row.annual_revenue) : <span className="text-subtle">—</span>,
-  },
-  {
-    key: 'updated',
-    header: 'Updated',
-    render: (row) => <Timestamp value={row.updated_at} />,
-  },
-]
+// Column headers are built from the dictionary, so the table header follows the
+// selected language like every other label. `t` is passed in rather than read
+// from a hook because this array is module-level.
+function accountColumns(t: TFunction): Column<Account>[] {
+  return [
+    {
+      key: 'name',
+      header: t('fields.name'),
+      render: (row) => (
+        <div>
+          <div className="table__primary">{row.name}</div>
+          {row.website ? <div className="table__secondary truncate">{row.website}</div> : null}
+        </div>
+      ),
+    },
+    {
+      key: 'industry',
+      header: t('fields.industry'),
+      render: (row) => row.industry ?? <span className="text-subtle">—</span>,
+    },
+    {
+      key: 'employees',
+      header: t('fields.employees'),
+      numeric: true,
+      render: (row) => row.employee_count ?? <span className="text-subtle">—</span>,
+    },
+    {
+      key: 'revenue',
+      header: t('fields.annualRevenue'),
+      numeric: true,
+      render: (row) =>
+        row.annual_revenue !== undefined ? (
+          formatMoney(row.annual_revenue)
+        ) : (
+          <span className="text-subtle">—</span>
+        ),
+    },
+    {
+      key: 'updated',
+      header: t('accounts.updated'),
+      render: (row) => <Timestamp value={row.updated_at} />,
+    },
+  ]
+}
 
 export function AccountsPage() {
   const navigate = useNavigate()
   const { can } = useAuth()
+  const t = useT()
   const [creating, setCreating] = useState(false)
 
   return (
     <>
-      <PageHeader
-        title="Accounts"
-        meta="Companies you sell to, and the deals and contacts attached to them."
-      />
+      <PageHeader title={t('accounts.title')} meta={t('accounts.meta')} />
       <ResourceList
-        title="All accounts"
+        title={t('accounts.all')}
         queryKey={['accounts']}
         fetchPage={(params) => accountsApi.list(params)}
-        columns={columns}
+        columns={accountColumns(t)}
         rowKey={(row) => row.id}
         onRowClick={(row) => navigate(`/accounts/${row.id}`)}
-        emptyTitle="No accounts yet"
-        emptyText="Accounts are the companies you do business with. Create one to get started."
+        emptyTitle={t('accounts.emptyTitle')}
+        emptyText={t('accounts.emptyText')}
         searchable
-        searchPlaceholder="Search accounts…"
+        searchPlaceholder={t('accounts.searchPlaceholder')}
         bulkActions={
           can('accounts.archive')
             ? (selected, clear) => (
                 <BulkArchiveButton
                   ids={selected}
-                  entityLabel="accounts"
+                  entityLabel={t('accounts.title').toLowerCase()}
                   archive={accountsApi.bulkArchive}
                   onDone={clear}
                 />
@@ -96,7 +104,7 @@ export function AccountsPage() {
         actions={
           can('accounts.create') ? (
             <button type="button" className="btn btn--primary btn--sm" onClick={() => setCreating(true)}>
-              New account
+              {t('accounts.newAccount')}
             </button>
           ) : null
         }
@@ -126,6 +134,7 @@ export function AccountFormDialog({
   onSaved: (account: Account) => void
 }) {
   const queryClient = useQueryClient()
+  const t = useT()
   const editing = Boolean(account)
 
   const [form, setForm] = useState<AccountInput>(() => toInput(account))
@@ -189,7 +198,7 @@ export function AccountFormDialog({
         onClick={(event) => event.stopPropagation()}
       >
         <div className="card__header">
-          <h2 id="account-form-title">{editing ? 'Edit account' : 'New account'}</h2>
+          <h2 id="account-form-title">{editing ? t('accounts.editAccount') : t('accounts.newAccount')}</h2>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="card__body">
@@ -200,7 +209,7 @@ export function AccountFormDialog({
             ) : null}
 
             <div className="form-grid">
-              <Field label="Name" htmlFor="account-name" required error={errors.name}>
+              <Field label={t('fields.name')} htmlFor="account-name" required error={errors.name}>
                 <input
                   id="account-name"
                   value={form.name}
@@ -209,21 +218,21 @@ export function AccountFormDialog({
                   required
                 />
               </Field>
-              <Field label="Legal name" htmlFor="account-legal">
+              <Field label={t('fields.legalName')} htmlFor="account-legal">
                 <input
                   id="account-legal"
                   value={form.legal_name ?? ''}
                   onChange={(event) => update('legal_name', event.target.value || null)}
                 />
               </Field>
-              <Field label="Industry" htmlFor="account-industry">
+              <Field label={t('fields.industry')} htmlFor="account-industry">
                 <input
                   id="account-industry"
                   value={form.industry ?? ''}
                   onChange={(event) => update('industry', event.target.value || null)}
                 />
               </Field>
-              <Field label="Website" htmlFor="account-website">
+              <Field label={t('fields.website')} htmlFor="account-website">
                 <input
                   id="account-website"
                   type="url"
@@ -232,7 +241,7 @@ export function AccountFormDialog({
                   onChange={(event) => update('website', event.target.value || null)}
                 />
               </Field>
-              <Field label="Email" htmlFor="account-email" error={errors.email}>
+              <Field label={t('fields.email')} htmlFor="account-email" error={errors.email}>
                 <input
                   id="account-email"
                   type="email"
@@ -240,21 +249,21 @@ export function AccountFormDialog({
                   onChange={(event) => update('email', event.target.value || null)}
                 />
               </Field>
-              <Field label="Phone" htmlFor="account-phone">
+              <Field label={t('fields.phone')} htmlFor="account-phone">
                 <input
                   id="account-phone"
                   value={form.phone ?? ''}
                   onChange={(event) => update('phone', event.target.value || null)}
                 />
               </Field>
-              <Field label="Tax ID" htmlFor="account-tax">
+              <Field label={t('fields.taxId')} htmlFor="account-tax">
                 <input
                   id="account-tax"
                   value={form.tax_id ?? ''}
                   onChange={(event) => update('tax_id', event.target.value || null)}
                 />
               </Field>
-              <Field label="Employees" htmlFor="account-employees">
+              <Field label={t('fields.employees')} htmlFor="account-employees">
                 <input
                   id="account-employees"
                   type="number"
@@ -265,7 +274,7 @@ export function AccountFormDialog({
                   }
                 />
               </Field>
-              <Field label="Annual revenue" htmlFor="account-revenue">
+              <Field label={t('fields.annualRevenue')} htmlFor="account-revenue">
                 <input
                   id="account-revenue"
                   type="number"
@@ -277,21 +286,21 @@ export function AccountFormDialog({
                   }
                 />
               </Field>
-              <Field label="Country" htmlFor="account-country">
+              <Field label={t('fields.country')} htmlFor="account-country">
                 <input
                   id="account-country"
                   value={form.country ?? ''}
                   onChange={(event) => update('country', event.target.value || null)}
                 />
               </Field>
-              <Field label="City" htmlFor="account-city">
+              <Field label={t('fields.city')} htmlFor="account-city">
                 <input
                   id="account-city"
                   value={form.city ?? ''}
                   onChange={(event) => update('city', event.target.value || null)}
                 />
               </Field>
-              <Field label="Address" htmlFor="account-address" full>
+              <Field label={t('fields.address')} htmlFor="account-address" full>
                 <input
                   id="account-address"
                   value={form.address_line1 ?? ''}
@@ -302,10 +311,10 @@ export function AccountFormDialog({
           </div>
           <div className="form-actions">
             <button type="button" className="btn btn--secondary" onClick={onClose}>
-              Cancel
+              {t('accounts.cancel')}
             </button>
             <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
-              {mutation.isPending ? 'Saving…' : editing ? 'Save changes' : 'Create account'}
+              {mutation.isPending ? t('accounts.saving') : editing ? t('accounts.saveChanges') : t('accounts.createAccount')}
             </button>
           </div>
         </form>
@@ -341,6 +350,7 @@ export function AccountDetailPage() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
   const { can } = useAuth()
+  const t = useT()
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState(false)
   const [archiving, setArchiving] = useState(false)
@@ -405,7 +415,7 @@ export function AccountDetailPage() {
 
   if (account.isError) {
     return (
-      <Card title="Account">
+      <Card title={t('accounts.title')}>
         <Alert tone="error">{errorMessage(account.error)}</Alert>
       </Card>
     )
@@ -429,22 +439,22 @@ export function AccountDetailPage() {
         meta={
           <>
             {data.industry ? <>{data.industry} · </> : null}
-            Updated <Timestamp value={data.updated_at} />
+            {t('accounts.updated')} <Timestamp value={data.updated_at} />
           </>
         }
         actions={
           <>
             <Link to="/accounts" className="btn btn--ghost btn--sm">
-              Back
+              {t('common.back')}
             </Link>
             {can('accounts.update') ? (
               <button type="button" className="btn btn--secondary btn--sm" onClick={() => setEditing(true)}>
-                Edit
+                {t('accounts.edit')}
               </button>
             ) : null}
             {can('accounts.archive') ? (
               <button type="button" className="btn btn--danger btn--sm" onClick={() => setArchiving(true)}>
-                Archive
+                {t('accounts.archive')}
               </button>
             ) : null}
           </>
@@ -458,11 +468,11 @@ export function AccountDetailPage() {
       ) : null}
 
       <div className="grid grid--split">
-        <Card title="Details">
+        <Card title={t('accounts.details')}>
           <dl className="dl">
-            <dt>Legal name</dt>
+            <dt>{t('fields.legalName')}</dt>
             <dd>{data.legal_name ?? <span className="text-subtle">—</span>}</dd>
-            <dt>Website</dt>
+            <dt>{t('fields.website')}</dt>
             <dd>
               {data.website ? (
                 <a href={data.website} target="_blank" rel="noreferrer noopener">
@@ -472,13 +482,13 @@ export function AccountDetailPage() {
                 <span className="text-subtle">—</span>
               )}
             </dd>
-            <dt>Email</dt>
+            <dt>{t('fields.email')}</dt>
             <dd>{data.email ?? <span className="text-subtle">—</span>}</dd>
-            <dt>Phone</dt>
+            <dt>{t('fields.phone')}</dt>
             <dd>{data.phone ?? <span className="text-subtle">—</span>}</dd>
-            <dt>Employees</dt>
+            <dt>{t('fields.employees')}</dt>
             <dd>{data.employee_count ?? <span className="text-subtle">—</span>}</dd>
-            <dt>Annual revenue</dt>
+            <dt>{t('fields.annualRevenue')}</dt>
             <dd>
               {data.annual_revenue !== undefined ? (
                 formatMoney(data.annual_revenue)
@@ -486,13 +496,13 @@ export function AccountDetailPage() {
                 <span className="text-subtle">—</span>
               )}
             </dd>
-            <dt>Address</dt>
+            <dt>{t('fields.address')}</dt>
             <dd>
               {[data.address_line1, data.city, data.region, data.postal_code, data.country]
                 .filter(Boolean)
                 .join(', ') || <span className="text-subtle">—</span>}
             </dd>
-            <dt>Created</dt>
+            <dt>{t('fields.created')}</dt>
             <dd>
               <Timestamp value={data.created_at} />
             </dd>
@@ -501,7 +511,7 @@ export function AccountDetailPage() {
 
         <div className="stack">
           {can('contacts.read') ? (
-            <Card title={`Contacts${contacts.data ? ` (${contacts.data.total})` : ''}`}>
+            <Card title={`${t('accounts.contacts')}${contacts.data ? ` (${contacts.data.total})` : ''}`}>
               {contacts.data?.items.length ? (
                 <div className="stack stack--sm">
                   {contacts.data.items.map((contact) => (
@@ -519,13 +529,13 @@ export function AccountDetailPage() {
                   ))}
                 </div>
               ) : (
-                <p className="text-muted text-sm">No contacts linked to this account.</p>
+                <p className="text-muted text-sm">{t('accounts.contactsEmpty')}</p>
               )}
             </Card>
           ) : null}
 
           {can('deals.read') ? (
-            <Card title={`Deals${deals.data ? ` (${deals.data.total})` : ''}`}>
+            <Card title={`${t('accounts.deals')}${deals.data ? ` (${deals.data.total})` : ''}`}>
               {deals.data?.items.length ? (
                 <div className="stack stack--sm">
                   {deals.data.items.map((deal) => (
@@ -546,13 +556,13 @@ export function AccountDetailPage() {
                   ))}
                 </div>
               ) : (
-                <p className="text-muted text-sm">No deals for this account.</p>
+                <p className="text-muted text-sm">{t('accounts.dealsEmpty')}</p>
               )}
             </Card>
           ) : null}
 
           {can('tasks.read') ? (
-            <Card title={`Open tasks${tasks.data ? ` (${tasks.data.total})` : ''}`}>
+            <Card title={`${t('accounts.openTasks')}${tasks.data ? ` (${tasks.data.total})` : ''}`}>
               {tasks.isError ? (
                 <Alert tone="error">{errorMessage(tasks.error)}</Alert>
               ) : tasks.data?.items.length ? (
@@ -568,13 +578,13 @@ export function AccountDetailPage() {
                   ))}
                 </div>
               ) : (
-                <p className="text-muted text-sm">No open tasks for this account.</p>
+                <p className="text-muted text-sm">{t('accounts.tasksEmpty')}</p>
               )}
             </Card>
           ) : null}
 
           {can('activities.read') ? (
-            <Card title={`Activity history${activities.data ? ` (${activities.data.total})` : ''}`}>
+            <Card title={`${t('accounts.activity')}${activities.data ? ` (${activities.data.total})` : ''}`}>
               {activities.isError ? (
                 <Alert tone="error">{errorMessage(activities.error)}</Alert>
               ) : activities.data?.items.length ? (
@@ -592,7 +602,7 @@ export function AccountDetailPage() {
                   ))}
                 </div>
               ) : (
-                <p className="text-muted text-sm">No recorded interactions yet.</p>
+                <p className="text-muted text-sm">{t('accounts.activityEmpty')}</p>
               )}
             </Card>
           ) : null}
@@ -625,9 +635,9 @@ export function AccountDetailPage() {
 
       <ConfirmDialog
         open={archiving}
-        title="Archive this account?"
-        text="The account and its history are kept, but it disappears from lists. This can be reversed by an administrator."
-        confirmLabel="Archive"
+        title={t('accounts.archiveTitle')}
+        text={t('accounts.archiveText')}
+        confirmLabel={t('accounts.archive')}
         danger
         busy={archive.isPending}
         onConfirm={() => archive.mutate()}
