@@ -11,6 +11,7 @@ import (
 	"os"
 	"sync"
 	"testing"
+	"time"
 
 	"log/slog"
 
@@ -197,5 +198,134 @@ func TestClaimOfAFreshKeyIsNotAnError(t *testing.T) {
 	}
 	if outcome != Claimed {
 		t.Fatalf("outcome = %v, want Claimed", outcome)
+	}
+}
+
+// An abandoned claim must not hold the key forever. A request that died without
+// storing a response — the process was killed, the host lost power — leaves a row
+// with response NULL. Once that claim has outlived its lease, a retry takes it over
+// and runs, instead of being refused with 409 until retention sweeps the row.
+func TestAnAbandonedClaimIsTakenOverAfterTheLease(t *testing.T) {
+	db := connectOrSkip(t)
+	freshSchema(t, db)
+	store := NewStore(db)
+	ctx := context.Background()
+
+	// Abandon a claim by taking the key and never completing it.
+	if outcome, _, err := store.Claim(ctx, "scope", "key-abandoned"); err != nil || outcome != Claimed {
+		t.Fatalf("first claim = %v/%v, want Claimed/nil", outcome, err)
+	}
+	// Within the lease it is still held: the owner may simply be slow.
+	if outcome, _, err := store.Claim(ctx, "scope", "key-abandoned"); err != nil || outcome != InFlight {
+		t.Fatalf("claim within the lease = %v/%v, want InFlight/nil", outcome, err)
+	}
+
+	// Age the claim past the lease by writing created_at directly: the lease is
+	// measured against the database clock, and a test must not sleep for minutes.
+	if _, err := db.Pool().Exec(ctx,
+		`UPDATE idempotency_keys SET created_at = now() - make_interval(secs => $1) WHERE scope = $2 AND key = $3`,
+		(ClaimLease + time.Minute).Seconds(), "scope", "key-abandoned"); err != nil {
+		t.Fatalf("age the claim: %v", err)
+	}
+
+	outcome, stored, err := store.Claim(ctx, "scope", "key-abandoned")
+	if err != nil {
+		t.Fatalf("claim after the lease: %v", err)
+	}
+	if outcome != Claimed || stored != nil {
+		t.Fatalf("claim after the lease = %v/%v, want Claimed/nil (the retry must run)", outcome, stored)
+	}
+	// The takeover refreshed the claim, so an immediate second attempt is refused
+	// again: the new owner is running.
+	if outcome, _, err := store.Claim(ctx, "scope", "key-abandoned"); err != nil || outcome != InFlight {
+		t.Fatalf("claim after takeover = %v/%v, want InFlight/nil", outcome, err)
+	}
+}
+
+// A claim that has been completed must never be taken over, however old it is: the
+// stored response is the whole point of the key, and replaying it is what makes a
+// retry safe.
+func TestACompletedClaimIsReplayedNotTakenOver(t *testing.T) {
+	db := connectOrSkip(t)
+	freshSchema(t, db)
+	store := NewStore(db)
+	ctx := context.Background()
+
+	if _, _, err := store.Claim(ctx, "scope", "key-old"); err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	if err := store.Complete(ctx, "scope", "key-old", 201, "application/json", []byte(`{"id":"kept"}`)); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	// Age the row well past the lease. A stored response has no lease.
+	if _, err := db.Pool().Exec(ctx,
+		`UPDATE idempotency_keys SET created_at = now() - interval '30 days' WHERE scope = $1 AND key = $2`,
+		"scope", "key-old"); err != nil {
+		t.Fatalf("age the row: %v", err)
+	}
+
+	outcome, stored, err := store.Claim(ctx, "scope", "key-old")
+	if err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	if outcome != Replayed || stored == nil || string(stored.Body) != `{"id":"kept"}` {
+		t.Fatalf("outcome = %v stored = %+v, want Replayed with the stored body", outcome, stored)
+	}
+}
+
+// Releasing a key must not erase a response another request already stored: a late
+// failure from an execution whose claim was taken over must not delete the result
+// the newer owner committed.
+func TestReleaseDoesNotEraseAStoredResponse(t *testing.T) {
+	db := connectOrSkip(t)
+	freshSchema(t, db)
+	store := NewStore(db)
+	ctx := context.Background()
+
+	if _, _, err := store.Claim(ctx, "scope", "key-stored"); err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	if err := store.Complete(ctx, "scope", "key-stored", 200, "application/json", []byte(`{"id":"kept"}`)); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	if err := store.Release(ctx, "scope", "key-stored"); err != nil {
+		t.Fatalf("release: %v", err)
+	}
+
+	outcome, stored, err := store.Claim(ctx, "scope", "key-stored")
+	if err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	if outcome != Replayed || stored == nil {
+		t.Fatalf("outcome = %v stored = %+v, want the stored response to survive the release", outcome, stored)
+	}
+}
+
+// A completed response must not be overwritten by a second execution that lost its
+// claim to a takeover. The first result wins, so a client never sees two different
+// answers for one key.
+func TestCompleteDoesNotOverwriteAnExistingResponse(t *testing.T) {
+	db := connectOrSkip(t)
+	freshSchema(t, db)
+	store := NewStore(db)
+	ctx := context.Background()
+
+	if _, _, err := store.Claim(ctx, "scope", "key-winner"); err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	if err := store.Complete(ctx, "scope", "key-winner", 200, "application/json", []byte(`{"winner":"first"}`)); err != nil {
+		t.Fatalf("first complete: %v", err)
+	}
+	// The late owner of the same key tries to store its own result.
+	if err := store.Complete(ctx, "scope", "key-winner", 200, "application/json", []byte(`{"winner":"second"}`)); err != nil {
+		t.Fatalf("second complete: %v", err)
+	}
+
+	_, stored, err := store.Claim(ctx, "scope", "key-winner")
+	if err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	if stored == nil || string(stored.Body) != `{"winner":"first"}` {
+		t.Fatalf("stored body = %q, want the first result to be kept", stored.Body)
 	}
 }

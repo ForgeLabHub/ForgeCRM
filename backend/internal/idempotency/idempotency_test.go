@@ -251,3 +251,58 @@ func TestHasNoStoreParsesTheDirectiveList(t *testing.T) {
 		}
 	}
 }
+
+// recordingClaimer is a Claimer that records the calls the middleware makes, so a
+// test can assert on the release without a database.
+type recordingClaimer struct {
+	released []string
+	complete int
+}
+
+func (r *recordingClaimer) Claim(context.Context, string, string) (Outcome, *storedResponse, error) {
+	return Claimed, nil, nil
+}
+
+func (r *recordingClaimer) Complete(context.Context, string, string, int, string, []byte) error {
+	r.complete++
+	return nil
+}
+
+func (r *recordingClaimer) Release(_ context.Context, _, key string) error {
+	r.released = append(r.released, key)
+	return nil
+}
+
+// A handler that panics must not leave its claim held. The panic is recovered by an
+// outer middleware that knows nothing about the key, so the release has to happen as
+// the stack unwinds here. Without it the key stays claimed until the lease expires,
+// and every retry in that window is refused with 409.
+func TestMiddlewareReleasesTheClaimWhenTheHandlerPanics(t *testing.T) {
+	store := &recordingClaimer{}
+	identity := func(_ context.Context) (string, string, bool) { return "org", "user", true }
+	next := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		panic("handler exploded")
+	})
+	h := Middleware(store, identity)(next)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/customers", nil)
+	req.Header.Set(Header, "panic-key")
+	rec := httptest.NewRecorder()
+
+	// The middleware re-panics so the outer recover still sees it; catch it here.
+	func() {
+		defer func() {
+			if rec := recover(); rec == nil {
+				t.Fatal("the panic did not propagate; an outer recover would not see it")
+			}
+		}()
+		h.ServeHTTP(rec, req)
+	}()
+
+	if len(store.released) != 1 || store.released[0] != "panic-key" {
+		t.Fatalf("released = %v, want the claim to be released on panic", store.released)
+	}
+	if store.complete != 0 {
+		t.Fatalf("the response was stored %d times, want 0 for a panicked handler", store.complete)
+	}
+}

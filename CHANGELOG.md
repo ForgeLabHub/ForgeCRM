@@ -23,6 +23,18 @@
 
 ### Fixed
 
+- **Брошенный claim идемпотентности больше не блокирует повтор навсегда.** Запрос,
+  погибший без ответа (процесс убит, хост потерян), оставлял строку в
+  `idempotency_keys` без сохранённого ответа, и каждый повтор с тем же ключом
+  получал `409`, пока retention не убирал строку через семь дней. Теперь claim — это
+  аренда: claim, переживший `idempotency.ClaimLease` (5 минут, больше 120-секундного
+  write timeout сервера), может быть перехвачен повтором, а паника освобождает claim
+  сразу, при разворачивании стека. Проверка аренды идёт в SQL против `now()`, чтобы
+  использовались одни часы; перехват и `Complete`/`Release` не перетирают уже
+  сохранённый ответ. Регрессия покрыта `internal/idempotency/integration_test.go`
+  (`TestAnAbandonedClaimIsTakenOverAfterTheLease`, `TestACompletedClaimIsReplayedNotTakenOver`,
+  `TestReleaseDoesNotEraseAStoredResponse`, `TestCompleteDoesNotOverwriteAnExistingResponse`)
+  и `idempotency_test.go` (`TestMiddlewareReleasesTheClaimWhenTheHandlerPanics`).
 - **Обход согласия через очередь писем закрыт.** Обработчик `email.send` в воркере
   отправлял почту напрямую, не спрашивая политику согласия, тогда как ручной эндпоинт
   `POST /api/v1/admin/email/send` её спрашивал. Одно и то же сообщение могло покинуть
