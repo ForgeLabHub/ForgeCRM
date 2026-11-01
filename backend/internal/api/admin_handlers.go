@@ -1194,8 +1194,8 @@ func (s *Server) handleDiagnostics(w http.ResponseWriter, r *http.Request) {
 			"telegram": s.deps.Telegram.Enabled(),
 			"ai":       s.deps.AI.Enabled(),
 			// Named for what it reports. The key was "oidc", which read as "SSO is
-			// available" while only the configuration is; the sign-in flow is not
-			// implemented. See docs/ROADMAP.md.
+			// available" while only the configuration is; the sign-in flow itself is
+			// reachable at /api/v1/auth/oidc/start and needs an enabled provider.
 			"oidc_configured": s.deps.Config.OIDC.Enabled,
 		},
 		"limits": map[string]any{

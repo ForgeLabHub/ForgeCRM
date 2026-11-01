@@ -116,6 +116,33 @@ describe('locale', () => {
     const { language: _language, ...rest } = en
     expect(walk(rest)).toBe(false)
   })
+
+  it('leaves no untranslated English words in the Russian dictionary', () => {
+    // The reverse of the check above: a Russian string that still carries an
+    // English word reads as a half-finished translation. Brand names, protocol
+    // acronyms and interpolation placeholders are the only allowed exceptions.
+    const allowed = new Set([
+      'ForgeCRM', 'Telegram', 'S3', 'MinIO', 'MCP', 'AI', 'OIDC', 'OAuth', 'SSO',
+      'API', 'URL', 'UUID', 'JSON', 'HTML', 'HTTP', 'HTTPS', 'SQL', 'RBAC', 'CRM',
+      'SDK', 'CSV', 'SMTP', 'Webhook', 'Webhooks',
+    ])
+    const offenders: string[] = []
+    const walk = (obj: Record<string, unknown>, prefix: string): void => {
+      for (const [key, value] of Object.entries(obj)) {
+        if (typeof value === 'string') {
+          const withoutPlaceholders = value.replace(/\{[^}]*\}/g, ' ')
+          const latin = withoutPlaceholders.match(/[A-Za-z]{4,}/g) ?? []
+          const stray = latin.filter((word) => !allowed.has(word))
+          if (stray.length > 0) offenders.push(`${prefix}${key}: ${value}`)
+        } else {
+          walk(value as Record<string, unknown>, `${prefix}${key}.`)
+        }
+      }
+    }
+    const { language: _language, ...rest } = ru
+    walk(rest as Record<string, unknown>, '')
+    expect(offenders).toEqual([])
+  })
 })
 
 describe('theme', () => {

@@ -21,12 +21,12 @@ function formatDuration(seconds: number): string {
  * Labels that differ from the raw capability key.
  *
  * A bare `oidc_configured: enabled` reads as "SSO works", which it does not: the
- * setting is present but the sign-in flow is not implemented. The label says what
- * the flag means so the page cannot mislead. A key with no entry falls back to the
- * key itself.
+ * flag reports that deployment-level settings are present, not that a provider is
+ * configured and enabled. The label says what the flag means so the page cannot
+ * mislead. A key with no entry falls back to the key itself.
  */
 const CAPABILITY_LABELS: Record<string, string> = {
-  oidc_configured: 'OIDC settings present (sign-in flow not implemented)',
+  oidc_configured: 'OIDC settings present (configure a provider to enable sign-in)',
   tool_api: 'Tool API over HTTP (not a full MCP server)',
 }
 

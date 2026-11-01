@@ -722,9 +722,10 @@ export interface SystemInfo {
 /**
  * Capabilities of the running instance.
  *
- * `oidc_configured` is not `oidc`: it reports that OIDC settings are present, not
- * that SSO can be used. The sign-in flow is not implemented, so the interface must
- * not offer it on the strength of this flag.
+ * `oidc_configured` is not `oidc`: it reports that deployment-level OIDC settings
+ * are present, not that SSO can be used. A provider must also be configured and
+ * enabled, so the interface must not offer it on the strength of this flag alone;
+ * the providers a visitor may choose from come from the SSO providers endpoint.
  */
 export interface Capabilities {
   email: boolean
@@ -738,7 +739,7 @@ export interface Capabilities {
   storage: boolean
   /** The single-object upload limit in bytes. Zero when storage is off. */
   max_upload_bytes: number
-  /** OIDC settings present. The authorisation-code flow is not implemented. */
+  /** OIDC settings present. Whether sign-in can be offered also needs a provider. */
   oidc_configured: boolean
   import_formats: string[]
   archive_formats: string[]

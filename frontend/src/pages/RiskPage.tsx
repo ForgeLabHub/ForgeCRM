@@ -172,7 +172,7 @@ function SignalCard({
         <dl className="row" style={{ gap: 'var(--space-4)', marginTop: 'var(--space-3)', flexWrap: 'wrap' }}>
           {signal.evidence.map((e) => (
             <div key={e.key}>
-              <dt className="text-subtle" style={{ fontSize: 'var(--font-size-sm)' }}>
+              <dt className="text-subtle text-sm">
                 {e.label}
               </dt>
               <dd>{e.value}</dd>
