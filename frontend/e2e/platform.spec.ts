@@ -35,7 +35,9 @@ test.describe('authentication', () => {
     const before = await page.request.get('/api/v1/accounts/')
     expect(before.status()).toBe(200)
 
-    await page.getByRole('button', { name: 'Sign out' }).click()
+    // Sign out lives in the account menu, which opens from its trigger.
+    await page.getByRole('button', { name: 'My account' }).click()
+    await page.getByRole('menuitem', { name: 'Sign out' }).click()
     await expect(page).toHaveURL(/\/login/)
 
     const after = await page.request.get('/api/v1/accounts/')

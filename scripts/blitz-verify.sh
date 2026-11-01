@@ -117,12 +117,16 @@ echo "Clean database"
 docker run -d --name "${pg}" --network "${network}" \
   -e POSTGRES_USER=forgecrm -e POSTGRES_PASSWORD=forgecrm -e POSTGRES_DB=forgecrm \
   postgres:17-alpine >/dev/null
+# Readiness is probed over TCP, not the unix socket. The image's entrypoint runs
+# a temporary server on the socket while it initialises the cluster, so a
+# socket-only probe reports ready a second before the real server exists; the
+# API reaches the database over TCP, so that is the connection that must work.
 for i in $(seq 1 60); do
-  docker exec "${pg}" pg_isready -U forgecrm -d forgecrm >/dev/null 2>&1 && break
+  docker exec "${pg}" pg_isready -h 127.0.0.1 -U forgecrm -d forgecrm >/dev/null 2>&1 && break
   sleep 1
 done
 check "PostgreSQL accepts connections" "0" \
-  "$(docker exec "${pg}" pg_isready -U forgecrm -d forgecrm >/dev/null 2>&1; echo $?)"
+  "$(docker exec "${pg}" psql -h 127.0.0.1 -U forgecrm -d forgecrm -tAc 'select 1' >/dev/null 2>&1; echo $?)"
 
 # The production environment blitz.cloud injects, minus PORT (we fix the listen
 # address). FORGECRM_TRUSTED_PROXIES is the real CIDR of the proxy network, not
