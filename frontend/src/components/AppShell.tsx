@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { GlobalSearch } from './GlobalSearch'
 import { useGlobalSearchShortcut } from '../hooks/useGlobalSearch'
 import { BrandMark } from './BrandMark'
+import { Skeleton } from './ui'
 import { NAV_ICONS } from './NavIcons'
 import { useI18n, type TranslationKey } from '../i18n'
 import { useTheme, type ThemeMode } from '../theme'
@@ -96,6 +97,26 @@ function initials(name?: string, email?: string): string {
   const parts = source.split(/\s+/).filter(Boolean)
   if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
   return source.slice(0, 2).toUpperCase()
+}
+
+/**
+ * Fallback for a route whose code chunk is still loading. It mirrors the page
+ * header and a content block so the shell does not collapse and then jump when
+ * the real page arrives.
+ */
+function RouteFallback() {
+  return (
+    <div aria-busy="true">
+      <div className="page-header">
+        <div>
+          <Skeleton width="220px" height={24} />
+          <div style={{ height: 8 }} />
+          <Skeleton width="320px" height={14} />
+        </div>
+      </div>
+      <Skeleton width="100%" height={220} />
+    </div>
+  )
 }
 
 export function AppShell() {
@@ -217,7 +238,9 @@ export function AppShell() {
         </header>
 
         <main className="content" id="main-content">
-          <Outlet />
+          <Suspense fallback={<RouteFallback />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
 
