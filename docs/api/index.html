@@ -216,6 +216,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <li data-op><a href="#op-post-api-v1-tags-id-attach"><span class="m m-post">POST</span><span class="p">/api/v1/tags/{id}/attach</span></a></li>
 <li data-op><a href="#op-get-api-v1-tasks"><span class="m m-get">GET</span><span class="p">/api/v1/tasks</span></a></li>
 <li data-op><a href="#op-post-api-v1-tasks"><span class="m m-post">POST</span><span class="p">/api/v1/tasks</span></a></li>
+<li data-op><a href="#op-get-api-v1-tasks-id"><span class="m m-get">GET</span><span class="p">/api/v1/tasks/{id}</span></a></li>
 <li data-op><a href="#op-put-api-v1-tasks-id"><span class="m m-put">PUT</span><span class="p">/api/v1/tasks/{id}</span></a></li>
 <li data-op><a href="#op-get-api-v1-tickets"><span class="m m-get">GET</span><span class="p">/api/v1/tickets</span></a></li>
 <li data-op><a href="#op-post-api-v1-tickets"><span class="m m-post">POST</span><span class="p">/api/v1/tickets</span></a></li>
@@ -5024,6 +5025,35 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <p class="ref">See <a href="#schema-taskinput"><code>TaskInput</code></a></p>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">201</span> Success.</div><p class="ref">See <a href="#schema-task"><code>Task</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">400</span> The request was malformed: bad JSON, an unknown field, or a missing required parameter.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">401</span> No valid session, or the session has expired. Sign in again.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">403</span> Authenticated, but the caller lacks the required permission.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">404</span> No such resource, or none visible to the caller&#39;s organization.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">409</span> The request conflicts with current state, such as a duplicate external identifier.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">422</span> A field failed validation. `error.details` names each field.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">429</span> Too many requests. Retry after the interval in `Retry-After`.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-server">500</span> Unexpected failure. The detail is deliberately generic; the cause is in the server log.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+</article>
+<article class="op" id="op-get-api-v1-tasks-id" data-op>
+<h3><span class="m m-get">GET</span> <code class="path">/api/v1/tasks/{id}</code></h3>
+<p class="summary">Get one task by id</p>
+<div class="op-desc"><p>Requires the `tasks.read` permission.</p>
+</div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+</tbody></table>
+<h4>Responses</h4>
+<div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success.</div><p class="ref">See <a href="#schema-task"><code>Task</code></a></p>
 </div>
 <div class="resp"><div class="resp-head"><span class="code c-client">400</span> The request was malformed: bad JSON, an unknown field, or a missing required parameter.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
 </div>

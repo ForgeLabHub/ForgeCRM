@@ -421,6 +421,10 @@ func (s *Service) Search(ctx context.Context, p *rbac.Principal, term string, li
 			SELECT id, subject, COALESCE(status,''), updated_at FROM tickets
 			WHERE organization_id = $1 AND archived_at IS NULL AND subject ILIKE $2
 			ORDER BY updated_at DESC LIMIT $3`},
+		{rbac.PermTasksRead, "task", `
+			SELECT id, title, COALESCE(status,''), updated_at FROM tasks
+			WHERE organization_id = $1 AND archived_at IS NULL AND title ILIKE $2
+			ORDER BY updated_at DESC LIMIT $3`},
 	}
 
 	var out []SearchResult

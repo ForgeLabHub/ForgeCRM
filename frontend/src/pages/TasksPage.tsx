@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { accountsApi, contactsApi, dealsApi, tasksApi } from '../api/crm'
 import { errorMessage, fieldErrors } from '../api/client'
 import type { ViewFilters } from '../api/views'
@@ -10,7 +11,7 @@ import { AssistPanel } from '../components/AssistPanel'
 import { RecordCollabPanel } from '../components/RecordCollabPanel'
 import { ResourceList, type Column } from '../components/ResourceList'
 import { SavedViewsBar } from '../components/SavedViewsBar'
-import { Alert, Badge, Field, PageHeader, StatusBadge, Timestamp } from '../components/ui'
+import { Alert, Badge, Card, Field, PageHeader, StatusBadge, Timestamp } from '../components/ui'
 
 const PRIORITIES = ['low', 'normal', 'high', 'urgent']
 const STATUSES = ['open', 'in_progress', 'completed', 'cancelled']
@@ -22,6 +23,7 @@ function isOverdue(task: Task): boolean {
 
 export function TasksPage() {
   const { can } = useAuth()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Task | null>(null)
@@ -145,6 +147,7 @@ export function TasksPage() {
         fetchPage={(params) => tasksApi.list({ ...params, status: statusFilter || undefined })}
         columns={columns}
         rowKey={(row) => row.id}
+        onRowClick={(row) => navigate(`/tasks/${row.id}`)}
         emptyTitle="No tasks"
         emptyText="Create a task to track something that needs doing."
         searchable
@@ -444,4 +447,168 @@ function toLocalInput(iso: string | null): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
     date.getHours(),
   )}:${pad(date.getMinutes())}`
+}
+
+export function TaskDetailPage() {
+  const { id = '' } = useParams()
+  const { can } = useAuth()
+  const queryClient = useQueryClient()
+  const [editing, setEditing] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
+
+  const task = useQuery({
+    queryKey: ['task', id],
+    queryFn: () => tasksApi.get(id),
+    enabled: Boolean(id),
+  })
+
+  const complete = useMutation({
+    mutationFn: () => {
+      const current = task.data
+      if (!current) throw new Error('The task is not loaded')
+      return tasksApi.update(id, { ...toInput(current), status: 'completed' })
+    },
+    onSuccess: (saved) => {
+      queryClient.setQueryData(['task', id], saved)
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      setActionError(null)
+    },
+    onError: (error) => setActionError(errorMessage(error)),
+  })
+
+  if (task.isError) {
+    return (
+      <Card title="Task">
+        <Alert tone="error">{errorMessage(task.error)}</Alert>
+      </Card>
+    )
+  }
+
+  if (task.isLoading || !task.data) {
+    return <div className="skeleton" style={{ width: '100%', height: 260 }} aria-busy="true" />
+  }
+
+  const data = task.data
+  const overdue = isOverdue(data)
+
+  return (
+    <>
+      <PageHeader
+        title={data.title}
+        meta={
+          <>
+            <StatusBadge status={data.status} /> · Updated <Timestamp value={data.updated_at} />
+          </>
+        }
+        actions={
+          <>
+            <Link to="/tasks" className="btn btn--ghost btn--sm">
+              Back
+            </Link>
+            {can('tasks.update') && data.status !== 'completed' ? (
+              <button
+                type="button"
+                className="btn btn--secondary btn--sm"
+                onClick={() => complete.mutate()}
+                disabled={complete.isPending}
+              >
+                Complete
+              </button>
+            ) : null}
+            {can('tasks.update') ? (
+              <button type="button" className="btn btn--secondary btn--sm" onClick={() => setEditing(true)}>
+                Edit
+              </button>
+            ) : null}
+          </>
+        }
+      />
+
+      {actionError ? (
+        <div style={{ marginBottom: 'var(--space-4)' }}>
+          <Alert tone="error">{actionError}</Alert>
+        </div>
+      ) : null}
+
+      <div className="grid grid--split">
+        <Card title="Details">
+          <dl className="dl">
+            <dt>Status</dt>
+            <dd>
+              <StatusBadge status={data.status} />
+            </dd>
+            <dt>Priority</dt>
+            <dd>
+              <Badge
+                tone={
+                  data.priority === 'urgent' ? 'danger' : data.priority === 'high' ? 'warning' : 'neutral'
+                }
+              >
+                {data.priority}
+              </Badge>
+            </dd>
+            <dt>Due</dt>
+            <dd className={overdue ? 'text-danger' : undefined}>
+              <Timestamp value={data.due_at} />
+              {overdue ? ' · overdue' : ''}
+            </dd>
+            <dt>Completed</dt>
+            <dd>
+              <Timestamp value={data.completed_at} />
+            </dd>
+            <dt>Description</dt>
+            <dd>{data.description ?? <span className="text-subtle">—</span>}</dd>
+          </dl>
+        </Card>
+
+        <Card title="Related records">
+          <dl className="dl">
+            <dt>Account</dt>
+            <dd>
+              {data.account_id ? (
+                <Link to={`/accounts/${data.account_id}`}>View account</Link>
+              ) : (
+                <span className="text-subtle">Not linked</span>
+              )}
+            </dd>
+            <dt>Contact</dt>
+            <dd>
+              {data.contact_id ? (
+                <Link to={`/contacts/${data.contact_id}`}>View contact</Link>
+              ) : (
+                <span className="text-subtle">Not linked</span>
+              )}
+            </dd>
+            <dt>Deal</dt>
+            <dd>
+              {data.deal_id ? (
+                <Link to={`/deals/${data.deal_id}`}>View deal</Link>
+              ) : (
+                <span className="text-subtle">Not linked</span>
+              )}
+            </dd>
+            <dt>Created</dt>
+            <dd>
+              <Timestamp value={data.created_at} />
+            </dd>
+          </dl>
+        </Card>
+      </div>
+
+      <AssistPanel entityType="task" entityId={id} />
+
+      <RecordCollabPanel entityType="task" entityId={id} />
+
+      <TaskFormDialog
+        open={editing}
+        task={data}
+        onClose={() => setEditing(false)}
+        onSaved={() => {
+          setEditing(false)
+          void queryClient.invalidateQueries({ queryKey: ['task', id] })
+          void queryClient.invalidateQueries({ queryKey: ['tasks'] })
+        }}
+      />
+    </>
+  )
 }

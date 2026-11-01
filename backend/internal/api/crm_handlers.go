@@ -85,6 +85,7 @@ func (s *Server) mountCRM(r chi.Router) {
 	// Tasks
 	r.Route("/tasks", func(r chi.Router) {
 		r.With(s.perm(rbac.PermTasksRead)).Get("/", s.handleListTasks)
+		r.With(s.perm(rbac.PermTasksRead)).Get("/{id}", s.handleGetTask)
 		r.With(s.perm(rbac.PermTasksCreate)).Post("/", s.handleCreateTask)
 		r.With(s.perm(rbac.PermTasksUpdate)).Put("/{id}", s.handleUpdateTask)
 	})
@@ -788,6 +789,23 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	task, err := s.deps.CRM.UpdateTask(r.Context(), p, id, in)
+	if err != nil {
+		s.respondDomainError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, task)
+}
+
+func (s *Server) handleGetTask(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.mustPrincipal(w, r)
+	if !ok {
+		return
+	}
+	id, ok := pathUUID(w, r, "id")
+	if !ok {
+		return
+	}
+	task, err := s.deps.CRM.GetTask(r.Context(), p, id)
 	if err != nil {
 		s.respondDomainError(w, r, err)
 		return

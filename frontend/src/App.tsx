@@ -12,7 +12,9 @@ const LeadsPage = lazy(() => import('./pages/LeadsPage').then((m) => ({ default:
 const DealDetailPage = lazy(() => import('./pages/DealsPage').then((m) => ({ default: m.DealDetailPage })))
 const DealsPage = lazy(() => import('./pages/DealsPage').then((m) => ({ default: m.DealsPage })))
 const TasksPage = lazy(() => import('./pages/TasksPage').then((m) => ({ default: m.TasksPage })))
+const TaskDetailPage = lazy(() => import('./pages/TasksPage').then((m) => ({ default: m.TaskDetailPage })))
 const TicketsPage = lazy(() => import('./pages/TicketsPage').then((m) => ({ default: m.TicketsPage })))
+const TicketDetailPage = lazy(() => import('./pages/TicketsPage').then((m) => ({ default: m.TicketDetailPage })))
 const ReportsPage = lazy(() => import('./pages/ReportsPage').then((m) => ({ default: m.ReportsPage })))
 const ImportCenterPage = lazy(() => import('./pages/ImportCenterPage').then((m) => ({ default: m.ImportCenterPage })))
 const ImportDetailPage = lazy(() => import('./pages/ImportDetailPage').then((m) => ({ default: m.ImportDetailPage })))
@@ -143,10 +145,26 @@ export function App() {
           }
         />
         <Route
+          path="tasks/:id"
+          element={
+            <RequirePermission permission="tasks.read">
+              <TaskDetailPage />
+            </RequirePermission>
+          }
+        />
+        <Route
           path="tickets"
           element={
             <RequirePermission permission="tickets.read">
               <TicketsPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="tickets/:id"
+          element={
+            <RequirePermission permission="tickets.read">
+              <TicketDetailPage />
             </RequirePermission>
           }
         />

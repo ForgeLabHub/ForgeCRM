@@ -7,7 +7,7 @@
 
 | Шаг | Документ |
 | --- | --- |
-| Понять, что это за продукт и чего в нём нет | [README.md](../README.md) |
+| Понять, что это за продукт и чего в нём нет | [README.md](../README.md), [PLATFORM.md](PLATFORM.md) |
 | Собрать с нуля | [BUILD.md](../BUILD.md) |
 | Понять устройство | [docs/ARCHITECTURE.md](ARCHITECTURE.md), затем [architecture/system-context.md](architecture/system-context.md) |
 | Запустить и проверить | [development/setup.md](development/setup.md), [verification/matrix.md](verification/matrix.md) |
@@ -17,6 +17,8 @@
 
 | Вопрос | Где ответ |
 | --- | --- |
+| Что такое платформа ForgeLabHub и 16 её ключевых возможностей | [PLATFORM.md](PLATFORM.md) |
+| Как платформа соотносится с другими open-source проектами | [COMPETITIVE_LANDSCAPE.md](COMPETITIVE_LANDSCAPE.md) |
 | Как система устроена и почему так | `ARCHITECTURE.md`, `architecture/`, `adr/` |
 | Как собрать и проверить | `BUILD.md`, `development/` |
 | Как устроены данные и миграции | `database/` |
