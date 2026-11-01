@@ -1,44 +1,51 @@
+import { lazy } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppShell } from './components/AppShell'
 import { useAuth } from './hooks/useAuth'
 import { LoginPage } from './pages/LoginPage'
 import { OverviewPage } from './pages/OverviewPage'
-import { AccountDetailPage, AccountsPage } from './pages/AccountsPage'
-import { ContactDetailPage, ContactsPage } from './pages/ContactsPage'
-import { LeadsPage } from './pages/LeadsPage'
-import { DealDetailPage, DealsPage } from './pages/DealsPage'
-import { TasksPage, TaskDetailPage } from './pages/TasksPage'
-import { TicketsPage, TicketDetailPage } from './pages/TicketsPage'
-import { ReportsPage } from './pages/ReportsPage'
-import { ImportCenterPage } from './pages/ImportCenterPage'
-import { ImportDetailPage } from './pages/ImportDetailPage'
-import { IntegrationsPage } from './pages/IntegrationsPage'
-import { MigrationsPage } from './pages/MigrationsPage'
-import { WebhooksPage } from './pages/WebhooksPage'
-import { EventsPage } from './pages/EventsPage'
-import { WorkflowsPage } from './pages/WorkflowsPage'
-import { SimulationPage } from './pages/SimulationPage'
-import { ForecastPage } from './pages/ForecastPage'
-import { RiskPage } from './pages/RiskPage'
-import { JobsPage } from './pages/JobsPage'
-import { AiPage } from './pages/AiPage'
-import { ApprovalsPage } from './pages/ApprovalsPage'
-import { NotificationsPage } from './pages/NotificationsPage'
-import { UsersPage } from './pages/admin/UsersPage'
-import { RolesPage } from './pages/admin/RolesPage'
-import { OrganizationsPage } from './pages/admin/OrganizationsPage'
-import { TeamsPage } from './pages/admin/TeamsPage'
-import { AuditPage } from './pages/admin/AuditPage'
-import { ConsentPage } from './pages/admin/ConsentPage'
-import { SecurityPage } from './pages/admin/SecurityPage'
-import { DiagnosticsPage } from './pages/admin/DiagnosticsPage'
-import { EmailPage } from './pages/admin/EmailPage'
-import { TelegramPage } from './pages/admin/TelegramPage'
-import { SSOPage } from './pages/admin/SSOPage'
-import { MCPCredentialsPage } from './pages/admin/MCPCredentialsPage'
-import { TenantSettingsPage } from './pages/admin/TenantSettingsPage'
-import { AccountPage } from './pages/AccountPage'
-import { ForbiddenPage, NotFoundPage } from './pages/ErrorPages'
+const AccountDetailPage = lazy(() => import('./pages/AccountsPage').then((m) => ({ default: m.AccountDetailPage })))
+const AccountsPage = lazy(() => import('./pages/AccountsPage').then((m) => ({ default: m.AccountsPage })))
+const ContactDetailPage = lazy(() => import('./pages/ContactsPage').then((m) => ({ default: m.ContactDetailPage })))
+const ContactsPage = lazy(() => import('./pages/ContactsPage').then((m) => ({ default: m.ContactsPage })))
+const LeadsPage = lazy(() => import('./pages/LeadsPage').then((m) => ({ default: m.LeadsPage })))
+const DealDetailPage = lazy(() => import('./pages/DealsPage').then((m) => ({ default: m.DealDetailPage })))
+const DealsPage = lazy(() => import('./pages/DealsPage').then((m) => ({ default: m.DealsPage })))
+const TasksPage = lazy(() => import('./pages/TasksPage').then((m) => ({ default: m.TasksPage })))
+const TaskDetailPage = lazy(() => import('./pages/TasksPage').then((m) => ({ default: m.TaskDetailPage })))
+const TicketsPage = lazy(() => import('./pages/TicketsPage').then((m) => ({ default: m.TicketsPage })))
+const TicketDetailPage = lazy(() => import('./pages/TicketsPage').then((m) => ({ default: m.TicketDetailPage })))
+const ReportsPage = lazy(() => import('./pages/ReportsPage').then((m) => ({ default: m.ReportsPage })))
+const ImportCenterPage = lazy(() => import('./pages/ImportCenterPage').then((m) => ({ default: m.ImportCenterPage })))
+const ImportDetailPage = lazy(() => import('./pages/ImportDetailPage').then((m) => ({ default: m.ImportDetailPage })))
+const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage').then((m) => ({ default: m.IntegrationsPage })))
+const MigrationsPage = lazy(() => import('./pages/MigrationsPage').then((m) => ({ default: m.MigrationsPage })))
+const WebhooksPage = lazy(() => import('./pages/WebhooksPage').then((m) => ({ default: m.WebhooksPage })))
+const EventsPage = lazy(() => import('./pages/EventsPage').then((m) => ({ default: m.EventsPage })))
+const WorkflowsPage = lazy(() => import('./pages/WorkflowsPage').then((m) => ({ default: m.WorkflowsPage })))
+const SimulationPage = lazy(() => import('./pages/SimulationPage').then((m) => ({ default: m.SimulationPage })))
+const ForecastPage = lazy(() => import('./pages/ForecastPage').then((m) => ({ default: m.ForecastPage })))
+const RiskPage = lazy(() => import('./pages/RiskPage').then((m) => ({ default: m.RiskPage })))
+const JobsPage = lazy(() => import('./pages/JobsPage').then((m) => ({ default: m.JobsPage })))
+const AiPage = lazy(() => import('./pages/AiPage').then((m) => ({ default: m.AiPage })))
+const ApprovalsPage = lazy(() => import('./pages/ApprovalsPage').then((m) => ({ default: m.ApprovalsPage })))
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage })))
+const UsersPage = lazy(() => import('./pages/admin/UsersPage').then((m) => ({ default: m.UsersPage })))
+const RolesPage = lazy(() => import('./pages/admin/RolesPage').then((m) => ({ default: m.RolesPage })))
+const OrganizationsPage = lazy(() => import('./pages/admin/OrganizationsPage').then((m) => ({ default: m.OrganizationsPage })))
+const TeamsPage = lazy(() => import('./pages/admin/TeamsPage').then((m) => ({ default: m.TeamsPage })))
+const AuditPage = lazy(() => import('./pages/admin/AuditPage').then((m) => ({ default: m.AuditPage })))
+const ConsentPage = lazy(() => import('./pages/admin/ConsentPage').then((m) => ({ default: m.ConsentPage })))
+const SecurityPage = lazy(() => import('./pages/admin/SecurityPage').then((m) => ({ default: m.SecurityPage })))
+const DiagnosticsPage = lazy(() => import('./pages/admin/DiagnosticsPage').then((m) => ({ default: m.DiagnosticsPage })))
+const EmailPage = lazy(() => import('./pages/admin/EmailPage').then((m) => ({ default: m.EmailPage })))
+const TelegramPage = lazy(() => import('./pages/admin/TelegramPage').then((m) => ({ default: m.TelegramPage })))
+const SSOPage = lazy(() => import('./pages/admin/SSOPage').then((m) => ({ default: m.SSOPage })))
+const MCPCredentialsPage = lazy(() => import('./pages/admin/MCPCredentialsPage').then((m) => ({ default: m.MCPCredentialsPage })))
+const TenantSettingsPage = lazy(() => import('./pages/admin/TenantSettingsPage').then((m) => ({ default: m.TenantSettingsPage })))
+const AccountPage = lazy(() => import('./pages/AccountPage').then((m) => ({ default: m.AccountPage })))
+const ForbiddenPage = lazy(() => import('./pages/ErrorPages').then((m) => ({ default: m.ForbiddenPage })))
+const NotFoundPage = lazy(() => import('./pages/ErrorPages').then((m) => ({ default: m.NotFoundPage })))
 import { RequirePermission } from './components/RequirePermission'
 
 function FullPageSkeleton() {
