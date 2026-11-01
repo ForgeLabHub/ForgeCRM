@@ -320,7 +320,7 @@ function CopyBlock({ label, value }: { label: string; value: string }) {
         style={{
           margin: 0,
           padding: 'var(--space-3)',
-          background: 'var(--surface-sunken, #f4f4f5)',
+          background: 'var(--color-bg)',
           borderRadius: 6,
           overflowX: 'auto',
         }}
@@ -633,7 +633,7 @@ function TokenDialog({
             style={{
               wordBreak: 'break-all',
               padding: 'var(--space-3)',
-              background: 'var(--surface-sunken, #f4f4f5)',
+              background: 'var(--color-bg)',
               borderRadius: 6,
             }}
           >
