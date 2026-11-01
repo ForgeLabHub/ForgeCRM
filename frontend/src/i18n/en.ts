@@ -20,6 +20,7 @@ export const en = {
   brand: {
     name: 'ForgeCRM',
     tagline: 'The CRM platform for teams that ship.',
+    shortTagline: 'Self-hosted workspace',
     description:
       'Accounts, pipeline, imports and automation in one self-hosted workspace. Your data stays on your infrastructure.',
     feature1: 'Customer workspace',
@@ -63,7 +64,6 @@ export const en = {
     light: 'Light',
     dark: 'Dark',
     system: 'System',
-    cycle: 'Change theme (current: {mode})',
   },
   overview: {
     greeting: 'Welcome back, {name}',
@@ -203,6 +203,7 @@ export const en = {
     account: 'My account',
     search: 'Search',
     menu: 'Menu',
+    closeMenu: 'Close menu',
     mainNavigation: 'Main navigation',
   },
 }

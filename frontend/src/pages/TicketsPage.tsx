@@ -206,7 +206,7 @@ export function TicketFormDialog({
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(16, 24, 40, 0.45)',
+        background: 'var(--color-overlay)',
         zIndex: 60,
         overflowY: 'auto',
         padding: 'var(--space-5)',

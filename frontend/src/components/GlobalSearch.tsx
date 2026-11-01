@@ -102,7 +102,7 @@ export function GlobalSearch({ onClose }: { onClose?: () => void }) {
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(16, 24, 40, 0.45)',
+        background: 'var(--color-overlay)',
         zIndex: 70,
         padding: 'var(--space-4)',
         paddingTop: '12vh',

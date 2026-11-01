@@ -144,7 +144,7 @@ function NewOrganizationDialog({
         inset: 0,
         display: 'grid',
         placeItems: 'center',
-        background: 'rgba(16, 24, 40, 0.45)',
+        background: 'var(--color-overlay)',
         zIndex: 60,
         padding: 'var(--space-4)',
       }}

@@ -394,7 +394,7 @@ function CredentialDialog({
         inset: 0,
         display: 'grid',
         placeItems: 'center',
-        background: 'rgba(16, 24, 40, 0.45)',
+        background: 'var(--color-overlay)',
         zIndex: 60,
         padding: 'var(--space-4)',
         overflowY: 'auto',
@@ -545,7 +545,7 @@ function RotateDialog({
         inset: 0,
         display: 'grid',
         placeItems: 'center',
-        background: 'rgba(16, 24, 40, 0.45)',
+        background: 'var(--color-overlay)',
         zIndex: 60,
         padding: 'var(--space-4)',
       }}
@@ -614,7 +614,7 @@ function TokenDialog({
         inset: 0,
         display: 'grid',
         placeItems: 'center',
-        background: 'rgba(16, 24, 40, 0.45)',
+        background: 'var(--color-overlay)',
         zIndex: 70,
         padding: 'var(--space-4)',
       }}

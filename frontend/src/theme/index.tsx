@@ -32,8 +32,6 @@ interface ThemeValue {
   /** The theme actually in effect after resolving "system". */
   resolved: ResolvedTheme
   setMode: (mode: ThemeMode) => void
-  /** Cycles light -> dark -> system, for a single keyboard-reachable control. */
-  cycle: () => void
 }
 
 const ThemeContext = createContext<ThemeValue | null>(null)
@@ -93,15 +91,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const cycle = useCallback(() => {
-    const order: ThemeMode[] = ['light', 'dark', 'system']
-    const next = order[(order.indexOf(mode) + 1) % order.length]
-    setMode(next)
-  }, [mode, setMode])
-
   const value = useMemo<ThemeValue>(
-    () => ({ mode, resolved, setMode, cycle }),
-    [mode, resolved, setMode, cycle],
+    () => ({ mode, resolved, setMode }),
+    [mode, resolved, setMode],
   )
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
 }

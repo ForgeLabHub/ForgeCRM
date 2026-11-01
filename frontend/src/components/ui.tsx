@@ -1,5 +1,7 @@
 /** Small presentational primitives shared by every page. */
+import { useEffect, useId, useRef } from 'react'
 import type { ReactNode } from 'react'
+import { IconClose } from './icons'
 
 export function Badge({
   children,
@@ -171,6 +173,46 @@ export function Skeleton({ width = '100%', height = 16 }: { width?: string; heig
   return <div className="skeleton" style={{ width, height }} aria-hidden="true" />
 }
 
+/** An inline busy indicator for a region that is loading but already has a frame. */
+export function Spinner({ label }: { label?: string }) {
+  return (
+    <div className="loading-block" role="status">
+      <span className="spinner" aria-hidden="true" />
+      {label ? <span>{label}</span> : null}
+    </div>
+  )
+}
+
+/**
+ * A round identity mark: the user's initials on the accent colour.
+ *
+ * The initials come from the display name, falling back to the email's first
+ * character, so the mark is never blank. It is decorative — the full name is
+ * always rendered as text beside it — so it is hidden from assistive technology.
+ */
+export function Avatar({
+  name,
+  email,
+  size = 'md',
+}: {
+  name?: string | null
+  email?: string | null
+  size?: 'sm' | 'md' | 'lg'
+}) {
+  const source = (name ?? '').trim() || (email ?? '').trim()
+  const initials = source
+    .split(/[\s@._-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('')
+  return (
+    <span className={`avatar avatar--${size}`} aria-hidden="true">
+      {initials || '?'}
+    </span>
+  )
+}
+
 export function TableSkeleton({ rows = 5, columns = 4 }: { rows?: number; columns?: number }) {
   return (
     <div className="card__body stack" aria-busy="true" aria-label="Loading">
@@ -239,35 +281,14 @@ export function ConfirmDialog({
   onConfirm: () => void
   onCancel: () => void
 }) {
-  if (!open) return null
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="confirm-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        display: 'grid',
-        placeItems: 'center',
-        background: 'rgba(16, 24, 40, 0.45)',
-        zIndex: 60,
-        padding: 'var(--space-4)',
-      }}
-      onClick={onCancel}
-    >
-      <div
-        className="card"
-        style={{ maxWidth: 420, width: '100%' }}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="card__header">
-          <h2 id="confirm-title">{title}</h2>
-        </div>
-        <div className="card__body">
-          <p className="text-muted">{text}</p>
-        </div>
-        <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
+    <Modal
+      open={open}
+      onClose={onCancel}
+      title={title}
+      size="sm"
+      footer={
+        <>
           <button type="button" className="btn btn--secondary" onClick={onCancel} disabled={busy}>
             Cancel
           </button>
@@ -279,7 +300,111 @@ export function ConfirmDialog({
           >
             {busy ? 'Working…' : confirmLabel}
           </button>
+        </>
+      }
+    >
+      <p className="text-muted">{text}</p>
+    </Modal>
+  )
+}
+
+/**
+ * The one modal shell every dialog is built on.
+ *
+ * It owns the parts that are easy to get wrong once and repeat: the overlay,
+ * Escape to dismiss, a click on the backdrop, and a focus trap. The trap moves
+ * focus into the panel on open, keeps Tab inside it while it is open, and
+ * returns focus to whatever opened it on close — so a keyboard user is never
+ * stranded behind the overlay.
+ */
+export function Modal({
+  open,
+  onClose,
+  title,
+  description,
+  size = 'md',
+  footer,
+  children,
+}: {
+  open: boolean
+  onClose: () => void
+  title: string
+  description?: string
+  size?: 'sm' | 'md' | 'lg'
+  footer?: ReactNode
+  children: ReactNode
+}) {
+  const panelRef = useRef<HTMLDivElement>(null)
+  const titleId = useId()
+  // Kept in a ref so the open/close effect depends only on `open`: a parent that
+  // passes an inline onClose would otherwise re-run the effect on every render,
+  // yanking focus back to the first control on each keystroke.
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+
+  useEffect(() => {
+    if (!open) return
+    const previouslyFocused = document.activeElement as HTMLElement | null
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation()
+        onCloseRef.current()
+        return
+      }
+      if (event.key !== 'Tab' || !panelRef.current) return
+      const focusable = panelRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )
+      if (focusable.length === 0) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown, true)
+    // Focus the panel, not the first control: a confirm dialog must not put the
+    // pointer on a destructive button, where a stray Enter would fire it.
+    panelRef.current?.focus()
+
+    return () => {
+      document.removeEventListener('keydown', onKeyDown, true)
+      previouslyFocused?.focus?.()
+    }
+  }, [open])
+
+  if (!open) return null
+
+  return (
+    <div className="modal" onClick={onClose}>
+      <div
+        ref={panelRef}
+        className={`modal__panel modal__panel--${size}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="modal__header">
+          <div>
+            <h2 id={titleId} className="modal__title">
+              {title}
+            </h2>
+            {description ? <p className="modal__description">{description}</p> : null}
+          </div>
+          <button type="button" className="modal__close" aria-label="Close" onClick={onClose}>
+            <IconClose size={18} />
+          </button>
         </div>
+        <div className="modal__body">{children}</div>
+        {footer ? <div className="modal__footer">{footer}</div> : null}
       </div>
     </div>
   )

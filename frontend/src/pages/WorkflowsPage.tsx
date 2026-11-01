@@ -394,7 +394,7 @@ function WorkflowDialog({ workflow, onClose, onSaved }: WorkflowDialogProps) {
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(16, 24, 40, 0.45)',
+        background: 'var(--color-overlay)',
         zIndex: 60,
         overflowY: 'auto',
         padding: 'var(--space-5)',
@@ -588,7 +588,7 @@ function RunHistoryDrawer({ workflow, onClose }: { workflow: Workflow; onClose: 
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(16, 24, 40, 0.45)',
+        background: 'var(--color-overlay)',
         zIndex: 60,
         overflowY: 'auto',
         padding: 'var(--space-5)',
@@ -855,7 +855,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(16, 24, 40, 0.45)',
+        background: 'var(--color-overlay)',
         zIndex: 60,
         overflowY: 'auto',
         padding: 'var(--space-5)',

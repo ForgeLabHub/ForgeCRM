@@ -45,9 +45,15 @@
 
   --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
   --shadow: 0 1px 3px rgba(16, 24, 40, 0.1), 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 6px 16px rgba(16, 24, 40, 0.1);
   --shadow-lg: 0 10px 24px rgba(16, 24, 40, 0.12);
 
-  --sidebar-width: 244px;
+  /* Backdrop behind modals and the mobile sidebar. A token so the scrim is the
+     same colour everywhere and can be strengthened in dark mode, where a light
+     scrim would wash the content out instead of dimming it. */
+  --color-overlay: rgba(16, 24, 40, 0.45);
+
+  --sidebar-width: 248px;
   --header-height: 56px;
 }
 
@@ -77,6 +83,10 @@
   --color-warning: #e0b366;
   --color-warning-soft: #33270f;
 
+  --color-overlay: rgba(4, 6, 10, 0.62);
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.6);
+
   color-scheme: dark;
 }
 
@@ -105,6 +115,10 @@
     --color-success-soft: #16301f;
     --color-warning: #e0b366;
     --color-warning-soft: #33270f;
+
+    --color-overlay: rgba(4, 6, 10, 0.62);
+    --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.6);
 
     color-scheme: dark;
   }
@@ -179,8 +193,7 @@ pre {
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-4) var(--space-3);
+  padding: var(--space-3) var(--space-2) var(--space-2);
   background: var(--color-surface);
   border-right: 1px solid var(--color-border);
   overflow-y: auto;
@@ -190,44 +203,57 @@ pre {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-2) var(--space-4);
-  font-weight: 600;
+  padding: var(--space-2) var(--space-2) var(--space-3);
+  font-weight: 650;
   font-size: 15px;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
+  color: var(--color-text);
+  text-decoration: none;
 }
 
-.sidebar__mark {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border-radius: var(--radius-sm);
-  background: var(--color-accent);
-  color: var(--color-on-accent);
-  font-size: 13px;
-  font-weight: 700;
+.sidebar__brand:hover { text-decoration: none; }
+
+/* The brand lockup doubles as the way home, so the whole row is the target. */
+.sidebar__brand-text { display: flex; flex-direction: column; line-height: 1.15; }
+
+.sidebar__brand-sub {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-subtle);
+  letter-spacing: 0;
+}
+
+.sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: var(--space-4);
 }
 
 .sidebar__group-label {
   padding: var(--space-4) var(--space-2) var(--space-1);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 10.5px;
+  font-weight: 650;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
   color: var(--color-text-subtle);
 }
 
 .nav-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 7px var(--space-2);
+  padding: 7px var(--space-2) 7px 10px;
   border-radius: var(--radius-sm);
   color: var(--color-text-muted);
   font-size: 13.5px;
   font-weight: 500;
   text-decoration: none;
+  transition: background-color 0.12s ease, color 0.12s ease;
 }
+
+.nav-item svg { flex-shrink: 0; opacity: 0.85; }
 
 .nav-item:hover {
   background: var(--color-bg);
@@ -235,9 +261,25 @@ pre {
   text-decoration: none;
 }
 
+/* The active row is marked by an accent rail as well as by colour, so the
+   current location survives a colour-blind reader and a low-contrast display. */
 .nav-item--active {
   background: var(--color-accent-soft);
   color: var(--color-accent);
+  font-weight: 600;
+}
+
+.nav-item--active svg { opacity: 1; }
+
+.nav-item--active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--color-accent);
 }
 
 .main {
@@ -253,7 +295,8 @@ pre {
   gap: var(--space-4);
   height: var(--header-height);
   padding: 0 var(--space-5);
-  background: var(--color-surface);
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  backdrop-filter: saturate(140%) blur(8px);
   border-bottom: 1px solid var(--color-border);
   position: sticky;
   top: 0;
@@ -261,8 +304,19 @@ pre {
 }
 
 .topbar__org {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   font-size: 12.5px;
   color: var(--color-text-muted);
+}
+
+.topbar__org-name { font-weight: 600; color: var(--color-text); }
+
+.topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .topbar__user {
@@ -271,11 +325,187 @@ pre {
   gap: var(--space-3);
 }
 
+/* The search affordance reads as a field, not a button, so its placement next to
+   the org name tells the user it searches the whole workspace. */
+.search-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 200px;
+  padding: 6px 8px 6px 10px;
+  color: var(--color-text-subtle);
+  font-size: 13px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.search-trigger:hover {
+  background: var(--color-surface);
+  border-color: var(--color-border-strong);
+  color: var(--color-text-muted);
+}
+
+.search-trigger__label { flex: 1; text-align: left; }
+
+/* --------------------------------------------------------- account menu -- */
+
+.menu {
+  position: relative;
+}
+
+.menu__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 3px 6px 3px 3px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--color-text);
+}
+
+.menu__trigger:hover { background: var(--color-bg); }
+
+.menu__trigger[aria-expanded='true'] {
+  background: var(--color-bg);
+  border-color: var(--color-border);
+}
+
+.menu__name { font-size: 13px; font-weight: 500; }
+
+.menu__popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 248px;
+  padding: var(--space-2);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  z-index: 50;
+}
+
+.menu__identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2);
+}
+
+.menu__identity-text { min-width: 0; }
+
+.menu__identity-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.menu__identity-mail {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu__separator {
+  height: 1px;
+  margin: var(--space-2) 0;
+  background: var(--color-border);
+}
+
+.menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 7px var(--space-2);
+  font-family: inherit;
+  font-size: 13.5px;
+  color: var(--color-text);
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.menu__item:hover { background: var(--color-bg); text-decoration: none; }
+
+.menu__item svg { color: var(--color-text-subtle); }
+
+.menu__item--danger { color: var(--color-danger); }
+
+.menu__item--danger svg { color: var(--color-danger); }
+
+/* The theme control is a three-way segmented switch inside the menu, so the
+   current mode is visible rather than cycled blind. */
+.menu__theme {
+  display: flex;
+  gap: 2px;
+  margin: var(--space-1) var(--space-2) 0;
+  padding: 2px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.menu__theme-option {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 6px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.menu__theme-option--active {
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-sm);
+}
+
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  user-select: none;
+}
+
 .content {
   flex: 1;
   padding: var(--space-5);
   max-width: 1400px;
   width: 100%;
+}
+
+/* Scrim behind the mobile sidebar. It is a button so a tap anywhere dismisses
+   the drawer and a screen reader has something to activate. */
+.sidebar-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+  border: none;
+  padding: 0;
+  background: var(--color-overlay);
+  cursor: pointer;
 }
 
 .page-header {
@@ -758,6 +988,10 @@ tbody tr:last-child td { border-bottom: none; }
 
 /* ---------------------------------------------------------------- mobile -- */
 
+/* The scrim is only meaningful while the sidebar is a drawer, so it is hidden
+   on a wide screen where the sidebar never leaves the layout. */
+.sidebar-scrim { display: none; }
+
 .sidebar-toggle { display: none; }
 
 @media (max-width: 860px) {
@@ -775,7 +1009,14 @@ tbody tr:last-child td { border-bottom: none; }
 
   .sidebar--open { transform: translateX(0); }
 
+  .sidebar-scrim { display: block; }
+
   .sidebar-toggle { display: inline-flex; }
+
+  /* The search affordance collapses to its icon so the top bar still fits. */
+  .search-trigger { min-width: 0; padding: 6px 8px; }
+  .search-trigger__label,
+  .search-trigger .kbd { display: none; }
 
   .content { padding: var(--space-4); }
 
@@ -1176,14 +1417,282 @@ tbody tr:last-child td { border-bottom: none; }
   .login-controls { gap: var(--space-2); }
 }
 
-.theme-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+/* The theme switch now lives in the account menu, so its standalone control is
+   gone. `.segmented` remains for the sign-in page's own control. */
+
+/* ---------------------------------------------------------------- modals -- */
+
+/* One modal shell for every dialog in the product. The panel is a column so a
+   long body scrolls while the title and the actions stay put; that keeps the
+   confirm button reachable on a short viewport without scrolling the whole
+   page behind the overlay. */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: var(--color-overlay);
+  overflow-y: auto;
 }
 
-.theme-toggle__text { font-size: 12px; }
+.modal__panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: calc(100vh - 2 * var(--space-4));
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
 
-@media (max-width: 700px) {
-  .theme-toggle__text { display: none; }
+.modal__panel--sm { max-width: 440px; }
+.modal__panel--md { max-width: 620px; }
+.modal__panel--lg { max-width: 860px; }
+
+.modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.modal__title { font-size: 16px; }
+
+.modal__description {
+  margin-top: var(--space-1);
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.modal__close {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.modal__close:hover { background: var(--color-bg); color: var(--color-text); }
+
+.modal__body {
+  padding: var(--space-4);
+  overflow-y: auto;
+}
+
+.modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+/* ---------------------------------------------------------------- avatar -- */
+
+.avatar--lg { width: 40px; height: 40px; font-size: 15px; }
+.avatar--md { width: 30px; height: 30px; font-size: 12.5px; }
+.avatar--sm { width: 24px; height: 24px; font-size: 10.5px; }
+
+/* --------------------------------------------------------------- overview -- */
+
+/* A hero strip that states where the user is and what the workspace holds. It is
+   the first thing on the overview, so it carries the product identity without
+   repeating the sidebar. */
+.hero {
+  position: relative;
+  padding: var(--space-5);
+  margin-bottom: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(
+      120% 140% at 100% 0%,
+      color-mix(in srgb, var(--color-accent) 12%, transparent) 0%,
+      transparent 55%
+    ),
+    var(--color-surface);
+  overflow: hidden;
+}
+
+.hero__title {
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.hero__meta {
+  margin-top: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.hero__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+/* Metric tiles. The link variant is a whole-card target, so the value and the
+   label are one click, not just the number. */
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
+}
+
+a.metric:hover {
+  text-decoration: none;
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.metric__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.metric__icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.metric__label {
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.metric__value {
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric__hint { font-size: 12.5px; color: var(--color-text-subtle); }
+
+.metric__value--error { color: var(--color-danger); }
+
+/* Quick actions: the handful of things a user most often does next, each a real
+   link to a real page rather than a decorative tile. */
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-3);
+}
+
+.quick-action {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  text-decoration: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.quick-action:hover {
+  text-decoration: none;
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-sm);
+}
+
+.quick-action__icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+}
+
+.quick-action:hover .quick-action__icon {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+/* A single-line row inside a "what needs attention" list. */
+.attention-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+  color: inherit;
+  text-decoration: none;
+}
+
+.attention-item:last-child { border-bottom: none; }
+
+.attention-item:hover { text-decoration: none; }
+
+.attention-item__title { font-weight: 500; }
+
+.attention-item__meta { font-size: 12.5px; color: var(--color-text-muted); }
+
+/* --------------------------------------------------------------- loading -- */
+
+.loading-block {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-6);
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--color-border-strong);
+  border-top-color: var(--color-accent);
+  border-radius: 999px;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation-duration: 1.6s; }
+  a.metric:hover { transform: none; }
 }

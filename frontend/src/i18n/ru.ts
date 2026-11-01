@@ -14,6 +14,7 @@ export const ru: Dictionary = {
   brand: {
     name: 'ForgeCRM',
     tagline: 'CRM-платформа для команд, которые выпускают продукт.',
+    shortTagline: 'Self-hosted пространство',
     description:
       'Клиенты, воронка, импорт и автоматизация в одном self-hosted рабочем пространстве. Данные остаются на вашей инфраструктуре.',
     feature1: 'Рабочее пространство клиентов',
@@ -57,7 +58,6 @@ export const ru: Dictionary = {
     light: 'Светлая',
     dark: 'Тёмная',
     system: 'Системная',
-    cycle: 'Сменить тему (сейчас: {mode})',
   },
   overview: {
     greeting: 'С возвращением, {name}',
@@ -197,6 +197,7 @@ export const ru: Dictionary = {
     account: 'Мой аккаунт',
     search: 'Поиск',
     menu: 'Меню',
+    closeMenu: 'Закрыть меню',
     mainNavigation: 'Основная навигация',
   },
 }
