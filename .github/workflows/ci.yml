@@ -84,6 +84,17 @@ jobs:
         # generator makes the document correct, this keeps it correct.
         run: go run ./cmd/openapi-gen -check
 
+      - name: Project facts are current
+        # docs/verification/project-facts.md is generated from source by
+        # cmd/facts-gen. This gate fails when a metric in the committed document
+        # drifts from the code, and also when independent sources disagree
+        # (RBAC constants vs catalog, seeded permissions vs catalog, up/down
+        # migration symmetry, duplicate App.tsx route paths). FACTS_COMMIT stamps
+        # the checked-out SHA inside the auto block so the provenance is visible.
+        env:
+          FACTS_COMMIT: ${{ github.sha }}
+        run: go run ./cmd/facts-gen -repo .. -check
+
       - name: Unit tests
         run: go test -race -count=1 ./...
 

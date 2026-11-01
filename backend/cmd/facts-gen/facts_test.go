@@ -114,6 +114,44 @@ func TestMetricsBlockMatch(t *testing.T) {
 	}
 }
 
+// TestReplaceBlockPreservesProse pins the -write path: regeneration must replace
+// only the FACTS:AUTO region and leave hand-written text around it intact.
+func TestReplaceBlockPreservesProse(t *testing.T) {
+	doc := "# Заголовок\n\nвступление человека\n\n" +
+		autoBegin + "\nстарое содержимое\n" + autoEnd + "\n\nэпилог\n"
+	newBlock := autoBegin + "\nновое содержимое\n" + autoEnd + "\n"
+	got, err := ReplaceBlock(doc, newBlock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "# Заголовок") || !strings.Contains(got, "вступление человека") {
+		t.Errorf("prose before the block was lost: %q", got)
+	}
+	if !strings.Contains(got, "эпилог") {
+		t.Errorf("prose after the block was lost: %q", got)
+	}
+	if strings.Contains(got, "старое содержимое") {
+		t.Errorf("old block content survived: %q", got)
+	}
+	if !strings.Contains(got, "новое содержимое") {
+		t.Errorf("new block content missing: %q", got)
+	}
+	// Replacement is idempotent: running it again on its own output is a no-op.
+	again, err := ReplaceBlock(got, newBlock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again != got {
+		t.Errorf("ReplaceBlock is not idempotent:\nfirst=%q\nagain=%q", got, again)
+	}
+	if _, err := ReplaceBlock("нет маркеров", newBlock); err == nil {
+		t.Error("missing markers in the document must error")
+	}
+	if _, err := ReplaceBlock(doc, "нет маркеров"); err == nil {
+		t.Error("block without markers must error")
+	}
+}
+
 func TestExtractSeededPermissionsIgnoresNonPermissionStrings(t *testing.T) {
 	text := `INSERT INTO permissions (code, description) VALUES
 		('contacts.read', 'read contacts'),

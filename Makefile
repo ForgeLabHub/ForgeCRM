@@ -32,7 +32,7 @@ TEST_DATABASE_URL ?= postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_test?s
 COMPOSE_UP_ARGS ?=
 
 .PHONY: help doctor setup build build-api build-worker build-frontend \
-        fmt fmt-check vet lint openapi openapi-check \
+        fmt fmt-check vet lint openapi openapi-check facts facts-check \
         test test-unit test-frontend test-integration test-e2e \
         migrate migrate-status compose-up compose-down compose-logs smoke-test \
         backup restore docs-check verify clean package
@@ -100,6 +100,12 @@ openapi: ## Перегенерировать docs/api/openapi.json из роут
 openapi-check: ## Убедиться, что спецификация не разошлась с кодом (как в CI)
 	cd $(BACKEND_DIR) && go run ./cmd/openapi-gen -check
 
+facts: ## Перегенерировать блок FACTS:AUTO в docs/verification/project-facts.md
+	cd $(BACKEND_DIR) && go run ./cmd/facts-gen -repo .. -write
+
+facts-check: ## Убедиться, что project-facts.md не разошёлся с кодом (как в CI)
+	cd $(BACKEND_DIR) && go run ./cmd/facts-gen -repo .. -check
+
 docs-check: ## Проверить структуру документации, ссылки и матрицу проверок
 	@./scripts/docs-check.sh
 
@@ -154,7 +160,7 @@ restore: ## Восстановление из дампа (требует DUMP=..
 
 ## --- Сводные цели ----------------------------------------------------------
 
-verify: lint test openapi-check docs-check forge-check ## Локальная матрица без контейнеров
+verify: lint test openapi-check facts-check docs-check forge-check ## Локальная матрица без контейнеров
 	@echo "verify: ok (сборка и интеграционные уровни проверяются в CI)"
 
 package: build ## Собрать релизные артефакты и контрольные суммы

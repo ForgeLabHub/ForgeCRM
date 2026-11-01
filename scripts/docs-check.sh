@@ -27,6 +27,7 @@ required=(
   docs/security/threat-model.md docs/security/permissions.md
   docs/modules/module-template.md docs/modules/crm.md
   docs/verification/matrix.md
+  docs/verification/project-facts.md
   docs/adr/README.md
 )
 for f in "${required[@]}"; do

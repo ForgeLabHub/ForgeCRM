@@ -51,7 +51,7 @@ func RenderMarkdown(rep *Report, commit string) string {
 	row(&b, "Записи каталога", f.RbacCatalog, "элементы map catalog в rbac.go")
 	row(&b, "Разрешений в БД (seeded)", f.RbacSeeded, "уникальные коды из INSERT INTO permissions во всех up-миграциях")
 	row(&b, "Системных ролей", f.SystemRoles, "кортежи INSERT INTO roles с is_system = true")
-	b.WriteString("\n`platform.owner` сидируется в таблице permissions и намеренно отсутствует\nв каталоге прав (назначается через членство в роли, а не по маршрутам).\n\n")
+	b.WriteString("\nКаталог и сид совпадают точно: наборы равны, симметричной разницы нет.\n`platform.owner` генератор всё равно исключает из сравнения сида на будущее:\nвладелец платформы держит права через членство в роли, а не через отдельный код\nразрешения, поэтому появление такого кода в сиде не должно считаться каталогом.\n\n")
 
 	b.WriteString("## API\n\n")
 	b.WriteString("| Метрика | Значение | Определение |\n|---|---|---|\n")
@@ -145,4 +145,21 @@ func extractBlock(s string) (string, error) {
 		return "", fmt.Errorf("маркеры FACTS:AUTO не найдены")
 	}
 	return s[i+len(autoBegin) : j], nil
+}
+
+// ReplaceBlock returns doc with the region from autoBegin through autoEnd
+// replaced by block (which must itself carry both markers). Human prose before
+// and after the markers is preserved verbatim, so regeneration never discards
+// hand-written context around the generated tables.
+func ReplaceBlock(doc, block string) (string, error) {
+	i := strings.Index(doc, autoBegin)
+	j := strings.Index(doc, autoEnd)
+	if i < 0 || j < 0 || j <= i {
+		return "", fmt.Errorf("маркеры FACTS:AUTO не найдены в документе")
+	}
+	if !strings.HasPrefix(block, autoBegin) || !strings.Contains(block, autoEnd) {
+		return "", fmt.Errorf("новый блок не содержит маркеров FACTS:AUTO")
+	}
+	end := j + len(autoEnd)
+	return doc[:i] + strings.TrimRight(block, "\n") + doc[end:], nil
 }

@@ -14,6 +14,7 @@
 | Повторный запуск миграций | миграции идемпотентны | `make migrate` дважды | `ci.yml` → `backend` |
 | Обновление существующей БД | продукт обновляем, а не только устанавливаем | `make migrate` на базе предыдущей версии | `portability.yml` → `upgrade-path` |
 | OpenAPI не разошёлся с кодом | документация API генерируема и актуальна | `make openapi-check` | `ci.yml` → `backend` |
+| Факты о проекте не разошлись с кодом | числа в `docs/verification/project-facts.md` выводятся из исходников, а не поддерживаются вручную; RBAC-каталог, сид, симметрия миграций и уникальность маршрутов согласованы | `make facts-check` | `ci.yml` → `backend` |
 | Контрактные тесты API | маршрут без права/схемы ловится | `make test-unit` | `ci.yml` → `backend` |
 | Интеграционные тесты | транзакции, RBAC, изоляция на реальной БД | `make test-integration` | `ci.yml` → `backend` |
 | Tenant isolation и RBAC | пользователи не получают чужие данные | `make test-integration` | `ci.yml` → `backend` |
