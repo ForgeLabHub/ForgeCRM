@@ -64,14 +64,27 @@ func buildVersion() string {
 
 // buildCommit mirrors buildVersion for the commit SHA, so a host that sets
 // FORGECRM_COMMIT without passing build args still reports a real revision.
+// RENDER_GIT_COMMIT is the last fallback: Render builds the repository root
+// without build args, so the checked-out SHA is the only source it provides.
 func buildCommit() string {
 	if commit != "" && commit != "unknown" && commit != "dev" {
 		return commit
 	}
-	if env := strings.TrimSpace(os.Getenv("FORGECRM_COMMIT")); env != "" {
+	if env := strings.TrimSpace(firstNonEmpty(os.Getenv("FORGECRM_COMMIT"), os.Getenv("RENDER_GIT_COMMIT"))); env != "" {
 		return env
 	}
 	return commit
+}
+
+// firstNonEmpty returns the first non-blank value, so a chain of fallbacks reads
+// as one expression instead of nested conditionals.
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func main() {

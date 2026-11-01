@@ -246,6 +246,34 @@ func firstEnv(names ...string) string {
 	return ""
 }
 
+// defaultBaseURL resolves the public origin. An explicit FORGECRM_BASE_URL wins;
+// otherwise the hosting platform's published URL is used; otherwise the local
+// development default.
+//
+// The platform value matters for production: a Blueprint that sets
+// FORGECRM_ENV=production but no FORGECRM_BASE_URL would otherwise fall back to
+// plain http, and the production check below refuses to start on a non-https
+// base URL. Render injects RENDER_EXTERNAL_URL as the service's own https URL,
+// so reading it keeps a Blueprint deployable without a hardcoded hostname.
+func defaultBaseURL() string {
+	if v := strings.TrimSpace(os.Getenv("FORGECRM_BASE_URL")); v != "" {
+		return v
+	}
+	if v := platformExternalURL(); v != "" {
+		return v
+	}
+	return "http://localhost:8080"
+}
+
+// platformExternalURL returns the public origin a hosting platform publishes for
+// this service, or "" when there is none.
+func platformExternalURL() string {
+	if v := strings.TrimSpace(os.Getenv("RENDER_EXTERNAL_URL")); v != "" {
+		return v
+	}
+	return ""
+}
+
 func env(key, def string) string {
 	if v, ok := os.LookupEnv(key); ok && v != "" {
 		return v
@@ -317,7 +345,7 @@ func Load() (*Config, error) {
 			}
 			return env("FORGECRM_HTTP_ADDR", ":8080")
 		}(),
-		BaseURL:     strings.TrimRight(env("FORGECRM_BASE_URL", "http://localhost:8080"), "/"),
+		BaseURL:     strings.TrimRight(defaultBaseURL(), "/"),
 		DatabaseURL: env("FORGECRM_DATABASE_URL", env("DATABASE_URL", "")),
 
 		DatabaseMaxConns: int32(envIntOr("FORGECRM_DATABASE_MAX_CONNS", int(database.DefaultMaxConns))),
