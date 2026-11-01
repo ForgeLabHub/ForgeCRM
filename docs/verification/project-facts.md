@@ -92,13 +92,13 @@ openapi.json генерируется из живого роутера (`cmd/ope
 |---|---|---|
 | Файлы src (.ts/.tsx) | **109** | frontend/src/**, включая тестовые |
 | Тестовые файлы src | **27** | *.test.ts(x)/.spec.ts(x) в frontend/src |
-| Объявления it()/test() в src | **188** | запускаемые кейсы vitest; test.describe вычитается |
+| Объявления it()/test() в src | **190** | запускаемые кейсы vitest; test.describe вычитается |
 | Файлы страниц | **38** | компоненты в frontend/src/pages (без admin/, без тестов) |
 | Тесты страниц | **13** | *.test.tsx рядом со страницами |
 | Маршрутов <Route path> | **43** | объявления в frontend/src/App.tsx (регистр маршрутизации SPA) |
 | Уникальных путей маршрутов | **41** | различающиеся path по всем <Routes>-деревьям App.tsx; повторения внутри одного дерева запрещены (гейт route_paths_unique) |
 | E2E спецификации | **2** | *.spec.ts в frontend/e2e |
-| E2E тесты | **51** | объявления test() Playwright; test.describe вычитается |
+| E2E тесты | **52** | объявления test() Playwright; test.describe вычитается |
 
 ## CI/CD
 
