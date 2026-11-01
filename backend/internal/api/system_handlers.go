@@ -140,9 +140,10 @@ func (s *Server) handleCapabilities(w http.ResponseWriter, r *http.Request) {
 		// A standard MCP client can connect: the JSON-RPC 2.0 transport, the
 		// initialize handshake and tools/list and tools/call are implemented.
 		MCP: true,
-		// Reported, but the authorisation-code flow that would use it is not
-		// implemented. Named for what it is so the interface cannot mistake a
-		// setting for a working feature.
+		// Named for what it reports: the presence of deployment-level settings, not
+		// that a sign-in can succeed. The authorisation-code flow itself lives in
+		// internal/oidc and is reachable at /api/v1/auth/oidc/start; this flag stays
+		// narrow because a provider must also be configured and enabled.
 		OIDCConfigured: s.deps.Config.OIDC.Enabled,
 
 		Imports:          []string{"csv", "tsv", "json", "jsonl", "xlsx", "xml"},
