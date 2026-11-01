@@ -77,7 +77,7 @@ export function ImportDetailPage() {
       const available = fields.data?.fields ?? []
       const guessed = columns
         .filter((column) => available.includes(normalize(column)))
-        .map((column) => ({ source: column, target: normalize(column) }))
+        .map((column) => ({ source_column: column, target_field: normalize(column) }))
       setMapping(guessed)
     },
     onError: (error) => setActionError(errorMessage(error)),
@@ -383,21 +383,22 @@ export function ImportDetailPage() {
                 </thead>
                 <tbody>
                   {availableFields.map((field) => {
-                    const selected = mapping.find((entry) => entry.target === field)
+                    const selected = mapping.find((entry) => entry.target_field === field)
                     return (
                       <tr key={field}>
                         <td className="table__primary">{field}</td>
                         <td>
                           <select
                             aria-label={`Source column for ${field}`}
-                            value={selected?.source ?? ''}
+                            value={selected?.source_column ?? ''}
                             onChange={(event) => {
                               const source = event.target.value
                               setMapping((previous) => [
                                 ...previous.filter(
-                                  (entry) => entry.target !== field && entry.source !== source,
+                                  (entry) =>
+                                    entry.target_field !== field && entry.source_column !== source,
                                 ),
-                                ...(source ? [{ source, target: field }] : []),
+                                ...(source ? [{ source_column: source, target_field: field }] : []),
                               ])
                             }}
                           >

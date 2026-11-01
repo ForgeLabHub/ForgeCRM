@@ -76,18 +76,18 @@ export function ReportsPage() {
             <div className="grid grid--stats">
               <Stat
                 label="Won"
-                value={sales.data.won_count}
-                hint={formatMoney(sales.data.won_amount)}
+                value={sales.data.deals_won}
+                hint={formatMoney(sales.data.won_value)}
               />
               <Stat
                 label="Lost"
-                value={sales.data.lost_count}
-                hint={formatMoney(sales.data.lost_amount)}
+                value={sales.data.deals_lost}
+                hint={formatMoney(sales.data.lost_value)}
               />
               <Stat
                 label="Open"
                 value={sales.data.open_count}
-                hint={formatMoney(sales.data.open_amount)}
+                hint={formatMoney(sales.data.open_value)}
               />
               <Stat
                 label="Win rate"
@@ -95,33 +95,6 @@ export function ReportsPage() {
                 hint="Won ÷ (won + lost)"
               />
             </div>
-
-            {sales.data.by_owner?.length ? (
-              <div style={{ marginTop: 'var(--space-4)' }}>
-                <Card title="By owner">
-                  <div className="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Owner</th>
-                          <th className="numeric">Deals</th>
-                          <th className="numeric">Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sales.data.by_owner.map((row, index) => (
-                          <tr key={row.owner_user_id ?? index}>
-                            <td className="mono">{row.owner_user_id?.slice(0, 8) ?? 'Unassigned'}</td>
-                            <td className="numeric">{row.count}</td>
-                            <td className="numeric">{formatMoney(row.amount)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </Card>
-              </div>
-            ) : null}
           </>
         ) : null}
       </section>
@@ -138,15 +111,15 @@ export function ReportsPage() {
           </div>
         ) : support.data ? (
           <div className="grid grid--stats">
-            <Stat label="Opened" value={support.data.opened} />
+            <Stat label="Opened" value={support.data.total} />
             <Stat label="Resolved" value={support.data.resolved} />
             <Stat label="Still open" value={support.data.open} />
             <Stat
               label="SLA breached"
               value={support.data.sla_breached}
               hint={
-                support.data.avg_resolution_minutes !== undefined
-                  ? `Avg resolution ${Math.round(support.data.avg_resolution_minutes)} min`
+                support.data.avg_resolution_hours !== undefined
+                  ? `Avg resolution ${Math.round(support.data.avg_resolution_hours)} h`
                   : undefined
               }
             />
@@ -174,8 +147,8 @@ export function ReportsPage() {
             title="Stage breakdown"
             actions={
               <span className="text-muted text-sm">
-                Weighted {formatMoney(pipelineReport.data.weighted_amount)} of{' '}
-                {formatMoney(pipelineReport.data.total_amount)}
+                Open {formatMoney(pipelineReport.data.total_open)} · Won{' '}
+                {formatMoney(pipelineReport.data.total_won)}
               </span>
             }
             flush

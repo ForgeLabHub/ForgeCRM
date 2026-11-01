@@ -15,7 +15,6 @@ export interface User {
   is_platform_owner: boolean
   mfa_enabled: boolean
   last_login_at?: string
-  roles?: string[]
 }
 
 export interface OrganizationSummary {
@@ -133,7 +132,8 @@ export interface Lead {
   email?: string
   phone?: string
   company?: string
-  job_title?: string
+  /** The lead's job title. The server field is `title`, not `job_title`. */
+  title?: string
   source?: string
   status: string
   score?: number
@@ -142,7 +142,6 @@ export interface Lead {
   team_id?: string
   converted_account_id?: string
   converted_contact_id?: string
-  converted_deal_id?: string
   converted_at?: string
   external_source?: string
   external_id?: string
@@ -156,12 +155,11 @@ export interface Pipeline {
   id: string
   organization_id: string
   name: string
-  description?: string
   is_default: boolean
   currency: string
   created_at: string
-  updated_at: string
   stages?: PipelineStage[]
+  archived_at?: string
 }
 
 export interface PipelineStage {
@@ -172,8 +170,6 @@ export interface PipelineStage {
   probability: number
   is_won: boolean
   is_lost: boolean
-  created_at: string
-  updated_at: string
 }
 
 export interface Deal {
@@ -258,7 +254,7 @@ export interface Activity {
   id: string
   organization_id: string
   type: string
-  subject?: string
+  subject: string
   body?: string
   occurred_at: string
   duration_minutes?: number
@@ -268,10 +264,7 @@ export interface Activity {
   deal_id?: string
   ticket_id?: string
   user_id?: string
-  external_source?: string
-  external_id?: string
   created_at: string
-  updated_at: string
 }
 
 export interface ActivityInput {
@@ -290,22 +283,23 @@ export interface ActivityInput {
 export interface Ticket {
   id: string
   organization_id: string
+  /** The per-organization ticket number the server assigns. */
+  number: number
   subject: string
   description?: string
   status: string
   priority: string
-  channel?: string
+  channel: string
   account_id?: string
   contact_id?: string
   assignee_user_id?: string
   team_id?: string
-  sla_due_at?: string
-  first_response_at?: string
+  sla_policy_id?: string
+  first_response_due_at?: string
+  resolution_due_at?: string
+  first_responded_at?: string
   resolved_at?: string
-  closed_at?: string
-  resolution?: string
-  external_source?: string
-  external_id?: string
+  sla_breached: boolean
   created_at: string
   updated_at: string
   archived_at?: string
@@ -419,9 +413,8 @@ export interface ImportJob {
   error?: string | null
   created_by?: string
   created_at: string
-  updated_at: string
-  started_at?: string | null
-  finished_at?: string | null
+  started_at?: string
+  finished_at?: string
 }
 
 /** The response of POST /imports/{id}/analyze. */
@@ -462,8 +455,10 @@ export interface ImportReport {
 
 /** A mapping from a source column to a target field. */
 export interface MappingEntry {
-  source: string
-  target: string
+  /** The column in the source file. The server field is `source_column`. */
+  source_column: string
+  /** The importable field it feeds. The server field is `target_field`. */
+  target_field: string
   required?: boolean
 }
 
@@ -518,27 +513,46 @@ export interface Job {
   status: string
   attempts: number
   max_attempts: number
+  priority: number
+  payload?: Record<string, unknown>
+  cancel_requested: boolean
   last_error?: string
-  run_at: string
+  run_after: string
   created_at: string
   updated_at: string
+  started_at?: string
   finished_at?: string
 }
 
 export interface Integration {
   id: string
   organization_id: string
-  key: string
   name: string
+  /** The adapter kind, e.g. `rest_api`. Named `kind` on the server, not `key`. */
   kind: string
   status: string
-  direction?: string
+  direction: string
   config?: Record<string, unknown>
-  last_checked_at?: string
+  allow_write: boolean
+  timeout_seconds: number
+  max_concurrency: number
+  quota_per_hour?: number
+  last_test_at?: string
+  last_test_ok?: boolean
+  last_test_error?: string
   last_sync_at?: string
-  last_error?: string
   created_at: string
-  updated_at: string
+  archived_at?: string
+  /** Whether credentials are stored, without revealing them. */
+  has_secrets: boolean
+}
+
+/** The adapter's health, as returned by POST /integrations/{id}/test. */
+export interface IntegrationStatus {
+  healthy: boolean
+  message?: string
+  checked_at?: string
+  last_error?: string
 }
 
 export interface IntegrationRun {
@@ -664,34 +678,34 @@ export interface PipelineStageStat {
 export interface PipelineReport {
   pipeline_id: string
   pipeline_name: string
+  currency: string
   stages: PipelineStageStat[]
-  total_amount: number
-  weighted_amount: number
+  total_open: number
+  total_won: number
+  total_lost: number
 }
 
 export interface SalesSummaryReport {
-  from: string
-  to: string
-  won_count: number
-  won_amount: number
-  lost_count: number
-  lost_amount: number
+  from?: string
+  to?: string
+  deals_created: number
+  deals_won: number
+  deals_lost: number
+  won_value: number
+  lost_value: number
+  open_value: number
   open_count: number
-  open_amount: number
+  avg_deal_amount: number
   win_rate: number
-  by_owner?: { owner_user_id?: string; count: number; amount: number }[]
 }
 
 export interface SupportSummaryReport {
-  from: string
-  to: string
-  opened: number
-  resolved: number
+  total: number
   open: number
-  avg_first_response_minutes?: number
-  avg_resolution_minutes?: number
+  resolved: number
   sla_breached: number
-  by_priority?: { priority: string; count: number }[]
+  avg_resolution_hours: number
+  by_priority: Record<string, number>
 }
 
 export interface SystemInfo {

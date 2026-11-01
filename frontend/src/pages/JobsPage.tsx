@@ -57,7 +57,7 @@ export function JobsPage() {
     {
       key: 'runAt',
       header: 'Scheduled',
-      render: (row) => <Timestamp value={row.run_at} />,
+      render: (row) => <Timestamp value={row.run_after} />,
     },
     {
       key: 'finished',
@@ -189,7 +189,7 @@ export function JobsPage() {
                 </dd>
                 <dt>Scheduled for</dt>
                 <dd>
-                  <Timestamp value={detail.run_at} />
+                  <Timestamp value={detail.run_after} />
                 </dd>
                 <dt>Created</dt>
                 <dd>
