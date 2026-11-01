@@ -68,6 +68,13 @@ COPY --from=build /out/forgecrm-api /usr/local/bin/forgecrm-api
 COPY --from=build /out/forgecrm-worker /usr/local/bin/forgecrm-worker
 COPY --from=frontend /web/dist /app/public
 
+# The entrypoint chooses the binary. One image holds both, and a platform that
+# sets its "docker command" to the worker path appends it to the entrypoint
+# rather than replacing it, so the dispatcher turns that into the worker instead
+# of a second API process. See deploy/entrypoint.sh.
+COPY deploy/entrypoint.sh /usr/local/bin/forgecrm-entrypoint
+RUN chmod 0755 /usr/local/bin/forgecrm-entrypoint
+
 # /app is the working directory so the interface's default location ("public")
 # resolves to /app/public without requiring FORGECRM_STATIC_DIR to be set.
 WORKDIR /app
@@ -76,5 +83,5 @@ USER 10001:10001
 
 EXPOSE 8080
 
-# The API image is the default; the worker overrides the entrypoint in compose.
-ENTRYPOINT ["/usr/local/bin/forgecrm-api"]
+# The API is the default binary; the dispatcher selects the worker when asked.
+ENTRYPOINT ["/usr/local/bin/forgecrm-entrypoint"]

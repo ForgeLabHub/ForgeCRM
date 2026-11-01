@@ -32,14 +32,17 @@ Secrets are reported as `present` or `absent`, never printed.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `FORGECRM_ENV` | API, Worker | no | `development` | Selects the environment. `production` turns on the hardening checks below and disables dev conveniences such as returning password-reset tokens in API responses. | `production` | no | yes |
 | `FORGECRM_HTTP_ADDR` | API | no | `:8080` | Address the API listens on. `PORT` overrides it when set. | `:8080` | no | no |
-| `PORT` | API | no | none | Address the API listens on, supplied by some platforms (Render, Heroku). Wins over `FORGECRM_HTTP_ADDR`; the host is forced to `0.0.0.0`. | `10000` | no | no |
-| `FORGECRM_BASE_URL` | API | yes in production | `http://localhost:8080` | Public origin, used to build links (invitations, password reset, OIDC redirect fallback). Must be `https://` in production. | `https://crm.example.com` | no | yes |
+| `PORT` | API | no | none | Address the API listens on, supplied by some platforms (Render, Heroku, blitz.cloud). Wins over `FORGECRM_HTTP_ADDR`; the host is forced to `0.0.0.0`. | `10000` | no | no |
+| `FORGECRM_BASE_URL` | API, Worker | yes in production | platform URL, else `http://localhost:8080` | Public origin, used to build links (invitations, password reset, OIDC redirect fallback). Must be `https://` in production. When unset, the hosting platform's published URL (`RENDER_EXTERNAL_URL`) is used before the local default. | `https://crm.example.com` | no | yes |
+| `RENDER_EXTERNAL_URL` | API, Worker | no | none | The service's own https URL, injected by Render. Read only as a fallback for `FORGECRM_BASE_URL`, so a Blueprint that sets `FORGECRM_ENV=production` without a hardcoded base URL still starts. Ignored on other hosts. | `https://forgecrm-api.onrender.com` | no | no |
 | `FORGECRM_LOG_LEVEL` | API, Worker | no | `info` | Minimum log level: `debug`, `info`, `warn`, `error`. | `info` | no | no |
 | `FORGECRM_LOG_FORMAT` | API, Worker | no | `json` | Log encoding: `json` or `text`. Use `json` when a collector parses it. | `json` | no | no |
 | `FORGECRM_MIGRATE_ON_START` | API | no | `false` | Apply pending migrations before serving. The API also verifies the schema before it listens, so a failure here stops the process rather than serving broken requests. | `true` | no | recommended |
-| `FORGECRM_STATIC_DIR` | API | no | `public` | Directory holding the built web interface. The root Dockerfile copies the bundle to `/app/public` and sets this. When the directory is absent the API serves API routes only. | `/app/public` | no | no |
-| `FORGECRM_VERSION` | API, Worker | no | `0.1.0-dev` | Fallback build version for hosts that do not pass linker flags. Used only when the value was not set at build time. | `1.4.2` | no | recommended |
-| `FORGECRM_COMMIT` | API, Worker | no | `unknown` | Fallback commit SHA, same fallback rule as `FORGECRM_VERSION`. Reported by `/ready` and the startup log. | `a1b2c3d` | no | recommended |
+| `FORGECRM_STATIC_DIR` | API | no | `public` | Directory holding the built web interface. The root Dockerfile copies the bundle to `/app/public`, sets the working directory to `/app` and sets this. When the directory is absent the API serves API routes only. | `/app/public` | no | no |
+| `FORGECRM_ROLE` | API, Worker | no | none | Selects the binary the image entrypoint runs. `worker` starts the background worker; anything else (or unset) starts the API. Set by Compose and the Render Blueprint so one image can serve both roles. | `worker` | no | no |
+| `FORGECRM_VERSION` | API, Worker, Docker, Compose | no | `0.1.0-dev` | Fallback build version for hosts that do not pass linker flags. Used only when the value was not set at build time. | `1.4.2` | no | recommended |
+| `FORGECRM_COMMIT` | API, Worker, Docker, Compose | no | `unknown` | Fallback commit SHA, same fallback rule as `FORGECRM_VERSION`. Reported by `/ready` and the startup log. | `a1b2c3d` | no | recommended |
+| `RENDER_GIT_COMMIT` | API, Worker | no | none | The checked-out revision, injected by Render. Read as a last fallback for the commit when neither the linker flag nor `FORGECRM_COMMIT` is set, so the startup log shows a real SHA rather than `unknown`. | `a1b2c3d9...` | no | no |
 
 ## Database
 
@@ -200,11 +203,19 @@ capabilities endpoint reports `storage: false` so the UI hides uploads.
 
 | Name | Component | Required | Default | Description | Example | Secret | Production |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `FORGECRM_VERSION` | Docker, Compose | no | `dev` | Build argument passed to the linker for the image. Prefer setting it at build time; the runtime fallback above covers hosts that do not pass it. | `1.4.2` | no | recommended |
-| `FORGECRM_COMMIT` | Docker, Compose | no | `unknown` | Build argument for the commit SHA. | `a1b2c3d` | no | recommended |
-| `FORGECRM_HTTP_PORT` | Compose | no | `8080` | Host port the Compose `api` service publishes. | `8080` | no | no |
-| `FORGECRM_PROXY_PORT` | Compose | no | `80` | Host port the optional `nginx` profile publishes. | `80` | no | no |
-| `FORGECRM_API_URL` | Frontend (Vite dev, E2E) | no | `http://127.0.0.1:8080` | API origin the dev server proxies to, and the base URL the E2E suite targets. Baked into the dev build only. | `http://127.0.0.1:8080` | no | no |
+| `FORGECRM_HTTP_PORT` | Compose | no | `8080` | Host port the Compose `api` service publishes. Read by the Compose file only, not by the API. | `8080` | no | no |
+| `FORGECRM_PROXY_PORT` | Compose | no | `80` | Host port the optional `nginx` profile publishes. Read by the Compose file only. | `80` | no | no |
+| `FORGECRM_API_URL` | Frontend (Vite dev, E2E) | no | `http://127.0.0.1:8080` | API origin the dev server proxies to, and the base URL the E2E suite targets. Baked into the dev build only; the production bundle calls the API on its own origin. | `http://127.0.0.1:8080` | no | no |
+
+## Tooling (not runtime)
+
+Read by the documentation generator (`cmd/facts-gen`) and the CI job that runs
+it. They never affect a running API or worker.
+
+| Name | Component | Required | Default | Description | Example | Secret | Production |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `FACTS_COMMIT` | Tooling (facts-gen) | no | none | Commit SHA stamped into the generated `FACTS:AUTO` block of `docs/verification/project-facts.md`, so the recorded numbers are traceable to a revision. CI sets it to the checked-out SHA. | `a1b2c3d` | no | no |
+| `FACTS_REPO` | Tooling (facts-gen tests) | no | working directory | Repository root the facts generator walks. Set only when the generator runs outside the repository (the test suite sets it). | `/src` | no | no |
 
 ## Test-only
 
@@ -214,7 +225,7 @@ Read only by the test suites. They must never be set in production.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `FORGECRM_TEST_DATABASE_URL` | Test | no | none | PostgreSQL used by integration tests. Tests skip when unset. | `postgres://...` | yes | never |
 | `FORGECRM_TEST_REDIS_URL` | Test | no | none | Redis used by the distributed-limiter tests. Tests skip when unset. | `redis://127.0.0.1:6379/1` | no | never |
-| `FORGECRM_TEST_MYSQL_URL` | Test | no | none | Reserved for a MySQL-backed test path; no current test reads it. | none | no | never |
+| `FORGECRM_TEST_MYSQL_URL` | Test | no | none | MySQL used by the migration-path integration test. Tests skip when unset. | `mysql://user:pass@127.0.0.1:3306/forgecrm` | yes | never |
 
 ## Declared but unused
 
@@ -258,3 +269,17 @@ wrong, naming the variable but never its value:
   and the unused ones are flagged above.
 - `FORGECRM_STATIC_DIR` is set by Compose and the root Dockerfile but was not
   documented; it is now.
+- `FORGECRM_TEST_MYSQL_URL` was described as "no current test reads it", but
+  `internal/migratex/mysql_integration_test.go` reads it. The description now
+  matches the code.
+- The `RENDER_EXTERNAL_URL` and `RENDER_GIT_COMMIT` platform variables were read
+  by the code but undocumented. Both are now in the Core table, and the `render.md`
+  guide explains the Blueprint copies the former into `FORGECRM_BASE_URL`.
+- `FORGECRM_ROLE` was added when the image entrypoint became a dispatcher; it is
+  documented under Core and in the Compose and blitz.cloud guides.
+- `FACTS_COMMIT` and `FACTS_REPO`, read by the `facts-gen` tool and its test, were
+  undocumented. They are listed under Tooling (not runtime), which keeps them
+  distinct from settings that affect a running service.
+- `FORGECRM_VERSION` and `FORGECRM_COMMIT` were listed twice, once as runtime
+  fallbacks and once as build arguments with a different default. They are one
+  variable each; the Core table now carries the single, correct default.
