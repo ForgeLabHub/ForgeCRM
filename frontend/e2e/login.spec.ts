@@ -98,6 +98,27 @@ test.describe('sign-in page', () => {
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
   })
 
+  test('collapses to a single column and hides the brand panel on a phone viewport', async ({ page }) => {
+    // The two-pane layout must not squeeze the form on a phone. The aside is
+    // hidden and the grid becomes one column, which is the property that keeps
+    // the controls usable rather than a pixel-perfect snapshot.
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto('/login')
+
+    await expect(page.getByLabel('Email')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible()
+
+    const aside = page.locator('.login__aside')
+    await expect(aside).toBeHidden()
+
+    // The form fits the viewport: a single-column layout that overflows would
+    // hide the submit button off-screen on a phone.
+    const overflows = await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth + 1,
+    )
+    expect(overflows).toBe(false)
+  })
+
   test('keeps the language and theme choice after signing in', async ({ page }) => {
     await page.goto('/login')
     // Theme first, then language: the theme control's accessible name is itself
