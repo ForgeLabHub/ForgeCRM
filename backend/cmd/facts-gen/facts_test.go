@@ -26,6 +26,23 @@ func TestComputeOnRealRepo(t *testing.T) {
 	if got, want := f.MigrationsDown, countFiles(t, filepath.Join(repo, "backend/internal/migrations"), ".down.sql"); got != want {
 		t.Errorf("migrations down: got %d want %d", got, want)
 	}
+	// GoPackagesInternal is classified by path relative to the repo root. A
+	// literal "backend/internal/" prefix test against the walk path made this
+	// zero for every root but ".", so assert it against an independent count
+	// and require it to be a strict subset of the total.
+	if want := countGoDirs(t, filepath.Join(repo, "backend", "internal")); f.GoPackagesInternal != want {
+		t.Errorf("internal packages: facts=%d recount=%d", f.GoPackagesInternal, want)
+	}
+	if f.GoPackagesInternal == 0 || f.GoPackagesInternal >= f.GoPackagesTotal {
+		t.Errorf("internal packages %d must be a non-empty strict subset of total %d",
+			f.GoPackagesInternal, f.GoPackagesTotal)
+	}
+	// Frontend src files must be counted from frontend/src only. The metric used
+	// to include vendored node_modules sources (hundreds of files with a "src"
+	// path segment), so it drifted with what happened to be installed.
+	if want := countFESrc(t, filepath.Join(repo, "frontend", "src")); f.FESrcFiles != want {
+		t.Errorf("frontend src files: facts=%d recount=%d (node_modules must be excluded)", f.FESrcFiles, want)
+	}
 	if f.RbacConsts != f.RbacCatalog {
 		t.Errorf("rbac consts (%d) != catalog (%d)", f.RbacConsts, f.RbacCatalog)
 	}
@@ -124,6 +141,86 @@ func TestCountSystemRolesUsesColumnPosition(t *testing.T) {
 		(false, 'guest', 'y');`
 	if n := countSystemRoles(reordered); n != 2 {
 		t.Errorf("reordered: got %d want 2", n)
+	}
+	// Two statements with different column orders in one file. Reading the header
+	// from the first statement (the original bug) makes the second one use the
+	// wrong column index, so its system roles are miscounted.
+	twoStatements := `INSERT INTO roles (key, name, description, is_system) VALUES
+		('a', 'A', 'x', true),
+		('b', 'B', 'y', false);
+	INSERT INTO roles (is_system, key, name, description) VALUES
+		(true, 'c', 'C', 'z'),
+		(false, 'd', 'D', 'w');`
+	if n := countSystemRoles(twoStatements); n != 2 {
+		t.Errorf("per-statement column list: got %d want 2", n)
+	}
+}
+
+// TestScanFrontendIgnoresNodeModules pins the exclusion that the substring-based
+// classifier missed: a vendored .ts file whose path contains "src" must not be
+// counted, and classification must not depend on the prefix of dir.
+func TestScanFrontendIgnoresNodeModules(t *testing.T) {
+	dir := t.TempDir()
+	write := func(rel, body string) {
+		t.Helper()
+		p := filepath.Join(dir, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("src/App.tsx", `<Routes><Route path="/a"/></Routes>`)
+	write("src/pages/HomePage.tsx", "export const X = 1")
+	write("src/pages/HomePage.test.tsx", "it('x', () => {})")
+	write("src/util.ts", "export const u = 1")
+	write("src/util.test.ts", "test('u', () => {})")
+	write("e2e/login.spec.ts", "test('login', () => {})")
+	// Vendored sources with a "src" segment and .ts/.tsx names.
+	write("node_modules/pkg/src/index.ts", "export const vendored = 1")
+	write("node_modules/@scope/lib/src/deep/Comp.tsx", "export const C = 1")
+	// A nested node_modules inside src: without an explicit skip this path
+	// starts with "src/" and would be counted as project source.
+	write("src/node_modules/vendored/src/index.ts", "export const nested = 1")
+
+	r, err := scanFrontend(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.srcFiles != 5 {
+		t.Errorf("srcFiles=%d want 5 (node_modules must be excluded)", r.srcFiles)
+	}
+	if r.testFiles != 2 {
+		t.Errorf("testFiles=%d want 2", r.testFiles)
+	}
+	if r.pageFiles != 1 || r.pageTests != 1 {
+		t.Errorf("pageFiles=%d pageTests=%d want 1/1", r.pageFiles, r.pageTests)
+	}
+	if r.e2eFiles != 1 || r.e2eTests != 1 {
+		t.Errorf("e2eFiles=%d e2eTests=%d want 1/1", r.e2eFiles, r.e2eTests)
+	}
+	if r.routes != 1 || r.uniqueRoutes != 1 {
+		t.Errorf("routes=%d unique=%d want 1/1", r.routes, r.uniqueRoutes)
+	}
+
+	// The same tree reached through a relative path must yield identical counts.
+	parent := filepath.Dir(dir)
+	rel, err := filepath.Rel(parent, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old, _ := os.Getwd()
+	if err := os.Chdir(parent); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(old)
+	r2, err := scanFrontend(rel)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r2.srcFiles != r.srcFiles || r2.e2eFiles != r.e2eFiles || r2.pageFiles != r.pageFiles {
+		t.Errorf("relative root changed counts: abs=%+v rel=%+v", r, r2)
 	}
 }
 
@@ -235,6 +332,43 @@ func countGoFiles(t *testing.T, dir, suffix string) int {
 	n := 0
 	filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
 		if err == nil && !d.IsDir() && strings.HasSuffix(p, suffix) {
+			n++
+		}
+		return nil
+	})
+	return n
+}
+
+// countGoDirs counts distinct directories holding at least one .go file.
+func countGoDirs(t *testing.T, dir string) int {
+	t.Helper()
+	dirs := map[string]struct{}{}
+	filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
+		if err == nil && !d.IsDir() && strings.HasSuffix(p, ".go") {
+			dirs[filepath.Dir(p)] = struct{}{}
+		}
+		return nil
+	})
+	return len(dirs)
+}
+
+// countFESrc counts .ts/.tsx files under dir, excluding test files is not the
+// point here — it mirrors the generator's "frontend/src/**, including tests"
+// definition and never descends into node_modules.
+func countFESrc(t *testing.T, dir string) int {
+	t.Helper()
+	n := 0
+	filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if d.Name() == "node_modules" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasSuffix(p, ".ts") || strings.HasSuffix(p, ".tsx") {
 			n++
 		}
 		return nil

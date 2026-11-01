@@ -71,6 +71,11 @@ func Compute(repo string) (*Report, error) {
 	c := &Consistency{}
 
 	// --- Go tree -------------------------------------------------------------
+	// Packages are classified by their path relative to the repository root, not
+	// by the walk path: the walk path carries whatever prefix -repo was given
+	// ("..", ".", an absolute path), so a literal "backend/internal/" prefix test
+	// silently matched nothing and reported zero internal packages for every root
+	// but ".".
 	pkgs := map[string]struct{}{}
 	internalPkgs := map[string]struct{}{}
 	var tests, benches, fuzzers, examples int
@@ -78,7 +83,11 @@ func Compute(repo string) (*Report, error) {
 		if err != nil || d.IsDir() || !strings.HasSuffix(p, ".go") {
 			return err
 		}
-		dir := filepath.ToSlash(filepath.Dir(p))
+		rel, rerr := filepath.Rel(repo, p)
+		if rerr != nil {
+			return fmt.Errorf("relativize %s: %w", p, rerr)
+		}
+		dir := filepath.ToSlash(filepath.Dir(rel))
 		pkgs[dir] = struct{}{}
 		if dir == "backend/internal" || strings.HasPrefix(dir, "backend/internal/") {
 			internalPkgs[dir] = struct{}{}
@@ -341,13 +350,15 @@ var insertRolesRe = regexp.MustCompile(`(?is)INSERT\s+INTO\s+roles[^;]*?VALUES(.
 var tupleRe = regexp.MustCompile(`\(([^()]*(?:'[^']*'[^()]*)*)\)`)
 
 // countSystemRoles counts role value tuples whose is_system column is TRUE.
-// Column position is taken from the INSERT column list, so reordering columns
-// in a future migration cannot silently change the count.
+// Column position is taken from each statement's own INSERT column list, so
+// reordering columns in a future migration — or a second INSERT INTO roles with
+// a different column order in the same file — cannot silently change the count.
 func countSystemRoles(text string) int {
 	n := 0
 	for _, ins := range insertRolesRe.FindAllStringSubmatch(text, -1) {
-		header := insertRolesRe.FindString(text)
-		cols := splitSQLTuple(extractColumnList(header))
+		// ins[0] is the whole statement, so the column list is read from the
+		// statement being counted rather than from the first one in the file.
+		cols := splitSQLTuple(extractColumnList(ins[0]))
 		idx := -1
 		for i, col := range cols {
 			if strings.EqualFold(strings.TrimSpace(col), "is_system") {
@@ -483,27 +494,51 @@ func scanAppRoutes(src string) (total, unique int, dupWithinTree map[string]stri
 	return total, unique, dupWithinTree, nil
 }
 
-// scanFrontend derives frontend metrics from source files only. Declarations of
-// describe blocks are subtracted so "tests" means runnable cases, not suites.
+// frontendSkipDirs are never part of the source tree. node_modules in particular
+// contains thousands of vendored .ts/.tsx files, many with a "src" segment in
+// their path; a substring test on the full path counted them, so the metric
+// moved with whatever happened to be installed and with whether the checkout
+// was relative or absolute.
+var frontendSkipDirs = map[string]bool{
+	"node_modules": true,
+	"dist":         true,
+	"coverage":     true,
+	".vite":        true,
+}
+
+// scanFrontend derives frontend metrics from source files only. Paths are taken
+// relative to dir so classification does not depend on the prefix the caller
+// passed. Declarations of describe blocks are subtracted so "tests" means
+// runnable cases, not suites.
 func scanFrontend(dir string) (frontendScan, error) {
 	var r frontendScan
 	r.dupWithinTree = map[string]string{}
 	walk := func(p string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+		if err != nil {
 			return err
 		}
+		if d.IsDir() {
+			if p != dir && frontendSkipDirs[d.Name()] {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		rel, rerr := filepath.Rel(dir, p)
+		if rerr != nil {
+			return fmt.Errorf("relativize %s: %w", p, rerr)
+		}
+		rel = filepath.ToSlash(rel)
 		base := filepath.Base(p)
-		slash := filepath.ToSlash(p)
 		read := func() ([]byte, error) { return os.ReadFile(p) }
 		switch {
-		case strings.Contains(slash, "/e2e/") && strings.HasSuffix(base, ".spec.ts"):
+		case strings.HasPrefix(rel, "e2e/") && strings.HasSuffix(base, ".spec.ts"):
 			t, err := read()
 			if err != nil {
 				return err
 			}
 			r.e2eFiles++
 			r.e2eTests += len(itRe.FindAllIndex(t, -1)) - len(describeRe.FindAllIndex(t, -1))
-		case strings.Contains(slash, "/src/") && (strings.HasSuffix(base, ".ts") || strings.HasSuffix(base, ".tsx")):
+		case strings.HasPrefix(rel, "src/") && (strings.HasSuffix(base, ".ts") || strings.HasSuffix(base, ".tsx")):
 			t, err := read()
 			if err != nil {
 				return err
@@ -514,14 +549,14 @@ func scanFrontend(dir string) (frontendScan, error) {
 				r.testFiles++
 			}
 			r.testDecls += len(itRe.FindAllIndex(t, -1)) - len(describeRe.FindAllIndex(t, -1))
-			if strings.Contains(slash, "/pages/") {
+			if strings.HasPrefix(rel, "src/pages/") {
 				if isTest {
 					r.pageTests++
 				} else {
 					r.pageFiles++
 				}
 			}
-			if base == "App.tsx" {
+			if rel == "src/App.tsx" {
 				total, unique, dups, err := scanAppRoutes(string(t))
 				if err != nil {
 					return err
