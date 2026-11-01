@@ -53,7 +53,7 @@ export function IntegrationsPage() {
         <div>
           <div className="table__primary">{row.name}</div>
           <div className="table__secondary">
-            {row.key}
+            {row.kind}
             {row.direction ? ` · ${row.direction}` : ''}
           </div>
         </div>
@@ -63,7 +63,7 @@ export function IntegrationsPage() {
     {
       key: 'lastChecked',
       header: 'Last checked',
-      render: (row) => <Timestamp value={row.last_checked_at} />,
+      render: (row) => <Timestamp value={row.last_test_at} />,
     },
     {
       key: 'lastSync',
@@ -397,21 +397,21 @@ function IntegrationDetailDialog({
 
             <dl className="dl">
               <dt>Kind</dt>
-              <dd>{integration.key}</dd>
+              <dd>{integration.kind}</dd>
               <dt>Direction</dt>
               <dd>{integration.direction ?? '—'}</dd>
               <dt>Last checked</dt>
               <dd>
-                <Timestamp value={integration.last_checked_at} />
+                <Timestamp value={integration.last_test_at} />
               </dd>
               <dt>Last sync</dt>
               <dd>
                 <Timestamp value={integration.last_sync_at} />
               </dd>
-              {integration.last_error ? (
+              {integration.last_test_error ? (
                 <>
                   <dt>Last error</dt>
-                  <dd className="text-danger">{integration.last_error}</dd>
+                  <dd className="text-danger">{integration.last_test_error}</dd>
                 </>
               ) : null}
             </dl>

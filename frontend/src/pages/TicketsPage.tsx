@@ -18,10 +18,10 @@ const STATUSES = ['new', 'open', 'pending', 'resolved', 'closed']
 const PRIORITIES = ['low', 'normal', 'high', 'urgent']
 
 function slaState(ticket: Ticket): 'breached' | 'due-soon' | 'ok' | 'none' {
-  if (!ticket.sla_due_at || ticket.resolved_at || ticket.closed_at) return 'none'
-  const due = new Date(ticket.sla_due_at).getTime()
+  if (!ticket.resolution_due_at || ticket.resolved_at) return 'none'
+  if (ticket.sla_breached) return 'breached'
+  const due = new Date(ticket.resolution_due_at).getTime()
   const now = Date.now()
-  if (due < now) return 'breached'
   if (due - now < 60 * 60 * 1000) return 'due-soon'
   return 'ok'
 }
@@ -63,7 +63,7 @@ export function TicketsPage() {
         if (state === 'none') return <span className="text-subtle">—</span>
         if (state === 'breached') return <Badge tone="danger">breached</Badge>
         if (state === 'due-soon') return <Badge tone="warning">due soon</Badge>
-        return <Timestamp value={row.sla_due_at} />
+        return <Timestamp value={row.resolution_due_at} />
       },
     },
     {
@@ -433,25 +433,19 @@ export function TicketDetailPage() {
                 <span className="text-subtle">—</span>
               ) : (
                 <>
-                  <Timestamp value={data.sla_due_at} />
+                  <Timestamp value={data.resolution_due_at} />
                   {sla === 'breached' ? ' · breached' : sla === 'due-soon' ? ' · due soon' : ''}
                 </>
               )}
             </dd>
             <dt>First response</dt>
             <dd>
-              <Timestamp value={data.first_response_at} />
+              <Timestamp value={data.first_responded_at} />
             </dd>
             <dt>Resolved</dt>
             <dd>
               <Timestamp value={data.resolved_at} />
             </dd>
-            <dt>Closed</dt>
-            <dd>
-              <Timestamp value={data.closed_at} />
-            </dd>
-            <dt>Resolution</dt>
-            <dd>{data.resolution ?? <span className="text-subtle">—</span>}</dd>
             <dt>Description</dt>
             <dd>{data.description ?? <span className="text-subtle">—</span>}</dd>
           </dl>
@@ -473,17 +467,6 @@ export function TicketDetailPage() {
                 <Link to={`/contacts/${data.contact_id}`}>View contact</Link>
               ) : (
                 <span className="text-subtle">Not linked</span>
-              )}
-            </dd>
-            <dt>External source</dt>
-            <dd>
-              {data.external_source ? (
-                <>
-                  {data.external_source}
-                  {data.external_id ? ` · ${data.external_id}` : ''}
-                </>
-              ) : (
-                <span className="text-subtle">—</span>
               )}
             </dd>
             <dt>Created</dt>

@@ -226,8 +226,8 @@ export function LeadFormDialog({
               <Field label="Job title" htmlFor="lead-title">
                 <input
                   id="lead-title"
-                  value={form.job_title ?? ''}
-                  onChange={(event) => update('job_title', event.target.value)}
+                  value={form.title ?? ''}
+                  onChange={(event) => update('title', event.target.value)}
                 />
               </Field>
               <Field label="Source" htmlFor="lead-source" hint="Where the lead came from.">
