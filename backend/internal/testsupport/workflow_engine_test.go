@@ -42,6 +42,7 @@ type workflowFixture struct {
 	engine *workflow.Engine
 	store  *workflow.Store
 	rbac   *rbac.Service
+	crm    *crm.Service
 	org    uuid.UUID
 	userID uuid.UUID
 }
@@ -75,6 +76,7 @@ func newWorkflowFixture(t *testing.T, orgSlug, roleKey string) *workflowFixture 
 		engine: engine,
 		store:  engine.Store(),
 		rbac:   rbacSvc,
+		crm:    crmSvc,
 		org:    org,
 		userID: userID,
 	}
@@ -143,6 +145,56 @@ func TestWorkflowManualRunExecutesAStep(t *testing.T) {
 	}
 	if stepType != "create_task" || stepStatus != "succeeded" {
 		t.Fatalf("step run = (%q,%q), want (create_task,succeeded)", stepType, stepStatus)
+	}
+}
+
+// fakeOrgDefaults answers one key from a fixed value, standing in for the tenant
+// configuration so the test can prove a default reaches the engine without depending
+// on the settings surface.
+type fakeOrgDefaults struct{ priority string }
+
+func (f fakeOrgDefaults) EffectiveString(_ context.Context, _ uuid.UUID, key string) string {
+	if key == crm.SettingDefaultTaskPriority {
+		return f.priority
+	}
+	return ""
+}
+
+// TestWorkflowTaskStepUsesTheOrganizationDefaultPriority is the regression for a gap of
+// the same shape as a port wired into one engine and not the other: the create_task step
+// filled in "normal" itself, so a workflow-created task never saw the organization's
+// configured default even though a task created through the API did. The engine must
+// leave an unnamed priority for crm.Service to resolve against that default.
+func TestWorkflowTaskStepUsesTheOrganizationDefaultPriority(t *testing.T) {
+	f := newWorkflowFixture(t, "wf-default-priority", "sales_manager")
+	ctx := context.Background()
+
+	f.crm.SetOrgDefaults(fakeOrgDefaults{priority: "urgent"})
+
+	// The step names no priority, so the organization's default must decide it.
+	def := json.RawMessage(`{"steps":[
+		{"id":"t1","type":"create_task","args":{"title":"Chase the overdue invoice"}}
+	]}`)
+	wf := f.create(t, "Escalate overdue invoices", workflow.CreateInput{
+		Definition:  def,
+		TriggerType: workflow.TriggerManual,
+	})
+
+	result, err := f.engine.RunManual(ctx, f.principal(t), *wf)
+	if err != nil {
+		t.Fatalf("run the workflow: %v", err)
+	}
+	if result.Status != "succeeded" {
+		t.Fatalf("run status = %q, want succeeded", result.Status)
+	}
+
+	var priority string
+	if err := f.db.Pool().QueryRow(ctx,
+		`SELECT priority FROM tasks WHERE organization_id = $1`, f.org).Scan(&priority); err != nil {
+		t.Fatalf("read the created task: %v", err)
+	}
+	if priority != "urgent" {
+		t.Fatalf("workflow task priority = %q, want the organization default %q", priority, "urgent")
 	}
 }
 

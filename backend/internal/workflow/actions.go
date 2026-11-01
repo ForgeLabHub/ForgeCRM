@@ -22,14 +22,20 @@ func (e *Engine) doCreateTask(ctx context.Context, p *rbac.Principal, step *Step
 	if !ok || strings.TrimSpace(title) == "" {
 		return nil, fmt.Errorf("create_task needs a title")
 	}
-	in := crm.TaskInput{Title: title, Status: "open", Priority: "normal"}
+	// A step that names no priority leaves it empty so the organization's configured
+	// default applies in crm.Service, exactly as it does for a task created through the
+	// API. Filling in "normal" here would bypass that default on the one path a workflow
+	// takes, the same shape of gap as a port wired into one engine and not the other.
+	in := crm.TaskInput{Title: title, Status: "open"}
 	if v, ok := argString(step.Args, "description", env); ok && v != "" {
 		in.Description = &v
 	}
 	if v, ok := argString(step.Args, "priority", env); ok && v != "" {
 		in.Priority = v
 	}
-	if in.Priority != "low" && in.Priority != "normal" && in.Priority != "high" && in.Priority != "urgent" {
+	// A named priority is rejected here so the failure names the step and the value; an
+	// absent one is left for the service to resolve against the organization's default.
+	if in.Priority != "" && in.Priority != "low" && in.Priority != "normal" && in.Priority != "high" && in.Priority != "urgent" {
 		return nil, fmt.Errorf("create_task priority %q is not one of low, normal, high, urgent", in.Priority)
 	}
 	if hours, ok := numberArg(step.Args, "due_in_hours"); ok && hours > 0 {
