@@ -146,6 +146,96 @@ func TestEntityRefAcceptsAtMostOneEntity(t *testing.T) {
 	}
 }
 
+// attachableEntities is every entity a document may be attached to, in one place.
+// entityRef reads the id columns, entityPermissions names the read permission for
+// the parent record and entityTables resolves the record for the ownership check.
+// A new entity has to be added to all three; if it is added to only one or two,
+// the reader check either stops naming the parent's permission or stops proving
+// the record belongs to the organization, and a cross-tenant read opens quietly.
+var attachableEntities = []string{
+	EntityAccount, EntityContact, EntityDeal, EntityTicket, EntityLead, EntityTask,
+}
+
+// TestEveryAttachableEntityHasAPermission pins entityPermissions to the closed
+// set. The check it guards is the one that makes an attachment inherit its
+// parent's visibility, so a missing entry turns that check into a no-op for the
+// entity, not a refusal.
+func TestEveryAttachableEntityHasAPermission(t *testing.T) {
+	for _, et := range attachableEntities {
+		if _, ok := entityPermissions[et]; !ok {
+			t.Errorf("entity %q has no read permission; a document attached to it would skip the parent check", et)
+		}
+	}
+	for et := range entityPermissions {
+		if !containsEntity(et) {
+			t.Errorf("entityPermissions names %q, which is not an attachable entity", et)
+		}
+	}
+}
+
+// TestEveryAttachableEntityResolvesToATable pins entityTables to the same set:
+// entityPermissions decides the permission, entityTables decides which table
+// proves the row belongs to the caller's organization. If the two disagree, the
+// permission is checked against one entity and the existence against another, or
+// not at all.
+func TestEveryAttachableEntityResolvesToATable(t *testing.T) {
+	for _, et := range attachableEntities {
+		if _, ok := entityTables[et]; !ok {
+			t.Errorf("entity %q has no table; the organization ownership check would be skipped", et)
+		}
+	}
+	for et := range entityTables {
+		if !containsEntity(et) {
+			t.Errorf("entityTables names %q, which is not an attachable entity", et)
+		}
+	}
+}
+
+// TestEveryAttachableEntityIsReachableFromUpload checks the last leg: an entity
+// the maps know about but entityRef never reads is unreachable, so an upload can
+// never attach a document to it — a capability that looks present and is not.
+func TestEveryAttachableEntityIsReachableFromUpload(t *testing.T) {
+	for _, et := range attachableEntities {
+		entityType, _, err := uploadInputFor(et).entityRef()
+		if err != nil {
+			t.Errorf("entity %q is not reachable from an upload: %v", et, err)
+			continue
+		}
+		if entityType != et {
+			t.Errorf("entityRef named %q for an upload of %q", entityType, et)
+		}
+	}
+}
+
+func uploadInputFor(entity string) UploadInput {
+	id := uuid.New()
+	in := UploadInput{}
+	switch entity {
+	case EntityAccount:
+		in.AccountID = &id
+	case EntityContact:
+		in.ContactID = &id
+	case EntityDeal:
+		in.DealID = &id
+	case EntityTicket:
+		in.TicketID = &id
+	case EntityLead:
+		in.LeadID = &id
+	case EntityTask:
+		in.TaskID = &id
+	}
+	return in
+}
+
+func containsEntity(entity string) bool {
+	for _, et := range attachableEntities {
+		if et == entity {
+			return true
+		}
+	}
+	return false
+}
+
 func TestDisabledServiceReportsOff(t *testing.T) {
 	svc := New(nil, nil, nil, nil, Config{Enabled: false})
 	if svc.Enabled() {

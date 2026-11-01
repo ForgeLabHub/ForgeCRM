@@ -84,22 +84,38 @@ var supportedStates = map[State]struct{}{
 // Valid reports whether p is a supported purpose.
 func (p Purpose) Valid() bool { _, ok := supportedPurposes[p]; return ok }
 
-// RequiresGrant reports whether this purpose may only be contacted on the strength
-// of a recorded grant. Marketing, product updates and research may not be sent on
-// the strength of silence, so an absent record blocks them.
+// grantRequiredPurposes names every purpose that may only be contacted on the
+// strength of a recorded grant. Marketing, product updates and research may not be
+// sent on the strength of silence, so an absent record blocks them.
+var grantRequiredPurposes = map[Purpose]struct{}{
+	PurposeMarketing:      {},
+	PurposeProductUpdates: {},
+	PurposeResearch:       {},
+}
+
+// purposesExemptFromGrant names every purpose that may be sent without a recorded
+// grant. Transactional mail is the legitimate-interest category — a password
+// reset, a receipt, a security notice — and is deliberately not gated: blocking it
+// because nobody recorded a marketing consent would break account recovery and
+// hide security notices. An explicit denial or withdrawal is still honoured,
+// because a decision the person made is not overridden by a category default.
 //
-// Transactional mail is the legitimate-interest category — a password reset, a
-// receipt, a security notice — and is deliberately not gated: blocking it because
-// nobody recorded a marketing consent would break account recovery and hide
-// security notices. An explicit denial or withdrawal is still honoured, because a
-// decision the person made is not overridden by a category default.
+// The two sets are declared rather than expressed as a switch default, so a
+// purpose added to supportedPurposes without a decision fails a test instead of
+// falling through to the permissive answer. RequiresGrant is the rule that decides
+// what silence means, and a purpose that silently lands on "allowed" is the exact
+// defect this split prevents.
+var purposesExemptFromGrant = map[Purpose]struct{}{
+	PurposeTransactional: {},
+}
+
+// RequiresGrant reports whether this purpose may only be contacted on the strength
+// of a recorded grant. It is true only for a purpose named in grantRequiredPurposes;
+// every other purpose must be named in purposesExemptFromGrant, which
+// TestEveryPurposeIsClassifiedByGrantRequirement enforces.
 func (p Purpose) RequiresGrant() bool {
-	switch p {
-	case PurposeMarketing, PurposeProductUpdates, PurposeResearch:
-		return true
-	default:
-		return false
-	}
+	_, ok := grantRequiredPurposes[p]
+	return ok
 }
 
 // Valid reports whether c is a supported channel.

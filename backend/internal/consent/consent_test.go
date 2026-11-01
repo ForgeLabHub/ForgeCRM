@@ -62,6 +62,37 @@ func TestRequiresGrantIsThePurposeDefault(t *testing.T) {
 	}
 }
 
+// TestEveryPurposeIsClassifiedByGrantRequirement is the guard that keeps silence
+// from becoming permission. RequiresGrant is derived from grantRequiredPurposes,
+// so a purpose added to the vocabulary but to neither set would be treated as
+// exempt — the permissive answer — with no test to notice. Every supported purpose
+// must be in exactly one set: gated or explicitly exempt.
+func TestEveryPurposeIsClassifiedByGrantRequirement(t *testing.T) {
+	for p := range supportedPurposes {
+		_, gated := grantRequiredPurposes[p]
+		_, exempt := purposesExemptFromGrant[p]
+		switch {
+		case gated && exempt:
+			t.Errorf("purpose %q is both gated and exempt; the two sets must not overlap", p)
+		case !gated && !exempt:
+			t.Errorf("purpose %q is in neither set, so RequiresGrant treats it as exempt; "+
+				"classify it as gated or exempt", p)
+		case gated != p.RequiresGrant():
+			t.Errorf("purpose %q: RequiresGrant() = %v, classification says %v", p, p.RequiresGrant(), gated)
+		}
+	}
+	for p := range grantRequiredPurposes {
+		if !p.Valid() {
+			t.Errorf("grantRequiredPurposes names %q, which is not a supported purpose", p)
+		}
+	}
+	for p := range purposesExemptFromGrant {
+		if !p.Valid() {
+			t.Errorf("purposesExemptFromGrant names %q, which is not a supported purpose", p)
+		}
+	}
+}
+
 // TestValidateRefusesAnAmbiguousSubject is the check that keeps "which person is
 // this about" from being a guess: a record naming both a contact and an address, or
 // neither, is refused.
