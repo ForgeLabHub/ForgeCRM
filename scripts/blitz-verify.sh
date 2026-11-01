@@ -117,12 +117,20 @@ echo "Clean database"
 docker run -d --name "${pg}" --network "${network}" \
   -e POSTGRES_USER=forgecrm -e POSTGRES_PASSWORD=forgecrm -e POSTGRES_DB=forgecrm \
   postgres:17-alpine >/dev/null
+# Wait on TCP, not the default unix socket. initdb runs a temporary server that
+# listens on the socket only, accepts a connection, then shuts down as the real
+# server starts; a socket probe can therefore succeed once and fail on the very
+# next call, which is what made this check flaky. The TCP port is opened by the
+# real server only, so the first success is stable.
+pg_ready=1
 for i in $(seq 1 60); do
-  docker exec "${pg}" pg_isready -U forgecrm -d forgecrm >/dev/null 2>&1 && break
+  if docker exec "${pg}" pg_isready -h 127.0.0.1 -U forgecrm -d forgecrm >/dev/null 2>&1; then
+    pg_ready=0
+    break
+  fi
   sleep 1
 done
-check "PostgreSQL accepts connections" "0" \
-  "$(docker exec "${pg}" pg_isready -U forgecrm -d forgecrm >/dev/null 2>&1; echo $?)"
+check "PostgreSQL accepts connections" "0" "${pg_ready}"
 
 # The production environment blitz.cloud injects, minus PORT (we fix the listen
 # address). FORGECRM_TRUSTED_PROXIES is the real CIDR of the proxy network, not
