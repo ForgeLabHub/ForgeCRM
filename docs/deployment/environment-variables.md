@@ -253,7 +253,11 @@ wrong, naming the variable but never its value:
   set together or not at all.
 - `FORGECRM_RATE_LIMIT_STORE=redis` requires `FORGECRM_REDIS_URL`, and a Redis
   URL alongside the `memory` store is refused as ambiguous.
-- `FORGECRM_TRUSTED_PROXIES` must be a list of valid CIDRs; `*` is not accepted.
+- `FORGECRM_TRUSTED_PROXIES` must be a list of valid CIDRs or addresses. `*`
+  (and `0.0.0.0/0` / `::/0`) is accepted but means "trust every peer": it is
+  recorded as a distinct value and logged with a warning, because it lets any
+  caller choose its own address through a forwarding header. Use the proxy's
+  actual CIDR instead.
 - An enabled subsystem (`STORAGE`, `SMTP`, `OIDC`, `AI`) must have its required
   settings.
 
