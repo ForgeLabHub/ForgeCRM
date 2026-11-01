@@ -28,6 +28,16 @@ services:
         value: info
       - key: FORGECRM_LOG_FORMAT
         value: json
+      # Production requires an https FORGECRM_BASE_URL and the API refuses to start
+      # without one. Render publishes the service's own URL as RENDER_EXTERNAL_URL,
+      # so it is copied into FORGECRM_BASE_URL here rather than hardcoding the
+      # onrender.com hostname in the repository. An explicit FORGECRM_BASE_URL still
+      # wins, because the API consults it first.
+      - key: FORGECRM_BASE_URL
+        fromService:
+          type: web
+          name: forgecrm-api
+          envVarKey: RENDER_EXTERNAL_URL
       # Render injects PORT; the API binds 0.0.0.0:$PORT.
       - key: FORGECRM_MIGRATE_ON_START
         value: "true"
@@ -47,12 +57,18 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
+    # The image entrypoint defaults to the API; this names the worker binary and
+    # FORGECRM_ROLE makes the choice explicit regardless of how Render passes the
+    # command. Either signal alone is enough; both are set so the worker can never
+    # come up as a second API instance.
     dockerCommand: /usr/local/bin/forgecrm-worker
     region: oregon
     plan: starter
     envVars:
       - key: FORGECRM_ENV
         value: production
+      - key: FORGECRM_ROLE
+        value: worker
       - key: FORGECRM_LOG_LEVEL
         value: info
       - key: FORGECRM_LOG_FORMAT
@@ -61,6 +77,14 @@ services:
         fromDatabase:
           name: forgecrm-db
           property: connectionString
+      # The worker runs the same production config validation as the API, which
+      # requires an https base URL. A worker service has no RENDER_EXTERNAL_URL of
+      # its own, so it takes the API's public URL.
+      - key: FORGECRM_BASE_URL
+        fromService:
+          type: web
+          name: forgecrm-api
+          envVarKey: RENDER_EXTERNAL_URL
       - key: FORGECRM_SECRET_KEY
         fromService:
           type: web

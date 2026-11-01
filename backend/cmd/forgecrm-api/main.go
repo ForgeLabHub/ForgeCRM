@@ -45,6 +45,11 @@ var commit = "unknown"
 // buildInfo returns the effective version and commit. Linker-set values win; the
 // environment is the fallback; a placeholder is replaced by an explicit marker so
 // an operator can tell "no metadata supplied" from a genuine value.
+//
+// A platform that builds the repository root without passing build args (Render)
+// still knows the revision it checked out, so RENDER_GIT_COMMIT is consulted for
+// the commit. That is what turns a log line of commit=unknown into the real SHA
+// without a manual variable.
 func buildInfo() (string, string) {
 	v, c := version, commit
 	if v == "" || v == "0.1.0-dev" || v == "dev" {
@@ -53,7 +58,7 @@ func buildInfo() (string, string) {
 		}
 	}
 	if c == "" || c == "unknown" || c == "dev" {
-		if env := strings.TrimSpace(os.Getenv("FORGECRM_COMMIT")); env != "" {
+		if env := strings.TrimSpace(firstNonEmpty(os.Getenv("FORGECRM_COMMIT"), os.Getenv("RENDER_GIT_COMMIT"))); env != "" {
 			c = env
 		}
 	}

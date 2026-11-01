@@ -551,7 +551,10 @@ func TestEveryInternalPackageIsReachableFromACommand(t *testing.T) {
 	//
 	// archtest is this package: it imports nothing from the module and is run by
 	// `go test` rather than linked into a binary, so it is unreachable by design.
-	skip := map[string]bool{"migrations": true, "archtest": true}
+	//
+	// deploycheck is likewise test-only: it reads the deployment descriptors
+	// (render.yaml and friends) and asserts invariants, so no binary imports it.
+	skip := map[string]bool{"migrations": true, "archtest": true, "deploycheck": true}
 
 	for path := range graph {
 		internal := internalPkg(path)

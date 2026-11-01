@@ -99,8 +99,11 @@ services:
         VERSION: ${FORGECRM_VERSION:-dev}
         COMMIT: ${FORGECRM_COMMIT:-unknown}
     restart: unless-stopped
-    # The worker shares the API image and runs the other binary.
-    entrypoint: ["/usr/local/bin/forgecrm-worker"]
+    # The worker shares the API image and runs the other binary. The entrypoint
+    # dispatcher reads FORGECRM_ROLE and starts the worker.
+    entrypoint: ["/usr/local/bin/forgecrm-entrypoint"]
+    environment:
+      FORGECRM_ROLE: worker
     # On SIGTERM the worker stops claiming and waits up to FORGECRM_WORKER_SHUTDOWN_GRACE
     # (30s by default) for the job in hand. Docker's own default of 10s would SIGKILL
     # it first, leaving that job's row 'running' until the requeue sweep recovers it.

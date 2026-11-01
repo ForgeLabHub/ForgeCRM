@@ -162,6 +162,56 @@ func TestProductionHappyPathLoads(t *testing.T) {
 	}
 }
 
+// TestProductionBaseURLFallsBackToPlatformURL pins the fix for the Render
+// Blueprint defect: FORGECRM_ENV=production with no FORGECRM_BASE_URL made the
+// API refuse to start, because the default base URL is plain http. Render
+// publishes the service URL as RENDER_EXTERNAL_URL, so Load must use it rather
+// than fail. An explicit FORGECRM_BASE_URL still wins.
+func TestProductionBaseURLFallsBackToPlatformURL(t *testing.T) {
+	baseEnv(t)
+	t.Setenv("FORGECRM_ENV", "production")
+	t.Setenv("FORGECRM_SECRET_KEY", strings.Repeat("k", 40))
+	t.Setenv("FORGECRM_COOKIE_SECURE", "true")
+	t.Setenv("RENDER_EXTERNAL_URL", "https://forgecrm-api.onrender.com")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("a production deployment that supplies only RENDER_EXTERNAL_URL was rejected: %v", err)
+	}
+	if cfg.BaseURL != "https://forgecrm-api.onrender.com" {
+		t.Fatalf("BaseURL is %q, want the platform URL", cfg.BaseURL)
+	}
+}
+
+func TestExplicitBaseURLBeatsPlatformURL(t *testing.T) {
+	baseEnv(t)
+	t.Setenv("RENDER_EXTERNAL_URL", "https://forgecrm-api.onrender.com")
+	t.Setenv("FORGECRM_BASE_URL", "https://crm.example.com")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.BaseURL != "https://crm.example.com" {
+		t.Fatalf("BaseURL is %q, want the explicit value to win", cfg.BaseURL)
+	}
+}
+
+// A trailing slash on the platform URL must not produce a double slash in the
+// links the API builds, so it is trimmed the same way an explicit value is.
+func TestPlatformBaseURLIsTrimmed(t *testing.T) {
+	baseEnv(t)
+	t.Setenv("RENDER_EXTERNAL_URL", "https://forgecrm-api.onrender.com/")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.BaseURL != "https://forgecrm-api.onrender.com" {
+		t.Fatalf("BaseURL is %q, want the trailing slash trimmed", cfg.BaseURL)
+	}
+}
+
 // The redacted rendering is logged at startup, so it must never carry a secret
 // value even though it deliberately reports whether each secret is present.
 func TestRedactedNeverContainsSecretValues(t *testing.T) {
