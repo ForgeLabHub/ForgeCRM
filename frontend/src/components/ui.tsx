@@ -1,5 +1,6 @@
 /** Small presentational primitives shared by every page. */
 import type { ReactNode } from 'react'
+import { useT } from '../i18n'
 
 export function Badge({
   children,
@@ -71,6 +72,7 @@ export function PageHeader({
     <header className="page-header">
       <div>
         <h1>{title}</h1>
+        <div className="page-header__rule" aria-hidden="true" />
         {meta ? <div className="page-header__meta">{meta}</div> : null}
       </div>
       {actions ? <div className="page-header__actions">{actions}</div> : null}
@@ -131,6 +133,12 @@ export function EmptyState({
 }) {
   return (
     <div className="empty-state">
+      <div className="empty-state__icon" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 7l2-3h12l2 3v12H4z" />
+          <path d="M4 7h16M9 12h6" />
+        </svg>
+      </div>
       <div className="empty-state__title">{title}</div>
       {text ? <p className="empty-state__text">{text}</p> : null}
       {action}
@@ -139,13 +147,20 @@ export function EmptyState({
 }
 
 export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  const t = useT()
   return (
     <div className="error-state" role="alert">
-      <div className="error-state__title">Something went wrong</div>
+      <div className="error-state__icon" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 8v5M12 16h.01" />
+        </svg>
+      </div>
+      <div className="error-state__title">{t('errors.somethingWrong')}</div>
       <p className="error-state__text">{message}</p>
       {onRetry ? (
         <button type="button" className="btn btn--secondary" onClick={onRetry}>
-          Try again
+          {t('common.tryAgain')}
         </button>
       ) : null}
     </div>
@@ -239,26 +254,18 @@ export function ConfirmDialog({
   onConfirm: () => void
   onCancel: () => void
 }) {
+  const t = useT()
   if (!open) return null
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirm-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        display: 'grid',
-        placeItems: 'center',
-        background: 'rgba(16, 24, 40, 0.45)',
-        zIndex: 60,
-        padding: 'var(--space-4)',
-      }}
+      className="dialog-backdrop"
       onClick={onCancel}
     >
       <div
-        className="card"
-        style={{ maxWidth: 420, width: '100%' }}
+        className="card dialog"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="card__header">
@@ -269,7 +276,7 @@ export function ConfirmDialog({
         </div>
         <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
           <button type="button" className="btn btn--secondary" onClick={onCancel} disabled={busy}>
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -277,7 +284,7 @@ export function ConfirmDialog({
             onClick={onConfirm}
             disabled={busy}
           >
-            {busy ? 'Working…' : confirmLabel}
+            {busy ? t('common.loading') : confirmLabel}
           </button>
         </div>
       </div>
@@ -296,6 +303,7 @@ export function Pagination({
   offset: number
   onChange: (offset: number) => void
 }) {
+  const t = useT()
   const first = total === 0 ? 0 : offset + 1
   const last = Math.min(offset + limit, total)
   const hasPrevious = offset > 0
@@ -304,7 +312,7 @@ export function Pagination({
   return (
     <div className="pagination">
       <span>
-        {total === 0 ? 'No results' : `${first}–${last} of ${total}`}
+        {total === 0 ? t('list.noResults') : t('list.range', { first, last, total })}
       </span>
       <div className="pagination__controls">
         <button
@@ -313,7 +321,7 @@ export function Pagination({
           disabled={!hasPrevious}
           onClick={() => onChange(Math.max(0, offset - limit))}
         >
-          Previous
+          {t('list.previous')}
         </button>
         <button
           type="button"
@@ -321,7 +329,7 @@ export function Pagination({
           disabled={!hasNext}
           onClick={() => onChange(offset + limit)}
         >
-          Next
+          {t('list.next')}
         </button>
       </div>
     </div>

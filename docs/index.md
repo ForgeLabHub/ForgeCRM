@@ -19,6 +19,7 @@
 | --- | --- |
 | Как система устроена и почему так | `ARCHITECTURE.md`, `architecture/`, `adr/` |
 | Как собрать и проверить | `BUILD.md`, `development/` |
+| Как устроен визуальный слой, темы и локализация | [development/design-system.md](development/design-system.md) |
 | Как устроены данные и миграции | `database/` |
 | Какие есть API и контракты | `api/`, `docs/api/openapi.json` |
 | Что делает конкретный модуль | `modules/` |

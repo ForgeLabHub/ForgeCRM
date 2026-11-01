@@ -295,6 +295,8 @@ export function LoginPage() {
               ))}
             </div>
           ) : null}
+
+          <p className="login__foot">{t('login.help')}</p>
         </div>
       </main>
     </div>

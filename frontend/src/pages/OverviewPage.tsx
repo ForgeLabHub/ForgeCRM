@@ -24,21 +24,22 @@ function CountStat({
   const query = useQuery({ queryKey: ['count', queryKey], queryFn: fetchCount })
   const value = query.isLoading ? '—' : query.isError ? '!' : query.data
 
-  return (
-    <div className="stat">
+  const body = (
+    <>
       <div className="stat__label">{label}</div>
-      <div className="stat__value">
-        {link ? (
-          <Link to={link} style={{ color: 'inherit' }}>
-            {value}
-          </Link>
-        ) : (
-          value
-        )}
-      </div>
+      <div className="stat__value">{value}</div>
       {hint ? <div className="stat__hint">{hint}</div> : null}
-    </div>
+    </>
   )
+
+  if (link) {
+    return (
+      <Link to={link} className="stat stat--link">
+        {body}
+      </Link>
+    )
+  }
+  return <div className="stat">{body}</div>
 }
 
 export function OverviewPage() {

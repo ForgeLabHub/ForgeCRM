@@ -1,19 +1,17 @@
 import { Link } from 'react-router-dom'
 import { EmptyState } from '../components/ui'
+import { useT } from '../i18n'
 
 export function ForbiddenPage({ permission }: { permission?: string }) {
+  const t = useT()
   return (
     <div className="card">
       <EmptyState
-        title="You do not have access to this area"
-        text={
-          permission
-            ? `This page requires the "${permission}" permission. Ask an administrator if you need it.`
-            : 'Ask an administrator if you need access.'
-        }
+        title={t('errors.forbiddenTitle')}
+        text={permission ? t('errors.forbiddenPermission', { permission }) : t('errors.forbiddenText')}
         action={
           <Link to="/" className="btn btn--secondary">
-            Back to overview
+            {t('errors.backToOverview')}
           </Link>
         }
       />
@@ -22,14 +20,15 @@ export function ForbiddenPage({ permission }: { permission?: string }) {
 }
 
 export function NotFoundPage() {
+  const t = useT()
   return (
     <div className="card">
       <EmptyState
-        title="Page not found"
-        text="The page you asked for does not exist."
+        title={t('errors.notFoundTitle')}
+        text={t('errors.notFoundText')}
         action={
           <Link to="/" className="btn btn--secondary">
-            Back to overview
+            {t('errors.backToOverview')}
           </Link>
         }
       />

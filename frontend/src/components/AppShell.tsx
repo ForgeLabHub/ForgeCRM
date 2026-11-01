@@ -1,8 +1,10 @@
-import { useState } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { GlobalSearch } from './GlobalSearch'
 import { useGlobalSearchShortcut } from '../hooks/useGlobalSearch'
+import { BrandMark } from './BrandMark'
+import { NAV_ICONS } from './NavIcons'
 import { useI18n, type TranslationKey } from '../i18n'
 import { useTheme, type ThemeMode } from '../theme'
 
@@ -87,12 +89,37 @@ const NAV_GROUPS: NavGroup[] = [
 
 const THEME_ICON: Record<ThemeMode, string> = { light: '☀', dark: '☾', system: '◐' }
 
+/** The initials shown in the avatar: the display name, or the email's first letter. */
+function initials(name?: string, email?: string): string {
+  const source = (name ?? '').trim() || (email ?? '').trim()
+  if (!source) return '?'
+  const parts = source.split(/\s+/).filter(Boolean)
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
+  return source.slice(0, 2).toUpperCase()
+}
+
 export function AppShell() {
   const { session, signOut, can } = useAuth()
   const { t } = useI18n()
   const { mode, cycle } = useTheme()
   const [menuOpen, setMenuOpen] = useState(false)
   const search = useGlobalSearchShortcut()
+  const location = useLocation()
+
+  // The drawer is a fixed overlay on a phone. Navigating away must close it, and
+  // Escape must close it, or it would cover the page the user just opened.
+  useEffect(() => {
+    setMenuOpen(false)
+  }, [location.pathname])
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [menuOpen])
 
   const groups = NAV_GROUPS.map((group) => ({
     ...group,
@@ -101,9 +128,17 @@ export function AppShell() {
 
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#main-content">
+        {t('nav.skipToContent')}
+      </a>
+
+      {menuOpen ? (
+        <div className="sidebar-backdrop" aria-hidden="true" onClick={() => setMenuOpen(false)} />
+      ) : null}
+
       <aside className={menuOpen ? 'sidebar sidebar--open' : 'sidebar'}>
         <div className="sidebar__brand">
-          <span className="sidebar__mark" aria-hidden="true">F</span>
+          <BrandMark size={28} />
           <span>{t('brand.name')}</span>
         </div>
         <nav aria-label={t('nav.mainNavigation')}>
@@ -118,6 +153,9 @@ export function AppShell() {
                   className={({ isActive }) => (isActive ? 'nav-item nav-item--active' : 'nav-item')}
                   onClick={() => setMenuOpen(false)}
                 >
+                  {NAV_ICONS[item.to] ? (
+                    <span className="nav-item__icon">{NAV_ICONS[item.to]}</span>
+                  ) : null}
                   {t(item.labelKey)}
                 </NavLink>
               ))}
@@ -136,7 +174,7 @@ export function AppShell() {
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen((open) => !open)}
             >
-              {t('nav.menu')}
+              <MenuIcon />
             </button>
             <span className="topbar__org">
               {session?.organization?.name || t('brand.name')}
@@ -147,9 +185,12 @@ export function AppShell() {
               onClick={() => search.setOpen(true)}
               aria-keyshortcuts="Control+K Meta+K"
             >
-              {t('nav.search')}
+              <SearchIcon />
+              <span className="topbar__search-label">{t('nav.search')}</span>
               <kbd className="kbd">Ctrl K</kbd>
             </button>
+          </div>
+          <div className="topbar__user">
             <button
               type="button"
               className="btn btn--ghost btn--sm theme-toggle"
@@ -160,18 +201,14 @@ export function AppShell() {
               <span aria-hidden="true">{THEME_ICON[mode]}</span>
               <span className="theme-toggle__text">{t(`theme.${mode}` as 'theme.light')}</span>
             </button>
-          </div>
-          <div className="topbar__user">
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontWeight: 500, fontSize: 13 }}>
-                {session?.user?.display_name}
-              </div>
-              <div className="text-subtle" style={{ fontSize: 12 }}>
-                {session?.user?.email}
-              </div>
-            </div>
-            <NavLink to="/account" className="btn btn--ghost btn--sm">
-              {t('nav.account')}
+            <NavLink to="/account" className="topbar__user-link">
+              <span className="avatar" aria-hidden="true">
+                {initials(session?.user?.display_name, session?.user?.email)}
+              </span>
+              <span className="topbar__user-meta">
+                <span className="topbar__user-name">{session?.user?.display_name}</span>
+                <span className="topbar__user-email">{session?.user?.email}</span>
+              </span>
             </NavLink>
             <button type="button" className="btn btn--secondary btn--sm" onClick={() => void signOut()}>
               {t('common.signOut')}
@@ -179,12 +216,29 @@ export function AppShell() {
           </div>
         </header>
 
-        <main className="content">
+        <main className="content" id="main-content">
           <Outlet />
         </main>
       </div>
 
       {search.open ? <GlobalSearch onClose={() => search.setOpen(false)} /> : null}
     </div>
+  )
+}
+
+function MenuIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+      <path d="M4 7h16M4 12h16M4 17h16" />
+    </svg>
+  )
+}
+
+function SearchIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-3.2-3.2" />
+    </svg>
   )
 }

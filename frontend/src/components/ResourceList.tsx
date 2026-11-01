@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import type { ListResponse, PaginationParams } from '../api/client'
 import { errorMessage } from '../api/client'
+import { useT } from '../i18n'
 import { Card, EmptyState, ErrorState, Pagination, TableSkeleton } from './ui'
 
 export interface Column<T> {
@@ -69,6 +70,7 @@ export function ResourceList<T>({
   const [offset, setOffset] = useState(0)
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
+  const t = useT()
 
   const selectable = Boolean(bulkActions)
 
@@ -142,9 +144,7 @@ export function ResourceList<T>({
 
       {selectable && selected.size > 0 ? (
         <div className="toolbar" style={{ padding: 'var(--space-3) var(--space-4) 0' }}>
-          <span className="text-sm">
-            {selected.size} selected
-          </span>
+          <span className="text-sm">{t('list.selectedCount', { count: selected.size })}</span>
           {bulkActions ? bulkActions([...selected], () => setSelected(new Set())) : null}
         </div>
       ) : null}
@@ -155,8 +155,8 @@ export function ResourceList<T>({
         <TableSkeleton rows={6} columns={columns.length} />
       ) : !data || data.items.length === 0 ? (
         <EmptyState
-          title={search.trim() ? 'No matches' : emptyTitle}
-          text={search.trim() ? 'Try a different search term.' : emptyText}
+          title={search.trim() ? t('list.noMatches') : emptyTitle}
+          text={search.trim() ? t('list.noMatchesText') : emptyText}
           action={search.trim() ? undefined : emptyAction}
         />
       ) : (
@@ -169,7 +169,7 @@ export function ResourceList<T>({
                     <th style={{ width: '2.5rem' }}>
                       <input
                         type="checkbox"
-                        aria-label="Select all rows on this page"
+                        aria-label={t('list.selectAll')}
                         checked={allOnPageSelected}
                         onChange={toggleAllOnPage}
                       />
@@ -199,7 +199,7 @@ export function ResourceList<T>({
                             select would navigate away from the list being built. */}
                         <input
                           type="checkbox"
-                          aria-label="Select row"
+                          aria-label={t('list.selectRow')}
                           checked={selected.has(String(rowKey(row)))}
                           onClick={(event) => event.stopPropagation()}
                           onChange={() => toggle(String(rowKey(row)))}

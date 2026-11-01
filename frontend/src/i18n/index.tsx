@@ -111,7 +111,16 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
 export function useI18n(): I18nValue {
   const ctx = useContext(I18nContext)
-  if (!ctx) throw new Error('useI18n must be used inside an I18nProvider')
+  // A component rendered outside the provider (an isolated unit test, a story)
+  // gets the English dictionary rather than a thrown error. Localisation is a
+  // presentation concern: losing it should never take the screen down.
+  if (!ctx) {
+    return {
+      locale: DEFAULT_LOCALE,
+      setLocale: () => {},
+      t: (key, vars) => interpolate(lookup(en, key) ?? key, vars),
+    }
+  }
   return ctx
 }
 

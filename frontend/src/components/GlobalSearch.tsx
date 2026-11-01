@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { searchApi } from '../api/crm'
 import { errorMessage } from '../api/client'
+import { useI18n } from '../i18n'
 import type { SearchResult } from '../types/api'
 
 /**
@@ -21,12 +22,13 @@ const DESTINATIONS: Record<string, (id: string) => string> = {
   ticket: () => '/tickets',
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  account: 'Account',
-  contact: 'Contact',
-  lead: 'Lead',
-  deal: 'Deal',
-  ticket: 'Ticket',
+/** Entity types the interface knows how to label. Anything else falls back to
+ *  the raw server value rather than showing an unresolved translation key. */
+const KNOWN_TYPES = ['account', 'contact', 'lead', 'deal', 'ticket'] as const
+type KnownType = (typeof KNOWN_TYPES)[number]
+
+function isKnownType(value: string): value is KnownType {
+  return (KNOWN_TYPES as readonly string[]).includes(value)
 }
 
 /**
@@ -39,6 +41,7 @@ const TYPE_LABELS: Record<string, string> = {
  */
 export function GlobalSearch({ onClose }: { onClose?: () => void }) {
   const navigate = useNavigate()
+  const { t } = useI18n()
   const [term, setTerm] = useState('')
   const [debounced, setDebounced] = useState('')
   const [active, setActive] = useState(0)
@@ -98,29 +101,21 @@ export function GlobalSearch({ onClose }: { onClose?: () => void }) {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Global search"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(16, 24, 40, 0.45)',
-        zIndex: 70,
-        padding: 'var(--space-4)',
-        paddingTop: '12vh',
-      }}
+      aria-label={t('search.label')}
+      className="command-backdrop"
       onClick={onClose}
     >
       <div
-        className="card"
-        style={{ maxWidth: 620, width: '100%', margin: '0 auto', padding: 0 }}
+        className="card command-palette"
         onClick={(event) => event.stopPropagation()}
       >
-        <div style={{ padding: 'var(--space-3)', borderBottom: '1px solid var(--color-border)' }}>
+        <div className="command-palette__field">
           <label className="field" style={{ margin: 0 }}>
-            <span className="sr-only">Search accounts, contacts, leads, deals and tickets</span>
+            <span className="sr-only">{t('search.inputHint')}</span>
             <input
               ref={inputRef}
               type="text"
-              placeholder="Search accounts, contacts, leads, deals, tickets…"
+              placeholder={t('search.placeholder')}
               value={term}
               onChange={(event) => setTerm(event.target.value)}
               onKeyDown={onKeyDown}
@@ -132,24 +127,18 @@ export function GlobalSearch({ onClose }: { onClose?: () => void }) {
           </label>
         </div>
 
-        <div id="global-search-results" role="listbox" style={{ maxHeight: 380, overflowY: 'auto' }}>
+        <div id="global-search-results" role="listbox" className="command-palette__results">
           {!enabled ? (
-            <p className="text-muted text-sm" style={{ padding: 'var(--space-4)' }}>
-              Type at least two characters. Results are limited to the records your permissions
-              allow, so a record you cannot open does not appear.
-            </p>
+            <p className="text-muted text-sm command-palette__hint">{t('search.typeHint')}</p>
           ) : results.isLoading ? (
-            <p className="text-muted text-sm" style={{ padding: 'var(--space-4)' }}>
-              Searching…
-            </p>
+            <p className="text-muted text-sm command-palette__hint">{t('search.searching')}</p>
           ) : results.isError ? (
-            <p className="text-sm" style={{ padding: 'var(--space-4)', color: 'var(--color-danger)' }}>
+            <p className="text-sm command-palette__hint text-danger">
               {errorMessage(results.error)}
             </p>
           ) : items.length === 0 ? (
-            <p className="text-muted text-sm" style={{ padding: 'var(--space-4)' }}>
-              Nothing matched “{debounced}”. Either no record matches, or none of the matches is
-              available to you.
+            <p className="text-muted text-sm command-palette__hint">
+              {t('search.empty', { term: debounced })}
             </p>
           ) : (
             items.map((result, index) => (
@@ -161,25 +150,22 @@ export function GlobalSearch({ onClose }: { onClose?: () => void }) {
                 type="button"
                 onMouseEnter={() => setActive(index)}
                 onClick={() => open(result)}
-                style={{
-                  display: 'block',
-                  width: '100%',
-                  textAlign: 'left',
-                  padding: 'var(--space-2) var(--space-3)',
-                  background: index === active ? 'var(--color-accent-soft)' : 'transparent',
-                  border: 'none',
-                  borderBottom: '1px solid var(--color-border)',
-                  cursor: 'pointer',
-                }}
+                className={
+                  index === active
+                    ? 'command-palette__item command-palette__item--active'
+                    : 'command-palette__item'
+                }
               >
-                <span className="text-subtle text-sm" style={{ marginRight: 8 }}>
-                  {TYPE_LABELS[result.entity_type] ?? result.entity_type}
+                <span className="command-palette__type">
+                  {isKnownType(result.entity_type)
+                    ? t(`search.types.${result.entity_type}`)
+                    : result.entity_type}
                 </span>
-                <span style={{ fontWeight: 500 }}>{result.title || '(no title)'}</span>
+                <span className="command-palette__title">
+                  {result.title || t('search.noTitle')}
+                </span>
                 {result.subtitle ? (
-                  <span className="text-muted text-sm" style={{ marginLeft: 8 }}>
-                    {result.subtitle}
-                  </span>
+                  <span className="command-palette__subtitle">{result.subtitle}</span>
                 ) : null}
               </button>
             ))
