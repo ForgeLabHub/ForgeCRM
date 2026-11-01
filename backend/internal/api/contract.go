@@ -228,6 +228,7 @@ func APIContract() openapi.Contract {
 	c.RequiredBody["TaskInput"] = []string{"title"}
 	c.RequestBodies["PUT /api/v1/tasks/{id}"] = reflect.TypeOf(crm.TaskInput{})
 	c.Responses["GET /api/v1/tasks"] = reflect.TypeOf(httpx.ListResponse[crm.Task]{})
+	c.Responses["GET /api/v1/tasks/{id}"] = reflect.TypeOf(crm.Task{})
 	c.Responses["POST /api/v1/tasks"] = reflect.TypeOf(crm.Task{})
 	c.Responses["PUT /api/v1/tasks/{id}"] = reflect.TypeOf(crm.Task{})
 	c.SortColumns["GET /api/v1/tasks"] = []string{"title", "due_at", "status", "priority", "created_at"}

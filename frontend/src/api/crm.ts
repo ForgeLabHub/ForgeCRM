@@ -97,6 +97,7 @@ export const dealsApi = {
 
 export const tasksApi = {
   list: (params?: CRMListParams) => api.get<ListResponse<Task>>('/api/v1/tasks', params),
+  get: (id: string) => api.get<Task>(`/api/v1/tasks/${id}`),
   create: (body: TaskInput) => api.post<Task>('/api/v1/tasks', body),
   update: (id: string, body: TaskInput) => api.put<Task>(`/api/v1/tasks/${id}`, body),
 }

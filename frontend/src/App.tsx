@@ -7,8 +7,8 @@ import { AccountDetailPage, AccountsPage } from './pages/AccountsPage'
 import { ContactDetailPage, ContactsPage } from './pages/ContactsPage'
 import { LeadsPage } from './pages/LeadsPage'
 import { DealDetailPage, DealsPage } from './pages/DealsPage'
-import { TasksPage } from './pages/TasksPage'
-import { TicketsPage } from './pages/TicketsPage'
+import { TasksPage, TaskDetailPage } from './pages/TasksPage'
+import { TicketsPage, TicketDetailPage } from './pages/TicketsPage'
 import { ReportsPage } from './pages/ReportsPage'
 import { ImportCenterPage } from './pages/ImportCenterPage'
 import { ImportDetailPage } from './pages/ImportDetailPage'
@@ -138,10 +138,26 @@ export function App() {
           }
         />
         <Route
+          path="tasks/:id"
+          element={
+            <RequirePermission permission="tasks.read">
+              <TaskDetailPage />
+            </RequirePermission>
+          }
+        />
+        <Route
           path="tickets"
           element={
             <RequirePermission permission="tickets.read">
               <TicketsPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="tickets/:id"
+          element={
+            <RequirePermission permission="tickets.read">
+              <TicketDetailPage />
             </RequirePermission>
           }
         />

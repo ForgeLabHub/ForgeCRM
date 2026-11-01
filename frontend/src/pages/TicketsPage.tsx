@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ticketsApi } from '../api/crm'
 import { errorMessage, fieldErrors } from '../api/client'
 import type { ViewFilters } from '../api/views'
@@ -11,7 +12,7 @@ import { SavedViewsBar } from '../components/SavedViewsBar'
 import { AssistPanel } from '../components/AssistPanel'
 import { AttachmentPanel } from '../components/AttachmentPanel'
 import { RecordCollabPanel } from '../components/RecordCollabPanel'
-import { Alert, Badge, Field, PageHeader, StatusBadge, Timestamp } from '../components/ui'
+import { Alert, Badge, Card, Field, PageHeader, StatusBadge, Timestamp } from '../components/ui'
 
 const STATUSES = ['new', 'open', 'pending', 'resolved', 'closed']
 const PRIORITIES = ['low', 'normal', 'high', 'urgent']
@@ -27,6 +28,7 @@ function slaState(ticket: Ticket): 'breached' | 'due-soon' | 'ok' | 'none' {
 
 export function TicketsPage() {
   const { can } = useAuth()
+  const navigate = useNavigate()
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Ticket | null>(null)
   const [statusFilter, setStatusFilter] = useState('')
@@ -93,6 +95,7 @@ export function TicketsPage() {
         fetchPage={(params) => ticketsApi.list({ ...params, status: statusFilter || undefined })}
         columns={columns}
         rowKey={(row) => row.id}
+        onRowClick={(row) => navigate(`/tickets/${row.id}`)}
         emptyTitle="No tickets"
         emptyText="Tickets raised by customers or staff appear here."
         searchable
@@ -321,4 +324,192 @@ function toInput(ticket?: Ticket): TicketInput {
     assignee_user_id: ticket.assignee_user_id ?? null,
     team_id: ticket.team_id ?? null,
   }
+}
+
+export function TicketDetailPage() {
+  const { id = '' } = useParams()
+  const { can } = useAuth()
+  const queryClient = useQueryClient()
+  const [editing, setEditing] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
+
+  const ticket = useQuery({
+    queryKey: ['ticket', id],
+    queryFn: () => ticketsApi.get(id),
+    enabled: Boolean(id),
+  })
+
+  const resolve = useMutation({
+    mutationFn: () => {
+      const current = ticket.data
+      if (!current) throw new Error('The ticket is not loaded')
+      return ticketsApi.update(id, { ...toInput(current), status: 'resolved' })
+    },
+    onSuccess: (saved) => {
+      queryClient.setQueryData(['ticket', id], saved)
+      void queryClient.invalidateQueries({ queryKey: ['tickets'] })
+      setActionError(null)
+    },
+    onError: (error) => setActionError(errorMessage(error)),
+  })
+
+  if (ticket.isError) {
+    return (
+      <Card title="Ticket">
+        <Alert tone="error">{errorMessage(ticket.error)}</Alert>
+      </Card>
+    )
+  }
+
+  if (ticket.isLoading || !ticket.data) {
+    return <div className="skeleton" style={{ width: '100%', height: 260 }} aria-busy="true" />
+  }
+
+  const data = ticket.data
+  const closed = data.status === 'resolved' || data.status === 'closed'
+  const sla = slaState(data)
+
+  return (
+    <>
+      <PageHeader
+        title={data.subject}
+        meta={
+          <>
+            <StatusBadge status={data.status} /> · Updated <Timestamp value={data.updated_at} />
+          </>
+        }
+        actions={
+          <>
+            <Link to="/tickets" className="btn btn--ghost btn--sm">
+              Back
+            </Link>
+            {can('tickets.update') && !closed ? (
+              <button
+                type="button"
+                className="btn btn--secondary btn--sm"
+                onClick={() => resolve.mutate()}
+                disabled={resolve.isPending}
+              >
+                Resolve
+              </button>
+            ) : null}
+            {can('tickets.update') ? (
+              <button type="button" className="btn btn--secondary btn--sm" onClick={() => setEditing(true)}>
+                Edit
+              </button>
+            ) : null}
+          </>
+        }
+      />
+
+      {actionError ? (
+        <div style={{ marginBottom: 'var(--space-4)' }}>
+          <Alert tone="error">{actionError}</Alert>
+        </div>
+      ) : null}
+
+      <div className="grid grid--split">
+        <Card title="Details">
+          <dl className="dl">
+            <dt>Status</dt>
+            <dd>
+              <StatusBadge status={data.status} />
+            </dd>
+            <dt>Priority</dt>
+            <dd>
+              <Badge
+                tone={
+                  data.priority === 'urgent' ? 'danger' : data.priority === 'high' ? 'warning' : 'neutral'
+                }
+              >
+                {data.priority}
+              </Badge>
+            </dd>
+            <dt>Channel</dt>
+            <dd>{data.channel ?? <span className="text-subtle">—</span>}</dd>
+            <dt>SLA due</dt>
+            <dd className={sla === 'breached' ? 'text-danger' : undefined}>
+              {sla === 'none' ? (
+                <span className="text-subtle">—</span>
+              ) : (
+                <>
+                  <Timestamp value={data.sla_due_at} />
+                  {sla === 'breached' ? ' · breached' : sla === 'due-soon' ? ' · due soon' : ''}
+                </>
+              )}
+            </dd>
+            <dt>First response</dt>
+            <dd>
+              <Timestamp value={data.first_response_at} />
+            </dd>
+            <dt>Resolved</dt>
+            <dd>
+              <Timestamp value={data.resolved_at} />
+            </dd>
+            <dt>Closed</dt>
+            <dd>
+              <Timestamp value={data.closed_at} />
+            </dd>
+            <dt>Resolution</dt>
+            <dd>{data.resolution ?? <span className="text-subtle">—</span>}</dd>
+            <dt>Description</dt>
+            <dd>{data.description ?? <span className="text-subtle">—</span>}</dd>
+          </dl>
+        </Card>
+
+        <Card title="Related records">
+          <dl className="dl">
+            <dt>Account</dt>
+            <dd>
+              {data.account_id ? (
+                <Link to={`/accounts/${data.account_id}`}>View account</Link>
+              ) : (
+                <span className="text-subtle">Not linked</span>
+              )}
+            </dd>
+            <dt>Contact</dt>
+            <dd>
+              {data.contact_id ? (
+                <Link to={`/contacts/${data.contact_id}`}>View contact</Link>
+              ) : (
+                <span className="text-subtle">Not linked</span>
+              )}
+            </dd>
+            <dt>External source</dt>
+            <dd>
+              {data.external_source ? (
+                <>
+                  {data.external_source}
+                  {data.external_id ? ` · ${data.external_id}` : ''}
+                </>
+              ) : (
+                <span className="text-subtle">—</span>
+              )}
+            </dd>
+            <dt>Created</dt>
+            <dd>
+              <Timestamp value={data.created_at} />
+            </dd>
+          </dl>
+        </Card>
+      </div>
+
+      <AssistPanel entityType="ticket" entityId={id} />
+
+      <RecordCollabPanel entityType="ticket" entityId={id} />
+
+      <AttachmentPanel entityType="ticket" entityId={id} />
+
+      <TicketFormDialog
+        open={editing}
+        ticket={data}
+        onClose={() => setEditing(false)}
+        onSaved={() => {
+          setEditing(false)
+          void queryClient.invalidateQueries({ queryKey: ['ticket', id] })
+          void queryClient.invalidateQueries({ queryKey: ['tickets'] })
+        }}
+      />
+    </>
+  )
 }

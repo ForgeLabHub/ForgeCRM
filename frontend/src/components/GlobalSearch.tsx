@@ -8,17 +8,17 @@ import type { SearchResult } from '../types/api'
 /**
  * The entity types the server can return, mapped to where a result should lead.
  *
- * Leads and tickets have no detail route yet, so a result opens the list page
- * filtered to nothing in particular rather than a page that does not exist. That
- * is a smaller gap than a link that 404s, and it is stated here so the omission
- * is visible rather than discovered by clicking.
+ * Leads have no detail route yet, so a result opens the list page rather than a
+ * page that does not exist. That is a smaller gap than a link that 404s, and it
+ * is stated here so the omission is visible rather than discovered by clicking.
  */
 const DESTINATIONS: Record<string, (id: string) => string> = {
   account: (id) => `/accounts/${id}`,
   contact: (id) => `/contacts/${id}`,
   deal: (id) => `/deals/${id}`,
   lead: () => '/leads',
-  ticket: () => '/tickets',
+  ticket: (id) => `/tickets/${id}`,
+  task: (id) => `/tasks/${id}`,
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -27,6 +27,7 @@ const TYPE_LABELS: Record<string, string> = {
   lead: 'Lead',
   deal: 'Deal',
   ticket: 'Ticket',
+  task: 'Task',
 }
 
 /**
