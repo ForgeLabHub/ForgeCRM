@@ -39,7 +39,7 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 код изменился, а документ не перегенерировали.
 
 <!-- FACTS:AUTO BEGIN — генерируется backend/cmd/facts-gen, не редактировать вручную -->
-<!-- измерено на HEAD `1c5420381ef1e85f3aec99623be5dc32dadd4d69` -->
+<!-- измерено на HEAD `2f448e787b33dbedc952ad4f6fba36bd7c7178f0` -->
 
 ## Backend / Architecture
 
@@ -90,9 +90,9 @@ openapi.json генерируется из живого роутера (`cmd/ope
 
 | Метрика | Значение | Определение |
 |---|---|---|
-| Файлы src (.ts/.tsx) | **110** | frontend/src/**, включая тестовые |
-| Тестовые файлы src | **27** | *.test.ts(x)/.spec.ts(x) в frontend/src |
-| Объявления it()/test() в src | **188** | запускаемые кейсы vitest; test.describe вычитается |
+| Файлы src (.ts/.tsx) | **111** | frontend/src/**, включая тестовые |
+| Тестовые файлы src | **28** | *.test.ts(x)/.spec.ts(x) в frontend/src |
+| Объявления it()/test() в src | **195** | запускаемые кейсы vitest; test.describe вычитается |
 | Файлы страниц | **38** | компоненты в frontend/src/pages (без admin/, без тестов) |
 | Тесты страниц | **13** | *.test.tsx рядом со страницами |
 | Маршрутов <Route path> | **43** | объявления в frontend/src/App.tsx (регистр маршрутизации SPA) |
