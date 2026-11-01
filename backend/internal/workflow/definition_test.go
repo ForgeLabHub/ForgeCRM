@@ -215,3 +215,34 @@ func TestBranchDepthIsBounded(t *testing.T) {
 		t.Fatal("a branch nested past the limit was accepted")
 	}
 }
+
+// TestEveryStepTypeHasADeclaredPermission guards the privilege-escalation boundary.
+//
+// The engine calls crm.Service directly, so it cannot rely on the HTTP middleware or
+// the MCP tool registry to enforce the coarse "may you do this at all" permission.
+// It enforces that itself through requiredPermission, keyed by step type. A step
+// type that reaches crm.Service or delivers a notification but is missing from that
+// map would run for an author whose role forbids the action — a user holding only
+// workflows.manage could create tasks or update deals their own role denies.
+//
+// The two sets must therefore agree in both directions: every step that does work
+// (ActionSteps) and every step the engine runs against a permission must declare one.
+func TestEveryStepTypeHasADeclaredPermission(t *testing.T) {
+	for step := range ActionSteps {
+		if _, ok := requiredPermission[step]; !ok {
+			t.Errorf("action step %q has no entry in requiredPermission: an author "+
+				"without the matching permission could run it through a workflow", step)
+		}
+	}
+	for step := range requiredPermission {
+		if !ActionSteps[step] && step != StepFindDeals {
+			t.Errorf("requiredPermission names %q, which is neither an action step nor "+
+				"a read step the engine runs; the entry is stale or misplaced", step)
+		}
+	}
+	// The read step is checked in its own path (findDeals), but it must still be a
+	// step the engine knows, or the permission is enforced for a type nothing runs.
+	if !knownStepTypes[StepFindDeals] {
+		t.Errorf("requiredPermission guards %q, which is not a known step type", StepFindDeals)
+	}
+}
