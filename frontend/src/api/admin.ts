@@ -91,7 +91,7 @@ export const systemApi = {
 export const jobsApi = {
   list: (params?: PaginationParams & { kind?: string; status?: string }) =>
     api.get<ListResponse<Job>>('/api/v1/jobs', params),
-  stats: () => api.get<Record<string, number>>('/api/v1/jobs/stats'),
+  stats: () => api.get<{ by_status: Record<string, number> }>('/api/v1/jobs/stats'),
   get: (id: string) => api.get<Job>(`/api/v1/jobs/${id}`),
   cancel: (id: string) => api.post(`/api/v1/jobs/${id}/cancel`),
   retry: (id: string) => api.post(`/api/v1/jobs/${id}/retry`),

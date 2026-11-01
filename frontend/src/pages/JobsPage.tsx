@@ -126,7 +126,7 @@ export function JobsPage() {
 
       {stats.data ? (
         <div className="grid grid--stats" style={{ marginBottom: 'var(--space-5)' }}>
-          {Object.entries(stats.data)
+          {Object.entries(stats.data.by_status)
             .slice(0, 6)
             .map(([key, value]) => (
               <Stat key={key} label={key.replace(/_/g, ' ')} value={value} />
@@ -167,7 +167,7 @@ export function JobsPage() {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'var(--color-overlay)',
+            background: 'rgba(16, 24, 40, 0.45)',
             zIndex: 60,
             overflowY: 'auto',
             padding: 'var(--space-5)',
