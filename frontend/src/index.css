@@ -16,7 +16,10 @@
   --color-border-strong: #c8cdd6;
   --color-text: #14181f;
   --color-text-muted: #5b6472;
-  --color-text-subtle: #838d9c;
+  /* AA-contrast on the page background and on a surface: 4.61:1 / 4.94:1.
+     The previous value (#838d9c) sat at 3.1–3.4:1, which fails WCAG AA for the
+     small hint text it is used for. */
+  --color-text-subtle: #68717e;
 
   --color-accent: #2f5bea;
   --color-accent-hover: #2549c4;
@@ -70,7 +73,9 @@
   --color-border-strong: #3a424f;
   --color-text: #e8ebf0;
   --color-text-muted: #9aa4b2;
-  --color-text-subtle: #78828f;
+  /* AA-contrast on the raised surface and the page background: 5.53:1 / 6.45:1.
+     #78828f measured 4.09:1 on the raised surface, just under AA. */
+  --color-text-subtle: #8f99a7;
 
   --color-accent: #6c8cf5;
   --color-accent-hover: #8aa4f8;
@@ -103,7 +108,7 @@
     --color-border-strong: #3a424f;
     --color-text: #e8ebf0;
     --color-text-muted: #9aa4b2;
-    --color-text-subtle: #78828f;
+    --color-text-subtle: #8f99a7;
 
     --color-accent: #6c8cf5;
     --color-accent-hover: #8aa4f8;
@@ -154,13 +159,16 @@ h4 {
   font-weight: 600;
   line-height: 1.25;
   letter-spacing: -0.01em;
+  /* Headings are short and stand alone, so balancing the lines stops a single
+     trailing word from sitting on its own line. */
+  text-wrap: balance;
 }
 
-h1 { font-size: 22px; }
+h1 { font-size: 22px; letter-spacing: -0.022em; }
 h2 { font-size: 17px; }
 h3 { font-size: 15px; }
 
-p { margin: 0; }
+p { margin: 0; text-wrap: pretty; }
 
 a {
   color: var(--color-accent);
@@ -174,6 +182,19 @@ a:hover { text-decoration: underline; }
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
+}
+
+/* A user who asks for less motion gets none: the interface stays fully usable,
+   it just stops moving. Kept global so a new component cannot forget it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 code,
@@ -568,7 +589,21 @@ pre {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
+  transition: border-color 0.14s ease, box-shadow 0.14s ease;
 }
+
+/* A tile that links somewhere is a control, so it earns a hover state. A plain
+   tile must not, or the interface would promise a click that does nothing. */
+.stat:has(a) {
+  cursor: pointer;
+}
+
+.stat:has(a):hover {
+  border-color: var(--color-border-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.stat:has(a):hover .stat__value { color: var(--color-accent); }
 
 .stat__label {
   font-size: 12px;
@@ -580,10 +615,12 @@ pre {
 
 .stat__value {
   margin-top: var(--space-2);
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
+  transition: color 0.14s ease;
 }
 
 .stat__hint {
@@ -768,6 +805,10 @@ td {
   padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--color-border);
   vertical-align: middle;
+}
+
+tbody tr {
+  transition: background-color 0.1s ease;
 }
 
 tbody tr:hover { background: var(--color-bg); }
@@ -1054,18 +1095,40 @@ tbody tr:last-child td { border-bottom: none; }
 }
 
 .login__aside {
+  position: relative;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   padding: var(--space-7) var(--space-6);
+  overflow: hidden;
   background:
     radial-gradient(
-      120% 120% at 0% 0%,
-      color-mix(in srgb, var(--color-accent) 14%, transparent) 0%,
-      transparent 55%
+      130% 110% at 0% 0%,
+      color-mix(in srgb, var(--color-accent) 16%, transparent) 0%,
+      transparent 58%
     ),
     var(--color-surface);
   border-right: 1px solid var(--color-border);
+}
+
+/* A faint grid over the brand panel. It gives the empty half of the screen a
+   sense of structure without competing with the copy, and it is drawn with a
+   gradient so there is no image to load or flash. */
+.login__aside::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, var(--color-border) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--color-border) 1px, transparent 1px);
+  background-size: 44px 44px;
+  opacity: 0.4;
+  mask-image: radial-gradient(120% 90% at 0% 0%, #000 0%, transparent 72%);
+  pointer-events: none;
+}
+
+.login__aside > * {
+  position: relative;
 }
 
 .login__aside-inner {
@@ -1122,11 +1185,14 @@ tbody tr:last-child td { border-bottom: none; }
   color: var(--color-text);
 }
 
+/* A small accent tile rather than a bare dot: it reads as a deliberate bullet
+   and stays visible against the tinted brand panel in both themes. */
 .login__feature-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
   background: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 16%, transparent);
   flex-shrink: 0;
 }
 
@@ -1165,7 +1231,7 @@ tbody tr:last-child td { border-bottom: none; }
 
 .login__topbar {
   width: 100%;
-  max-width: 400px;
+  max-width: 420px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1177,18 +1243,27 @@ tbody tr:last-child td { border-bottom: none; }
    already carries it, so it is hidden. */
 .login__brand--compact { display: none; }
 
+/* The form sits on its own surface rather than directly on the page tint. It
+   separates the task from the empty space around it and gives the inputs a
+   defined edge, which is what makes the screen read as a product rather than a
+   template. */
 .login__panel {
   width: 100%;
-  max-width: 400px;
+  max-width: 420px;
   margin: auto 0;
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
 }
 
 .login__header { margin-bottom: var(--space-5); }
 
 .login__title {
-  font-size: 24px;
+  font-size: 25px;
   font-weight: 650;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.028em;
 }
 
 .login__subtitle {
@@ -1232,13 +1307,13 @@ tbody tr:last-child td { border-bottom: none; }
 
 .login-field__input {
   width: 100%;
-  padding: 10px 12px;
+  padding: 11px 12px;
   font-size: 14px;
   font-family: inherit;
   color: var(--color-text);
   background: var(--color-surface);
   border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
@@ -1294,9 +1369,10 @@ tbody tr:last-child td { border-bottom: none; }
 }
 
 .login__submit {
-  margin-top: var(--space-1);
-  padding: 10px 14px;
+  margin-top: var(--space-2);
+  padding: 11px 14px;
   font-size: 14px;
+  border-radius: var(--radius);
 }
 
 .login__back { align-self: flex-start; }
@@ -1409,7 +1485,16 @@ tbody tr:last-child td { border-bottom: none; }
 
   .login__topbar { margin-bottom: var(--space-6); }
 
-  .login__title { font-size: 22px; }
+  /* On a narrow screen the card would sit edge to edge, so the border and
+     shadow are dropped and the form becomes the page. */
+  .login__panel {
+    padding: 0;
+    border: none;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  .login__title { font-size: 23px; }
 }
 
 @media (max-width: 460px) {
