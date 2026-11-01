@@ -39,17 +39,17 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 код изменился, а документ не перегенерировали.
 
 <!-- FACTS:AUTO BEGIN — генерируется backend/cmd/facts-gen, не редактировать вручную -->
-<!-- измерено на HEAD `c20447b9e43558bbac190e3297652b5cbca6c358` -->
+<!-- измерено на HEAD `32ff61450a3ecb4a1840d1a178f292dd86137278` -->
 
 ## Backend / Architecture
 
 | Метрика | Значение | Определение |
 |---|---|---|
-| Пакеты Go (весь backend) | **52** | каталоги с хотя бы одним .go-файлом под backend/ |
-| Пакеты Go (backend/internal) | **47** | то же, ограничено backend/internal/** |
+| Пакеты Go (весь backend) | **53** | каталоги с хотя бы одним .go-файлом под backend/ |
+| Пакеты Go (backend/internal) | **48** | то же, ограничено backend/internal/** |
 | Go-файлы без тестов | **144** | *.go, кроме *_test.go |
-| Go тестовых файлов | **125** | *_test.go |
-| Тестовые функции Go | **823** | верхнеуровневые func TestXxx(*testing.T), TestMain исключён |
+| Go тестовых файлов | **126** | *_test.go |
+| Тестовые функции Go | **830** | верхнеуровневые func TestXxx(*testing.T), TestMain исключён |
 | Бенчмарки Go | **0** | func BenchmarkXxx |
 | Fuzz-тесты Go | **0** | func FuzzXxx |
 | Example-тесты Go | **0** | func ExampleXxx |
@@ -92,13 +92,13 @@ openapi.json генерируется из живого роутера (`cmd/ope
 |---|---|---|
 | Файлы src (.ts/.tsx) | **111** | frontend/src/**, включая тестовые |
 | Тестовые файлы src | **28** | *.test.ts(x)/.spec.ts(x) в frontend/src |
-| Объявления it()/test() в src | **195** | запускаемые кейсы vitest; test.describe вычитается |
+| Объявления it()/test() в src | **197** | запускаемые кейсы vitest; test.describe вычитается |
 | Файлы страниц | **38** | компоненты в frontend/src/pages (без admin/, без тестов) |
 | Тесты страниц | **13** | *.test.tsx рядом со страницами |
 | Маршрутов <Route path> | **43** | объявления в frontend/src/App.tsx (регистр маршрутизации SPA) |
 | Уникальных путей маршрутов | **41** | различающиеся path по всем <Routes>-деревьям App.tsx; повторения внутри одного дерева запрещены (гейт route_paths_unique) |
 | E2E спецификации | **2** | *.spec.ts в frontend/e2e |
-| E2E тесты | **51** | объявления test() Playwright; test.describe вычитается |
+| E2E тесты | **52** | объявления test() Playwright; test.describe вычитается |
 
 ## CI/CD
 
