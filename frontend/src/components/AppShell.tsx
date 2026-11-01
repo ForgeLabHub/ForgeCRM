@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, Suspense } from 'react'
 import type { JSX } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
@@ -6,7 +6,7 @@ import { GlobalSearch } from './GlobalSearch'
 import { useGlobalSearchShortcut } from '../hooks/useGlobalSearch'
 import { useI18n, type TranslationKey } from '../i18n'
 import { useTheme, THEME_MODES, type ThemeMode } from '../theme'
-import { Avatar } from './ui'
+import { Avatar, Skeleton } from './ui'
 import {
   IconActivity,
   IconBadgeCheck,
@@ -257,6 +257,21 @@ function AccountMenu() {
   )
 }
 
+/**
+ * Fallback for a route whose code chunk is still loading. It mirrors the page
+ * header and a content block so the shell does not collapse and then jump when
+ * the real page arrives.
+ */
+function RouteFallback() {
+  return (
+    <div aria-busy="true">
+      <div className="skeleton" style={{ width: 220, height: 24, marginBottom: 12 }} />
+      <div className="skeleton" style={{ width: 320, height: 14, marginBottom: 24 }} />
+      <Skeleton width="100%" height={220} />
+    </div>
+  )
+}
+
 export function AppShell() {
   const { session, can } = useAuth()
   const { t } = useI18n()
@@ -347,7 +362,9 @@ export function AppShell() {
         </header>
 
         <main className="content">
-          <Outlet />
+          <Suspense fallback={<RouteFallback />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
 
