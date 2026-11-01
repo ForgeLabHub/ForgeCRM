@@ -24,7 +24,9 @@
 | Backup → restore → smoke | данные восстанавливаются, а не только копируются | `make backup` → `make restore` → `make smoke-test` | `portability.yml` → `backup-restore` |
 | E2E в Chromium | основные сценарии работают в браузере | `make test-e2e` | `ci.yml` → `e2e` |
 | Конфигурация без секретов | проект не зависит от случайных локальных ключей | `./scripts/check-env.sh` | `portability.yml` → `config-without-secrets` |
-| Документация полна и связана | документы существуют, ссылки живые, спецификации модулей заполнены | `make docs-check` | `portability.yml` → `docs` |
+| Документация полна и связана | документы существуют, ссылки живые, спецификации модулей заполнены | `make docs-check` | `portability.yml` → `docs`, `ci.yml` → `docs` |
+| Утверждения документации совпадают с кодом | число разрешений RBAC, счётчики OpenAPI и наличие/вид `LICENSE` в живой документации равны измеренным из кода | `make docs-claims` | `portability.yml` → `docs`, `ci.yml` → `docs` |
+| Развёртывание на blitz.cloud воспроизводится | на чистой PostgreSQL образ собирается из корневого `Dockerfile`, миграции применяются повторно, первый администратор создаётся, вход и выход работают, `/ready` отличим от `/health` | `make blitz-verify` | `ci.yml` → `blitz-cloud` |
 | Команды `forge.sh` работают | справка и диспетчер не расходятся, команды запускаются | `make forge-check` | `portability.yml` → `docs` |
 | Зависимости и образы без известных уязвимостей | нет известного вредоносного кода в поставке | `govulncheck`, `gosec`, `gitleaks` | `ci.yml` → `security` |
 | Многократная репликация корректна | несколько API не ломают инварианты: сессия, лимитер, отказ реплики, доверие к прокси | `./scripts/multi-replica-verify.sh` | ручной прогон (Docker), 31 проверка пройдена; описано в `deploy/` |

@@ -349,6 +349,39 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  blitz-cloud:
+    name: Blitz Cloud deployment (root image, clean database)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # blitz.cloud builds the repository-root Dockerfile. Building the same file
+      # here means a change that breaks that build — a missing COPY, a frontend
+      # that no longer compiles — fails in CI, not on the platform.
+      - name: Build the root image (what blitz.cloud builds)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          load: true
+          tags: forgecrm-blitz-verify:latest
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            COMMIT=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Then run that image exactly as the platform runs it: production config,
+      # TLS in front, a clean PostgreSQL, a separate migrate step, and a
+      # bootstrap. The script asserts the full path — including that /ready is
+      # 503 when the schema is gone while /health stays 200, the distinction that
+      # hid `relation "users" does not exist`.
+      - name: Verify the blitz.cloud path on a clean database
+        run: ./scripts/blitz-verify.sh forgecrm-blitz-verify:latest
+
   docs:
     name: Required documentation is present
     runs-on: ubuntu-latest
@@ -358,14 +391,13 @@ jobs:
       - name: Check for required files
         run: |
           missing=0
-          # LICENSE is deliberately absent from this list: the distribution
-          # model is an owner decision, not something CI should force.
           required=(
             README.md
             CONTRIBUTING.md
             SECURITY.md
             CODE_OF_CONDUCT.md
             CHANGELOG.md
+            LICENSE
             docs/PROJECT_AUDIT.md
             docs/ARCHITECTURE.md
             docs/ROADMAP.md
@@ -385,3 +417,14 @@ jobs:
             echo "${missing} required file(s) missing"
             exit 1
           fi
+
+      - name: Documentation is consistent with the code
+        # Runs the same gate developers run locally: required files, module
+        # specifications, relative links, schema counters, extraction-module
+        # lists, matrix commands, and the documentation claims check (RBAC
+        # count, OpenAPI counters and LICENSE state against their real
+        # sources). A drift here fails the job with a named message.
+        #
+        # The generated snapshot gate (cmd/facts-gen -check) runs in the backend
+        # job, where the Go toolchain is already set up; this job stays Go-free.
+        run: ./scripts/docs-check.sh

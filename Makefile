@@ -26,6 +26,7 @@ BIN_DIR         := bin
 API_BIN         := $(BIN_DIR)/forgecrm-api
 WORKER_BIN      := $(BIN_DIR)/forgecrm-worker
 TEST_DATABASE_URL ?= postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_test?sslmode=disable
+BLITZ_VERIFY_IMAGE ?= forgecrm-blitz-verify:latest
 
 # Команды различаются для локальной машины и контейнера: docker compose run
 # запускает миграции в сети compose, прямой бинарник — по FORGECRM_DATABASE_URL.
@@ -35,7 +36,8 @@ COMPOSE_UP_ARGS ?=
         fmt fmt-check vet lint openapi openapi-check facts facts-check \
         test test-unit test-frontend test-integration test-e2e \
         migrate migrate-status compose-up compose-down compose-logs smoke-test \
-        backup restore docs-check verify clean package
+        blitz-verify \
+        backup restore docs-check docs-claims verify clean package
 
 help: ## Показать список целей
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -109,6 +111,9 @@ facts-check: ## Убедиться, что project-facts.md не разошёл�
 docs-check: ## Проверить структуру документации, ссылки и матрицу проверок
 	@./scripts/docs-check.sh
 
+docs-claims: ## Проверить, что числа и статусы в документации совпадают с кодом
+	@./scripts/check-doc-claims.sh
+
 forge-check: ## Проверить, что команды forge.sh работают и совпадают со справкой
 	@./scripts/forge-check.sh
 
@@ -149,6 +154,9 @@ compose-logs: ## Логи всех сервисов
 
 smoke-test: ## Проверить живой инстанс
 	@./scripts/smoke-test.sh $(SMOKE_URL)
+
+blitz-verify: ## Воспроизвести развёртывание blitz.cloud на чистой БД (нужен Docker)
+	@./scripts/blitz-verify.sh $(BLITZ_VERIFY_IMAGE)
 
 ## --- Эксплуатация ----------------------------------------------------------
 

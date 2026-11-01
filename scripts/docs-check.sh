@@ -5,6 +5,9 @@
 #
 #   ./scripts/docs-check.sh
 set -uo pipefail
+# Запускается из корня репозитория (так делают make и CI), но не зависит от cwd.
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "${root}" || exit 1
 failures=0
 ok()  { printf '  \033[32mok\033[0m    %s\n' "$1"; }
 bad() { printf '  \033[31mfail\033[0m  %s\n' "$1"; failures=$((failures + 1)); }
@@ -165,6 +168,15 @@ if [ -s "$matrix" ]; then
     esac
   done < <(grep -oE '`(make [a-z-]+|\./scripts/[a-z-]+\.sh)`' "$matrix" | sort -u)
   [ "$missing" -eq 0 ] && ok "все команды из матрицы существуют"
+fi
+
+printf '\nУтверждения документации против кода\n'
+# Числа и статусы в живой документации (число разрешений RBAC, счётчики
+# OpenAPI, наличие и вид LICENSE) обязаны совпадать с кодом. Проверка живёт в
+# отдельном скрипте, чтобы её можно было запускать и в одиночку; здесь она
+# подключается к общему прогону документации.
+if ! ./scripts/check-doc-claims.sh; then
+  failures=$((failures + 1))
 fi
 
 printf '\n'

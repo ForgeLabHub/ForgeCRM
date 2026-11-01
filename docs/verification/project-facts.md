@@ -39,7 +39,7 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 код изменился, а документ не перегенерировали.
 
 <!-- FACTS:AUTO BEGIN — генерируется backend/cmd/facts-gen, не редактировать вручную -->
-<!-- измерено на HEAD `0ba29d25df70fae6df3fe2e1a662d8d58d3de814` -->
+<!-- измерено на HEAD `154f5255cb931a4463019f7b6ab178daaea5ac2c` -->
 
 ## Backend / Architecture
 
@@ -48,8 +48,8 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 | Пакеты Go (весь backend) | **52** | каталоги с хотя бы одним .go-файлом под backend/ |
 | Пакеты Go (backend/internal) | **47** | то же, ограничено backend/internal/** |
 | Go-файлы без тестов | **144** | *.go, кроме *_test.go |
-| Go тестовых файлов | **124** | *_test.go |
-| Тестовые функции Go | **814** | верхнеуровневые func TestXxx(*testing.T), TestMain исключён |
+| Go тестовых файлов | **125** | *_test.go |
+| Тестовые функции Go | **817** | верхнеуровневые func TestXxx(*testing.T), TestMain исключён |
 | Бенчмарки Go | **0** | func BenchmarkXxx |
 | Fuzz-тесты Go | **0** | func FuzzXxx |
 | Example-тесты Go | **0** | func ExampleXxx |
@@ -105,9 +105,9 @@ openapi.json генерируется из живого роутера (`cmd/ope
 | Метрика | Значение | Определение |
 |---|---|---|
 | Workflow-файлов | **2** | *.yml/*.yaml в .github/workflows |
-| Jobs суммарно | **13** | ключи двухпробельного отступа внутри секции jobs: |
+| Jobs суммарно | **14** | ключи двухпробельного отступа внутри секции jobs: |
 
-Список заданий: ci.yml/backend, ci.yml/constructor, ci.yml/docker, ci.yml/docs, ci.yml/e2e, ci.yml/extraction, ci.yml/frontend, ci.yml/security, portability.yml/backup-restore, portability.yml/compose-smoke, portability.yml/config-without-secrets, portability.yml/docs, portability.yml/upgrade-path.
+Список заданий: ci.yml/backend, ci.yml/blitz-cloud, ci.yml/constructor, ci.yml/docker, ci.yml/docs, ci.yml/e2e, ci.yml/extraction, ci.yml/frontend, ci.yml/security, portability.yml/backup-restore, portability.yml/compose-smoke, portability.yml/config-without-secrets, portability.yml/docs, portability.yml/upgrade-path.
 
 ## Consistency flags
 
