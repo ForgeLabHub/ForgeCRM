@@ -62,3 +62,19 @@ export function localizeError(error: unknown, t: TFunction, locale: Locale): str
 
   return t('errors.unknown')
 }
+
+/**
+ * The sign-in variant of `localizeError`.
+ *
+ * A blocked or suspended account is reported as 403 `forbidden`, the same code
+ * the API uses for a permissions refusal, so `localizeError` alone would tell a
+ * locked-out person they "do not have permission". The server's detail sentence
+ * distinguishes the two here, and the sign-in page gets the account-state
+ * message instead.
+ */
+export function localizeLoginError(error: unknown, t: TFunction, locale: Locale): string {
+  if (error instanceof ApiError && error.status === 403 && /not active/i.test(error.message ?? '')) {
+    return t('login.errors.account_inactive')
+  }
+  return localizeError(error, t, locale)
+}
