@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { searchApi } from '../api/crm'
 import { errorMessage } from '../api/client'
+import { useT } from '../i18n'
 import type { SearchResult } from '../types/api'
 
 /**
@@ -21,14 +22,14 @@ const DESTINATIONS: Record<string, (id: string) => string> = {
   task: (id) => `/tasks/${id}`,
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  account: 'Account',
-  contact: 'Contact',
-  lead: 'Lead',
-  deal: 'Deal',
-  ticket: 'Ticket',
-  task: 'Task',
-}
+const TYPE_LABEL_KEYS = {
+  account: 'search.types.account',
+  contact: 'search.types.contact',
+  lead: 'search.types.lead',
+  deal: 'search.types.deal',
+  ticket: 'search.types.ticket',
+  task: 'search.types.task',
+} as const
 
 /**
  * Global search over the records the caller is allowed to see.
@@ -40,6 +41,7 @@ const TYPE_LABELS: Record<string, string> = {
  */
 export function GlobalSearch({ onClose }: { onClose?: () => void }) {
   const navigate = useNavigate()
+  const t = useT()
   const [term, setTerm] = useState('')
   const [debounced, setDebounced] = useState('')
   const [active, setActive] = useState(0)
@@ -99,7 +101,7 @@ export function GlobalSearch({ onClose }: { onClose?: () => void }) {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Global search"
+      aria-label={t('search.label')}
       style={{
         position: 'fixed',
         inset: 0,
@@ -117,11 +119,11 @@ export function GlobalSearch({ onClose }: { onClose?: () => void }) {
       >
         <div style={{ padding: 'var(--space-3)', borderBottom: '1px solid var(--color-border)' }}>
           <label className="field" style={{ margin: 0 }}>
-            <span className="sr-only">Search accounts, contacts, leads, deals and tickets</span>
+            <span className="sr-only">{t('search.ariaLabel')}</span>
             <input
               ref={inputRef}
               type="text"
-              placeholder="Search accounts, contacts, leads, deals, tickets…"
+              placeholder={t('search.placeholder')}
               value={term}
               onChange={(event) => setTerm(event.target.value)}
               onKeyDown={onKeyDown}
@@ -136,12 +138,11 @@ export function GlobalSearch({ onClose }: { onClose?: () => void }) {
         <div id="global-search-results" role="listbox" style={{ maxHeight: 380, overflowY: 'auto' }}>
           {!enabled ? (
             <p className="text-muted text-sm" style={{ padding: 'var(--space-4)' }}>
-              Type at least two characters. Results are limited to the records your permissions
-              allow, so a record you cannot open does not appear.
+              {t('search.typeHint')} {t('search.permissionHint')}
             </p>
           ) : results.isLoading ? (
             <p className="text-muted text-sm" style={{ padding: 'var(--space-4)' }}>
-              Searching…
+              {t('search.searching')}
             </p>
           ) : results.isError ? (
             <p className="text-sm" style={{ padding: 'var(--space-4)', color: 'var(--color-danger)' }}>
@@ -149,8 +150,7 @@ export function GlobalSearch({ onClose }: { onClose?: () => void }) {
             </p>
           ) : items.length === 0 ? (
             <p className="text-muted text-sm" style={{ padding: 'var(--space-4)' }}>
-              Nothing matched “{debounced}”. Either no record matches, or none of the matches is
-              available to you.
+              {t('search.empty', { term: debounced })} {t('search.emptyHint')}
             </p>
           ) : (
             items.map((result, index) => (
@@ -174,9 +174,11 @@ export function GlobalSearch({ onClose }: { onClose?: () => void }) {
                 }}
               >
                 <span className="text-subtle text-sm" style={{ marginRight: 8 }}>
-                  {TYPE_LABELS[result.entity_type] ?? result.entity_type}
+                  {result.entity_type in TYPE_LABEL_KEYS
+                    ? t(TYPE_LABEL_KEYS[result.entity_type as keyof typeof TYPE_LABEL_KEYS])
+                    : result.entity_type}
                 </span>
-                <span style={{ fontWeight: 500 }}>{result.title || '(no title)'}</span>
+                <span style={{ fontWeight: 500 }}>{result.title || t('search.noTitle')}</span>
                 {result.subtitle ? (
                   <span className="text-muted text-sm" style={{ marginLeft: 8 }}>
                     {result.subtitle}

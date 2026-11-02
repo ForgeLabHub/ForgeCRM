@@ -6,6 +6,7 @@ import { errorMessage } from '../api/client'
 import type { Notification } from '../types/api'
 import { ResourceList, type Column } from '../components/ResourceList'
 import { Alert, Badge, PageHeader, Timestamp } from '../components/ui'
+import { useT } from '../i18n'
 
 /**
  * The notification inbox.
@@ -16,6 +17,7 @@ import { Alert, Badge, PageHeader, Timestamp } from '../components/ui'
  * raised could not be seen or cleared from the interface.
  */
 export function NotificationsPage() {
+  const t = useT()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [unreadOnly, setUnreadOnly] = useState(false)
@@ -43,26 +45,26 @@ export function NotificationsPage() {
       width: '90px',
       render: (row) =>
         row.read_at ? (
-          <Badge tone="neutral">Read</Badge>
+          <Badge tone="neutral">{t('notifications.read')}</Badge>
         ) : (
-          <Badge tone="accent">Unread</Badge>
+          <Badge tone="accent">{t('notifications.unread')}</Badge>
         ),
     },
     {
       key: 'title',
-      header: 'Title',
+      header: t('notifications.columnTitle'),
       render: (row) => (
         <span style={{ fontWeight: row.read_at ? 400 : 600 }}>{row.title}</span>
       ),
     },
     {
       key: 'type',
-      header: 'Type',
+      header: t('notifications.columnType'),
       render: (row) => <span className="mono text-sm">{row.type}</span>,
     },
     {
       key: 'created',
-      header: 'Received',
+      header: t('notifications.columnReceived'),
       render: (row) => <Timestamp value={row.created_at} />,
     },
     {
@@ -80,7 +82,7 @@ export function NotificationsPage() {
               markRead.mutate(row.id)
             }}
           >
-            Mark read
+            {t('notifications.markRead')}
           </button>
         ),
     },
@@ -88,25 +90,24 @@ export function NotificationsPage() {
 
   return (
     <>
-      <PageHeader
-        title="Notifications"
-        meta="Messages raised for you by workflows and automations. Marking one read clears it from the unread count."
-      />
+      <PageHeader title={t('notifications.title')} meta={t('notifications.meta')} />
       {error ? (
         <div style={{ marginBottom: 'var(--space-4)' }}>
           <Alert tone="error">{error}</Alert>
         </div>
       ) : null}
       <ResourceList
-        title={unread > 0 ? `Inbox — ${unread} unread` : 'Inbox'}
+        title={
+          unread > 0 ? t('notifications.inboxUnread', { count: unread }) : t('notifications.inbox')
+        }
         queryKey={['notifications', { unreadOnly }]}
         fetchPage={(params) =>
           notificationsApi.list({ ...params, unread_only: unreadOnly || undefined })
         }
         columns={columns}
         rowKey={(row) => row.id}
-        emptyTitle={unreadOnly ? 'Nothing unread' : 'No notifications'}
-        emptyText="Notifications appear here when a workflow notifies you."
+        emptyTitle={unreadOnly ? t('notifications.emptyUnread') : t('notifications.emptyTitle')}
+        emptyText={t('notifications.emptyText')}
         filters={
           <label className="row" style={{ gap: 'var(--space-2)' }}>
             <input
@@ -114,7 +115,7 @@ export function NotificationsPage() {
               checked={unreadOnly}
               onChange={(event) => setUnreadOnly(event.target.checked)}
             />
-            <span className="text-sm">Unread only</span>
+            <span className="text-sm">{t('notifications.unreadOnly')}</span>
           </label>
         }
         onRowClick={(row) => {
@@ -124,7 +125,8 @@ export function NotificationsPage() {
         }}
       />
       <p className="text-subtle text-sm" style={{ marginTop: 'var(--space-3)' }}>
-        Looking for the agent approval queue? <Link to="/approvals">Agent approvals</Link>.
+        {t('notifications.approvalsPrompt')}
+        <Link to="/approvals">{t('notifications.approvalsLink')}</Link>.
       </p>
     </>
   )

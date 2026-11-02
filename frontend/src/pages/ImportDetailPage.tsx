@@ -5,6 +5,7 @@ import { importsApi } from '../api/imports'
 import { errorMessage } from '../api/client'
 import type { ImportReport, MappingEntry } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
+import { useT } from '../i18n'
 import {
   Alert,
   Badge,
@@ -17,21 +18,22 @@ import {
   formatBytes,
 } from '../components/ui'
 
-/** Steps in the import wizard, in order. */
-const STEPS = [
-  'Upload',
-  'Analyse',
-  'Map fields',
-  'Validate',
-  'Dry run',
-  'Import',
-  'Report',
-] as const
 
 export function ImportDetailPage() {
   const { id = '' } = useParams()
   const queryClient = useQueryClient()
-  const { can } = useAuth()
+    const { can } = useAuth()
+    const t = useT()
+
+    const steps = [
+      t('imports.stepUpload'),
+      t('imports.stepAnalyse'),
+      t('imports.stepMap'),
+      t('imports.stepValidate'),
+      t('imports.stepDryRun'),
+      t('imports.stepImport'),
+      t('imports.stepReport'),
+    ]
 
   const [mapping, setMapping] = useState<MappingEntry[]>([])
   const [duplicates, setDuplicates] = useState<'skip' | 'update' | 'create' | 'fail'>('skip')
@@ -149,7 +151,7 @@ export function ImportDetailPage() {
 
   if (job.isError) {
     return (
-      <Card title="Import">
+            <Card title={t('imports.detailImport')}>
         <Alert tone="error">{errorMessage(job.error)}</Alert>
       </Card>
     )
@@ -172,7 +174,7 @@ export function ImportDetailPage() {
         title={data.name || data.original_filename || 'Import'}
         meta={
           <>
-            {data.entity_type ?? 'unknown entity'}
+            {data.entity_type ?? t('imports.unknownEntity')}
             {data.format ? ` · ${data.format}` : ''}
             {data.original_filename ? ` · ${data.original_filename}` : ''}
             {data.size_bytes ? ` · ${formatBytes(data.size_bytes)}` : ''}
@@ -181,8 +183,8 @@ export function ImportDetailPage() {
         actions={
           <>
             <Link to="/imports" className="btn btn--ghost btn--sm">
-              Back
-            </Link>
+              {t('imports.back')}
+                          </Link>
             {isBusy && canExecute ? (
               <button
                 type="button"
@@ -190,14 +192,14 @@ export function ImportDetailPage() {
                 onClick={() => cancel.mutate()}
                 disabled={cancel.isPending}
               >
-                Cancel import
-              </button>
+                {t('imports.cancelImport')}
+                              </button>
             ) : null}
           </>
         }
       />
 
-      <StepIndicator steps={STEPS} current={currentStep} />
+      <StepIndicator steps={steps} current={currentStep} />
 
       {actionError ? (
         <div style={{ marginBottom: 'var(--space-4)' }}>
@@ -207,31 +209,33 @@ export function ImportDetailPage() {
 
       {data.error ? (
         <div style={{ marginBottom: 'var(--space-4)' }}>
-          <Alert tone="error">Import failed: {data.error}</Alert>
+          <Alert tone="error">{t('imports.importFailed', { error: data.error })}</Alert>
         </div>
       ) : null}
 
       <div className="stack">
-        <Card title="Source">
+        <Card title={t('imports.source')}>
           <div className="grid grid--stats">
-            <Stat label="Status" value={<StatusBadge status={data.status} />} />
-            <Stat label="Entity" value={data.entity_type ?? '—'} />
-            <Stat label="Format" value={data.format ?? '—'} />
-            <Stat label="Size" value={formatBytes(data.size_bytes)} />
+            <Stat label={t('common.status')} value={<StatusBadge status={data.status} />} />
+            <Stat label={t('imports.entity')} value={data.entity_type ?? '—'} />
+            <Stat label={t('imports.format')} value={data.format ?? '—'} />
+            <Stat label={t('imports.columnSize')} value={formatBytes(data.size_bytes)} />
           </div>
           <dl className="dl" style={{ marginTop: 'var(--space-4)' }}>
-            <dt>Checksum</dt>
+            <dt>{t('imports.checksum')}</dt>
             <dd className="mono truncate">{data.checksum_sha256 ?? '—'}</dd>
-            <dt>Uploaded</dt>
+            <dt>{t('imports.uploaded')}</dt>
             <dd>
               <Timestamp value={data.created_at} />
             </dd>
             {data.schema_info?.archive ? (
               <>
-                <dt>Archive</dt>
+                                <dt>{t('imports.archive')}</dt>
                 <dd>
-                  {data.schema_info.files ?? 0} files
-                  {data.schema_info.selected_file ? ` · selected ${data.schema_info.selected_file}` : ''}
+                                    {t('imports.filesCount', { count: data.schema_info.files ?? 0 })}
+                                    {data.schema_info.selected_file
+                                      ? ` · ${t('imports.selectedFile', { name: data.schema_info.selected_file })}`
+                                      : ''}
                 </dd>
               </>
             ) : null}
@@ -239,7 +243,7 @@ export function ImportDetailPage() {
         </Card>
 
         <Card
-          title="1–2. Analyse the file"
+                    title={t('imports.analyseTitle')}
           actions={
             can('imports.read') ? (
               <button
@@ -248,26 +252,30 @@ export function ImportDetailPage() {
                 onClick={() => analyze.mutate()}
                 disabled={!hasFile || analyze.isPending}
               >
-                {analyze.isPending ? 'Analysing…' : data.schema_info ? 'Re-analyse' : 'Analyse'}
+                {analyze.isPending
+                                  ? t('imports.analysing')
+                                  : data.schema_info
+                                    ? t('imports.reanalyse')
+                                    : t('imports.analyse')}
               </button>
             ) : null
           }
         >
           {!hasFile ? (
-            <Alert tone="warning">No file has been uploaded for this job yet.</Alert>
+            <Alert tone="warning">{t('imports.noFile')}</Alert>
           ) : data.schema_info ? (
             <div className="stack">
               <div className="grid grid--stats">
-                <Stat label="Columns found" value={columns.length} />
-                <Stat label="Rows detected" value={data.schema_info.total_rows ?? 0} />
+                <Stat label={t('imports.columnsFound')} value={columns.length} />
+                <Stat label={t('imports.rowsDetected')} value={data.schema_info.total_rows ?? 0} />
                 {data.schema_info.archive ? (
-                  <Stat label="Files in archive" value={data.schema_info.files ?? 0} />
+                  <Stat label={t('imports.filesInArchive')} value={data.schema_info.files ?? 0} />
                 ) : null}
               </div>
 
               {data.schema_info.selected_file ? (
                 <div className="row row--wrap">
-                  <span className="text-muted text-sm">Selected file in archive:</span>
+                  <span className="text-muted text-sm">{t('imports.selectedInArchive')}</span>
                   <Badge tone="accent">{data.schema_info.selected_file}</Badge>
                 </div>
               ) : null}
@@ -275,7 +283,7 @@ export function ImportDetailPage() {
               {data.schema_info.warnings?.length ? (
                 <Alert tone="warning">
                   <div>
-                    <strong>Warnings</strong>
+                                        <strong>{t('imports.warnings')}</strong>
                     <ul style={{ margin: 'var(--space-1) 0 0', paddingLeft: 18 }}>
                       {data.schema_info.warnings.map((warning) => (
                         <li key={warning}>{warning}</li>
@@ -287,7 +295,7 @@ export function ImportDetailPage() {
 
               {columns.length > 0 ? (
                 <div>
-                  <h3 style={{ marginBottom: 'var(--space-2)' }}>Detected columns</h3>
+                  <h3 style={{ marginBottom: 'var(--space-2)' }}>{t('imports.detectedColumns')}</h3>
                   <div className="row row--wrap">
                     {columns.map((column) => (
                       <Badge key={column} tone="neutral">
@@ -303,7 +311,7 @@ export function ImportDetailPage() {
 
               {data.preview?.length ? (
                 <div>
-                  <h3 style={{ marginBottom: 'var(--space-2)' }}>Preview</h3>
+                  <h3 style={{ marginBottom: 'var(--space-2)' }}>{t('imports.preview')}</h3>
                   <div className="table-wrap">
                     <table>
                       <thead>
@@ -331,12 +339,12 @@ export function ImportDetailPage() {
 
               {data.schema_info.sheets?.length ? (
                 <label className="field" style={{ maxWidth: 280 }}>
-                  <span className="field__label">Sheet</span>
+                  <span className="field__label">{t('imports.sheet')}</span>
                   <select
                     value={sheetName}
                     onChange={(event) => setSheetName(event.target.value)}
                   >
-                    <option value="">First sheet</option>
+                    <option value="">{t('imports.firstSheet')}</option>
                     {data.schema_info.sheets.map((sheet) => (
                       <option key={sheet} value={sheet}>
                         {sheet}
@@ -348,37 +356,32 @@ export function ImportDetailPage() {
 
               {data.schema_info.archive ? (
                 <label className="field" style={{ maxWidth: 380 }}>
-                  <span className="field__label">Entry inside the archive</span>
+                  <span className="field__label">{t('imports.archiveEntry')}</span>
                   <input
                     value={archiveEntry}
                     onChange={(event) => setArchiveEntry(event.target.value)}
                     placeholder={data.schema_info.selected_file ?? 'data/contacts.csv'}
                   />
-                  <span className="field__hint">
-                    Leave empty to use the detected file.
-                  </span>
+                                    <span className="field__hint">{t('imports.archiveEntryHint')}</span>
                 </label>
               ) : null}
             </div>
           ) : (
-            <p className="text-muted">
-              Analyse the file to see its columns, types and a preview of the first rows.
-            </p>
+            <p className="text-muted">{t('imports.analysePrompt')}</p>
           )}
         </Card>
 
         {columns.length > 0 && availableFields.length > 0 ? (
-          <Card title="3. Map fields">
+          <Card title={t('imports.mapFields')}>
             <p className="text-muted text-sm" style={{ marginBottom: 'var(--space-3)' }}>
-              Each target field can take one source column. Fields left unmapped are omitted, so a
-              column with no obvious target stays out of the import.
-            </p>
+                          {t('imports.mapFieldsHint')}
+                        </p>
             <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Target field</th>
-                    <th>Source column</th>
+                                        <th>{t('imports.targetField')}</th>
+                                        <th>{t('imports.sourceColumn')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -389,7 +392,7 @@ export function ImportDetailPage() {
                         <td className="table__primary">{field}</td>
                         <td>
                           <select
-                            aria-label={`Source column for ${field}`}
+                            aria-label={t('imports.sourceColumnFor', { field })}
                             value={selected?.source_column ?? ''}
                             onChange={(event) => {
                               const source = event.target.value
@@ -402,7 +405,7 @@ export function ImportDetailPage() {
                               ])
                             }}
                           >
-                            <option value="">Not mapped</option>
+                            <option value="">{t('imports.notMapped')}</option>
                             {columns.map((column) => (
                               <option key={column} value={column}>
                                 {column}
@@ -417,44 +420,43 @@ export function ImportDetailPage() {
               </table>
             </div>
             <p className="text-sm text-muted" style={{ marginTop: 'var(--space-3)' }}>
-              {mapping.length} of {availableFields.length} fields mapped.
+                            {t('imports.mappedCount', {
+                              mapped: mapping.length,
+                              total: availableFields.length,
+                            })}
             </p>
           </Card>
         ) : null}
 
-        <Card title="4. Options">
+        <Card title={t('imports.options')}>
           <div className="form-grid">
             <label className="field">
-              <span className="field__label">On duplicate</span>
+              <span className="field__label">{t('imports.onDuplicate')}</span>
               <select
                 value={duplicates}
                 onChange={(event) => setDuplicates(event.target.value as typeof duplicates)}
               >
-                <option value="skip">Skip the row</option>
-                <option value="update">Update the existing record</option>
-                <option value="create">Create another record</option>
-                <option value="fail">Fail the row</option>
+                <option value="skip">{t('imports.duplicateSkip')}</option>
+                                <option value="update">{t('imports.duplicateUpdate')}</option>
+                                <option value="create">{t('imports.duplicateCreate')}</option>
+                                <option value="fail">{t('imports.duplicateFail')}</option>
               </select>
-              <span className="field__hint">
-                Duplicates are matched on the external ID when one is supplied.
-              </span>
+                            <span className="field__hint">{t('imports.duplicatesHint')}</span>
             </label>
             <label className="field">
-              <span className="field__label">External source</span>
+              <span className="field__label">{t('imports.externalSource')}</span>
               <input
                 value={externalSource}
                 onChange={(event) => setExternalSource(event.target.value)}
                 placeholder="legacy-crm"
               />
-              <span className="field__hint">
-                Tags every imported record so a later sync can match it.
-              </span>
+                            <span className="field__hint">{t('imports.externalSourceHint')}</span>
             </label>
           </div>
         </Card>
 
         <Card
-          title="5–6. Validate, dry run, then import"
+                    title={t('imports.runTitle')}
           actions={
             canExecute ? (
               <div className="row">
@@ -464,7 +466,7 @@ export function ImportDetailPage() {
                   onClick={() => validate.mutate()}
                   disabled={validate.isPending || mapping.length === 0}
                 >
-                  {validate.isPending ? 'Checking…' : 'Validate'}
+                  {validate.isPending ? t('imports.checking') : t('imports.validate')}
                 </button>
                 <button
                   type="button"
@@ -472,7 +474,7 @@ export function ImportDetailPage() {
                   onClick={() => dryRun.mutate()}
                   disabled={dryRun.isPending || mapping.length === 0}
                 >
-                  {dryRun.isPending ? 'Running…' : 'Dry run'}
+                  {dryRun.isPending ? t('imports.running') : t('imports.dryRun')}
                 </button>
                 <button
                   type="button"
@@ -480,45 +482,41 @@ export function ImportDetailPage() {
                   onClick={() => setConfirmExecute(true)}
                   disabled={isBusy || mapping.length === 0 || data.status === 'completed'}
                 >
-                  {data.status === 'completed' ? 'Imported' : 'Run import'}
+                  {data.status === 'completed' ? t('imports.imported') : t('imports.runImport')}
                 </button>
               </div>
             ) : null
           }
         >
           {mapping.length === 0 ? (
-            <p className="text-muted">Analyse the file and map at least one field first.</p>
+            <p className="text-muted">{t('imports.mapFirst')}</p>
           ) : (
             <div className="stack">
-              <p className="text-muted text-sm">
-                Validate checks the mapping without reading every row. A dry run processes the whole
-                file inside a transaction that is rolled back, which is the closest thing to the
-                real import without changing anything.
-              </p>
-              {validateResult ? <ReportSummary title="Validation" report={validateResult} /> : null}
-              {dryRunResult ? <ReportSummary title="Dry run" report={dryRunResult} /> : null}
+              <p className="text-muted text-sm">{t('imports.runHint')}</p>
+              {validateResult ? <ReportSummary title={t('imports.validation')} report={validateResult} /> : null}
+              {dryRunResult ? <ReportSummary title={t('imports.dryRun')} report={dryRunResult} /> : null}
             </div>
           )}
         </Card>
 
         {data.status === 'completed' || data.imported_rows > 0 ? (
-          <Card title="7. Result">
+          <Card title={t('imports.result')}>
             <div className="grid grid--stats">
-              <Stat label="Total rows" value={data.total_rows} />
-              <Stat label="Imported" value={data.imported_rows} />
-              <Stat label="Skipped" value={data.skipped_rows} />
+              <Stat label={t('imports.totalRows')} value={data.total_rows} />
+              <Stat label={t('imports.imported')} value={data.imported_rows} />
+              <Stat label={t('imports.skipped')} value={data.skipped_rows} />
               <Stat
-                label="Failed"
-                value={data.failed_rows}
-                hint={data.failed_rows > 0 ? 'See rejected rows below' : undefined}
+                                label={t('imports.failed')}
+                                value={data.failed_rows}
+                                hint={data.failed_rows > 0 ? t('imports.failedHint') : undefined}
               />
             </div>
             <dl className="dl" style={{ marginTop: 'var(--space-4)' }}>
-              <dt>Started</dt>
+                            <dt>{t('imports.started')}</dt>
               <dd>
                 <Timestamp value={data.started_at} />
               </dd>
-              <dt>Finished</dt>
+                            <dt>{t('imports.finished')}</dt>
               <dd>
                 <Timestamp value={data.finished_at} />
               </dd>
@@ -527,15 +525,15 @@ export function ImportDetailPage() {
         ) : null}
 
         {errors.data && errors.data.total > 0 ? (
-          <Card title={`Rejected rows (${errors.data.total})`} flush>
+          <Card title={t('imports.rejectedRows', { count: errors.data.total })} flush>
             <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th className="numeric">Row</th>
-                    <th>Field</th>
-                    <th>Problem</th>
-                    <th>Value</th>
+                                        <th className="numeric">{t('imports.columnRow')}</th>
+                                        <th>{t('imports.columnField')}</th>
+                                        <th>{t('imports.columnProblem')}</th>
+                                        <th>{t('imports.columnValue')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -558,9 +556,12 @@ export function ImportDetailPage() {
 
       <ConfirmDialog
         open={confirmExecute}
-        title="Run this import?"
-        text={`${mapping.length} fields will be written into ${data.entity_type}. Records are created or updated according to the duplicate strategy. Review the dry run result first if you have not already.`}
-        confirmLabel="Run import"
+                title={t('imports.confirmTitle')}
+                text={t('imports.confirmText', {
+                  count: mapping.length,
+                  entity: data.entity_type ?? t('imports.unknownEntity'),
+                })}
+                confirmLabel={t('imports.runImport')}
         busy={execute.isPending}
         onConfirm={() => execute.mutate()}
         onCancel={() => setConfirmExecute(false)}
@@ -602,6 +603,7 @@ function StepIndicator({ steps, current }: { steps: readonly string[]; current: 
 }
 
 function ReportSummary({ title, report }: { title: string; report: ImportReport }) {
+  const t = useT()
   return (
     <div className="card" style={{ background: 'var(--color-bg)' }}>
       <div className="card__header" style={{ padding: 'var(--space-3)' }}>
@@ -610,11 +612,17 @@ function ReportSummary({ title, report }: { title: string; report: ImportReport 
       </div>
       <div className="card__body" style={{ padding: 'var(--space-3)' }}>
         <div className="row row--wrap">
-          <Badge tone="neutral">{report.total_rows} rows</Badge>
-          <Badge tone="success">{report.imported_rows} imported</Badge>
-          <Badge tone="warning">{report.skipped_rows} skipped</Badge>
+          <Badge tone="neutral">
+            {t('imports.rowsBadge', { count: report.total_rows })}
+          </Badge>
+          <Badge tone="success">
+            {t('imports.imported')}: {report.imported_rows}
+          </Badge>
+          <Badge tone="warning">
+            {t('imports.skipped')}: {report.skipped_rows}
+          </Badge>
           <Badge tone={report.failed_rows > 0 ? 'danger' : 'neutral'}>
-            {report.failed_rows} failed
+            {t('imports.failed')}: {report.failed_rows}
           </Badge>
         </div>
         {report.error ? (

@@ -128,8 +128,18 @@ export function useI18n(): I18nValue {
 export function useT() {
   const ctx = useContext(I18nContext)
   if (ctx) return ctx.t
-  return (key: TranslationKey, vars?: Record<string, string | number>) =>
-    interpolate(lookup(en, key) ?? key, vars)
+  return translateEn
+}
+
+/**
+ * The reference-locale translator, for callers outside a component tree.
+ *
+ * A pure function such as a definition validator has no hook to read the active
+ * locale from, and its caller may pass a translator in. Defaulting to English
+ * keeps it usable and readable on its own.
+ */
+export function translateEn(key: TranslationKey, vars?: Record<string, string | number>): string {
+  return interpolate(lookup(en, key) ?? key, vars)
 }
 
 /**

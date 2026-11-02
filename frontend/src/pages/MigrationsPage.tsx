@@ -6,6 +6,7 @@ import { systemApi } from '../api/admin'
 import { errorMessage, fieldErrors } from '../api/client'
 import type { MigrationJob } from '../api/integrations'
 import { useAuth } from '../hooks/useAuth'
+import { useT, type TFunction } from '../i18n'
 import { ResourceList, type Column } from '../components/ResourceList'
 import { Alert, Field, PageHeader, StatusBadge, Timestamp } from '../components/ui'
 
@@ -30,10 +31,11 @@ function useMigrationSources() {
 
 const STRATEGIES = ['one_time', 'periodic', 'incremental', 'cdc']
 
-const columns: Column<MigrationJob>[] = [
+function buildColumns(t: TFunction): Column<MigrationJob>[] {
+  return [
   {
     key: 'name',
-    header: 'Migration',
+    header: t('migrations.columnMigration'),
     render: (row) => (
       <div>
         <div className="table__primary">{row.name || row.source_type}</div>
@@ -41,21 +43,23 @@ const columns: Column<MigrationJob>[] = [
       </div>
     ),
   },
-  { key: 'status', header: 'Status', render: (row) => <StatusBadge status={row.status} /> },
+  { key: 'status', header: t('migrations.columnStatus'), render: (row) => <StatusBadge status={row.status} /> },
   {
     key: 'strategy',
-    header: 'Strategy',
+    header: t('migrations.columnStrategy'),
     render: (row) => row.strategy?.replace('_', ' ') ?? <span className="text-subtle">—</span>,
   },
   {
     key: 'updated',
-    header: 'Updated',
+    header: t('migrations.columnUpdated'),
     render: (row) => <Timestamp value={row.updated_at} />,
   },
-]
+  ]
+}
 
 export function MigrationsPage() {
   const { can } = useAuth()
+  const t = useT()
   const queryClient = useQueryClient()
   const [creating, setCreating] = useState(false)
   const [discovering, setDiscovering] = useState<MigrationJob | null>(null)
@@ -77,7 +81,7 @@ export function MigrationsPage() {
   })
 
   const withActions: Column<MigrationJob>[] = [
-    ...columns,
+    ...buildColumns(t),
     {
       key: 'actions',
       header: '',
@@ -93,7 +97,7 @@ export function MigrationsPage() {
             }}
             disabled={discover.isPending}
           >
-            Discover schema
+            {t('migrations.discoverSchema')}
           </button>
           <button
             type="button"
@@ -104,7 +108,7 @@ export function MigrationsPage() {
             }}
             disabled={reconcile.isPending}
           >
-            Reconcile
+            {t('migrations.reconcile')}
           </button>
           <button
             type="button"
@@ -114,7 +118,7 @@ export function MigrationsPage() {
               setDiscovering(row)
             }}
           >
-            Details
+            {t('migrations.details')}
           </button>
         </div>
       ),
@@ -123,16 +127,10 @@ export function MigrationsPage() {
 
   return (
     <>
-      <PageHeader
-        title="Migrations"
-        meta="Read from an existing database or API, map it onto ForgeCRM, and check that the counts agree."
-      />
+      <PageHeader title={t('migrations.title')} meta={t('migrations.meta')} />
 
       <div style={{ marginBottom: 'var(--space-4)' }}>
-        <Alert tone="info">
-          Migrations connect with read-only credentials by default. ForgeCRM never writes to the
-          source system, and passwords are stored encrypted rather than in the configuration text.
-        </Alert>
+        <Alert tone="info">{t('migrations.infoBanner')}</Alert>
       </div>
 
       {actionError ? (
@@ -142,19 +140,19 @@ export function MigrationsPage() {
       ) : null}
 
       <ResourceList
-        title="Migration jobs"
+        title={t('migrations.jobsTitle')}
         queryKey={['migrations']}
         fetchPage={(params) => migrationsApi.list(params)}
         columns={withActions}
         rowKey={(row) => row.id}
-        emptyTitle="No migrations"
-        emptyText="Set up a migration to bring existing data across from another system."
+        emptyTitle={t('migrations.emptyTitle')}
+        emptyText={t('migrations.emptyText')}
         searchable
-        searchPlaceholder="Search migrations…"
+        searchPlaceholder={t('migrations.searchPlaceholder')}
         actions={
           can('migrations.manage') ? (
             <button type="button" className="btn btn--primary btn--sm" onClick={() => setCreating(true)}>
-              New migration
+              {t('migrations.newMigration')}
             </button>
           ) : null
         }
@@ -185,6 +183,7 @@ function NewMigrationDialog({
   onClose: () => void
   onCreated: () => void
 }) {
+  const t = useT()
   const [name, setName] = useState('')
   const { sourceTypes, isLoading: sourcesLoading } = useMigrationSources()
   const [sourceType, setSourceType] = useState('')
@@ -199,7 +198,7 @@ function NewMigrationDialog({
       try {
         config = JSON.parse(configText) as Record<string, unknown>
       } catch {
-        throw new Error('Connection configuration must be valid JSON.')
+        throw new Error(t('migrations.invalidJson'))
       }
       const kind = sourceType || sourceTypes[0] || ''
       return migrationsApi.create({ name, source_type: kind, config, strategy })
@@ -237,23 +236,23 @@ function NewMigrationDialog({
     >
       <div className="card" style={{ maxWidth: 640, margin: '0 auto' }} onClick={(e) => e.stopPropagation()}>
         <div className="card__header">
-          <h2 id="new-migration-title">New migration</h2>
+          <h2 id="new-migration-title">{t('migrations.newMigrationTitle')}</h2>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="card__body stack">
             {formError ? <Alert tone="error">{formError}</Alert> : null}
 
-            <Field label="Name" htmlFor="migration-name" error={errors.name}>
+            <Field label={t('migrations.name')} htmlFor="migration-name" error={errors.name}>
               <input
                 id="migration-name"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                placeholder="Legacy CRM cutover"
+                placeholder={t('migrations.namePlaceholder')}
               />
             </Field>
 
             <div className="form-grid">
-              <Field label="Source type" htmlFor="migration-source" required>
+              <Field label={t('migrations.sourceType')} htmlFor="migration-source" required>
                 <select
                   id="migration-source"
                   value={sourceType || sourceTypes[0] || ''}
@@ -267,7 +266,7 @@ function NewMigrationDialog({
                   ))}
                 </select>
               </Field>
-              <Field label="Strategy" htmlFor="migration-strategy">
+              <Field label={t('migrations.strategy')} htmlFor="migration-strategy">
                 <select
                   id="migration-strategy"
                   value={strategy}
@@ -283,9 +282,9 @@ function NewMigrationDialog({
             </div>
 
             <Field
-              label="Connection (JSON)"
+              label={t('migrations.connectionJson')}
               htmlFor="migration-config"
-              hint="The password is encrypted at rest and never returned to the browser."
+              hint={t('migrations.connectionHint')}
             >
               <textarea
                 id="migration-config"
@@ -296,16 +295,14 @@ function NewMigrationDialog({
               />
             </Field>
 
-            <Alert tone="warning">
-              Grant the account read-only access. ForgeCRM will not modify the source database.
-            </Alert>
+            <Alert tone="warning">{t('migrations.readOnlyWarning')}</Alert>
           </div>
           <div className="form-actions">
             <button type="button" className="btn btn--secondary" onClick={onClose}>
-              Cancel
+              {t('common.cancel')}
             </button>
             <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
-              {mutation.isPending ? 'Creating…' : 'Create'}
+              {mutation.isPending ? t('migrations.creating') : t('common.create')}
             </button>
           </div>
         </form>
@@ -321,6 +318,7 @@ function MigrationDetailDialog({
   migration: MigrationJob
   onClose: () => void
 }) {
+  const t = useT()
   const reconciliations = useQuery({
     queryKey: ['migration', migration.id, 'reconciliation'],
     queryFn: () => migrationsApi.reconciliations(migration.id, { limit: 20 }),
@@ -348,36 +346,36 @@ function MigrationDetailDialog({
         </div>
         <div className="card__body stack">
           <dl className="dl">
-            <dt>Source</dt>
+            <dt>{t('migrations.source')}</dt>
             <dd>{migration.source_type}</dd>
-            <dt>Strategy</dt>
+            <dt>{t('migrations.strategy')}</dt>
             <dd>{migration.strategy?.replace('_', ' ') ?? '—'}</dd>
-            <dt>Created</dt>
+            <dt>{t('migrations.created')}</dt>
             <dd>
               <Timestamp value={migration.created_at} />
             </dd>
             {migration.last_error ? (
               <>
-                <dt>Last error</dt>
+                <dt>{t('migrations.lastError')}</dt>
                 <dd className="text-danger">{migration.last_error}</dd>
               </>
             ) : null}
           </dl>
 
           <div>
-            <h3 style={{ marginBottom: 'var(--space-2)' }}>Reconciliations</h3>
+            <h3 style={{ marginBottom: 'var(--space-2)' }}>{t('migrations.reconciliations')}</h3>
             {reconciliations.isLoading ? (
-              <p className="text-muted text-sm">Loading…</p>
+              <p className="text-muted text-sm">{t('common.loading')}</p>
             ) : reconciliations.data?.items.length ? (
               <div className="table-wrap">
                 <table>
                   <thead>
                     <tr>
-                      <th>Status</th>
-                      <th className="numeric">Source</th>
-                      <th className="numeric">Target</th>
-                      <th className="numeric">Mismatches</th>
-                      <th>When</th>
+                      <th>{t('common.status')}</th>
+                      <th className="numeric">{t('migrations.columnSourceCount')}</th>
+                      <th className="numeric">{t('migrations.columnTargetCount')}</th>
+                      <th className="numeric">{t('migrations.columnMismatches')}</th>
+                      <th>{t('migrations.columnWhen')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -398,13 +396,13 @@ function MigrationDetailDialog({
                 </table>
               </div>
             ) : (
-              <p className="text-muted text-sm">No reconciliation has been run yet.</p>
+              <p className="text-muted text-sm">{t('migrations.noReconciliations')}</p>
             )}
           </div>
         </div>
         <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
           <button type="button" className="btn btn--secondary" onClick={onClose}>
-            Close
+            {t('common.close')}
           </button>
         </div>
       </div>

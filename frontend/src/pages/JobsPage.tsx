@@ -6,8 +6,10 @@ import type { Job } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
 import { ResourceList, type Column } from '../components/ResourceList'
 import { Alert, PageHeader, Stat, StatusBadge, Timestamp } from '../components/ui'
+import { useT } from '../i18n'
 
 export function JobsPage() {
+  const t = useT()
   const { can } = useAuth()
   const queryClient = useQueryClient()
   const [statusFilter, setStatusFilter] = useState('')
@@ -37,7 +39,7 @@ export function JobsPage() {
   const columns: Column<Job>[] = [
     {
       key: 'kind',
-      header: 'Job',
+      header: t('jobs.columnJob'),
       render: (row) => (
         <div>
           <div className="table__primary">{row.kind}</div>
@@ -47,21 +49,21 @@ export function JobsPage() {
         </div>
       ),
     },
-    { key: 'status', header: 'Status', render: (row) => <StatusBadge status={row.status} /> },
+    { key: 'status', header: t('common.status'), render: (row) => <StatusBadge status={row.status} /> },
     {
       key: 'attempts',
-      header: 'Attempts',
+      header: t('jobs.columnAttempts'),
       numeric: true,
       render: (row) => `${row.attempts}/${row.max_attempts}`,
     },
     {
       key: 'runAt',
-      header: 'Scheduled',
+      header: t('jobs.columnScheduled'),
       render: (row) => <Timestamp value={row.run_after} />,
     },
     {
       key: 'finished',
-      header: 'Finished',
+      header: t('jobs.columnFinished'),
       render: (row) => <Timestamp value={row.finished_at} />,
     },
     {
@@ -80,7 +82,7 @@ export function JobsPage() {
               }}
               disabled={cancel.isPending}
             >
-              Cancel
+              {t('jobs.cancel')}
             </button>
           ) : null}
           {can('jobs.manage') && row.status === 'failed' ? (
@@ -93,7 +95,7 @@ export function JobsPage() {
               }}
               disabled={retry.isPending}
             >
-              Retry
+              {t('jobs.retry')}
             </button>
           ) : null}
           <button
@@ -104,7 +106,7 @@ export function JobsPage() {
               setDetail(row)
             }}
           >
-            Details
+            {t('jobs.details')}
           </button>
         </div>
       ),
@@ -113,10 +115,7 @@ export function JobsPage() {
 
   return (
     <>
-      <PageHeader
-        title="Background jobs"
-        meta="Queued work: imports, exports, integration syncs and notification delivery."
-      />
+      <PageHeader title={t('jobs.title')} meta={t('jobs.meta')} />
 
       {actionError ? (
         <div style={{ marginBottom: 'var(--space-4)' }}>
@@ -135,23 +134,23 @@ export function JobsPage() {
       ) : null}
 
       <ResourceList
-        title="Job queue"
+        title={t('jobs.queueTitle')}
         queryKey={['jobs', statusFilter]}
         fetchPage={(params) => jobsApi.list({ ...params, status: statusFilter || undefined })}
         columns={columns}
         rowKey={(row) => row.id}
-        emptyTitle="No jobs"
-        emptyText="Background work appears here when it is queued."
+        emptyTitle={t('jobs.emptyTitle')}
+        emptyText={t('jobs.emptyText')}
         searchable
-        searchPlaceholder="Search jobs…"
+        searchPlaceholder={t('jobs.searchPlaceholder')}
         filters={
           <label className="field" style={{ maxWidth: 180 }}>
-            <span className="field__label">Status</span>
+            <span className="field__label">{t('jobs.statusField')}</span>
             <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-              <option value="">All statuses</option>
+              <option value="">{t('common.allStatuses')}</option>
               {['queued', 'running', 'succeeded', 'failed', 'cancelled'].map((status) => (
                 <option key={status} value={status}>
-                  {status}
+                  {t(`status.${status}` as Parameters<typeof t>[0])}
                 </option>
               ))}
             </select>
@@ -181,27 +180,25 @@ export function JobsPage() {
             </div>
             <div className="card__body">
               <dl className="dl">
-                <dt>Job ID</dt>
+                <dt>{t('jobs.jobId')}</dt>
                 <dd className="mono truncate">{detail.id}</dd>
-                <dt>Attempts</dt>
-                <dd>
-                  {detail.attempts} of {detail.max_attempts}
-                </dd>
-                <dt>Scheduled for</dt>
+                <dt>{t('jobs.columnAttempts')}</dt>
+                <dd>{t('jobs.attemptsOf', { done: detail.attempts, total: detail.max_attempts })}</dd>
+                <dt>{t('jobs.scheduledFor')}</dt>
                 <dd>
                   <Timestamp value={detail.run_after} />
                 </dd>
-                <dt>Created</dt>
+                <dt>{t('common.created')}</dt>
                 <dd>
                   <Timestamp value={detail.created_at} />
                 </dd>
-                <dt>Finished</dt>
+                <dt>{t('jobs.columnFinished')}</dt>
                 <dd>
                   <Timestamp value={detail.finished_at} />
                 </dd>
                 {detail.last_error ? (
                   <>
-                    <dt>Last error</dt>
+                    <dt>{t('jobs.lastError')}</dt>
                     <dd className="text-danger">{detail.last_error}</dd>
                   </>
                 ) : null}
@@ -209,7 +206,7 @@ export function JobsPage() {
             </div>
             <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
               <button type="button" className="btn btn--secondary" onClick={() => setDetail(null)}>
-                Close
+                {t('common.close')}
               </button>
             </div>
           </div>
@@ -218,9 +215,7 @@ export function JobsPage() {
 
       {stats.isError ? (
         <div style={{ marginTop: 'var(--space-4)' }}>
-          <Alert tone="warning">
-            Could not load job statistics: {errorMessage(stats.error)}
-          </Alert>
+          <Alert tone="warning">{t('jobs.statsError', { message: errorMessage(stats.error) })}</Alert>
         </div>
       ) : null}
     </>

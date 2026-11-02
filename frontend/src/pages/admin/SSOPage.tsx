@@ -15,6 +15,7 @@ import { ssoAdminApi, rolesApi } from '../../api/admin'
 import type { SSOProviderInput, SSOProviderRow } from '../../api/admin'
 import { errorMessage, fieldErrors } from '../../api/client'
 import { useAuth } from '../../hooks/useAuth'
+import { useT } from '../../i18n'
 import {
   Alert,
   Badge,
@@ -28,6 +29,7 @@ import {
 
 export function SSOPage() {
   const { can } = useAuth()
+  const t = useT()
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState<SSOProviderRow | null>(null)
   const [creating, setCreating] = useState(false)
@@ -49,7 +51,7 @@ export function SSOPage() {
 
   if (providers.isError) {
     return (
-      <Card title="Single sign-on">
+      <Card title={t('sso.title')}>
         <ErrorState
           message={errorMessage(providers.error)}
           onRetry={() => void providers.refetch()}
@@ -62,13 +64,10 @@ export function SSOPage() {
 
   return (
     <>
-      <PageHeader
-        title="Single sign-on"
-        meta="OpenID Connect providers users may sign in through."
-      />
+      <PageHeader title={t('sso.title')} meta={t('sso.meta')} />
 
       <Card
-        title="Providers"
+        title={t('sso.providers')}
         flush
         actions={
           mayManage ? (
@@ -77,8 +76,8 @@ export function SSOPage() {
               className="btn btn--primary btn--sm"
               onClick={() => setCreating(true)}
             >
-              New provider
-            </button>
+              {t('sso.newProvider')}
+              </button>
           ) : null
         }
       >
@@ -89,10 +88,10 @@ export function SSOPage() {
             <table>
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Issuer</th>
-                  <th>Status</th>
-                  <th>Secret</th>
+                  <th>{t('sso.columnName')}</th>
+                  <th>{t('sso.columnIssuer')}</th>
+                  <th>{t('sso.columnStatus')}</th>
+                  <th>{t('sso.columnSecret')}</th>
                   <th />
                 </tr>
               </thead>
@@ -106,16 +105,16 @@ export function SSOPage() {
                     <td className="mono text-sm truncate">{provider.issuer}</td>
                     <td>
                       {provider.enabled ? (
-                        <Badge tone="success">enabled</Badge>
+                        <Badge tone="success">{t('sso.enabled')}</Badge>
                       ) : (
-                        <Badge tone="neutral">disabled</Badge>
+                        <Badge tone="neutral">{t('sso.disabled')}</Badge>
                       )}
                     </td>
                     <td>
                       {provider.has_secret ? (
-                        <Badge tone="success">stored</Badge>
+                        <Badge tone="success">{t('sso.stored')}</Badge>
                       ) : (
-                        <Badge tone="warning">none</Badge>
+                        <Badge tone="warning">{t('sso.none')}</Badge>
                       )}
                     </td>
                     <td>
@@ -126,15 +125,15 @@ export function SSOPage() {
                             className="btn btn--secondary btn--sm"
                             onClick={() => setEditing(provider)}
                           >
-                            Edit
-                          </button>
+                            {t('sso.edit')}
+                            </button>
                           <button
                             type="button"
                             className="btn btn--ghost btn--sm"
                             onClick={() => setDeleting(provider)}
                           >
-                            Delete
-                          </button>
+                            {t('sso.delete')}
+                            </button>
                         </div>
                       ) : null}
                     </td>
@@ -145,18 +144,13 @@ export function SSOPage() {
           </div>
         ) : (
           <div className="card__body">
-            <p className="text-muted">
-              No identity providers are registered. Password sign-in still works.
-            </p>
+            <p className="text-muted">{t('sso.empty')}</p>
           </div>
         )}
       </Card>
 
-      <Card title="Redirect URL">
-        <p className="text-muted text-sm">
-          Register this exact callback with each provider. It is built from the server's public
-          base URL, so it is the value the provider must redirect back to.
-        </p>
+      <Card title={t('sso.redirectTitle')}>
+        <p className="text-muted text-sm">{t('sso.redirectHint')}</p>
         <div className="mono text-sm" style={{ marginTop: 'var(--space-2)', wordBreak: 'break-all' }}>
           {providers.data?.redirect_url ?? '—'}
         </div>
@@ -179,9 +173,9 @@ export function SSOPage() {
 
       <ConfirmDialog
         open={deleting !== null}
-        title="Delete this provider?"
-        text={`"${deleting?.display_name ?? ''}" will be removed. Accounts linked only through it keep their local password if they have one, and otherwise cannot sign in until an administrator resets it.`}
-        confirmLabel="Delete"
+        title={t('sso.deleteTitle')}
+        text={t('sso.deleteText', { name: deleting?.display_name ?? '' })}
+        confirmLabel={t('sso.delete')}
         danger
         busy={remove.isPending}
         onCancel={() => setDeleting(null)}
@@ -203,6 +197,7 @@ function ProviderDialog({
   onClose: () => void
   onSaved: () => void
 }) {
+  const t = useT()
   const isEdit = provider !== null
   const [form, setForm] = useState({
     key: provider?.key ?? '',
@@ -285,13 +280,13 @@ function ProviderDialog({
         onSubmit={handleSubmit}
       >
         <div className="card__header">
-          <h2 id="provider-title">{isEdit ? 'Edit provider' : 'New provider'}</h2>
+          <h2 id="provider-title">{isEdit ? t('sso.editTitle') : t('sso.newTitle')}</h2>
         </div>
         <div className="card__body stack">
           {formError ? <Alert tone="error">{formError}</Alert> : null}
 
           <div className="form-grid">
-            <Field label="Key" htmlFor="sso-key" required error={errors.key} hint="A short identifier, for example acme">
+            <Field label={t('sso.key')} htmlFor="sso-key" required error={errors.key} hint={t('sso.keyHint')}>
               <input
                 id="sso-key"
                 value={form.key}
@@ -300,7 +295,7 @@ function ProviderDialog({
                 autoFocus
               />
             </Field>
-            <Field label="Display name" htmlFor="sso-name" required error={errors.display_name}>
+            <Field label={t('sso.displayName')} htmlFor="sso-name" required error={errors.display_name}>
               <input
                 id="sso-name"
                 value={form.display_name}
@@ -310,11 +305,11 @@ function ProviderDialog({
           </div>
 
           <Field
-            label="Issuer URL"
+            label={t('sso.issuer')}
             htmlFor="sso-issuer"
             required
             error={errors.issuer}
-            hint="The provider's base URL, whose /.well-known/openid-configuration is read"
+            hint={t('sso.issuerHint')}
           >
             <input
               id="sso-issuer"
@@ -324,7 +319,7 @@ function ProviderDialog({
             />
           </Field>
 
-          <Field label="Client ID" htmlFor="sso-client-id" required error={errors.client_id}>
+          <Field label={t('sso.clientId')} htmlFor="sso-client-id" required error={errors.client_id}>
             <input
               id="sso-client-id"
               value={form.client_id}
@@ -333,14 +328,10 @@ function ProviderDialog({
           </Field>
 
           <Field
-            label="Client secret"
+            label={t('sso.clientSecret')}
             htmlFor="sso-secret"
             error={errors.client_secret}
-            hint={
-              isEdit
-                ? 'Leave blank to keep the stored secret'
-                : 'Required for a confidential client; leave blank for a public client that uses PKCE only'
-            }
+            hint={isEdit ? t('sso.secretKeep') : t('sso.secretHint')}
           >
             <input
               id="sso-secret"
@@ -351,7 +342,7 @@ function ProviderDialog({
             />
           </Field>
 
-          <Field label="Scopes" htmlFor="sso-scopes" hint="Space-separated; defaults to openid profile email">
+          <Field label={t('sso.scopes')} htmlFor="sso-scopes" hint={t('sso.scopesHint')}>
             <input
               id="sso-scopes"
               value={form.scopes}
@@ -360,9 +351,9 @@ function ProviderDialog({
           </Field>
 
           <Field
-            label="Allowed email domains"
+            label={t('sso.domains')}
             htmlFor="sso-domains"
-            hint="Space-separated. Empty accepts any domain the provider vouches for"
+            hint={t('sso.domainsHint')}
           >
             <input
               id="sso-domains"
@@ -377,21 +368,21 @@ function ProviderDialog({
               checked={form.jit_provisioning}
               onChange={(event) => set('jit_provisioning', event.target.checked)}
             />
-            <span>Create an account on first sign-in</span>
+            <span>{t('sso.jit')}</span>
           </label>
 
           {form.jit_provisioning ? (
             <Field
-              label="Default role for new accounts"
+              label={t('sso.defaultRole')}
               htmlFor="sso-role"
-              hint="The role a just-in-time account is granted"
+              hint={t('sso.defaultRoleHint')}
             >
               <select
                 id="sso-role"
                 value={form.default_role_key}
                 onChange={(event) => set('default_role_key', event.target.value)}
               >
-                <option value="">Select a role</option>
+                <option value="">{t('sso.selectRole')}</option>
                 {(roles.data?.items ?? []).map((role) => (
                   <option key={role.id} value={role.key}>
                     {role.name}
@@ -407,15 +398,15 @@ function ProviderDialog({
               checked={form.enabled}
               onChange={(event) => set('enabled', event.target.checked)}
             />
-            <span>Enabled</span>
+            <span>{t('sso.enabledLabel')}</span>
           </label>
         </div>
         <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
           <button type="button" className="btn btn--secondary" onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </button>
           <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
-            {mutation.isPending ? 'Saving…' : 'Save'}
+            {mutation.isPending ? t('sso.saving') : t('common.save')}
           </button>
         </div>
       </form>

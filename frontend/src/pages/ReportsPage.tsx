@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { pipelinesApi, reportsApi } from '../api/crm'
 import { errorMessage } from '../api/client'
 import { Alert, Card, ErrorState, PageHeader, Stat, TableSkeleton, formatMoney } from '../components/ui'
+import { useT } from '../i18n'
 
 function defaultRange(): { from: string; to: string } {
   const to = new Date()
@@ -13,6 +14,7 @@ function defaultRange(): { from: string; to: string } {
 }
 
 export function ReportsPage() {
+  const t = useT()
   const [range, setRange] = useState(defaultRange)
 
   const sales = useQuery({
@@ -37,12 +39,12 @@ export function ReportsPage() {
   return (
     <>
       <PageHeader
-        title="Reports"
-        meta="Sales and support performance over a chosen period."
+        title={t('reports.title')}
+        meta={t('reports.meta')}
         actions={
           <div className="row">
             <label className="field">
-              <span className="field__label">From</span>
+              <span className="field__label">{t('reports.from')}</span>
               <input
                 type="date"
                 value={range.from}
@@ -50,7 +52,7 @@ export function ReportsPage() {
               />
             </label>
             <label className="field">
-              <span className="field__label">To</span>
+              <span className="field__label">{t('reports.to')}</span>
               <input
                 type="date"
                 value={range.to}
@@ -62,7 +64,7 @@ export function ReportsPage() {
       />
 
       <section style={{ marginBottom: 'var(--space-5)' }}>
-        <h2 style={{ marginBottom: 'var(--space-3)' }}>Sales</h2>
+        <h2 style={{ marginBottom: 'var(--space-3)' }}>{t('reports.sales')}</h2>
         {sales.isError ? (
           <ErrorState message={errorMessage(sales.error)} onRetry={() => void sales.refetch()} />
         ) : sales.isLoading ? (
@@ -74,25 +76,13 @@ export function ReportsPage() {
         ) : sales.data ? (
           <>
             <div className="grid grid--stats">
+              <Stat label={t('reports.won')} value={sales.data.deals_won} hint={formatMoney(sales.data.won_value)} />
+              <Stat label={t('reports.lost')} value={sales.data.deals_lost} hint={formatMoney(sales.data.lost_value)} />
+              <Stat label={t('reports.open')} value={sales.data.open_count} hint={formatMoney(sales.data.open_value)} />
               <Stat
-                label="Won"
-                value={sales.data.deals_won}
-                hint={formatMoney(sales.data.won_value)}
-              />
-              <Stat
-                label="Lost"
-                value={sales.data.deals_lost}
-                hint={formatMoney(sales.data.lost_value)}
-              />
-              <Stat
-                label="Open"
-                value={sales.data.open_count}
-                hint={formatMoney(sales.data.open_value)}
-              />
-              <Stat
-                label="Win rate"
+                label={t('reports.winRate')}
                 value={`${(sales.data.win_rate * 100).toFixed(1)}%`}
-                hint="Won ÷ (won + lost)"
+                hint={t('reports.winRateHint')}
               />
             </div>
           </>
@@ -100,7 +90,7 @@ export function ReportsPage() {
       </section>
 
       <section style={{ marginBottom: 'var(--space-5)' }}>
-        <h2 style={{ marginBottom: 'var(--space-3)' }}>Support</h2>
+        <h2 style={{ marginBottom: 'var(--space-3)' }}>{t('reports.support')}</h2>
         {support.isError ? (
           <ErrorState message={errorMessage(support.error)} onRetry={() => void support.refetch()} />
         ) : support.isLoading ? (
@@ -111,15 +101,15 @@ export function ReportsPage() {
           </div>
         ) : support.data ? (
           <div className="grid grid--stats">
-            <Stat label="Opened" value={support.data.total} />
-            <Stat label="Resolved" value={support.data.resolved} />
-            <Stat label="Still open" value={support.data.open} />
+            <Stat label={t('reports.opened')} value={support.data.total} />
+            <Stat label={t('reports.resolved')} value={support.data.resolved} />
+            <Stat label={t('reports.stillOpen')} value={support.data.open} />
             <Stat
-              label="SLA breached"
+              label={t('reports.slaBreached')}
               value={support.data.sla_breached}
               hint={
                 support.data.avg_resolution_hours !== undefined
-                  ? `Avg resolution ${Math.round(support.data.avg_resolution_hours)} h`
+                  ? t('reports.avgResolution', { hours: Math.round(support.data.avg_resolution_hours) })
                   : undefined
               }
             />
@@ -129,11 +119,12 @@ export function ReportsPage() {
 
       <section>
         <h2 style={{ marginBottom: 'var(--space-3)' }}>
-          Pipeline{activePipeline ? `: ${activePipeline.name}` : ''}
+          {t('reports.pipeline')}
+          {activePipeline ? `: ${activePipeline.name}` : ''}
         </h2>
         {!activePipeline ? (
           <Card>
-            <p className="text-muted">No pipeline is configured.</p>
+            <p className="text-muted">{t('reports.noPipeline')}</p>
           </Card>
         ) : pipelineReport.isError ? (
           <ErrorState
@@ -144,28 +135,30 @@ export function ReportsPage() {
           <TableSkeleton rows={4} columns={4} />
         ) : pipelineReport.data ? (
           <Card
-            title="Stage breakdown"
+            title={t('reports.stageBreakdown')}
             actions={
               <span className="text-muted text-sm">
-                Open {formatMoney(pipelineReport.data.total_open)} · Won{' '}
-                {formatMoney(pipelineReport.data.total_won)}
+                {t('reports.openWon', {
+                  open: formatMoney(pipelineReport.data.total_open),
+                  won: formatMoney(pipelineReport.data.total_won),
+                })}
               </span>
             }
             flush
           >
             {pipelineReport.data.stages.length === 0 ? (
               <div className="card__body">
-                <p className="text-muted">No stages defined for this pipeline.</p>
+                <p className="text-muted">{t('reports.noStages')}</p>
               </div>
             ) : (
               <div className="table-wrap">
                 <table>
                   <thead>
                     <tr>
-                      <th>Stage</th>
-                      <th className="numeric">Deals</th>
-                      <th className="numeric">Total value</th>
-                      <th className="numeric">Weighted</th>
+                      <th>{t('reports.stage')}</th>
+                      <th className="numeric">{t('reports.deals')}</th>
+                      <th className="numeric">{t('reports.totalValue')}</th>
+                      <th className="numeric">{t('reports.weighted')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -186,10 +179,7 @@ export function ReportsPage() {
       </section>
 
       <div style={{ marginTop: 'var(--space-5)' }}>
-        <Alert tone="info">
-          Reports reflect the period selected above. Amounts are shown in each deal's own currency,
-          so a mixed-currency pipeline sums nominal values rather than converting them.
-        </Alert>
+        <Alert tone="info">{t('reports.note')}</Alert>
       </div>
     </>
   )

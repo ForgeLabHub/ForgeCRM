@@ -9,6 +9,8 @@ import type {
 } from '../api/assist'
 import { ApiError, errorMessage } from '../api/client'
 import { useAuth } from '../hooks/useAuth'
+import { useT } from '../i18n'
+import type { TranslationKey } from '../i18n'
 import { Alert, Badge, Card, Skeleton, Timestamp } from './ui'
 
 /**
@@ -33,13 +35,13 @@ function isRetryable(error: unknown): boolean {
  *      there is no send button, because sending is a CRM action the user takes
  *      deliberately, not something this panel does on the model's behalf.
  */
-const KINDS: { value: AssistKind; label: string }[] = [
-  { value: 'summary', label: 'Summary' },
-  { value: 'risks', label: 'Risks' },
-  { value: 'next_actions', label: 'Next actions' },
-  { value: 'wrap_up', label: 'Wrap up' },
-  { value: 'draft', label: 'Draft a message' },
-  { value: 'ask', label: 'Ask a question' },
+const KIND_LABELS: { value: AssistKind; key: TranslationKey }[] = [
+  { value: 'summary', key: 'assist.kindSummary' },
+  { value: 'risks', key: 'assist.kindRisks' },
+  { value: 'next_actions', key: 'assist.kindNextActions' },
+  { value: 'wrap_up', key: 'assist.kindWrapUp' },
+  { value: 'draft', key: 'assist.kindDraft' },
+  { value: 'ask', key: 'assist.kindAsk' },
 ]
 
 export function AssistPanel({
@@ -49,6 +51,7 @@ export function AssistPanel({
   entityType: AssistEntityType
   entityId: string
 }) {
+  const t = useT()
   const { can } = useAuth()
   const [kind, setKind] = useState<AssistKind>('summary')
   const [question, setQuestion] = useState('')
@@ -147,7 +150,7 @@ export function AssistPanel({
 
   if (status.isLoading) {
     return (
-      <Card title="Assistant">
+      <Card title={t('assist.title')}>
         <Skeleton height={80} />
       </Card>
     )
@@ -155,11 +158,8 @@ export function AssistPanel({
 
   if (status.data && !status.data.enabled) {
     return (
-      <Card title="Assistant">
-        <Alert tone="info">
-          No AI provider is configured, so contextual assistance is unavailable. The rest of the
-          record works normally.
-        </Alert>
+      <Card title={t('assist.title')}>
+        <Alert tone="info">{t('assist.noProvider')}</Alert>
       </Card>
     )
   }
@@ -176,7 +176,7 @@ export function AssistPanel({
 
   return (
     <Card
-      title="Assistant"
+      title={t('assist.title')}
       actions={
         insight ? (
           <button
@@ -185,58 +185,53 @@ export function AssistPanel({
             onClick={() => startStream(true)}
             disabled={streaming}
           >
-            Ask again
+            {t('assist.askAgain')}
           </button>
         ) : null
       }
     >
       <div className="stack">
         {providerDown ? (
-          <Alert tone="warning">
-            The AI provider is configured but not reachable right now, so a request may fail. You
-            can still try; the record itself is unaffected.
-          </Alert>
+          <Alert tone="warning">{t('assist.providerDown')}</Alert>
         ) : null}
 
         <div className="row" style={{ gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-          {KINDS.map((k) => (
+          {KIND_LABELS.map((k) => (
             <button
               key={k.value}
               type="button"
               className={`btn btn--sm ${kind === k.value ? 'btn--primary' : 'btn--secondary'}`}
               onClick={() => setKind(k.value)}
             >
-              {k.label}
+              {t(k.key)}
             </button>
           ))}
         </div>
 
         {kind === 'ask' ? (
           <label className="field" htmlFor="assist-question">
-            <span className="field__label">Your question</span>
+            <span className="field__label">{t('assist.question')}</span>
             <input
               id="assist-question"
               className="input"
               value={question}
               maxLength={500}
-              placeholder="What is blocking this deal?"
+              placeholder={t('assist.questionPlaceholder')}
               onChange={(e) => setQuestion(e.target.value)}
             />
-            <span className="field__hint">
-              Answered only from this record's data, which is limited to what you may see.
-            </span>
+            <span className="field__hint">{t('assist.questionHint')}</span>
           </label>
         ) : null}
 
         {kind === 'draft' ? (
           <label className="field" htmlFor="assist-recipient">
-            <span className="field__label">Who is the message for? (optional)</span>
+            <span className="field__label">{t('assist.recipient')}</span>
             <input
               id="assist-recipient"
               className="input"
               value={recipientHint}
               maxLength={200}
-              placeholder="the customer's procurement lead"
+              placeholder={t('assist.recipientPlaceholder')}
               onChange={(e) => setRecipientHint(e.target.value)}
             />
           </label>
@@ -249,18 +244,18 @@ export function AssistPanel({
             onClick={() => startStream(false)}
             disabled={streaming || (kind === 'ask' && question.trim() === '')}
           >
-            {streaming ? 'Asking…' : 'Run'}
+            {streaming ? t('assist.asking') : t('assist.run')}
           </button>
           {streaming ? (
             // A stream can run for many seconds; without a way to stop it the user
             // is stuck watching a provider they may not want to wait for.
             <button type="button" className="btn btn--secondary btn--sm" onClick={stopStream}>
-              Stop
+              {t('assist.stop')}
             </button>
           ) : null}
           {insight ? (
             <span className="text-muted text-sm">
-              {insight.cached ? 'From cache · ' : ''}
+              {insight.cached ? t('assist.fromCache') : ''}
               {insight.provider}
               {insight.model ? ` / ${insight.model}` : ''} ·{' '}
               <Timestamp value={insight.generated_at} />
@@ -280,7 +275,7 @@ export function AssistPanel({
                     onClick={() => startStream(false)}
                     disabled={streaming}
                   >
-                    {streaming ? 'Trying…' : 'Try again'}
+                    {streaming ? t('assist.trying') : t('assist.retry')}
                   </button>
                 </div>
               ) : null}
@@ -295,10 +290,10 @@ export function AssistPanel({
         {streaming ? (
           <section>
             <h3 className="text-sm">
-              Reply <Badge tone="neutral">model output, in progress</Badge>
+              {t('assist.reply')} <Badge tone="neutral">{t('assist.inProgress')}</Badge>
             </h3>
             <p className="text-muted text-sm" style={{ whiteSpace: 'pre-wrap' }}>
-              {streamText || 'Waiting for the model…'}
+              {streamText || t('assist.waiting')}
             </p>
           </section>
         ) : null}
@@ -319,7 +314,7 @@ export function AssistPanel({
                     onClick={() => run.mutate(false)}
                     disabled={run.isPending}
                   >
-                    {run.isPending ? 'Trying…' : 'Try again'}
+                    {run.isPending ? t('assist.trying') : t('assist.retry')}
                   </button>
                 </div>
               ) : null}
@@ -338,6 +333,7 @@ export function AssistPanel({
 
 /** Renders one insight, keeping CRM facts and model output visibly apart. */
 function InsightView({ insight }: { insight: AssistInsight }) {
+  const t = useT()
   return (
     <div className="stack">
       {insight.disclosures.length ? (
@@ -353,7 +349,7 @@ function InsightView({ insight }: { insight: AssistInsight }) {
       <ConfidenceNote confidence={insight.confidence} />
 
       <section>
-        <h3 className="text-sm">What the assistant was told (from the CRM)</h3>
+        <h3 className="text-sm">{t('assist.toldFromCrm')}</h3>
         <ul className="text-sm" style={{ margin: 0, paddingLeft: '1.1rem' }}>
           {insight.facts.map((f, i) => (
             <li key={i}>
@@ -365,7 +361,7 @@ function InsightView({ insight }: { insight: AssistInsight }) {
 
       <section>
         <h3 className="text-sm">
-          Analysis <Badge tone="neutral">model output</Badge>
+          {t('assist.analysis')} <Badge tone="neutral">{t('assist.modelOutput')}</Badge>
         </h3>
         <p style={{ whiteSpace: 'pre-wrap' }}>{insight.analysis}</p>
       </section>
@@ -373,33 +369,29 @@ function InsightView({ insight }: { insight: AssistInsight }) {
       {insight.recommendations.length ? (
         <section>
           <h3 className="text-sm">
-            Suggested next actions <Badge tone="neutral">model output</Badge>
+            {t('assist.nextActions')} <Badge tone="neutral">{t('assist.modelOutput')}</Badge>
           </h3>
           <ul style={{ margin: 0, paddingLeft: '1.1rem' }}>
             {insight.recommendations.map((r, i) => (
               <li key={i}>{r}</li>
             ))}
           </ul>
-          <p className="text-muted text-sm">
-            These are suggestions, not performed actions. Nothing has been changed.
-          </p>
+          <p className="text-muted text-sm">{t('assist.suggestionsNote')}</p>
         </section>
       ) : null}
 
       {insight.draft ? (
         <section>
           <h3 className="text-sm">
-            Draft <Badge tone="neutral">model output</Badge>
+            {t('assist.draft')} <Badge tone="neutral">{t('assist.modelOutput')}</Badge>
           </h3>
           {insight.draft.subject ? (
             <p className="text-sm">
-              <strong>Subject:</strong> {insight.draft.subject}
+              <strong>{t('assist.subject')}</strong> {insight.draft.subject}
             </p>
           ) : null}
           <textarea className="input" rows={8} readOnly value={insight.draft.body} />
-          <p className="text-muted text-sm">
-            Copy and edit this draft. Nothing is sent automatically.
-          </p>
+          <p className="text-muted text-sm">{t('assist.draftNote')}</p>
         </section>
       ) : null}
     </div>
@@ -414,6 +406,7 @@ function InsightView({ insight }: { insight: AssistInsight }) {
  * is a prompt to check the record, not a claim that the answer is wrong.
  */
 function ConfidenceNote({ confidence }: { confidence: AssistConfidence }) {
+  const t = useT()
   const tone =
     confidence.level === 'high'
       ? 'success'
@@ -422,33 +415,31 @@ function ConfidenceNote({ confidence }: { confidence: AssistConfidence }) {
         : 'danger'
   const label =
     confidence.level === 'high'
-      ? 'Well grounded'
+      ? t('assist.wellGrounded')
       : confidence.level === 'medium'
-        ? 'Partly grounded'
-        : 'Weakly grounded'
+        ? t('assist.partlyGrounded')
+        : t('assist.weaklyGrounded')
   return (
     <section>
       <h3 className="text-sm">
-        Grounding <Badge tone={tone}>{label}</Badge>
+        {t('assist.grounding')} <Badge tone={tone}>{label}</Badge>
       </h3>
       <ul className="text-muted text-sm" style={{ margin: 0, paddingLeft: '1.1rem' }}>
         {confidence.basis.map((b, i) => (
           <li key={i}>{b}</li>
         ))}
       </ul>
-      <p className="text-muted text-sm">
-        How closely this answer stays inside the record, judged by the server — not a
-        guarantee that it is correct.
-      </p>
+      <p className="text-muted text-sm">{t('assist.groundingNote')}</p>
     </section>
   )
 }
 
 /** Shows the facts the model would be given, before any request is made. */
 function ContextPreview({ context }: { context: import('../api/assist').AssistContext }) {
+  const t = useT()
   return (
     <details className="text-sm">
-      <summary>What the assistant can see</summary>
+      <summary>{t('assist.canSee')}</summary>
       <ul style={{ margin: 'var(--space-2) 0 0', paddingLeft: '1.1rem' }}>
         {context.facts.map((f, i) => (
           <li key={i}>

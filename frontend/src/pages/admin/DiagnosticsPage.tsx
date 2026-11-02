@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { diagnosticsApi, systemApi } from '../../api/admin'
 import { errorMessage } from '../../api/client'
 import { useAuth } from '../../hooks/useAuth'
+import { useT, type TranslationKey } from '../../i18n'
 import { Alert, Badge, Card, ErrorState, PageHeader, TableSkeleton, Timestamp } from '../../components/ui'
 
 /** Renders a duration in seconds as a short human-readable string. */
@@ -25,12 +26,13 @@ function formatDuration(seconds: number): string {
  * configured and enabled. The label says what the flag means so the page cannot
  * mislead. A key with no entry falls back to the key itself.
  */
-const CAPABILITY_LABELS: Record<string, string> = {
-  oidc_configured: 'OIDC settings present (configure a provider to enable sign-in)',
-  tool_api: 'Tool API over HTTP (not a full MCP server)',
+const CAPABILITY_LABELS: Record<string, TranslationKey> = {
+  oidc_configured: 'diagnostics.capOidc',
+  tool_api: 'diagnostics.capToolApi',
 }
 
 export function DiagnosticsPage() {
+  const t = useT()
   const info = useQuery({ queryKey: ['system', 'info'], queryFn: systemApi.info })
   const capabilities = useQuery({
     queryKey: ['system', 'capabilities'],
@@ -44,22 +46,19 @@ export function DiagnosticsPage() {
 
   return (
     <>
-      <PageHeader
-        title="Diagnostics"
-        meta="Runtime state of this instance. No secrets are exposed on this page."
-      />
+      <PageHeader title={t('diagnostics.title')} meta={t('diagnostics.meta')} />
 
       <div className="stack">
-        <Card title="System information">
+        <Card title={t('diagnostics.systemInfo')}>
           {info.isError ? (
             <Alert tone="error">{errorMessage(info.error)}</Alert>
           ) : info.isLoading ? (
             <TableSkeleton rows={3} columns={2} />
           ) : info.data ? (
             <dl className="dl">
-              <dt>Version</dt>
+              <dt>{t('diagnostics.version')}</dt>
               <dd>{info.data.version}</dd>
-              <dt>Environment</dt>
+              <dt>{t('diagnostics.environment')}</dt>
               <dd>
                 <Badge tone={info.data.environment === 'production' ? 'accent' : 'neutral'}>
                   {info.data.environment}
@@ -67,29 +66,29 @@ export function DiagnosticsPage() {
               </dd>
               {info.data.commit ? (
                 <>
-                  <dt>Build commit</dt>
+                  <dt>{t('diagnostics.buildCommit')}</dt>
                   <dd className="mono">{info.data.commit}</dd>
                 </>
               ) : null}
               {info.data.started_at ? (
                 <>
-                  <dt>Started</dt>
+                  <dt>{t('diagnostics.started')}</dt>
                   <dd>{new Date(info.data.started_at).toLocaleString()}</dd>
                 </>
               ) : null}
-              <dt>Database</dt>
+              <dt>{t('diagnostics.database')}</dt>
               <dd>
                 <Badge tone={info.data.database === 'ok' ? 'success' : 'danger'}>
                   {info.data.database}
                 </Badge>
               </dd>
-              <dt>Uptime</dt>
+              <dt>{t('diagnostics.uptime')}</dt>
               <dd>{formatDuration(info.data.uptime_seconds)}</dd>
             </dl>
           ) : null}
         </Card>
 
-        <Card title="Capabilities">
+        <Card title={t('diagnostics.capabilities')}>
           {capabilities.isError ? (
             <Alert tone="error">{errorMessage(capabilities.error)}</Alert>
           ) : capabilities.isLoading ? (
@@ -99,22 +98,22 @@ export function DiagnosticsPage() {
               <table>
                 <thead>
                   <tr>
-                    <th>Feature</th>
-                    <th>State</th>
+                    <th>{t('diagnostics.feature')}</th>
+                    <th>{t('diagnostics.state')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {Object.entries(capabilities.data).map(([key, value]) => (
                     <tr key={key}>
                       <td className="table__primary mono">
-                        {CAPABILITY_LABELS[key] ?? key}
+                        {CAPABILITY_LABELS[key] ? t(CAPABILITY_LABELS[key]) : key}
                       </td>
                       <td>
                         {typeof value === 'boolean' ? (
                           value ? (
-                            <Badge tone="success">enabled</Badge>
+                            <Badge tone="success">{t('diagnostics.enabled')}</Badge>
                           ) : (
-                            <Badge tone="neutral">disabled</Badge>
+                            <Badge tone="neutral">{t('diagnostics.disabled')}</Badge>
                           )
                         ) : (
                           <span className="mono">{String(value)}</span>
@@ -129,17 +128,17 @@ export function DiagnosticsPage() {
         </Card>
 
         <JsonCard
-          title="Metrics"
+          title={t('diagnostics.metrics')}
           query={metrics}
-          description="Counters and gauges collected since the process started."
+          description={t('diagnostics.metricsHint')}
         />
 
         <SettingsCard />
 
         <JsonCard
-          title="Diagnostics"
+          title={t('diagnostics.diagnosticsTitle')}
           query={diagnostics}
-          description="Dependency reachability and configuration summary, with sensitive values omitted."
+          description={t('diagnostics.diagnosticsHint')}
         />
       </div>
     </>
@@ -195,6 +194,7 @@ function JsonCard({
  * reader without it still sees the current values.
  */
 function SettingsCard() {
+  const t = useT()
   const { can } = useAuth()
   const canEdit = can('system.settings')
   const queryClient = useQueryClient()
@@ -239,7 +239,7 @@ function SettingsCard() {
   }
 
   return (
-    <Card title="Platform settings">
+    <Card title={t('diagnostics.platformSettings')}>
       {error ? <Alert tone="error">{error}</Alert> : null}
       {settings.isError ? (
         <ErrorState message={errorMessage(settings.error)} onRetry={() => settings.refetch()} />
@@ -247,8 +247,8 @@ function SettingsCard() {
         <TableSkeleton rows={3} columns={2} />
       ) : Object.keys(items).length === 0 ? (
         <p className="text-muted text-sm">
-          No platform settings have been written yet.
-          {canEdit ? ' Saving one creates it.' : ''}
+          {t('diagnostics.noSettings')}
+          {canEdit ? t('diagnostics.noSettingsCanEdit') : ''}
         </p>
       ) : (
         <dl className="dl">
@@ -259,7 +259,7 @@ function SettingsCard() {
                 {editing === key ? (
                   <div className="row" style={{ gap: 'var(--space-2)' }}>
                     <input
-                      aria-label={`Value for ${key}`}
+                      aria-label={t('diagnostics.valueFor', { key })}
                       value={draft}
                       onChange={(event) => setDraft(event.target.value)}
                     />
@@ -269,15 +269,15 @@ function SettingsCard() {
                       disabled={save.isPending}
                       onClick={() => commit(key)}
                     >
-                      Save
-                    </button>
+                      {t('diagnostics.save')}
+                      </button>
                     <button
                       type="button"
                       className="btn btn--ghost btn--sm"
                       onClick={() => setEditing(null)}
                     >
-                      Cancel
-                    </button>
+                      {t('common.cancel')}
+                      </button>
                   </div>
                 ) : (
                   <span className="row" style={{ gap: 'var(--space-2)' }}>
@@ -291,8 +291,8 @@ function SettingsCard() {
                         className="btn btn--ghost btn--sm"
                         onClick={() => beginEdit(key, entry.value)}
                       >
-                        Edit
-                      </button>
+                        {t('diagnostics.edit')}
+                        </button>
                     ) : null}
                   </span>
                 )}

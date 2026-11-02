@@ -21,6 +21,7 @@ import {
   StatusBadge,
   Timestamp,
 } from '../components/ui'
+import { useT, type TFunction } from '../i18n'
 
 /**
  * The Risk page.
@@ -36,6 +37,7 @@ import {
  * decision; it does not change the CRM record the signal is about.
  */
 export function RiskPage() {
+  const t = useT()
   const { can } = useAuth()
   const queryClient = useQueryClient()
   const [showTerminal, setShowTerminal] = useState(false)
@@ -72,11 +74,11 @@ export function RiskPage() {
   return (
     <>
       <PageHeader
-        title="Risk"
-        meta="Conditions the platform detected in the CRM, each with the reason it fired and the values behind it. Scanning reconciles the list; it never changes CRM data."
+        title={t('risk.title')}
+        meta={t('risk.meta')}
         actions={
           <button type="button" className="btn btn--primary" disabled={scan.isPending} onClick={() => scan.mutate()}>
-            {scan.isPending ? 'Scanning…' : 'Scan now'}
+            {scan.isPending ? t('risk.scanning') : t('risk.scanNow')}
           </button>
         }
       />
@@ -90,42 +92,44 @@ export function RiskPage() {
       {scan.data ? (
         <div style={{ marginBottom: 'var(--space-4)' }}>
           <Alert tone="info">
-            Scan detected {scan.data.detected} condition(s): {scan.data.opened} opened, {scan.data.updated}{' '}
-            updated, {scan.data.resolved} closed.
+            {t('risk.scanSummary', {
+              detected: scan.data.detected,
+              opened: scan.data.opened,
+              updated: scan.data.updated,
+              resolved: scan.data.resolved,
+            })}
           </Alert>
         </div>
       ) : null}
 
       <div className="grid grid--stats" style={{ marginBottom: 'var(--space-5)' }}>
-        <Stat label="Critical" value={bySeverity.critical} />
-        <Stat label="High" value={bySeverity.high} />
-        <Stat label="Warning" value={bySeverity.warn} />
-        <Stat label="Info" value={bySeverity.info} />
+        <Stat label={t('risk.critical')} value={bySeverity.critical} />
+        <Stat label={t('risk.high')} value={bySeverity.high} />
+        <Stat label={t('risk.warning')} value={bySeverity.warn} />
+        <Stat label={t('risk.info')} value={bySeverity.info} />
       </div>
 
       <Card
-        title="Signals"
+        title={t('risk.signals')}
         actions={
           <label className="field__label" style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
             <input type="checkbox" checked={showTerminal} onChange={(event) => setShowTerminal(event.target.checked)} />
-            Show resolved and dismissed
+            {t('risk.showResolved')}
           </label>
         }
       >
         {signalsQuery.isLoading ? (
-          <p className="text-subtle">Loading…</p>
+          <p className="text-subtle">{t('common.loading')}</p>
         ) : signalsQuery.isError ? (
           <ErrorState message={errorMessage(signalsQuery.error)} onRetry={() => void signalsQuery.refetch()} />
         ) : signals.length === 0 ? (
-          <EmptyState
-            title="No risk signals"
-            text="Either nothing needs attention or no scan has run yet. Run a scan to reconcile the list."
-          />
+          <EmptyState title={t('risk.noSignalsTitle')} text={t('risk.noSignalsText')} />
         ) : (
           <div className="stack">
             {signals.map((signal) => (
               <SignalCard
                 key={signal.id}
+                t={t}
                 signal={signal}
                 busy={setStatus.isPending}
                 onStatus={(status) => setStatus.mutate({ id: signal.id, status })}
@@ -136,17 +140,19 @@ export function RiskPage() {
       </Card>
 
       <div style={{ marginTop: 'var(--space-5)' }}>
-        <ThresholdsCard canManage={canManage} />
+        <ThresholdsCard t={t} canManage={canManage} />
       </div>
     </>
   )
 }
 
 function SignalCard({
+  t,
   signal,
   busy,
   onStatus,
 }: {
+  t: TFunction
   signal: RiskSignal
   busy: boolean
   onStatus: (status: RiskSignalStatus) => void
@@ -172,9 +178,7 @@ function SignalCard({
         <dl className="row" style={{ gap: 'var(--space-4)', marginTop: 'var(--space-3)', flexWrap: 'wrap' }}>
           {signal.evidence.map((e) => (
             <div key={e.key}>
-              <dt className="text-subtle text-sm">
-                {e.label}
-              </dt>
+              <dt className="text-subtle text-sm">{e.label}</dt>
               <dd>{e.value}</dd>
             </div>
           ))}
@@ -185,28 +189,26 @@ function SignalCard({
         <div className="row" style={{ gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
           {signal.status === 'open' ? (
             <button type="button" className="btn btn--secondary" disabled={busy} onClick={() => onStatus('acknowledged')}>
-              Acknowledge
+              {t('risk.acknowledge')}
             </button>
           ) : null}
           <button type="button" className="btn btn--secondary" disabled={busy} onClick={() => onStatus('resolved')}>
-            Resolve
+            {t('risk.resolve')}
           </button>
           <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => onStatus('dismissed')}>
-            Dismiss
+            {t('risk.dismiss')}
           </button>
         </div>
       ) : (
         <p className="text-subtle" style={{ marginTop: 'var(--space-2)' }}>
-          {signal.resolved_by_scan
-            ? 'Closed automatically: the condition no longer holds.'
-            : 'Closed by an operator.'}
+          {signal.resolved_by_scan ? t('risk.closedAuto') : t('risk.closedByOperator')}
         </p>
       )}
     </div>
   )
 }
 
-function ThresholdsCard({ canManage }: { canManage: boolean }) {
+function ThresholdsCard({ t, canManage }: { t: TFunction; canManage: boolean }) {
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState<RiskThresholds | null>(null)
   const [saved, setSaved] = useState(false)
@@ -230,11 +232,11 @@ function ThresholdsCard({ canManage }: { canManage: boolean }) {
   const current = draft ?? query.data ?? null
   if (!current) {
     return (
-      <Card title="Thresholds">
+      <Card title={t('risk.thresholds')}>
         {query.isError ? (
           <ErrorState message={errorMessage(query.error)} onRetry={() => void query.refetch()} />
         ) : (
-          <p className="text-subtle">Loading…</p>
+          <p className="text-subtle">{t('common.loading')}</p>
         )}
       </Card>
     )
@@ -258,19 +260,22 @@ function ThresholdsCard({ canManage }: { canManage: boolean }) {
   )
 
   return (
-    <Card title="Thresholds" actions={saved ? <Badge tone="success">Saved</Badge> : undefined}>
+    <Card
+      title={t('risk.thresholds')}
+      actions={saved ? <Badge tone="success">{t('risk.saved')}</Badge> : undefined}
+    >
       {error ? (
         <div style={{ marginBottom: 'var(--space-3)' }}>
           <Alert tone="error">{error}</Alert>
         </div>
       ) : null}
       <div className="grid grid--stats">
-        {field('stalled_deal_days', 'Stalled deal (days)', 'An open deal with no activity for this many days.')}
-        {field('overdue_task_days', 'Overdue task (days)', 'A task this many days past its due date.')}
-        {field('account_no_contact_days', 'Account without contact (days)')}
-        {field('amount_spike_ratio', 'Amount spike (basis points)', '10000 = 1.0x the median deal.')}
-        {field('conversion_drop_ratio', 'Conversion drop (basis points)', 'Win rate fell to at most this share; 10000 = 100%.')}
-        {field('stage_concentration_ratio', 'Stage concentration (basis points)', 'A stage holding at least this share of open value.')}
+        {field('stalled_deal_days', t('risk.stalledDealDays'), t('risk.stalledDealDaysHint'))}
+        {field('overdue_task_days', t('risk.overdueTaskDays'), t('risk.overdueTaskDaysHint'))}
+        {field('account_no_contact_days', t('risk.accountNoContactDays'))}
+        {field('amount_spike_ratio', t('risk.amountSpikeRatio'), t('risk.amountSpikeRatioHint'))}
+        {field('conversion_drop_ratio', t('risk.conversionDropRatio'), t('risk.conversionDropRatioHint'))}
+        {field('stage_concentration_ratio', t('risk.stageConcentrationRatio'), t('risk.stageConcentrationRatioHint'))}
       </div>
       {canManage ? (
         <div style={{ marginTop: 'var(--space-4)' }}>
@@ -280,11 +285,11 @@ function ThresholdsCard({ canManage }: { canManage: boolean }) {
             disabled={save.isPending}
             onClick={() => save.mutate(current)}
           >
-            {save.isPending ? 'Saving…' : 'Save thresholds'}
+            {save.isPending ? t('common.saving') : t('risk.saveThresholds')}
           </button>
         </div>
       ) : (
-        <Alert tone="info">You do not have permission to change thresholds.</Alert>
+        <Alert tone="info">{t('risk.noThresholdPermission')}</Alert>
       )}
     </Card>
   )

@@ -18,6 +18,7 @@ import {
   type WorkflowCondition,
   type WorkflowStep,
 } from '../api/workflows'
+import { translateEn, useT, type TFunction } from '../i18n'
 import { Badge } from './ui'
 
 export interface StepValidation {
@@ -25,43 +26,49 @@ export interface StepValidation {
   errors: string[]
 }
 
-/** Validates a definition the way the engine's parser does, for early feedback. */
-export function validateDefinition(steps: WorkflowStep[]): StepValidation {
+/**
+ * Validates a definition the way the engine's parser does, for early feedback.
+ *
+ * It reports its findings through the same translator the page uses, so the
+ * message a user reads here is localised; the default is the reference locale
+ * for callers that have no translator (a unit test, or any future CLI).
+ */
+export function validateDefinition(steps: WorkflowStep[], t: TFunction = translateEn): StepValidation {
   const errors: string[] = []
   const ids = new Set<string>()
 
   const walk = (list: WorkflowStep[], inForeach: boolean) => {
     if (!Array.isArray(list) || list.length === 0) {
-      errors.push('A step list cannot be empty.')
+      errors.push(t('workflowEditor.errEmptyList'))
       return
     }
     for (const step of list) {
-      if (!step.id?.trim()) errors.push('Every step needs an id.')
-      if (step.id && ids.has(step.id)) errors.push(`Duplicate step id "${step.id}".`)
+      if (!step.id?.trim()) errors.push(t('workflowEditor.errMissingId'))
+      if (step.id && ids.has(step.id)) errors.push(t('workflowEditor.errDuplicateId', { id: step.id }))
       if (step.id) ids.add(step.id)
       if (!WORKFLOW_STEP_TYPES.includes(step.type as (typeof WORKFLOW_STEP_TYPES)[number])) {
-        errors.push(`Unknown step type "${step.type}".`)
+        errors.push(t('workflowEditor.errUnknownType', { type: step.type }))
         continue
       }
       if (inForeach && (step.type === 'condition' || step.type === 'delay' || step.type === 'foreach' || step.type === 'branch')) {
-        errors.push(`A foreach body cannot contain a "${step.type}" step.`)
+        errors.push(t('workflowEditor.errForeachForbidden', { type: step.type }))
       }
       if (step.type === 'condition' || step.type === 'branch') {
-        if (!step.condition?.field?.trim()) errors.push(`Step "${step.id}" needs a condition field.`)
-        if (!step.condition?.op) errors.push(`Step "${step.id}" needs an operator.`)
+        if (!step.condition?.field?.trim()) errors.push(t('workflowEditor.errNeedField', { id: step.id }))
+        if (!step.condition?.op) errors.push(t('workflowEditor.errNeedOperator', { id: step.id }))
       }
       if (step.type === 'branch') {
         walk(step.then ?? [], inForeach)
         walk(step.else ?? [], inForeach)
       }
       if (step.type === 'foreach') {
-        if (!step.do || step.do.length === 0) errors.push(`Step "${step.id}" has nothing to repeat.`)
+        if (!step.do || step.do.length === 0) errors.push(t('workflowEditor.errNothingToRepeat', { id: step.id }))
         else walk(step.do, true)
       }
     }
   }
 
-  if (!Array.isArray(steps) || steps.length === 0) errors.push('The definition needs a non-empty "steps" array.')
+  if (!Array.isArray(steps) || steps.length === 0) errors.push(t('workflowEditor.errNeedSteps'))
   else walk(steps, false)
 
   return { ok: errors.length === 0, errors }
@@ -74,6 +81,7 @@ interface WorkflowEditorProps {
 }
 
 export function WorkflowEditor({ steps, eventTypes, onChange }: WorkflowEditorProps) {
+  const t = useT()
   return (
     <div className="stack" data-testid="workflow-editor">
       <StepList steps={steps} eventTypes={eventTypes} onChange={onChange} depth={0} />
@@ -82,7 +90,7 @@ export function WorkflowEditor({ steps, eventTypes, onChange }: WorkflowEditorPr
         className="btn btn--ghost btn--sm"
         onClick={() => onChange([...steps, newStep('create_task')])}
       >
-        + Add step
+        <span aria-hidden="true">+</span> {t('workflowEditor.addStep')}
       </button>
     </div>
   )
@@ -159,6 +167,7 @@ interface StepCardProps {
 }
 
 function StepCard({ step, eventTypes, onChange, onRemove, depth }: StepCardProps) {
+  const t = useT()
   const patch = (fields: Partial<WorkflowStep>) => onChange({ ...step, ...fields })
   const patchArgs = (fields: Record<string, unknown>) =>
     onChange({ ...step, args: { ...(step.args ?? {}), ...fields } })
@@ -170,20 +179,20 @@ function StepCard({ step, eventTypes, onChange, onRemove, depth }: StepCardProps
       <div className="card__body stack">
         <div className="row" style={{ gap: 'var(--space-2)', alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <label className="field" style={{ flex: 1, minWidth: 140 }}>
-            <span className="field__label">Step id</span>
+            <span className="field__label">{t('workflowEditor.stepId')}</span>
             <input
               className="input mono"
               value={step.id}
-              aria-label={`step id ${step.id}`}
+              aria-label={t('workflowEditor.stepIdAria', { id: step.id })}
               onChange={(e) => patch({ id: e.target.value })}
             />
           </label>
           <label className="field" style={{ flex: 1, minWidth: 160 }}>
-            <span className="field__label">Type</span>
+            <span className="field__label">{t('workflowEditor.type')}</span>
             <select
               className="input"
               value={step.type}
-              aria-label={`step type ${step.id}`}
+              aria-label={t('workflowEditor.stepTypeAria', { id: step.id })}
               onChange={(e) => onChange(newStep(e.target.value))}
             >
               {WORKFLOW_STEP_TYPES.map((t) => (
@@ -194,7 +203,7 @@ function StepCard({ step, eventTypes, onChange, onRemove, depth }: StepCardProps
             </select>
           </label>
           <button type="button" className="btn btn--ghost btn--sm" onClick={onRemove}>
-            Remove
+            {t('workflowEditor.remove')}
           </button>
         </div>
 
@@ -208,7 +217,7 @@ function StepCard({ step, eventTypes, onChange, onRemove, depth }: StepCardProps
         {step.type === 'branch' ? (
           <div className="stack">
             <div>
-              <Badge tone="accent">then</Badge>
+              <Badge tone="accent">{t('workflowEditor.then')}</Badge>
               <StepList
                 steps={step.then ?? []}
                 eventTypes={eventTypes}
@@ -217,7 +226,7 @@ function StepCard({ step, eventTypes, onChange, onRemove, depth }: StepCardProps
               />
             </div>
             <div>
-              <Badge tone="neutral">else</Badge>
+              <Badge tone="neutral">{t('workflowEditor.else')}</Badge>
               <StepList
                 steps={step.else ?? []}
                 eventTypes={eventTypes}
@@ -230,7 +239,7 @@ function StepCard({ step, eventTypes, onChange, onRemove, depth }: StepCardProps
 
         {step.type === 'foreach' ? (
           <div>
-            <Badge tone="accent">repeat for each item</Badge>
+            <Badge tone="accent">{t('workflowEditor.foreach')}</Badge>
             <StepList
               steps={step.do ?? []}
               eventTypes={eventTypes}
@@ -255,24 +264,25 @@ function ConditionEditor({
   condition: WorkflowCondition
   onChange: (condition: WorkflowCondition) => void
 }) {
+  const t = useT()
   return (
     <div className="row" style={{ gap: 'var(--space-2)', flexWrap: 'wrap', alignItems: 'flex-end' }}>
       <label className="field" style={{ flex: 2, minWidth: 160 }}>
-        <span className="field__label">Field</span>
+        <span className="field__label">{t('workflowEditor.field')}</span>
         <input
           className="input mono"
           value={condition.field}
-          aria-label="condition field"
-          placeholder="payload.priority"
+          aria-label={t('workflowEditor.conditionFieldAria')}
+          placeholder={t('workflowEditor.conditionFieldPlaceholder')}
           onChange={(e) => onChange({ ...condition, field: e.target.value })}
         />
       </label>
       <label className="field" style={{ flex: 1, minWidth: 100 }}>
-        <span className="field__label">Operator</span>
+        <span className="field__label">{t('workflowEditor.operator')}</span>
         <select
           className="input"
           value={condition.op}
-          aria-label="condition operator"
+          aria-label={t('workflowEditor.conditionOperatorAria')}
           onChange={(e) => onChange({ ...condition, op: e.target.value })}
         >
           {CONDITION_OPERATORS.map((op) => (
@@ -283,11 +293,11 @@ function ConditionEditor({
         </select>
       </label>
       <label className="field" style={{ flex: 2, minWidth: 140 }}>
-        <span className="field__label">Value</span>
+        <span className="field__label">{t('workflowEditor.value')}</span>
         <input
           className="input mono"
           value={condition.value === undefined || condition.value === null ? '' : String(condition.value)}
-          aria-label="condition value"
+          aria-label={t('workflowEditor.conditionValueAria')}
           onChange={(e) => onChange({ ...condition, value: e.target.value })}
         />
       </label>
@@ -305,6 +315,7 @@ function ArgsEditor({
   eventTypes: string[]
   onChange: (fields: Record<string, unknown>) => void
 }) {
+  const t = useT()
   const args = step.args ?? {}
   const str = (key: string) => (typeof args[key] === 'string' ? (args[key] as string) : '')
   const num = (key: string) => (typeof args[key] === 'number' ? String(args[key]) : '')
@@ -313,43 +324,43 @@ function ArgsEditor({
   switch (step.type) {
     case 'create_task':
       fields.push(
-        { key: 'title', label: 'Title', kind: 'text' },
-        { key: 'description', label: 'Description', kind: 'text' },
-        { key: 'priority', label: 'Priority', kind: 'select', options: ['low', 'normal', 'high', 'urgent'] },
-        { key: 'due_in_hours', label: 'Due in (hours)', kind: 'number' },
-        { key: 'deal_id', label: 'Deal id', kind: 'text' },
+        { key: 'title', label: t('workflowEditor.argTitle'), kind: 'text' },
+        { key: 'description', label: t('workflowEditor.argDescription'), kind: 'text' },
+        { key: 'priority', label: t('workflowEditor.argPriority'), kind: 'select', options: ['low', 'normal', 'high', 'urgent'] },
+        { key: 'due_in_hours', label: t('workflowEditor.argDueInHours'), kind: 'number' },
+        { key: 'deal_id', label: t('workflowEditor.argDealId'), kind: 'text' },
       )
       break
     case 'create_ticket':
       fields.push(
-        { key: 'subject', label: 'Subject', kind: 'text' },
-        { key: 'priority', label: 'Priority', kind: 'select', options: ['low', 'normal', 'high', 'urgent'] },
-        { key: 'description', label: 'Description', kind: 'text' },
+        { key: 'subject', label: t('workflowEditor.argSubject'), kind: 'text' },
+        { key: 'priority', label: t('workflowEditor.argPriority'), kind: 'select', options: ['low', 'normal', 'high', 'urgent'] },
+        { key: 'description', label: t('workflowEditor.argDescription'), kind: 'text' },
       )
       break
     case 'notify':
       fields.push(
-        { key: 'user_id', label: 'Recipient user id', kind: 'text' },
-        { key: 'title', label: 'Title', kind: 'text' },
-        { key: 'body', label: 'Body', kind: 'text' },
+        { key: 'user_id', label: t('workflowEditor.argRecipientUserId'), kind: 'text' },
+        { key: 'title', label: t('workflowEditor.argTitle'), kind: 'text' },
+        { key: 'body', label: t('workflowEditor.argBody'), kind: 'text' },
       )
       break
     case 'update_deal':
       fields.push(
-        { key: 'deal_id', label: 'Deal id', kind: 'text' },
-        { key: 'stage_id', label: 'New stage id', kind: 'text' },
-        { key: 'status', label: 'Status', kind: 'select', options: ['open', 'won', 'lost'] },
+        { key: 'deal_id', label: t('workflowEditor.argDealId'), kind: 'text' },
+        { key: 'stage_id', label: t('workflowEditor.argNewStageId'), kind: 'text' },
+        { key: 'status', label: t('workflowEditor.argStatus'), kind: 'select', options: ['open', 'won', 'lost'] },
       )
       break
     case 'delay':
-      fields.push({ key: 'minutes', label: 'Delay (minutes)', kind: 'number' })
+      fields.push({ key: 'minutes', label: t('workflowEditor.argDelayMinutes'), kind: 'number' })
       break
     case 'find_deals':
       fields.push(
-        { key: 'status', label: 'Status', kind: 'select', options: ['', 'open', 'won', 'lost'] },
-        { key: 'close_date_within_days', label: 'Close date within (days)', kind: 'number' },
-        { key: 'stale_days', label: 'No activity for (days)', kind: 'number' },
-        { key: 'limit', label: 'Limit', kind: 'number' },
+        { key: 'status', label: t('workflowEditor.argStatus'), kind: 'select', options: ['', 'open', 'won', 'lost'] },
+        { key: 'close_date_within_days', label: t('workflowEditor.argCloseWithinDays'), kind: 'number' },
+        { key: 'stale_days', label: t('workflowEditor.argStaleDays'), kind: 'number' },
+        { key: 'limit', label: t('workflowEditor.argLimit'), kind: 'number' },
       )
       break
     default:
@@ -391,7 +402,7 @@ function ArgsEditor({
       ))}
       {step.type === 'create_task' && eventTypes.length > 0 ? (
         <span className="field__hint">
-          Use <code>{'{{payload.deal_id}}'}</code> to reference the triggering event.
+          {t('workflowEditor.argEventHint', { path: '{{payload.deal_id}}' })}
         </span>
       ) : null}
     </div>

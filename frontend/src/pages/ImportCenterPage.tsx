@@ -7,16 +7,17 @@ import { errorMessage, fieldErrors } from '../api/client'
 import { IMPORT_ENTITY_TYPES } from '../types/api'
 import type { ImportJob } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
+import { useT, type TFunction } from '../i18n'
 import { ResourceList, type Column } from '../components/ResourceList'
 import { Alert, Field, PageHeader, StatusBadge, Timestamp, formatBytes } from '../components/ui'
 
-const columns: Column<ImportJob>[] = [
+const columns = (t: TFunction): Column<ImportJob>[] => [
   {
     key: 'name',
-    header: 'Import',
+        header: t('imports.columnImport'),
     render: (row) => (
       <div>
-        <div className="table__primary">{row.name || row.original_filename || 'Untitled import'}</div>
+        <div className="table__primary">{row.name || row.original_filename || t('imports.untitled')}</div>
         <div className="table__secondary">
           {row.entity_type ?? '—'}
           {row.format ? ` · ${row.format}` : ''}
@@ -25,67 +26,78 @@ const columns: Column<ImportJob>[] = [
       </div>
     ),
   },
-  { key: 'status', header: 'Status', render: (row) => <StatusBadge status={row.status} /> },
+    {
+      key: 'status',
+      header: t('imports.columnStatus'),
+      render: (row) => <StatusBadge status={row.status} />,
+    },
   {
     key: 'rows',
-    header: 'Rows',
+        header: t('imports.columnRows'),
     numeric: true,
     render: (row) =>
       row.status === 'pending' || row.total_rows === 0 ? (
         <span className="text-subtle">—</span>
       ) : (
-        <span title={`${row.imported_rows} imported, ${row.skipped_rows} skipped, ${row.failed_rows} failed`}>
+        <span
+                  title={t('imports.rowsTitle', {
+                    imported: row.imported_rows,
+                    skipped: row.skipped_rows,
+                    failed: row.failed_rows,
+                  })}
+                >
           {row.imported_rows}/{row.total_rows}
         </span>
       ),
   },
   {
     key: 'size',
-    header: 'Size',
+        header: t('imports.columnSize'),
     numeric: true,
     render: (row) => formatBytes(row.size_bytes),
   },
   {
     key: 'created',
-    header: 'Created',
+        header: t('imports.columnCreated'),
     render: (row) => <Timestamp value={row.created_at} />,
   },
 ]
 
 export function ImportCenterPage() {
-  const navigate = useNavigate()
-  const { can } = useAuth()
+    const navigate = useNavigate()
+    const { can } = useAuth()
+    const t = useT()
   const [creating, setCreating] = useState(false)
   const [exporting, setExporting] = useState(false)
 
   return (
     <>
       <PageHeader
-        title="Import Center"
-        meta="Load data from CSV, JSON, XLSX, XML and archives, preview it, and check the result before committing."
-      />
+                title={t('imports.title')}
+                meta={t('imports.meta')}
+              />
       <ResourceList
-        title="Import jobs"
+                title={t('imports.jobsTitle')}
         queryKey={['imports']}
         fetchPage={(params) => importsApi.list(params)}
-        columns={columns}
+                columns={columns(t)}
         rowKey={(row) => row.id}
         onRowClick={(row) => navigate(`/imports/${row.id}`)}
-        emptyTitle="No imports yet"
-        emptyText="Start an import to load contacts, accounts, deals or any other supported entity."
+                emptyTitle={t('imports.emptyTitle')}
+                emptyText={t('imports.emptyText')}
         searchable
-        searchPlaceholder="Search imports…"
+                searchPlaceholder={t('imports.searchPlaceholder')}
         actions={
           <div className="row" style={{ gap: 'var(--space-2)' }}>
             {can('exports.execute') ? (
               <button type="button" className="btn btn--secondary btn--sm" onClick={() => setExporting(true)}>
-                Export
-              </button>
+                {t('imports.export')}
+                </button>
             ) : null}
             {can('imports.create') ? (
               <button type="button" className="btn btn--primary btn--sm" onClick={() => setCreating(true)}>
-                New import
-              </button>
+                {t('imports.newImport')}
+                </button>
             ) : null}
           </div>
         }
@@ -113,6 +125,7 @@ export function ImportCenterPage() {
  * than silently exported.
  */
 function ExportDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const t = useT()
   const [entityType, setEntityType] = useState<string>(IMPORT_ENTITY_TYPES[0])
   const [format, setFormat] = useState<'csv' | 'jsonl'>('csv')
   const [error, setError] = useState<string | null>(null)
@@ -157,7 +170,7 @@ function ExportDialog({ open, onClose }: { open: boolean; onClose: () => void })
         onClick={(event) => event.stopPropagation()}
       >
         <div className="card__header">
-          <h2 id="export-title">Export records</h2>
+          <h2 id="export-title">{t('imports.exportTitle')}</h2>
         </div>
         <form
           onSubmit={(event: FormEvent) => {
@@ -173,7 +186,7 @@ function ExportDialog({ open, onClose }: { open: boolean; onClose: () => void })
               </div>
             ) : null}
             <div className="form-grid">
-              <Field label="Entity" htmlFor="export-entity">
+              <Field label={t('imports.entity')} htmlFor="export-entity">
                 <select
                   id="export-entity"
                   value={entityType}
@@ -186,7 +199,7 @@ function ExportDialog({ open, onClose }: { open: boolean; onClose: () => void })
                   ))}
                 </select>
               </Field>
-              <Field label="Format" htmlFor="export-format">
+              <Field label={t('imports.format')} htmlFor="export-format">
                 <select
                   id="export-format"
                   value={format}
@@ -200,10 +213,10 @@ function ExportDialog({ open, onClose }: { open: boolean; onClose: () => void })
           </div>
           <div className="form-actions">
             <button type="button" className="btn btn--secondary" onClick={onClose}>
-              Cancel
+              {t('common.cancel')}
             </button>
             <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
-              {mutation.isPending ? 'Preparing…' : 'Download'}
+              {mutation.isPending ? t('imports.preparing') : t('imports.download')}
             </button>
           </div>
         </form>
@@ -227,8 +240,9 @@ function NewImportDialog({
   onClose: () => void
   onCreated: (job: ImportJob) => void
 }) {
-  const queryClient = useQueryClient()
-  const [name, setName] = useState('')
+  const t = useT()
+    const queryClient = useQueryClient()
+    const [name, setName] = useState('')
   const [entityType, setEntityType] = useState<string>('contact')
   const [file, setFile] = useState<File | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -259,7 +273,7 @@ function NewImportDialog({
     setFormError(null)
     setErrors({})
     if (!file) {
-      setErrors({ file: 'Choose a file to import.' })
+      setErrors({ file: t('imports.chooseFile') })
       return
     }
     mutation.mutate()
@@ -288,22 +302,27 @@ function NewImportDialog({
         onClick={(event) => event.stopPropagation()}
       >
         <div className="card__header">
-          <h2 id="new-import-title">New import</h2>
+          <h2 id="new-import-title">{t('imports.newTitle')}</h2>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="card__body stack">
             {formError ? <Alert tone="error">{formError}</Alert> : null}
 
-            <Field label="Name" htmlFor="import-name" hint="For your own reference.">
+            <Field label={t('imports.name')} htmlFor="import-name" hint={t('imports.nameHint')}>
               <input
                 id="import-name"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                placeholder="March contact upload"
+                placeholder={t('imports.namePlaceholder')}
               />
             </Field>
 
-            <Field label="Target entity" htmlFor="import-entity" required error={errors.entity_type}>
+            <Field
+                          label={t('imports.targetEntity')}
+                          htmlFor="import-entity"
+                          required
+                          error={errors.entity_type}
+                        >
               <select
                 id="import-entity"
                 value={entityType}
@@ -318,11 +337,11 @@ function NewImportDialog({
             </Field>
 
             <Field
-              label="Source file"
-              htmlFor="import-file"
-              required
-              error={errors.file}
-              hint="CSV, TSV, XLSX, JSON, JSONL, XML, or an archive containing them."
+                            label={t('imports.sourceFile')}
+                            htmlFor="import-file"
+                            required
+                            error={errors.file}
+                            hint={t('imports.sourceFileHint')}
             >
               <input
                 id="import-file"
@@ -339,17 +358,14 @@ function NewImportDialog({
               </p>
             ) : null}
 
-            <Alert tone="info">
-              Nothing is written until you review the mapping and confirm. You can dry-run the
-              import first and see exactly what would change.
-            </Alert>
+            <Alert tone="info">{t('imports.nothingWritten')}</Alert>
           </div>
           <div className="form-actions">
             <button type="button" className="btn btn--secondary" onClick={onClose} disabled={mutation.isPending}>
-              Cancel
+              {t('common.cancel')}
             </button>
             <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
-              {mutation.isPending ? 'Uploading…' : 'Create and upload'}
+              {mutation.isPending ? t('common.uploading') : t('imports.createAndUpload')}
             </button>
           </div>
         </form>
