@@ -13,6 +13,7 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AttachmentPanel } from './AttachmentPanel'
 import { AuthProvider } from '../hooks/useAuth'
+import { I18nProvider } from '../i18n'
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -71,9 +72,11 @@ function renderPanel() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <AttachmentPanel entityType="deal" entityId="11111111-1111-1111-1111-111111111111" />
-      </AuthProvider>
+      <I18nProvider>
+        <AuthProvider>
+          <AttachmentPanel entityType="deal" entityId="11111111-1111-1111-1111-111111111111" />
+        </AuthProvider>
+      </I18nProvider>
     </QueryClientProvider>,
   )
 }

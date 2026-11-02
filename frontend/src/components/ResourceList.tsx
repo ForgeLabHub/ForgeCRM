@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import type { ListResponse, PaginationParams } from '../api/client'
 import { errorMessage } from '../api/client'
+import { useT } from '../i18n'
 import { Card, EmptyState, ErrorState, Pagination, TableSkeleton } from './ui'
 
 export interface Column<T> {
@@ -59,13 +60,15 @@ export function ResourceList<T>({
   emptyText,
   emptyAction,
   searchable = false,
-  searchPlaceholder = 'Search…',
+  searchPlaceholder,
   filters,
   actions,
   title,
   pageSize = 25,
   bulkActions,
 }: ResourceListProps<T>) {
+  const t = useT()
+  const placeholder = searchPlaceholder ?? t('common.search')
   const [offset, setOffset] = useState(0)
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
@@ -121,12 +124,12 @@ export function ResourceList<T>({
           {searchable ? (
             <div className="toolbar__search">
               <label className="sr-only" htmlFor="resource-search">
-                {searchPlaceholder}
+                {placeholder}
               </label>
               <input
                 id="resource-search"
                 type="search"
-                placeholder={searchPlaceholder}
+                placeholder={placeholder}
                 value={search}
                 onChange={(event) => {
                   setSearch(event.target.value)
@@ -143,7 +146,7 @@ export function ResourceList<T>({
       {selectable && selected.size > 0 ? (
         <div className="toolbar" style={{ padding: 'var(--space-3) var(--space-4) 0' }}>
           <span className="text-sm">
-            {selected.size} selected
+            {t('common.selectedCount', { count: selected.size })}
           </span>
           {bulkActions ? bulkActions([...selected], () => setSelected(new Set())) : null}
         </div>
@@ -155,8 +158,8 @@ export function ResourceList<T>({
         <TableSkeleton rows={6} columns={columns.length} />
       ) : !data || data.items.length === 0 ? (
         <EmptyState
-          title={search.trim() ? 'No matches' : emptyTitle}
-          text={search.trim() ? 'Try a different search term.' : emptyText}
+          title={search.trim() ? t('common.noMatches') : emptyTitle}
+          text={search.trim() ? t('common.tryDifferentSearch') : emptyText}
           action={search.trim() ? undefined : emptyAction}
         />
       ) : (
@@ -169,7 +172,7 @@ export function ResourceList<T>({
                     <th style={{ width: '2.5rem' }}>
                       <input
                         type="checkbox"
-                        aria-label="Select all rows on this page"
+                        aria-label={t('resourceList.selectAll')}
                         checked={allOnPageSelected}
                         onChange={toggleAllOnPage}
                       />
@@ -199,7 +202,7 @@ export function ResourceList<T>({
                             select would navigate away from the list being built. */}
                         <input
                           type="checkbox"
-                          aria-label="Select row"
+                          aria-label={t('resourceList.selectRow')}
                           checked={selected.has(String(rowKey(row)))}
                           onClick={(event) => event.stopPropagation()}
                           onChange={() => toggle(String(rowKey(row)))}

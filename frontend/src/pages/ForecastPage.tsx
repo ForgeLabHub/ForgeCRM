@@ -71,7 +71,7 @@ export function ForecastPage() {
         </div>
       ) : null}
 
-      <div className="grid" style={{ gridTemplateColumns: 'minmax(280px, 340px) 1fr', gap: 'var(--space-5)' }}>
+      <div className="layout--aside">
         <div className="stack">
           <Card title="New forecast">
             <div className="stack">
@@ -182,7 +182,7 @@ function ForecastDetail({ run }: { run: ForecastRun }) {
   return (
     <>
       <Card title="Projection">
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-4)' }}>
+        <div className="grid grid--stats">
           <Stat label="Method" value={result.method} hint={result.algorithm_version} />
           <Stat label="Horizon" value={`${run.horizon} periods`} />
           <Stat
@@ -196,31 +196,33 @@ function ForecastDetail({ run }: { run: ForecastRun }) {
           />
         </div>
 
-        <table className="table" style={{ marginTop: 'var(--space-4)' }}>
-          <thead>
-            <tr>
-              <th scope="col">Period</th>
-              <th scope="col">Projected</th>
-              <th scope="col">Error band</th>
-            </tr>
-          </thead>
-          <tbody>
-            {result.points.map((point) => (
-              <tr key={point.period}>
-                <td>{point.period}</td>
-                <td>{formatMinorUnits(point.value.amount_minor, currency)}</td>
-                <td className="text-subtle">
-                  {formatMinorUnits(point.lower.amount_minor, currency)} –{' '}
-                  {formatMinorUnits(point.upper.amount_minor, currency)}
-                </td>
+        <div className="table-wrap" style={{ marginTop: 'var(--space-4)' }}>
+          <table className="table">
+            <thead>
+              <tr>
+                <th scope="col">Period</th>
+                <th scope="col">Projected</th>
+                <th scope="col">Error band</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {result.points.map((point) => (
+                <tr key={point.period}>
+                  <td>{point.period}</td>
+                  <td>{formatMinorUnits(point.value.amount_minor, currency)}</td>
+                  <td className="text-subtle">
+                    {formatMinorUnits(point.lower.amount_minor, currency)} –{' '}
+                    {formatMinorUnits(point.upper.amount_minor, currency)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
       <Card title="Measured accuracy">
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-4)' }}>
+        <div className="grid grid--stats">
           <Stat label="Folds scored" value={result.quality.folds} />
           <Stat label="MAE" value={formatMinorUnits(result.quality.mae.amount_minor, currency)} hint="Mean absolute error, out of sample" />
           <Stat
@@ -235,22 +237,24 @@ function ForecastDetail({ run }: { run: ForecastRun }) {
       </Card>
 
       <Card title="Observed series">
-        <table className="table">
-          <thead>
-            <tr>
-              <th scope="col">Period</th>
-              <th scope="col">Revenue (observed)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {result.history.map((point) => (
-              <tr key={point.period}>
-                <td>{point.period}</td>
-                <td>{formatMinorUnits(point.value.amount_minor, currency)}</td>
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th scope="col">Period</th>
+                <th scope="col">Revenue (observed)</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {result.history.map((point) => (
+                <tr key={point.period}>
+                  <td>{point.period}</td>
+                  <td>{formatMinorUnits(point.value.amount_minor, currency)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
       {result.assumptions.length > 0 ? (

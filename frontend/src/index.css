@@ -494,6 +494,11 @@ pre {
   padding: var(--space-5);
   max-width: 1400px;
   width: 100%;
+  /* A grid/flex child defaults to min-width:auto, so a wide descendant (a
+     table, a long unbroken string) would widen the whole column and push the
+     page sideways instead of scrolling inside its own box. Pinning the column
+     to min-width:0 keeps the overflow local to the element that can scroll. */
+  min-width: 0;
 }
 
 /* Scrim behind the mobile sidebar. It is a button so a tap anywhere dismisses
@@ -544,6 +549,9 @@ pre {
   gap: var(--space-3);
   padding: var(--space-4);
   border-bottom: 1px solid var(--color-border);
+  /* A header whose title and actions do not both fit wraps onto a second line
+     rather than overflowing the card, which is what happens on a phone. */
+  flex-wrap: wrap;
 }
 
 .card__body { padding: var(--space-4); }
@@ -561,6 +569,24 @@ pre {
 
 .grid--split {
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+/* A sidebar-plus-main split. The sidebar keeps a readable fixed-ish width and
+   the main column takes the rest; both are allowed to shrink to zero so a wide
+   child (a table) scrolls in place instead of widening the page. Below the
+   breakpoint the two stack, because a 280px sidebar and a readable main column
+   cannot both fit on a phone. */
+.layout--aside {
+  display: grid;
+  grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.layout--aside > * { min-width: 0; }
+
+@media (max-width: 860px) {
+  .layout--aside { grid-template-columns: 1fr; }
 }
 
 .stat {
@@ -739,7 +765,12 @@ textarea {
 
 /* ----------------------------------------------------------------- table -- */
 
-.table-wrap { overflow-x: auto; }
+.table-wrap {
+  overflow-x: auto;
+  /* Keeps the scroll container from growing the page: the wrapper may be
+     narrower than the table it holds, and that is the point. */
+  max-width: 100%;
+}
 
 table {
   width: 100%;

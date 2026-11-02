@@ -31,6 +31,7 @@ import {
 } from '../api/consent'
 import { errorMessage } from '../api/client'
 import { useAuth } from '../hooks/useAuth'
+import { useT, type TFunction, type TranslationKey } from '../i18n'
 import { Alert, Badge, Card, Field, Skeleton, Timestamp } from './ui'
 
 const STATE_TONE: Record<ConsentState, 'success' | 'danger' | 'warning'> = {
@@ -39,10 +40,14 @@ const STATE_TONE: Record<ConsentState, 'success' | 'danger' | 'warning'> = {
   withdrawn: 'warning',
 }
 
-const STATE_LABEL: Record<ConsentState, string> = {
-  granted: 'Granted',
-  denied: 'Denied',
-  withdrawn: 'Withdrawn',
+const STATE_LABEL_KEY: Record<ConsentState, TranslationKey> = {
+  granted: 'consent.granted',
+  denied: 'consent.denied',
+  withdrawn: 'consent.withdrawn',
+}
+
+function stateLabel(t: TFunction, state: ConsentState): string {
+  return t(STATE_LABEL_KEY[state])
 }
 
 /**
@@ -69,6 +74,7 @@ export interface ConsentPanelProps {
 }
 
 export function ConsentPanel({ subject, subjectLabel }: ConsentPanelProps) {
+  const t = useT()
   const { can } = useAuth()
   const canRead = can('consent.read')
   const canManage = can('consent.manage')
@@ -79,7 +85,7 @@ export function ConsentPanel({ subject, subjectLabel }: ConsentPanelProps) {
 
   return (
     <div style={{ marginTop: 'var(--space-5)' }}>
-      <Card title="Consent">
+      <Card title={t('consent.title')}>
         <CurrentDecisions subject={subject} subjectKey={key} subjectLabel={subjectLabel} />
         {canManage ? <RecordDecisionForm subject={subject} subjectKey={key} /> : null}
         <HistorySection subject={subject} subjectKey={key} />
@@ -98,6 +104,7 @@ function CurrentDecisions({
   subjectKey: string
   subjectLabel?: string
 }) {
+  const t = useT()
   const current = useQuery({
     queryKey: ['consent', 'current', key],
     queryFn: () => consentApi.current(subject),
@@ -112,42 +119,44 @@ function CurrentDecisions({
   if (items.length === 0) {
     return (
       <p className="text-muted text-sm">
-        No consent on record{subjectLabel ? ` for ${subjectLabel}` : ''}. Marketing and product
-        messages are blocked until a decision is recorded; transactional messages are still
-        allowed.
+        {subjectLabel
+          ? t('consent.noneWithSubject', { label: subjectLabel })
+          : t('consent.noneWithoutSubject')}
       </p>
     )
   }
 
   return (
-    <table>
-      <thead>
-        <tr>
-          <th>Purpose</th>
-          <th>Channel</th>
-          <th>State</th>
-          <th>Decided</th>
-          <th>Expires</th>
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((record) => (
-          <tr key={record.id}>
-            <td>{record.purpose.replace(/_/g, ' ')}</td>
-            <td>{record.channel}</td>
-            <td>
-              <Badge tone={STATE_TONE[record.state]}>{STATE_LABEL[record.state]}</Badge>
-            </td>
-            <td>
-              <Timestamp value={record.decided_at} />
-            </td>
-            <td>
-              {record.expires_at ? <Timestamp value={record.expires_at} /> : <span className="text-subtle">—</span>}
-            </td>
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>{t('consent.purpose')}</th>
+            <th>{t('consent.channel')}</th>
+            <th>{t('consent.state')}</th>
+            <th>{t('consent.decided')}</th>
+            <th>{t('consent.expires')}</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {items.map((record) => (
+            <tr key={record.id}>
+              <td>{record.purpose.replace(/_/g, ' ')}</td>
+              <td>{record.channel}</td>
+              <td>
+                <Badge tone={STATE_TONE[record.state]}>{stateLabel(t, record.state)}</Badge>
+              </td>
+              <td>
+                <Timestamp value={record.decided_at} />
+              </td>
+              <td>
+                {record.expires_at ? <Timestamp value={record.expires_at} /> : <span className="text-subtle">—</span>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }
 
@@ -159,6 +168,7 @@ function RecordDecisionForm({
   subject: ConsentSubject
   subjectKey: string
 }) {
+  const t = useT()
   const queryClient = useQueryClient()
   const [purpose, setPurpose] = useState<ConsentPurpose>('marketing')
   const [channel, setChannel] = useState<ConsentChannel>('email')
@@ -212,7 +222,7 @@ function RecordDecisionForm({
 
   return (
     <form className="form-grid" onSubmit={onSubmit} style={{ marginTop: 'var(--space-4)' }}>
-      <Field label="Purpose" htmlFor={`consent-purpose-${key}`}>
+      <Field label={t('consent.purpose')} htmlFor={`consent-purpose-${key}`}>
         <select
           id={`consent-purpose-${key}`}
           className="input"
@@ -227,7 +237,7 @@ function RecordDecisionForm({
         </select>
       </Field>
 
-      <Field label="Channel" htmlFor={`consent-channel-${key}`}>
+      <Field label={t('consent.channel')} htmlFor={`consent-channel-${key}`}>
         <select
           id={`consent-channel-${key}`}
           className="input"
@@ -242,23 +252,23 @@ function RecordDecisionForm({
         </select>
       </Field>
 
-      <Field label="Decision" htmlFor={`consent-state-${key}`}>
+      <Field label={t('consent.decision')} htmlFor={`consent-state-${key}`}>
         <select
           id={`consent-state-${key}`}
           className="input"
           value={state}
           onChange={(e) => setState(e.target.value as ConsentState)}
         >
-          <option value="granted">Granted</option>
-          <option value="denied">Denied</option>
-          <option value="withdrawn">Withdrawn</option>
+          <option value="granted">{t('consent.granted')}</option>
+          <option value="denied">{t('consent.denied')}</option>
+          <option value="withdrawn">{t('consent.withdrawn')}</option>
         </select>
       </Field>
 
       <Field
-        label="Basis"
+        label={t('consent.basis')}
         htmlFor={`consent-basis-${key}`}
-        hint="On what grounds, in your words. Optional."
+        hint={t('consent.basisHint')}
       >
         <input
           id={`consent-basis-${key}`}
@@ -277,7 +287,7 @@ function RecordDecisionForm({
 
       <div className="form-grid__full">
         <button type="submit" className="btn btn--primary btn--sm" disabled={busy}>
-          {state === 'withdrawn' ? 'Withdraw consent' : 'Record decision'}
+          {state === 'withdrawn' ? t('consent.withdrawConsent') : t('consent.recordDecision')}
         </button>
       </div>
     </form>
@@ -292,6 +302,7 @@ function HistorySection({
   subject: ConsentSubject
   subjectKey: string
 }) {
+  const t = useT()
   const [purpose, setPurpose] = useState<ConsentPurpose>('marketing')
   const [channel, setChannel] = useState<ConsentChannel>('email')
 
@@ -302,10 +313,10 @@ function HistorySection({
 
   return (
     <details style={{ marginTop: 'var(--space-4)' }}>
-      <summary className="text-sm">History</summary>
+      <summary className="text-sm">{t('consent.history')}</summary>
       <div className="stack stack--sm" style={{ marginTop: 'var(--space-3)' }}>
         <div className="form-grid">
-          <Field label="History purpose" htmlFor={`consent-history-purpose-${key}`}>
+          <Field label={t('consent.historyPurpose')} htmlFor={`consent-history-purpose-${key}`}>
             <select
               id={`consent-history-purpose-${key}`}
               className="input"
@@ -319,7 +330,7 @@ function HistorySection({
               ))}
             </select>
           </Field>
-          <Field label="History channel" htmlFor={`consent-history-channel-${key}`}>
+          <Field label={t('consent.historyChannel')} htmlFor={`consent-history-channel-${key}`}>
             <select
               id={`consent-history-channel-${key}`}
               className="input"
@@ -340,14 +351,14 @@ function HistorySection({
         ) : history.isLoading ? (
           <Skeleton height={40} />
         ) : (history.data?.items ?? []).length === 0 ? (
-          <p className="text-muted text-sm">No decisions recorded for this purpose and channel.</p>
+          <p className="text-muted text-sm">{t('consent.historyEmpty')}</p>
         ) : (
           <ul className="stack stack--sm" style={{ listStyle: 'none', padding: 0 }}>
             {(history.data?.items ?? []).map((record: ConsentRecord) => (
               <li key={record.id} className="text-sm">
-                <Badge tone={STATE_TONE[record.state]}>{STATE_LABEL[record.state]}</Badge>{' '}
-                revision {record.revision}
-                {record.current ? ' (current)' : ''} — <Timestamp value={record.decided_at} />
+                <Badge tone={STATE_TONE[record.state]}>{stateLabel(t, record.state)}</Badge>{' '}
+                {t('consent.revision', { n: record.revision })}
+                {record.current ? t('consent.current') : ''} — <Timestamp value={record.decided_at} />
                 {record.basis ? <> · {record.basis}</> : null}
               </li>
             ))}

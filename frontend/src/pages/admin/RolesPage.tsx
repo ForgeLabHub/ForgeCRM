@@ -81,7 +81,7 @@ export function RolesPage() {
               key={role.id}
               title={role.name}
               actions={
-                <div className="row">
+                <div className="row row--wrap">
                   <Badge tone="neutral" >{role.key}</Badge>
                   <Badge tone="accent">{role.permissions.length} permissions</Badge>
                   {role.is_system ? (

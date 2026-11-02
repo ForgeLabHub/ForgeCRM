@@ -609,41 +609,43 @@ function RunHistoryDrawer({ workflow, onClose }: { workflow: Workflow; onClose: 
           ) : null}
 
           {runs.length > 0 ? (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Started</th>
-                  <th>Trigger</th>
-                  <th>Status</th>
-                  <th>Steps</th>
-                  <th>Depth</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {runs.map((run) => (
-                  <tr key={run.id}>
-                    <td>
-                      <Timestamp value={run.started_at} />
-                    </td>
-                    <td className="mono text-sm">{run.trigger_type}</td>
-                    <td>
-                      <StatusBadge status={run.status} />
-                    </td>
-                    <td className="numeric">
-                      {run.steps_succeeded}/{run.steps_total}
-                      {run.steps_failed > 0 ? <span className="text-danger"> ({run.steps_failed} failed)</span> : null}
-                    </td>
-                    <td className="numeric">{run.run_depth}</td>
-                    <td>
-                      <button type="button" className="btn btn--ghost btn--sm" onClick={() => setSelected(run.id)}>
-                        Steps
-                      </button>
-                    </td>
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Started</th>
+                    <th>Trigger</th>
+                    <th>Status</th>
+                    <th>Steps</th>
+                    <th>Depth</th>
+                    <th />
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {runs.map((run) => (
+                    <tr key={run.id}>
+                      <td>
+                        <Timestamp value={run.started_at} />
+                      </td>
+                      <td className="mono text-sm">{run.trigger_type}</td>
+                      <td>
+                        <StatusBadge status={run.status} />
+                      </td>
+                      <td className="numeric">
+                        {run.steps_succeeded}/{run.steps_total}
+                        {run.steps_failed > 0 ? <span className="text-danger"> ({run.steps_failed} failed)</span> : null}
+                      </td>
+                      <td className="numeric">{run.run_depth}</td>
+                      <td>
+                        <button type="button" className="btn btn--ghost btn--sm" onClick={() => setSelected(run.id)}>
+                          Steps
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : null}
 
           {selected ? (

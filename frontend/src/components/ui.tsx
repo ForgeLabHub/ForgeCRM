@@ -1,6 +1,7 @@
 /** Small presentational primitives shared by every page. */
 import { useEffect, useId, useRef } from 'react'
 import type { ReactNode } from 'react'
+import { useLocale, useT, type TranslationKey } from '../i18n'
 import { IconClose } from './icons'
 
 export function Badge({
@@ -57,7 +58,17 @@ export function statusTone(status: string): 'neutral' | 'success' | 'danger' | '
 }
 
 export function StatusBadge({ status }: { status: string }) {
-  return <Badge tone={statusTone(status)}>{status.replace(/_/g, ' ')}</Badge>
+  const t = useT()
+  // A status the dictionary does not name falls back to its key, which the
+  // translator returns unchanged; humanising that is better than showing the
+  // raw enum to the user, and a status added server-side keeps working.
+  const key = `status.${status}` as TranslationKey
+  const translated = t(key)
+  return (
+    <Badge tone={statusTone(status)}>
+      {translated === key ? status.replace(/_/g, ' ') : translated}
+    </Badge>
+  )
 }
 
 export function PageHeader({
@@ -141,13 +152,14 @@ export function EmptyState({
 }
 
 export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  const t = useT()
   return (
     <div className="error-state" role="alert">
-      <div className="error-state__title">Something went wrong</div>
+      <div className="error-state__title">{t('common.somethingWentWrong')}</div>
       <p className="error-state__text">{message}</p>
       {onRetry ? (
         <button type="button" className="btn btn--secondary" onClick={onRetry}>
-          Try again
+          {t('common.retry')}
         </button>
       ) : null}
     </div>
@@ -214,8 +226,9 @@ export function Avatar({
 }
 
 export function TableSkeleton({ rows = 5, columns = 4 }: { rows?: number; columns?: number }) {
+  const t = useT()
   return (
-    <div className="card__body stack" aria-busy="true" aria-label="Loading">
+    <div className="card__body stack" aria-busy="true" aria-label={t('resourceList.loading')}>
       {Array.from({ length: rows }, (_, rowIndex) => (
         <div key={rowIndex} className="row">
           {Array.from({ length: columns }, (_, colIndex) => (
@@ -266,7 +279,7 @@ export function ConfirmDialog({
   open,
   title,
   text,
-  confirmLabel = 'Confirm',
+  confirmLabel,
   danger = false,
   busy = false,
   onConfirm,
@@ -281,6 +294,7 @@ export function ConfirmDialog({
   onConfirm: () => void
   onCancel: () => void
 }) {
+  const t = useT()
   return (
     <Modal
       open={open}
@@ -290,7 +304,7 @@ export function ConfirmDialog({
       footer={
         <>
           <button type="button" className="btn btn--secondary" onClick={onCancel} disabled={busy}>
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -298,7 +312,7 @@ export function ConfirmDialog({
             onClick={onConfirm}
             disabled={busy}
           >
-            {busy ? 'Working…' : confirmLabel}
+            {busy ? t('common.working') : (confirmLabel ?? t('common.confirm'))}
           </button>
         </>
       }
@@ -334,6 +348,7 @@ export function Modal({
   footer?: ReactNode
   children: ReactNode
 }) {
+  const t = useT()
   const panelRef = useRef<HTMLDivElement>(null)
   const titleId = useId()
   // Kept in a ref so the open/close effect depends only on `open`: a parent that
@@ -399,7 +414,7 @@ export function Modal({
             </h2>
             {description ? <p className="modal__description">{description}</p> : null}
           </div>
-          <button type="button" className="modal__close" aria-label="Close" onClick={onClose}>
+          <button type="button" className="modal__close" aria-label={t('common.close')} onClick={onClose}>
             <IconClose size={18} />
           </button>
         </div>
@@ -421,6 +436,7 @@ export function Pagination({
   offset: number
   onChange: (offset: number) => void
 }) {
+  const t = useT()
   const first = total === 0 ? 0 : offset + 1
   const last = Math.min(offset + limit, total)
   const hasPrevious = offset > 0
@@ -429,7 +445,9 @@ export function Pagination({
   return (
     <div className="pagination">
       <span>
-        {total === 0 ? 'No results' : `${first}–${last} of ${total}`}
+        {total === 0
+          ? t('common.noResults')
+          : t('common.paginationRange', { first, last, total })}
       </span>
       <div className="pagination__controls">
         <button
@@ -438,7 +456,7 @@ export function Pagination({
           disabled={!hasPrevious}
           onClick={() => onChange(Math.max(0, offset - limit))}
         >
-          Previous
+          {t('common.previous')}
         </button>
         <button
           type="button"
@@ -446,21 +464,28 @@ export function Pagination({
           disabled={!hasNext}
           onClick={() => onChange(offset + limit)}
         >
-          Next
+          {t('common.next')}
         </button>
       </div>
     </div>
   )
 }
 
-/** Renders a timestamp in the viewer's locale, or a dash when absent. */
+/**
+ * Renders a timestamp in the selected locale, or a dash when absent.
+ *
+ * The locale follows the interface rather than the operating system: a user who
+ * picked Russian sees Russian dates even on an English-locale machine, and the
+ * two cannot disagree.
+ */
 export function Timestamp({ value, withTime = true }: { value?: string | null; withTime?: boolean }) {
+  const locale = useLocale()
   if (!value) return <span className="text-subtle">—</span>
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return <span className="text-subtle">—</span>
   return (
     <time dateTime={value} title={date.toISOString()}>
-      {date.toLocaleString(undefined, {
+      {date.toLocaleString(locale, {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
@@ -470,9 +495,9 @@ export function Timestamp({ value, withTime = true }: { value?: string | null; w
   )
 }
 
-export function formatMoney(amount: number, currency = 'USD'): string {
+export function formatMoney(amount: number, currency = 'USD', locale?: string): string {
   try {
-    return new Intl.NumberFormat(undefined, {
+    return new Intl.NumberFormat(locale, {
       style: 'currency',
       currency,
       maximumFractionDigits: 2,

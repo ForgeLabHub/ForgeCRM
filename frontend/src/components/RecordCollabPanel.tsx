@@ -18,6 +18,7 @@ import { commentsApi, tagsApi } from '../api/crm'
 import { errorMessage } from '../api/client'
 import type { Comment, Tag } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
+import { useT } from '../i18n'
 import { Alert, Card, Skeleton, Timestamp } from './ui'
 
 export type CollabEntityType = 'account' | 'contact' | 'lead' | 'deal' | 'ticket' | 'task'
@@ -44,6 +45,7 @@ export function RecordCollabPanel({ entityType, entityId }: RecordCollabPanelPro
 }
 
 function TagsCard({ entityType, entityId }: RecordCollabPanelProps) {
+  const t = useT()
   const { can } = useAuth()
   const queryClient = useQueryClient()
   const canManage = can('tags.manage')
@@ -106,7 +108,7 @@ function TagsCard({ entityType, entityId }: RecordCollabPanelProps) {
     setError(null)
     const name = newTag.trim()
     if (!name) {
-      setError('A tag needs a name.')
+      setError(t('recordCollab.tagNeedsName'))
       return
     }
     createAndAttach.mutate(name)
@@ -115,7 +117,7 @@ function TagsCard({ entityType, entityId }: RecordCollabPanelProps) {
   const busy = attach.isPending || createAndAttach.isPending
 
   return (
-    <Card title={`Tags${attachedTagIds.size ? ` (${attachedTagIds.size})` : ''}`}>
+    <Card title={`${t('recordCollab.tagsTitle')}${attachedTagIds.size ? ` (${attachedTagIds.size})` : ''}`}>
       {error ? <Alert tone="error">{error}</Alert> : null}
       {attached.isError ? <Alert tone="error">{errorMessage(attached.error)}</Alert> : null}
 
@@ -138,20 +140,20 @@ function TagsCard({ entityType, entityId }: RecordCollabPanelProps) {
           ))}
         </div>
       ) : (
-        <p className="text-muted text-sm">No tags on this record.</p>
+        <p className="text-muted text-sm">{t('recordCollab.noTags')}</p>
       )}
 
       {canManage ? (
         <div className="stack stack--sm" style={{ marginTop: 'var(--space-3)' }}>
           <form className="row" style={{ gap: 'var(--space-2)' }} onSubmit={onAttach}>
             <select
-              aria-label="Attach an existing tag"
+              aria-label={t('recordCollab.attachExisting')}
               value={selected}
               onChange={(event) => setSelected(event.target.value)}
               disabled={busy || available.length === 0}
             >
               <option value="">
-                {available.length === 0 ? 'No tags left to attach' : 'Attach a tag…'}
+                {available.length === 0 ? t('recordCollab.noTagsLeft') : t('recordCollab.attachTag')}
               </option>
               {available.map((tag) => (
                 <option key={tag.id} value={tag.id}>
@@ -164,20 +166,20 @@ function TagsCard({ entityType, entityId }: RecordCollabPanelProps) {
               className="btn btn--secondary btn--sm"
               disabled={busy || !selected}
             >
-              Attach
+              {t('recordCollab.attach')}
             </button>
           </form>
 
           <form className="row" style={{ gap: 'var(--space-2)' }} onSubmit={onCreate}>
             <input
-              aria-label="New tag name"
-              placeholder="New tag name"
+              aria-label={t('recordCollab.newTagName')}
+              placeholder={t('recordCollab.newTagName')}
               value={newTag}
               onChange={(event) => setNewTag(event.target.value)}
               disabled={busy}
             />
             <button type="submit" className="btn btn--ghost btn--sm" disabled={busy}>
-              Create &amp; attach
+              {t('recordCollab.createAndAttach')}
             </button>
           </form>
         </div>
@@ -187,6 +189,7 @@ function TagsCard({ entityType, entityId }: RecordCollabPanelProps) {
 }
 
 function CommentsCard({ entityType, entityId }: RecordCollabPanelProps) {
+  const t = useT()
   const { can } = useAuth()
   const queryClient = useQueryClient()
   const canComment = can('comments.create')
@@ -215,7 +218,7 @@ function CommentsCard({ entityType, entityId }: RecordCollabPanelProps) {
     setError(null)
     const text = body.trim()
     if (!text) {
-      setError('A comment needs some text.')
+      setError(t('recordCollab.commentNeedsText'))
       return
     }
     create.mutate(text)
@@ -224,7 +227,7 @@ function CommentsCard({ entityType, entityId }: RecordCollabPanelProps) {
   const comments: Comment[] = list.data?.items ?? []
 
   return (
-    <Card title={`Comments${comments.length ? ` (${comments.length})` : ''}`}>
+    <Card title={`${t('recordCollab.commentsTitle')}${comments.length ? ` (${comments.length})` : ''}`}>
       {error ? <Alert tone="error">{error}</Alert> : null}
       {list.isError ? <Alert tone="error">{errorMessage(list.error)}</Alert> : null}
 
@@ -236,7 +239,7 @@ function CommentsCard({ entityType, entityId }: RecordCollabPanelProps) {
             <li key={comment.id} className="stack stack--sm">
               <div className="row row--between">
                 <span className="table__primary text-sm">
-                  {comment.author_name ?? 'Unattributed'}
+                  {comment.author_name ?? t('recordCollab.unattributed')}
                 </span>
                 <Timestamp value={comment.created_at} />
               </div>
@@ -247,14 +250,14 @@ function CommentsCard({ entityType, entityId }: RecordCollabPanelProps) {
           ))}
         </ul>
       ) : (
-        <p className="text-muted text-sm">No comments yet.</p>
+        <p className="text-muted text-sm">{t('recordCollab.noComments')}</p>
       )}
 
       {canComment ? (
         <form className="stack stack--sm" style={{ marginTop: 'var(--space-3)' }} onSubmit={onSubmit}>
           <textarea
-            aria-label="Add a comment"
-            placeholder="Add a comment…"
+            aria-label={t('recordCollab.addComment')}
+            placeholder={t('recordCollab.addCommentPlaceholder')}
             rows={3}
             value={body}
             onChange={(event) => setBody(event.target.value)}
@@ -262,7 +265,7 @@ function CommentsCard({ entityType, entityId }: RecordCollabPanelProps) {
           />
           <div className="row row--end">
             <button type="submit" className="btn btn--primary btn--sm" disabled={create.isPending}>
-              {create.isPending ? 'Posting…' : 'Comment'}
+              {create.isPending ? t('common.posting') : t('recordCollab.comment')}
             </button>
           </div>
         </form>

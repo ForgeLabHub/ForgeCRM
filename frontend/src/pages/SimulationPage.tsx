@@ -79,7 +79,7 @@ export function SimulationPage() {
         </div>
       ) : null}
 
-      <div className="grid" style={{ gridTemplateColumns: 'minmax(280px, 340px) 1fr', gap: 'var(--space-5)' }}>
+      <div className="layout--aside">
         <div className="stack">
           <Card title="Scenarios">
             {scenariosQuery.isLoading ? (
@@ -535,28 +535,30 @@ function ComparisonView({ comparison }: { comparison: Comparison }) {
         ))}
       </div>
 
-      <div className="card" style={{ overflow: 'hidden' }}>
-        <table className="table">
-          <caption className="sr-only">Baseline and variant by metric</caption>
-          <thead>
-            <tr>
-              <th scope="col">Metric</th>
-              <th scope="col">Observed (CRM)</th>
-              <th scope="col">Modelled</th>
-              <th scope="col">Change</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[...moneyMetrics, ...otherMetrics].map((metric) => (
-              <tr key={metric.key}>
-                <td>{metric.label}</td>
-                <td>{formatMetricValue(metric, metric.baseline)}</td>
-                <td>{formatMetricValue(metric, metric.variant)}</td>
-                <td>{formatChange(metric)}</td>
+      <div className="card">
+        <div className="table-wrap">
+          <table className="table">
+            <caption className="sr-only">Baseline and variant by metric</caption>
+            <thead>
+              <tr>
+                <th scope="col">Metric</th>
+                <th scope="col">Observed (CRM)</th>
+                <th scope="col">Modelled</th>
+                <th scope="col">Change</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {[...moneyMetrics, ...otherMetrics].map((metric) => (
+                <tr key={metric.key}>
+                  <td>{metric.label}</td>
+                  <td>{formatMetricValue(metric, metric.baseline)}</td>
+                  <td>{formatMetricValue(metric, metric.variant)}</td>
+                  <td>{formatChange(metric)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {comparison.assumptions.length > 0 ? (

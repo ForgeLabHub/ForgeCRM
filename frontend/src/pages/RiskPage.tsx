@@ -96,7 +96,7 @@ export function RiskPage() {
         </div>
       ) : null}
 
-      <div className="grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
+      <div className="grid grid--stats" style={{ marginBottom: 'var(--space-5)' }}>
         <Stat label="Critical" value={bySeverity.critical} />
         <Stat label="High" value={bySeverity.high} />
         <Stat label="Warning" value={bySeverity.warn} />
@@ -264,7 +264,7 @@ function ThresholdsCard({ canManage }: { canManage: boolean }) {
           <Alert tone="error">{error}</Alert>
         </div>
       ) : null}
-      <div className="grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-4)' }}>
+      <div className="grid grid--stats">
         {field('stalled_deal_days', 'Stalled deal (days)', 'An open deal with no activity for this many days.')}
         {field('overdue_task_days', 'Overdue task (days)', 'A task this many days past its due date.')}
         {field('account_no_contact_days', 'Account without contact (days)')}
