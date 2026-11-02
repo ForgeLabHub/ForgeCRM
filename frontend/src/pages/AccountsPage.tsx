@@ -19,6 +19,7 @@ import {
   Card,
   ConfirmDialog,
   Field,
+  Modal,
   PageHeader,
   StatusBadge,
   Timestamp,
@@ -179,148 +180,128 @@ export function AccountFormDialog({
   if (!open) return null
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="account-form-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        overflowY: 'auto',
-        padding: 'var(--space-5)',
-      }}
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      title={editing ? t('accounts.editAccount') : t('accounts.newAccount')}
+      size="lg"
+      footer={<>
+        <button type="button" className="btn btn--secondary" onClick={onClose}>
+          {t('accounts.cancel')}
+        </button>
+        <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
+          {mutation.isPending ? t('accounts.saving') : editing ? t('accounts.saveChanges') : t('accounts.createAccount')}
+        </button>
+      </>}
+      formProps={{ onSubmit: handleSubmit }}
     >
-      <div
-        className="card"
-        style={{ maxWidth: 720, margin: '0 auto' }}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="card__header">
-          <h2 id="account-form-title">{editing ? t('accounts.editAccount') : t('accounts.newAccount')}</h2>
+      {formError ? (
+        <div style={{ marginBottom: 'var(--space-4)' }}>
+          <Alert tone="error">{formError}</Alert>
         </div>
-        <form onSubmit={handleSubmit}>
-          <div className="card__body">
-            {formError ? (
-              <div style={{ marginBottom: 'var(--space-4)' }}>
-                <Alert tone="error">{formError}</Alert>
-              </div>
-            ) : null}
+      ) : null}
 
-            <div className="form-grid">
-              <Field label={t('fields.name')} htmlFor="account-name" required error={errors.name}>
-                <input
-                  id="account-name"
-                  value={form.name}
-                  onChange={(event) => update('name', event.target.value)}
-                  className={errors.name ? 'input--invalid' : undefined}
-                  required
-                />
-              </Field>
-              <Field label={t('fields.legalName')} htmlFor="account-legal">
-                <input
-                  id="account-legal"
-                  value={form.legal_name ?? ''}
-                  onChange={(event) => update('legal_name', event.target.value || null)}
-                />
-              </Field>
-              <Field label={t('fields.industry')} htmlFor="account-industry">
-                <input
-                  id="account-industry"
-                  value={form.industry ?? ''}
-                  onChange={(event) => update('industry', event.target.value || null)}
-                />
-              </Field>
-              <Field label={t('fields.website')} htmlFor="account-website">
-                <input
-                  id="account-website"
-                  type="url"
-                  placeholder="https://"
-                  value={form.website ?? ''}
-                  onChange={(event) => update('website', event.target.value || null)}
-                />
-              </Field>
-              <Field label={t('fields.email')} htmlFor="account-email" error={errors.email}>
-                <input
-                  id="account-email"
-                  type="email"
-                  value={form.email ?? ''}
-                  onChange={(event) => update('email', event.target.value || null)}
-                />
-              </Field>
-              <Field label={t('fields.phone')} htmlFor="account-phone">
-                <input
-                  id="account-phone"
-                  value={form.phone ?? ''}
-                  onChange={(event) => update('phone', event.target.value || null)}
-                />
-              </Field>
-              <Field label={t('fields.taxId')} htmlFor="account-tax">
-                <input
-                  id="account-tax"
-                  value={form.tax_id ?? ''}
-                  onChange={(event) => update('tax_id', event.target.value || null)}
-                />
-              </Field>
-              <Field label={t('fields.employees')} htmlFor="account-employees">
-                <input
-                  id="account-employees"
-                  type="number"
-                  min={0}
-                  value={form.employee_count ?? ''}
-                  onChange={(event) =>
-                    update('employee_count', event.target.value === '' ? null : Number(event.target.value))
-                  }
-                />
-              </Field>
-              <Field label={t('fields.annualRevenue')} htmlFor="account-revenue">
-                <input
-                  id="account-revenue"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={form.annual_revenue ?? ''}
-                  onChange={(event) =>
-                    update('annual_revenue', event.target.value === '' ? null : Number(event.target.value))
-                  }
-                />
-              </Field>
-              <Field label={t('fields.country')} htmlFor="account-country">
-                <input
-                  id="account-country"
-                  value={form.country ?? ''}
-                  onChange={(event) => update('country', event.target.value || null)}
-                />
-              </Field>
-              <Field label={t('fields.city')} htmlFor="account-city">
-                <input
-                  id="account-city"
-                  value={form.city ?? ''}
-                  onChange={(event) => update('city', event.target.value || null)}
-                />
-              </Field>
-              <Field label={t('fields.address')} htmlFor="account-address" full>
-                <input
-                  id="account-address"
-                  value={form.address_line1 ?? ''}
-                  onChange={(event) => update('address_line1', event.target.value || null)}
-                />
-              </Field>
-            </div>
-          </div>
-          <div className="form-actions">
-            <button type="button" className="btn btn--secondary" onClick={onClose}>
-              {t('accounts.cancel')}
-            </button>
-            <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
-              {mutation.isPending ? t('accounts.saving') : editing ? t('accounts.saveChanges') : t('accounts.createAccount')}
-            </button>
-          </div>
-        </form>
+      <div className="form-grid">
+        <Field label={t('fields.name')} htmlFor="account-name" required error={errors.name}>
+          <input
+            id="account-name"
+            value={form.name}
+            onChange={(event) => update('name', event.target.value)}
+            className={errors.name ? 'input--invalid' : undefined}
+            required
+          />
+        </Field>
+        <Field label={t('fields.legalName')} htmlFor="account-legal">
+          <input
+            id="account-legal"
+            value={form.legal_name ?? ''}
+            onChange={(event) => update('legal_name', event.target.value || null)}
+          />
+        </Field>
+        <Field label={t('fields.industry')} htmlFor="account-industry">
+          <input
+            id="account-industry"
+            value={form.industry ?? ''}
+            onChange={(event) => update('industry', event.target.value || null)}
+          />
+        </Field>
+        <Field label={t('fields.website')} htmlFor="account-website">
+          <input
+            id="account-website"
+            type="url"
+            placeholder="https://"
+            value={form.website ?? ''}
+            onChange={(event) => update('website', event.target.value || null)}
+          />
+        </Field>
+        <Field label={t('fields.email')} htmlFor="account-email" error={errors.email}>
+          <input
+            id="account-email"
+            type="email"
+            value={form.email ?? ''}
+            onChange={(event) => update('email', event.target.value || null)}
+          />
+        </Field>
+        <Field label={t('fields.phone')} htmlFor="account-phone">
+          <input
+            id="account-phone"
+            value={form.phone ?? ''}
+            onChange={(event) => update('phone', event.target.value || null)}
+          />
+        </Field>
+        <Field label={t('fields.taxId')} htmlFor="account-tax">
+          <input
+            id="account-tax"
+            value={form.tax_id ?? ''}
+            onChange={(event) => update('tax_id', event.target.value || null)}
+          />
+        </Field>
+        <Field label={t('fields.employees')} htmlFor="account-employees">
+          <input
+            id="account-employees"
+            type="number"
+            min={0}
+            value={form.employee_count ?? ''}
+            onChange={(event) =>
+              update('employee_count', event.target.value === '' ? null : Number(event.target.value))
+            }
+          />
+        </Field>
+        <Field label={t('fields.annualRevenue')} htmlFor="account-revenue">
+          <input
+            id="account-revenue"
+            type="number"
+            min={0}
+            step="0.01"
+            value={form.annual_revenue ?? ''}
+            onChange={(event) =>
+              update('annual_revenue', event.target.value === '' ? null : Number(event.target.value))
+            }
+          />
+        </Field>
+        <Field label={t('fields.country')} htmlFor="account-country">
+          <input
+            id="account-country"
+            value={form.country ?? ''}
+            onChange={(event) => update('country', event.target.value || null)}
+          />
+        </Field>
+        <Field label={t('fields.city')} htmlFor="account-city">
+          <input
+            id="account-city"
+            value={form.city ?? ''}
+            onChange={(event) => update('city', event.target.value || null)}
+          />
+        </Field>
+        <Field label={t('fields.address')} htmlFor="account-address" full>
+          <input
+            id="account-address"
+            value={form.address_line1 ?? ''}
+            onChange={(event) => update('address_line1', event.target.value || null)}
+          />
+        </Field>
       </div>
-    </div>
+    </Modal>
   )
 }
 

@@ -19,6 +19,7 @@ import {
   Card,
   ConfirmDialog,
   Field,
+  Modal,
   PageHeader,
   Timestamp,
 } from '../components/ui'
@@ -178,134 +179,114 @@ export function ContactFormDialog({
   if (!open) return null
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="contact-form-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        overflowY: 'auto',
-        padding: 'var(--space-5)',
-      }}
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      title={editing ? t('contacts.editContact') : t('contacts.newContact')}
+      size="lg"
+      footer={<>
+        <button type="button" className="btn btn--secondary" onClick={onClose}>
+          {t('common.cancel')}
+        </button>
+        <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
+          {mutation.isPending
+            ? t('common.saving')
+            : editing
+              ? t('common.saveChanges')
+              : t('contacts.createContact')}
+        </button>
+      </>}
+      formProps={{ onSubmit: handleSubmit }}
     >
-      <div
-        className="card"
-        style={{ maxWidth: 680, margin: '0 auto' }}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="card__header">
-          <h2 id="contact-form-title">{editing ? t('contacts.editContact') : t('contacts.newContact')}</h2>
+      {formError ? (
+        <div style={{ marginBottom: 'var(--space-4)' }}>
+          <Alert tone="error">{formError}</Alert>
         </div>
-        <form onSubmit={handleSubmit}>
-          <div className="card__body">
-            {formError ? (
-              <div style={{ marginBottom: 'var(--space-4)' }}>
-                <Alert tone="error">{formError}</Alert>
-              </div>
-            ) : null}
+      ) : null}
 
-            <div className="form-grid">
-              <Field label={t('contacts.firstNameField')} htmlFor="contact-first" error={errors.name}>
-                <input
-                  id="contact-first"
-                  value={form.first_name ?? ''}
-                  onChange={(event) => update('first_name', event.target.value || null)}
-                />
-              </Field>
-              <Field label={t('contacts.lastNameField')} htmlFor="contact-last">
-                <input
-                  id="contact-last"
-                  value={form.last_name ?? ''}
-                  onChange={(event) => update('last_name', event.target.value || null)}
-                />
-              </Field>
-              <Field
-                label={t('contacts.emailField')}
-                htmlFor="contact-email"
-                error={errors.email}
-                hint={errors.name ? undefined : t('contacts.nameOrEmailHint')}
-              >
-                <input
-                  id="contact-email"
-                  type="email"
-                  value={form.email ?? ''}
-                  onChange={(event) => update('email', event.target.value || null)}
-                />
-              </Field>
-              <Field label={t('contacts.phoneField')} htmlFor="contact-phone">
-                <input
-                  id="contact-phone"
-                  value={form.phone ?? ''}
-                  onChange={(event) => update('phone', event.target.value || null)}
-                />
-              </Field>
-              <Field label={t('contacts.mobileField')} htmlFor="contact-mobile">
-                <input
-                  id="contact-mobile"
-                  value={form.mobile ?? ''}
-                  onChange={(event) => update('mobile', event.target.value || null)}
-                />
-              </Field>
-              <Field label={t('contacts.jobTitleField')} htmlFor="contact-title">
-                <input
-                  id="contact-title"
-                  value={form.job_title ?? ''}
-                  onChange={(event) => update('job_title', event.target.value || null)}
-                />
-              </Field>
-              <Field label={t('contacts.departmentField')} htmlFor="contact-department">
-                <input
-                  id="contact-department"
-                  value={form.department ?? ''}
-                  onChange={(event) => update('department', event.target.value || null)}
-                />
-              </Field>
-              <Field label={t('contacts.accountField')} htmlFor="contact-account">
-                <select
-                  id="contact-account"
-                  value={form.account_id ?? ''}
-                  onChange={(event) => update('account_id', event.target.value || null)}
-                >
-                  <option value="">{t('contacts.noAccount')}</option>
-                  {(accounts.data?.items ?? []).map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label={t('contacts.primaryField')} htmlFor="contact-primary" full>
-                <label className="checkbox">
-                  <input
-                    id="contact-primary"
-                    type="checkbox"
-                    checked={form.is_primary ?? false}
-                    onChange={(event) => update('is_primary', event.target.checked)}
-                  />
-                  {t('contacts.primaryHint')}
-                </label>
-              </Field>
-            </div>
-          </div>
-          <div className="form-actions">
-            <button type="button" className="btn btn--secondary" onClick={onClose}>
-              {t('common.cancel')}
-            </button>
-            <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
-              {mutation.isPending
-                ? t('common.saving')
-                : editing
-                  ? t('common.saveChanges')
-                  : t('contacts.createContact')}
-            </button>
-          </div>
-        </form>
+      <div className="form-grid">
+        <Field label={t('contacts.firstNameField')} htmlFor="contact-first" error={errors.name}>
+          <input
+            id="contact-first"
+            value={form.first_name ?? ''}
+            onChange={(event) => update('first_name', event.target.value || null)}
+          />
+        </Field>
+        <Field label={t('contacts.lastNameField')} htmlFor="contact-last">
+          <input
+            id="contact-last"
+            value={form.last_name ?? ''}
+            onChange={(event) => update('last_name', event.target.value || null)}
+          />
+        </Field>
+        <Field
+          label={t('contacts.emailField')}
+          htmlFor="contact-email"
+          error={errors.email}
+          hint={errors.name ? undefined : t('contacts.nameOrEmailHint')}
+        >
+          <input
+            id="contact-email"
+            type="email"
+            value={form.email ?? ''}
+            onChange={(event) => update('email', event.target.value || null)}
+          />
+        </Field>
+        <Field label={t('contacts.phoneField')} htmlFor="contact-phone">
+          <input
+            id="contact-phone"
+            value={form.phone ?? ''}
+            onChange={(event) => update('phone', event.target.value || null)}
+          />
+        </Field>
+        <Field label={t('contacts.mobileField')} htmlFor="contact-mobile">
+          <input
+            id="contact-mobile"
+            value={form.mobile ?? ''}
+            onChange={(event) => update('mobile', event.target.value || null)}
+          />
+        </Field>
+        <Field label={t('contacts.jobTitleField')} htmlFor="contact-title">
+          <input
+            id="contact-title"
+            value={form.job_title ?? ''}
+            onChange={(event) => update('job_title', event.target.value || null)}
+          />
+        </Field>
+        <Field label={t('contacts.departmentField')} htmlFor="contact-department">
+          <input
+            id="contact-department"
+            value={form.department ?? ''}
+            onChange={(event) => update('department', event.target.value || null)}
+          />
+        </Field>
+        <Field label={t('contacts.accountField')} htmlFor="contact-account">
+          <select
+            id="contact-account"
+            value={form.account_id ?? ''}
+            onChange={(event) => update('account_id', event.target.value || null)}
+          >
+            <option value="">{t('contacts.noAccount')}</option>
+            {(accounts.data?.items ?? []).map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t('contacts.primaryField')} htmlFor="contact-primary" full>
+          <label className="checkbox">
+            <input
+              id="contact-primary"
+              type="checkbox"
+              checked={form.is_primary ?? false}
+              onChange={(event) => update('is_primary', event.target.checked)}
+            />
+            {t('contacts.primaryHint')}
+          </label>
+        </Field>
       </div>
-    </div>
+    </Modal>
   )
 }
 

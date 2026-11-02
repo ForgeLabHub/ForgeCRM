@@ -13,7 +13,16 @@ import { SavedViewsBar } from '../components/SavedViewsBar'
 import { AssistPanel } from '../components/AssistPanel'
 import { AttachmentPanel } from '../components/AttachmentPanel'
 import { RecordCollabPanel } from '../components/RecordCollabPanel'
-import { Alert, Badge, Card, Field, PageHeader, StatusBadge, Timestamp } from '../components/ui'
+import {
+  Alert,
+  Badge,
+  Card,
+  Field,
+  Modal,
+  PageHeader,
+  StatusBadge,
+  Timestamp,
+} from '../components/ui'
 import { useT, type TFunction } from '../i18n'
 
 const STATUSES = ['new', 'open', 'pending', 'resolved', 'closed']
@@ -216,116 +225,95 @@ export function TicketFormDialog({
   if (!open) return null
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="ticket-form-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        overflowY: 'auto',
-        padding: 'var(--space-5)',
-      }}
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      title={editing ? t('tickets.editTicket') : t('tickets.newTicket')}
+      footer={<>
+        <button type="button" className="btn btn--secondary" onClick={onClose}>
+          {t('common.cancel')}
+        </button>
+        <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
+          {mutation.isPending
+            ? t('common.saving')
+            : editing
+              ? t('common.saveChanges')
+              : t('tickets.createTicket')}
+        </button>
+      </>}
+      formProps={{ onSubmit: handleSubmit }}
     >
-      <div
-        className="card"
-        style={{ maxWidth: 620, margin: '0 auto' }}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="card__header">
-          <h2 id="ticket-form-title">{editing ? t('tickets.editTicket') : t('tickets.newTicket')}</h2>
+      {formError ? (
+        <div style={{ marginBottom: 'var(--space-4)' }}>
+          <Alert tone="error">{formError}</Alert>
         </div>
-        <form onSubmit={handleSubmit}>
-          <div className="card__body">
-            {formError ? (
-              <div style={{ marginBottom: 'var(--space-4)' }}>
-                <Alert tone="error">{formError}</Alert>
-              </div>
-            ) : null}
-            {editing && ticket ? (
-              <div style={{ marginBottom: 'var(--space-4)' }} className="stack">
-                <AssistPanel entityType="ticket" entityId={ticket.id} />
-                <RecordCollabPanel entityType="ticket" entityId={ticket.id} />
-                <AttachmentPanel entityType="ticket" entityId={ticket.id} />
-              </div>
-            ) : null}
-            <div className="form-grid">
-              <Field label={t('tickets.subjectField')} htmlFor="ticket-subject" required error={errors.subject} full>
-                <input
-                  id="ticket-subject"
-                  value={form.subject}
-                  onChange={(event) => update('subject', event.target.value)}
-                  className={errors.subject ? 'input--invalid' : undefined}
-                  required
-                />
-              </Field>
-              <Field label={t('tickets.statusField')} htmlFor="ticket-status">
-                <select
-                  id="ticket-status"
-                  value={form.status ?? 'new'}
-                  onChange={(event) => update('status', event.target.value)}
-                >
-                  {STATUSES.map((status) => (
-                    <option key={status} value={status}>
-                      {t(`status.${status}` as Parameters<TFunction>[0])}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label={t('tickets.priorityField')} htmlFor="ticket-priority">
-                <select
-                  id="ticket-priority"
-                  value={form.priority ?? 'normal'}
-                  onChange={(event) => update('priority', event.target.value)}
-                >
-                  {PRIORITIES.map((priority) => (
-                    <option key={priority} value={priority}>
-                      {priorityLabel(t, priority)}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label={t('tickets.channelField')} htmlFor="ticket-channel">
-                <select
-                  id="ticket-channel"
-                  value={form.channel ?? ''}
-                  onChange={(event) => update('channel', event.target.value || null)}
-                >
-                  <option value="">{t('tickets.channelNotSet')}</option>
-                  {['email', 'phone', 'web', 'chat', 'telegram'].map((channel) => (
-                    <option key={channel} value={channel}>
-                      {t(`channel.${channel}` as Parameters<TFunction>[0])}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label={t('tickets.descriptionField')} htmlFor="ticket-description" full>
-                <textarea
-                  id="ticket-description"
-                  value={form.description ?? ''}
-                  onChange={(event) => update('description', event.target.value || null)}
-                />
-              </Field>
-            </div>
-          </div>
-          <div className="form-actions">
-            <button type="button" className="btn btn--secondary" onClick={onClose}>
-              {t('common.cancel')}
-            </button>
-            <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
-              {mutation.isPending
-                ? t('common.saving')
-                : editing
-                  ? t('common.saveChanges')
-                  : t('tickets.createTicket')}
-            </button>
-          </div>
-        </form>
+      ) : null}
+      {editing && ticket ? (
+        <div style={{ marginBottom: 'var(--space-4)' }} className="stack">
+          <AssistPanel entityType="ticket" entityId={ticket.id} />
+          <RecordCollabPanel entityType="ticket" entityId={ticket.id} />
+          <AttachmentPanel entityType="ticket" entityId={ticket.id} />
+        </div>
+      ) : null}
+      <div className="form-grid">
+        <Field label={t('tickets.subjectField')} htmlFor="ticket-subject" required error={errors.subject} full>
+          <input
+            id="ticket-subject"
+            value={form.subject}
+            onChange={(event) => update('subject', event.target.value)}
+            className={errors.subject ? 'input--invalid' : undefined}
+            required
+          />
+        </Field>
+        <Field label={t('tickets.statusField')} htmlFor="ticket-status">
+          <select
+            id="ticket-status"
+            value={form.status ?? 'new'}
+            onChange={(event) => update('status', event.target.value)}
+          >
+            {STATUSES.map((status) => (
+              <option key={status} value={status}>
+                {t(`status.${status}` as Parameters<TFunction>[0])}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t('tickets.priorityField')} htmlFor="ticket-priority">
+          <select
+            id="ticket-priority"
+            value={form.priority ?? 'normal'}
+            onChange={(event) => update('priority', event.target.value)}
+          >
+            {PRIORITIES.map((priority) => (
+              <option key={priority} value={priority}>
+                {priorityLabel(t, priority)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t('tickets.channelField')} htmlFor="ticket-channel">
+          <select
+            id="ticket-channel"
+            value={form.channel ?? ''}
+            onChange={(event) => update('channel', event.target.value || null)}
+          >
+            <option value="">{t('tickets.channelNotSet')}</option>
+            {['email', 'phone', 'web', 'chat', 'telegram'].map((channel) => (
+              <option key={channel} value={channel}>
+                {t(`channel.${channel}` as Parameters<TFunction>[0])}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t('tickets.descriptionField')} htmlFor="ticket-description" full>
+          <textarea
+            id="ticket-description"
+            value={form.description ?? ''}
+            onChange={(event) => update('description', event.target.value || null)}
+          />
+        </Field>
       </div>
-    </div>
+    </Modal>
   )
 }
 

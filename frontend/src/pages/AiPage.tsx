@@ -10,6 +10,7 @@ import {
   Badge,
   Card,
   EmptyState,
+  Modal,
   PageHeader,
   StatusBadge,
   TableSkeleton,
@@ -181,51 +182,35 @@ export function AiPage() {
       </div>
 
       {selected ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="tool-schema-title"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'var(--color-overlay)',
-            zIndex: 60,
-            overflowY: 'auto',
-            padding: 'var(--space-5)',
-          }}
-          onClick={() => setSelected(null)}
+        <Modal
+          open
+          onClose={() => setSelected(null)}
+          title={selected.name}
+          footer={<>
+            <button type="button" className="btn btn--secondary" onClick={() => setSelected(null)}>
+              {t('common.close')}
+            </button>
+          </>}
         >
-          <div className="card" style={{ maxWidth: 640, margin: '0 auto' }} onClick={(e) => e.stopPropagation()}>
-            <div className="card__header">
-              <h2 id="tool-schema-title" className="mono">
-                {selected.name}
-              </h2>
-            </div>
-            <div className="card__body stack">
-              <p className="text-muted">{selected.description}</p>
-              <div>
-                <h3 style={{ marginBottom: 'var(--space-2)' }}>{t('ai.inputSchema')}</h3>
-                <pre
-                  className="mono"
-                  style={{
-                    background: 'var(--color-bg)',
-                    padding: 'var(--space-3)',
-                    borderRadius: 'var(--radius-sm)',
-                    overflowX: 'auto',
-                    margin: 0,
-                  }}
-                >
-                  {JSON.stringify(selected.input_schema, null, 2)}
-                </pre>
-              </div>
-            </div>
-            <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
-              <button type="button" className="btn btn--secondary" onClick={() => setSelected(null)}>
-                {t('common.close')}
-              </button>
+          <div className="stack">
+            <p className="text-muted">{selected.description}</p>
+            <div>
+              <h3 style={{ marginBottom: 'var(--space-2)' }}>{t('ai.inputSchema')}</h3>
+              <pre
+                className="mono"
+                style={{
+                  background: 'var(--color-bg)',
+                  padding: 'var(--space-3)',
+                  borderRadius: 'var(--radius-sm)',
+                  overflowX: 'auto',
+                  margin: 0,
+                }}
+              >
+                {JSON.stringify(selected.input_schema, null, 2)}
+              </pre>
             </div>
           </div>
-        </div>
+        </Modal>
       ) : null}
     </>
   )

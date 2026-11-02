@@ -16,7 +16,7 @@ import { viewsApi } from '../api/views'
 import type { SavedView, SavedViewInput, ViewEntityType, ViewFilters } from '../api/views'
 import { useAuth } from '../hooks/useAuth'
 import { useT } from '../i18n'
-import { Alert, ConfirmDialog, Field } from './ui'
+import { Alert, ConfirmDialog, Field, Modal } from './ui'
 
 interface SavedViewsBarProps {
   entityType: ViewEntityType
@@ -216,67 +216,51 @@ function SaveViewDialog({
   if (!open) return null
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="save-view-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        display: 'grid',
-        placeItems: 'center',
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        padding: 'var(--space-4)',
-      }}
-      onClick={onClose}
-    >
-      <form
-        className="card"
-        style={{ maxWidth: 460, width: '100%' }}
-        onClick={(event) => event.stopPropagation()}
-        onSubmit={handleSubmit}
-      >
-        <div className="card__header">
-          <h2 id="save-view-title">{t('savedViews.saveTitle')}</h2>
-        </div>
-        <div className="card__body">
-          {error ? <Alert tone="error">{error}</Alert> : null}
-          <Field label={t('savedViews.name')} htmlFor="view-name" required>
-            <input
-              id="view-name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              autoFocus
-              maxLength={100}
-            />
-          </Field>
-          <label className="row" style={{ gap: 'var(--space-2)' }}>
-            <input
-              type="checkbox"
-              checked={shared}
-              onChange={(event) => setShared(event.target.checked)}
-            />
-            <span>{t('savedViews.share')}</span>
-          </label>
-          <label className="row" style={{ gap: 'var(--space-2)' }}>
-            <input
-              type="checkbox"
-              checked={pinned}
-              onChange={(event) => setPinned(event.target.checked)}
-            />
-            <span>{t('savedViews.pin')}</span>
-          </label>
-        </div>
-        <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
+    <Modal
+      open
+      onClose={onClose}
+      title={t('savedViews.saveTitle')}
+      size="sm"
+      formProps={{ onSubmit: handleSubmit }}
+      footer={
+        <>
           <button type="button" className="btn btn--secondary" onClick={onClose}>
             Cancel
           </button>
           <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
             {mutation.isPending ? 'Saving…' : 'Save'}
           </button>
-        </div>
-      </form>
-    </div>
+        </>
+      }
+    >
+      <div className="stack">
+        {error ? <Alert tone="error">{error}</Alert> : null}
+        <Field label={t('savedViews.name')} htmlFor="view-name" required>
+          <input
+            id="view-name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            autoFocus
+            maxLength={100}
+          />
+        </Field>
+        <label className="row" style={{ gap: 'var(--space-2)' }}>
+          <input
+            type="checkbox"
+            checked={shared}
+            onChange={(event) => setShared(event.target.checked)}
+          />
+          <span>{t('savedViews.share')}</span>
+        </label>
+        <label className="row" style={{ gap: 'var(--space-2)' }}>
+          <input
+            type="checkbox"
+            checked={pinned}
+            onChange={(event) => setPinned(event.target.checked)}
+          />
+          <span>{t('savedViews.pin')}</span>
+        </label>
+      </div>
+    </Modal>
   )
 }

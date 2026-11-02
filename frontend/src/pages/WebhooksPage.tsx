@@ -13,6 +13,7 @@ import {
   Badge,
   ConfirmDialog,
   Field,
+  Modal,
   PageHeader,
   StatusBadge,
   Timestamp,
@@ -261,131 +262,116 @@ function NewWebhookDialog({
   if (!open) return null
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="new-webhook-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        overflowY: 'auto',
-        padding: 'var(--space-5)',
-      }}
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      title={t('webhooks.newSubscriptionTitle')}
+      footer={<>
+        <button type="button" className="btn btn--secondary" onClick={onClose}>
+          {t('common.cancel')}
+        </button>
+        <button
+          type="submit"
+          className="btn btn--primary"
+          disabled={mutation.isPending || selected.length === 0}
+        >
+          {mutation.isPending ? t('webhooks.creating') : t('webhooks.createSubscription')}
+        </button>
+      </>}
+      formProps={{ onSubmit: handleSubmit }}
     >
-      <div className="card" style={{ maxWidth: 640, margin: '0 auto' }} onClick={(e) => e.stopPropagation()}>
-        <div className="card__header">
-          <h2 id="new-webhook-title">{t('webhooks.newSubscriptionTitle')}</h2>
-        </div>
-        <form onSubmit={handleSubmit}>
-          <div className="card__body stack">
-            {formError ? <Alert tone="error">{formError}</Alert> : null}
+      <div className="stack">
+        {formError ? <Alert tone="error">{formError}</Alert> : null}
 
-            <Field label={t('webhooks.name')} htmlFor="webhook-name" required error={errors.name}>
-              <input
-                id="webhook-name"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                required
-              />
-            </Field>
+        <Field label={t('webhooks.name')} htmlFor="webhook-name" required error={errors.name}>
+          <input
+            id="webhook-name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            required
+          />
+        </Field>
 
-            <Field
-              label={t('webhooks.targetUrl')}
-              htmlFor="webhook-url"
-              required
-              error={errors.target_url}
-              hint={t('webhooks.targetUrlHint')}
-            >
-              <input
-                id="webhook-url"
-                type="url"
-                placeholder="https://example.com/hooks/forgecrm"
-                value={targetUrl}
-                onChange={(event) => setTargetUrl(event.target.value)}
-                required
-              />
-            </Field>
+        <Field
+          label={t('webhooks.targetUrl')}
+          htmlFor="webhook-url"
+          required
+          error={errors.target_url}
+          hint={t('webhooks.targetUrlHint')}
+        >
+          <input
+            id="webhook-url"
+            type="url"
+            placeholder="https://example.com/hooks/forgecrm"
+            value={targetUrl}
+            onChange={(event) => setTargetUrl(event.target.value)}
+            required
+          />
+        </Field>
 
-            <Field
-              label={t('webhooks.signingSecret')}
-              htmlFor="webhook-secret"
-              hint={t('webhooks.signingSecretHint')}
-            >
-              <input
-                id="webhook-secret"
-                type="password"
-                autoComplete="new-password"
-                value={secret}
-                onChange={(event) => setSecret(event.target.value)}
-              />
-            </Field>
+        <Field
+          label={t('webhooks.signingSecret')}
+          htmlFor="webhook-secret"
+          hint={t('webhooks.signingSecretHint')}
+        >
+          <input
+            id="webhook-secret"
+            type="password"
+            autoComplete="new-password"
+            value={secret}
+            onChange={(event) => setSecret(event.target.value)}
+          />
+        </Field>
 
-            <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
-              <legend className="field__label" style={{ marginBottom: 'var(--space-2)' }}>
-                {t('webhooks.events')} <span className="field__required">*</span>
-              </legend>
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))',
-                  gap: 'var(--space-2)',
-                  maxHeight: 220,
-                  overflowY: 'auto',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 'var(--radius-sm)',
-                  padding: 'var(--space-3)',
-                }}
-              >
-                {eventsLoading ? (
-                  <span className="text-muted">{t('webhooks.loadingEventTypes')}</span>
-                ) : eventTypes.length === 0 ? (
-                  <span className="field__error">{t('webhooks.eventsLoadError')}</span>
-                ) : (
-                  eventTypes.map((type) => (
-                    <label key={type} className="checkbox">
-                      <input
-                        type="checkbox"
-                        checked={selected.includes(type)}
-                        onChange={(event) =>
-                          setSelected((previous) =>
-                            event.target.checked
-                              ? [...previous, type]
-                              : previous.filter((item) => item !== type),
-                          )
-                        }
-                      />
-                      <span className="mono">{type}</span>
-                    </label>
-                  ))
-                )}
-              </div>
-              {errors.event_types ? (
-                <span className="field__error">{errors.event_types}</span>
-              ) : (
-                <span className="field__hint">
-                  {t('webhooks.selectedCount', { count: selected.length })}
-                </span>
-              )}
-            </fieldset>
+        <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
+          <legend className="field__label" style={{ marginBottom: 'var(--space-2)' }}>
+            {t('webhooks.events')} <span className="field__required">*</span>
+          </legend>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))',
+              gap: 'var(--space-2)',
+              maxHeight: 220,
+              overflowY: 'auto',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-sm)',
+              padding: 'var(--space-3)',
+            }}
+          >
+            {eventsLoading ? (
+              <span className="text-muted">{t('webhooks.loadingEventTypes')}</span>
+            ) : eventTypes.length === 0 ? (
+              <span className="field__error">{t('webhooks.eventsLoadError')}</span>
+            ) : (
+              eventTypes.map((type) => (
+                <label key={type} className="checkbox">
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(type)}
+                    onChange={(event) =>
+                      setSelected((previous) =>
+                        event.target.checked
+                          ? [...previous, type]
+                          : previous.filter((item) => item !== type),
+                      )
+                    }
+                  />
+                  <span className="mono">{type}</span>
+                </label>
+              ))
+            )}
           </div>
-          <div className="form-actions">
-            <button type="button" className="btn btn--secondary" onClick={onClose}>
-              {t('common.cancel')}
-            </button>
-            <button
-              type="submit"
-              className="btn btn--primary"
-              disabled={mutation.isPending || selected.length === 0}
-            >
-              {mutation.isPending ? t('webhooks.creating') : t('webhooks.createSubscription')}
-            </button>
-          </div>
-        </form>
+          {errors.event_types ? (
+            <span className="field__error">{errors.event_types}</span>
+          ) : (
+            <span className="field__hint">
+              {t('webhooks.selectedCount', { count: selected.length })}
+            </span>
+          )}
+        </fieldset>
       </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -415,103 +401,88 @@ function DeliveriesDialog({ webhook, onClose }: { webhook: Webhook; onClose: () 
   })
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="deliveries-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        overflowY: 'auto',
-        padding: 'var(--space-5)',
-      }}
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      title={t('webhooks.deliveriesTitle', { name: webhook.name })}
+      size="lg"
+      footer={<>
+        <button type="button" className="btn btn--secondary" onClick={onClose}>
+          {t('common.close')}
+        </button>
+      </>}
     >
-      <div className="card" style={{ maxWidth: 900, margin: '0 auto' }} onClick={(e) => e.stopPropagation()}>
-        <div className="card__header">
-          <h2 id="deliveries-title">{t('webhooks.deliveriesTitle', { name: webhook.name })}</h2>
+      {error ? (
+        <div style={{ marginBottom: 'var(--space-3)' }}>
+          <Alert tone="error">{error}</Alert>
         </div>
-        <div className="card__body">
-          {error ? (
-            <div style={{ marginBottom: 'var(--space-3)' }}>
-              <Alert tone="error">{error}</Alert>
-            </div>
-          ) : null}
+      ) : null}
 
-          {deliveries.isLoading ? (
-            <p className="text-muted">{t('common.loading')}</p>
-          ) : deliveries.data?.items.length ? (
-            <div className="table-wrap">
-              <table className="table--stack">
-                <thead>
-                  <tr>
-                    <th>{t('webhooks.columnEvent')}</th>
-                    <th>{t('common.status')}</th>
-                    <th className="numeric">{t('webhooks.columnAttempts')}</th>
-                    <th className="numeric">{t('webhooks.columnReplays')}</th>
-                    <th>{t('webhooks.columnResult')}</th>
-                    <th>{t('webhooks.columnWhen')}</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {deliveries.data.items.map((delivery) => (
-                    <tr key={delivery.id}>
-                      <td className="mono" data-label={t('webhooks.columnEvent')}>
-                        {delivery.event_type}
-                      </td>
-                      <td data-label={t('common.status')}>
-                        <StatusBadge status={delivery.status} />
-                      </td>
-                      <td className="numeric" data-label={t('webhooks.columnAttempts')}>
-                        {delivery.attempts}
-                      </td>
-                      <td className="numeric" data-label={t('webhooks.columnReplays')}>
-                        {delivery.replay_count ?? 0}
-                      </td>
-                      <td
-                        className="truncate"
-                        style={{ maxWidth: '22rem' }}
-                        title={delivery.last_error ?? undefined}
-                        data-label={t('webhooks.columnResult')}
+      {deliveries.isLoading ? (
+        <p className="text-muted">{t('common.loading')}</p>
+      ) : deliveries.data?.items.length ? (
+        <div className="table-wrap">
+          <table className="table--stack">
+            <thead>
+              <tr>
+                <th>{t('webhooks.columnEvent')}</th>
+                <th>{t('common.status')}</th>
+                <th className="numeric">{t('webhooks.columnAttempts')}</th>
+                <th className="numeric">{t('webhooks.columnReplays')}</th>
+                <th>{t('webhooks.columnResult')}</th>
+                <th>{t('webhooks.columnWhen')}</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {deliveries.data.items.map((delivery) => (
+                <tr key={delivery.id}>
+                  <td className="mono" data-label={t('webhooks.columnEvent')}>
+                    {delivery.event_type}
+                  </td>
+                  <td data-label={t('common.status')}>
+                    <StatusBadge status={delivery.status} />
+                  </td>
+                  <td className="numeric" data-label={t('webhooks.columnAttempts')}>
+                    {delivery.attempts}
+                  </td>
+                  <td className="numeric" data-label={t('webhooks.columnReplays')}>
+                    {delivery.replay_count ?? 0}
+                  </td>
+                  <td
+                    className="truncate"
+                    style={{ maxWidth: '22rem' }}
+                    title={delivery.last_error ?? undefined}
+                    data-label={t('webhooks.columnResult')}
+                  >
+                    {delivery.last_error ? delivery.last_error : (delivery.response_status ?? '—')}
+                  </td>
+                  <td data-label={t('webhooks.columnWhen')}>
+                    <Timestamp value={delivery.created_at} />
+                  </td>
+                  <td>
+                    {delivery.status !== 'delivered' ? (
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() => {
+                          setReplaying(delivery.id)
+                          replay.mutate(delivery.id)
+                        }}
+                        disabled={replaying === delivery.id}
                       >
-                        {delivery.last_error ? delivery.last_error : (delivery.response_status ?? '—')}
-                      </td>
-                      <td data-label={t('webhooks.columnWhen')}>
-                        <Timestamp value={delivery.created_at} />
-                      </td>
-                      <td>
-                        {delivery.status !== 'delivered' ? (
-                          <button
-                            type="button"
-                            className="btn btn--secondary btn--sm"
-                            onClick={() => {
-                              setReplaying(delivery.id)
-                              replay.mutate(delivery.id)
-                            }}
-                            disabled={replaying === delivery.id}
-                          >
-                            {replaying === delivery.id ? t('webhooks.replaying') : t('webhooks.replay')}
-                          </button>
-                        ) : null}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="text-muted">{t('webhooks.noDeliveries')}</p>
-          )}
+                        {replaying === delivery.id ? t('webhooks.replaying') : t('webhooks.replay')}
+                      </button>
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-        <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
-          <button type="button" className="btn btn--secondary" onClick={onClose}>
-            {t('common.close')}
-          </button>
-        </div>
-      </div>
-    </div>
+      ) : (
+        <p className="text-muted">{t('webhooks.noDeliveries')}</p>
+      )}
+    </Modal>
   )
 }

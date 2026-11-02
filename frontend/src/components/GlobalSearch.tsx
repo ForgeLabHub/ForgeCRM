@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { searchApi } from '../api/crm'
 import { errorMessage } from '../api/client'
 import { useT } from '../i18n'
+import { Modal } from './ui'
 import type { SearchResult } from '../types/api'
 
 /**
@@ -98,26 +99,9 @@ export function GlobalSearch({ onClose }: { onClose?: () => void }) {
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={t('search.label')}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'var(--color-overlay)',
-        zIndex: 70,
-        padding: 'var(--space-4)',
-        paddingTop: '12vh',
-      }}
-      onClick={onClose}
-    >
-      <div
-        className="card"
-        style={{ maxWidth: 620, width: '100%', margin: '0 auto', padding: 0 }}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div style={{ padding: 'var(--space-3)', borderBottom: '1px solid var(--color-border)' }}>
+    <Modal open onClose={() => onClose?.()} title={t('search.label')} size="md">
+      <div className="search-palette">
+        <div className="search-palette__field">
           <label className="field" style={{ margin: 0 }}>
             <span className="sr-only">{t('search.ariaLabel')}</span>
             <input
@@ -135,7 +119,7 @@ export function GlobalSearch({ onClose }: { onClose?: () => void }) {
           </label>
         </div>
 
-        <div id="global-search-results" role="listbox" style={{ maxHeight: 380, overflowY: 'auto' }}>
+        <div id="global-search-results" role="listbox" className="search-palette__results">
           {!enabled ? (
             <p className="text-muted text-sm" style={{ padding: 'var(--space-4)' }}>
               {t('search.typeHint')} {t('search.permissionHint')}
@@ -162,16 +146,8 @@ export function GlobalSearch({ onClose }: { onClose?: () => void }) {
                 type="button"
                 onMouseEnter={() => setActive(index)}
                 onClick={() => open(result)}
-                style={{
-                  display: 'block',
-                  width: '100%',
-                  textAlign: 'left',
-                  padding: 'var(--space-2) var(--space-3)',
-                  background: index === active ? 'var(--color-accent-soft)' : 'transparent',
-                  border: 'none',
-                  borderBottom: '1px solid var(--color-border)',
-                  cursor: 'pointer',
-                }}
+                className="search-palette__result"
+                data-active={index === active}
               >
                 <span className="text-subtle text-sm" style={{ marginRight: 8 }}>
                   {result.entity_type in TYPE_LABEL_KEYS
@@ -189,6 +165,6 @@ export function GlobalSearch({ onClose }: { onClose?: () => void }) {
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }

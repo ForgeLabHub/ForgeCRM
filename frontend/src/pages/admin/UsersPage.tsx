@@ -13,6 +13,7 @@ import {
   Badge,
   ConfirmDialog,
   Field,
+  Modal,
   PageHeader,
   StatusBadge,
   Timestamp,
@@ -208,86 +209,71 @@ function InviteUserDialog({
   if (!open) return null
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="invite-user-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        overflowY: 'auto',
-        padding: 'var(--space-5)',
-      }}
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      title={t('users.inviteTitle')}
+      footer={<>
+        <button type="button" className="btn btn--secondary" onClick={onClose}>
+          {t('common.cancel')}
+        </button>
+        <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
+          {mutation.isPending ? t('users.inviting') : t('users.sendInvitation')}
+        </button>
+      </>}
+      formProps={{ onSubmit: handleSubmit }}
     >
-      <div className="card" style={{ maxWidth: 520, margin: '0 auto' }} onClick={(e) => e.stopPropagation()}>
-        <div className="card__header">
-          <h2 id="invite-user-title">{t('users.inviteTitle')}</h2>
-        </div>
-        <form onSubmit={handleSubmit}>
-          <div className="card__body stack">
-            {formError ? <Alert tone="error">{formError}</Alert> : null}
+      <div className="stack">
+        {formError ? <Alert tone="error">{formError}</Alert> : null}
 
-            <Field label={t('common.email')} htmlFor="invite-email" required error={errors.email}>
-              <input
-                id="invite-email"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                required
-              />
-            </Field>
+        <Field label={t('common.email')} htmlFor="invite-email" required error={errors.email}>
+          <input
+            id="invite-email"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            required
+          />
+        </Field>
 
-            <Field label={t('users.displayName')} htmlFor="invite-name" required error={errors.display_name}>
-              <input
-                id="invite-name"
-                value={displayName}
-                onChange={(event) => setDisplayName(event.target.value)}
-                required
-              />
-            </Field>
+        <Field label={t('users.displayName')} htmlFor="invite-name" required error={errors.display_name}>
+          <input
+            id="invite-name"
+            value={displayName}
+            onChange={(event) => setDisplayName(event.target.value)}
+            required
+          />
+        </Field>
 
-            <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
-              <legend className="field__label" style={{ marginBottom: 'var(--space-2)' }}>
-                {t('users.roles')}
-                </legend>
-              <div className="stack stack--sm" style={{ maxHeight: 200, overflowY: 'auto' }}>
-                {(roles.data?.items ?? []).map((role) => (
-                  <label key={role.key} className="checkbox">
-                    <input
-                      type="checkbox"
-                      checked={roleKeys.includes(role.key)}
-                      onChange={(event) =>
-                        setRoleKeys((previous) =>
-                          event.target.checked
-                            ? [...previous, role.key]
-                            : previous.filter((key) => key !== role.key),
-                        )
-                      }
-                    />
-                    <span>
-                      {role.name} <span className="text-subtle mono">{role.key}</span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-              <span className="field__hint">
-                {t('users.rolesHint')}
-              </span>
-            </fieldset>
+        <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
+          <legend className="field__label" style={{ marginBottom: 'var(--space-2)' }}>
+            {t('users.roles')}
+            </legend>
+          <div className="stack stack--sm" style={{ maxHeight: 200, overflowY: 'auto' }}>
+            {(roles.data?.items ?? []).map((role) => (
+              <label key={role.key} className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={roleKeys.includes(role.key)}
+                  onChange={(event) =>
+                    setRoleKeys((previous) =>
+                      event.target.checked
+                        ? [...previous, role.key]
+                        : previous.filter((key) => key !== role.key),
+                    )
+                  }
+                />
+                <span>
+                  {role.name} <span className="text-subtle mono">{role.key}</span>
+                </span>
+              </label>
+            ))}
           </div>
-          <div className="form-actions">
-            <button type="button" className="btn btn--secondary" onClick={onClose}>
-              {t('common.cancel')}
-            </button>
-            <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
-              {mutation.isPending ? t('users.inviting') : t('users.sendInvitation')}
-            </button>
-          </div>
-        </form>
+          <span className="field__hint">
+            {t('users.rolesHint')}
+          </span>
+        </fieldset>
       </div>
-    </div>
+    </Modal>
   )
 }

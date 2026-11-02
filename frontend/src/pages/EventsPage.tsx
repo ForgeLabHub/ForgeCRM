@@ -2,7 +2,12 @@ import { useState } from 'react'
 import { eventsApi } from '../api/integrations'
 import type { EventRow } from '../api/integrations'
 import { ResourceList, type Column } from '../components/ResourceList'
-import { Badge, PageHeader, Timestamp } from '../components/ui'
+import {
+  Badge,
+  Modal,
+  PageHeader,
+  Timestamp,
+} from '../components/ui'
 import { useT } from '../i18n'
 
 export function EventsPage() {
@@ -74,64 +79,51 @@ export function EventsPage() {
       />
 
       {detail ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="event-payload-title"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'var(--color-overlay)',
-            zIndex: 60,
-            overflowY: 'auto',
-            padding: 'var(--space-5)',
-          }}
-          onClick={() => setDetail(null)}
+        <Modal
+          open
+          onClose={() => setDetail(null)}
+          title={detail.event_type}
+          extra={<>
+            <Badge tone="neutral">{detail.source ?? t('events.internal')}</Badge>
+          </>}
+          size="lg"
+          footer={<>
+            <button type="button" className="btn btn--secondary" onClick={() => setDetail(null)}>
+              {t('common.close')}
+            </button>
+          </>}
         >
-          <div className="card" style={{ maxWidth: 720, margin: '0 auto' }} onClick={(e) => e.stopPropagation()}>
-            <div className="card__header">
-              <h2 id="event-payload-title" className="mono">
-                {detail.event_type}
-              </h2>
-              <Badge tone="neutral">{detail.source ?? t('events.internal')}</Badge>
-            </div>
-            <div className="card__body stack">
-              <dl className="dl">
-                <dt>{t('events.eventId')}</dt>
-                <dd className="mono truncate">{detail.id}</dd>
-                <dt>{t('events.columnOccurred')}</dt>
-                <dd>
-                  <Timestamp value={detail.occurred_at} />
-                </dd>
-                <dt>{t('events.correlationId')}</dt>
-                <dd className="mono truncate">{detail.correlation_id ?? '—'}</dd>
-                <dt>{t('events.schemaVersion')}</dt>
-                <dd>{detail.schema_version !== undefined ? `v${detail.schema_version}` : '—'}</dd>
-              </dl>
-              <div>
-                <h3 style={{ marginBottom: 'var(--space-2)' }}>{t('events.payload')}</h3>
-                <pre
-                  className="mono"
-                  style={{
-                    background: 'var(--color-bg)',
-                    padding: 'var(--space-3)',
-                    borderRadius: 'var(--radius-sm)',
-                    overflowX: 'auto',
-                    maxHeight: 420,
-                    margin: 0,
-                  }}
-                >
-                  {JSON.stringify(detail.payload ?? {}, null, 2)}
-                </pre>
-              </div>
-            </div>
-            <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
-              <button type="button" className="btn btn--secondary" onClick={() => setDetail(null)}>
-                {t('common.close')}
-              </button>
+          <div className="stack">
+            <dl className="dl">
+              <dt>{t('events.eventId')}</dt>
+              <dd className="mono truncate">{detail.id}</dd>
+              <dt>{t('events.columnOccurred')}</dt>
+              <dd>
+                <Timestamp value={detail.occurred_at} />
+              </dd>
+              <dt>{t('events.correlationId')}</dt>
+              <dd className="mono truncate">{detail.correlation_id ?? '—'}</dd>
+              <dt>{t('events.schemaVersion')}</dt>
+              <dd>{detail.schema_version !== undefined ? `v${detail.schema_version}` : '—'}</dd>
+            </dl>
+            <div>
+              <h3 style={{ marginBottom: 'var(--space-2)' }}>{t('events.payload')}</h3>
+              <pre
+                className="mono"
+                style={{
+                  background: 'var(--color-bg)',
+                  padding: 'var(--space-3)',
+                  borderRadius: 'var(--radius-sm)',
+                  overflowX: 'auto',
+                  maxHeight: 420,
+                  margin: 0,
+                }}
+              >
+                {JSON.stringify(detail.payload ?? {}, null, 2)}
+              </pre>
             </div>
           </div>
-        </div>
+        </Modal>
       ) : null}
     </>
   )

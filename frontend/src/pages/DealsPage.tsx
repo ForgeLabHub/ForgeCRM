@@ -22,6 +22,7 @@ import {
   Card,
   ConfirmDialog,
   Field,
+  Modal,
   PageHeader,
   StatusBadge,
   Timestamp,
@@ -426,159 +427,139 @@ export function DealFormDialog({
   if (!open) return null
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="deal-form-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        overflowY: 'auto',
-        padding: 'var(--space-5)',
-      }}
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      title={editing ? t('deals.editDeal') : t('deals.newDeal')}
+      size="lg"
+      footer={<>
+        <button type="button" className="btn btn--secondary" onClick={onClose}>
+          {t('common.cancel')}
+        </button>
+        <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
+          {mutation.isPending ? t('common.saving') : editing ? t('common.saveChanges') : t('deals.createDeal')}
+        </button>
+      </>}
+      formProps={{ onSubmit: handleSubmit }}
     >
-      <div
-        className="card"
-        style={{ maxWidth: 680, margin: '0 auto' }}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="card__header">
-          <h2 id="deal-form-title">{editing ? t('deals.editDeal') : t('deals.newDeal')}</h2>
+      {formError ? (
+        <div style={{ marginBottom: 'var(--space-4)' }}>
+          <Alert tone="error">{formError}</Alert>
         </div>
-        <form onSubmit={handleSubmit}>
-          <div className="card__body">
-            {formError ? (
-              <div style={{ marginBottom: 'var(--space-4)' }}>
-                <Alert tone="error">{formError}</Alert>
-              </div>
-            ) : null}
-            <div className="form-grid">
-              <Field label={t('deals.titleField')} htmlFor="deal-title" required error={errors.title} full>
-                <input
-                  id="deal-title"
-                  value={form.title}
-                  onChange={(event) => update('title', event.target.value)}
-                  className={errors.title ? 'input--invalid' : undefined}
-                  required
-                />
-              </Field>
-              <Field label={t('deals.pipelineField')} htmlFor="deal-pipeline" required error={errors.pipeline_id}>
-                <select
-                  id="deal-pipeline"
-                  value={form.pipeline_id}
-                  onChange={(event) => {
-                    const next = pipelineList.find((p) => p.id === event.target.value)
-                    setForm((previous) => ({
-                      ...previous,
-                      pipeline_id: event.target.value,
-                      stage_id: next?.stages?.[0]?.id ?? '',
-                    }))
-                  }}
-                  required
-                >
-                  <option value="">{t('deals.selectPipeline')}</option>
-                  {pipelineList.map((pipeline) => (
-                    <option key={pipeline.id} value={pipeline.id}>
-                      {pipeline.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label={t('deals.stageField')} htmlFor="deal-stage" required error={errors.stage_id}>
-                <select
-                  id="deal-stage"
-                  value={form.stage_id}
-                  onChange={(event) => update('stage_id', event.target.value)}
-                  disabled={stages.length === 0}
-                  required
-                >
-                  <option value="">{t('deals.selectStage')}</option>
-                  {stages.map((stage) => (
-                    <option key={stage.id} value={stage.id}>
-                      {stage.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label={t('deals.amountField')} htmlFor="deal-amount" error={errors.amount}>
-                <input
-                  id="deal-amount"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={form.amount ?? 0}
-                  onChange={(event) => update('amount', Number(event.target.value))}
-                />
-              </Field>
-              <Field label={t('deals.currencyField')} htmlFor="deal-currency">
-                <input
-                  id="deal-currency"
-                  maxLength={3}
-                  value={form.currency ?? 'USD'}
-                  onChange={(event) => update('currency', event.target.value.toUpperCase())}
-                />
-              </Field>
-              <Field
-                label={t('deals.discountField')}
-                htmlFor="deal-discount"
-                error={errors.discount_percent}
-                hint={t('deals.discountHint')}
-              >
-                <input
-                  id="deal-discount"
-                  type="number"
-                  min={0}
-                  max={100}
-                  step="0.5"
-                  value={form.discount_percent ?? 0}
-                  onChange={(event) => update('discount_percent', Number(event.target.value))}
-                />
-              </Field>
-              <Field label={t('deals.expectedClose')} htmlFor="deal-close">
-                <input
-                  id="deal-close"
-                  type="date"
-                  value={form.expected_close_date ?? ''}
-                  onChange={(event) => update('expected_close_date', event.target.value || null)}
-                />
-              </Field>
-              <Field label={t('deals.accountField')} htmlFor="deal-account">
-                <select
-                  id="deal-account"
-                  value={form.account_id ?? ''}
-                  onChange={(event) => update('account_id', event.target.value || null)}
-                >
-                  <option value="">{t('deals.noAccount')}</option>
-                  {(accounts.data?.items ?? []).map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label={t('deals.descriptionField')} htmlFor="deal-description" full>
-                <textarea
-                  id="deal-description"
-                  value={form.description ?? ''}
-                  onChange={(event) => update('description', event.target.value || null)}
-                />
-              </Field>
-            </div>
-          </div>
-          <div className="form-actions">
-            <button type="button" className="btn btn--secondary" onClick={onClose}>
-              {t('common.cancel')}
-            </button>
-            <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
-              {mutation.isPending ? t('common.saving') : editing ? t('common.saveChanges') : t('deals.createDeal')}
-            </button>
-          </div>
-        </form>
+      ) : null}
+      <div className="form-grid">
+        <Field label={t('deals.titleField')} htmlFor="deal-title" required error={errors.title} full>
+          <input
+            id="deal-title"
+            value={form.title}
+            onChange={(event) => update('title', event.target.value)}
+            className={errors.title ? 'input--invalid' : undefined}
+            required
+          />
+        </Field>
+        <Field label={t('deals.pipelineField')} htmlFor="deal-pipeline" required error={errors.pipeline_id}>
+          <select
+            id="deal-pipeline"
+            value={form.pipeline_id}
+            onChange={(event) => {
+              const next = pipelineList.find((p) => p.id === event.target.value)
+              setForm((previous) => ({
+                ...previous,
+                pipeline_id: event.target.value,
+                stage_id: next?.stages?.[0]?.id ?? '',
+              }))
+            }}
+            required
+          >
+            <option value="">{t('deals.selectPipeline')}</option>
+            {pipelineList.map((pipeline) => (
+              <option key={pipeline.id} value={pipeline.id}>
+                {pipeline.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t('deals.stageField')} htmlFor="deal-stage" required error={errors.stage_id}>
+          <select
+            id="deal-stage"
+            value={form.stage_id}
+            onChange={(event) => update('stage_id', event.target.value)}
+            disabled={stages.length === 0}
+            required
+          >
+            <option value="">{t('deals.selectStage')}</option>
+            {stages.map((stage) => (
+              <option key={stage.id} value={stage.id}>
+                {stage.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t('deals.amountField')} htmlFor="deal-amount" error={errors.amount}>
+          <input
+            id="deal-amount"
+            type="number"
+            min={0}
+            step="0.01"
+            value={form.amount ?? 0}
+            onChange={(event) => update('amount', Number(event.target.value))}
+          />
+        </Field>
+        <Field label={t('deals.currencyField')} htmlFor="deal-currency">
+          <input
+            id="deal-currency"
+            maxLength={3}
+            value={form.currency ?? 'USD'}
+            onChange={(event) => update('currency', event.target.value.toUpperCase())}
+          />
+        </Field>
+        <Field
+          label={t('deals.discountField')}
+          htmlFor="deal-discount"
+          error={errors.discount_percent}
+          hint={t('deals.discountHint')}
+        >
+          <input
+            id="deal-discount"
+            type="number"
+            min={0}
+            max={100}
+            step="0.5"
+            value={form.discount_percent ?? 0}
+            onChange={(event) => update('discount_percent', Number(event.target.value))}
+          />
+        </Field>
+        <Field label={t('deals.expectedClose')} htmlFor="deal-close">
+          <input
+            id="deal-close"
+            type="date"
+            value={form.expected_close_date ?? ''}
+            onChange={(event) => update('expected_close_date', event.target.value || null)}
+          />
+        </Field>
+        <Field label={t('deals.accountField')} htmlFor="deal-account">
+          <select
+            id="deal-account"
+            value={form.account_id ?? ''}
+            onChange={(event) => update('account_id', event.target.value || null)}
+          >
+            <option value="">{t('deals.noAccount')}</option>
+            {(accounts.data?.items ?? []).map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t('deals.descriptionField')} htmlFor="deal-description" full>
+          <textarea
+            id="deal-description"
+            value={form.description ?? ''}
+            onChange={(event) => update('description', event.target.value || null)}
+          />
+        </Field>
       </div>
-    </div>
+    </Modal>
   )
 }
 

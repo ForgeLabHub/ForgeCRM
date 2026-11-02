@@ -10,6 +10,7 @@ import {
   Card,
   ErrorState,
   Field,
+  Modal,
   PageHeader,
   StatusBadge,
   TableSkeleton,
@@ -139,72 +140,57 @@ function NewOrganizationDialog({
   if (!open) return null
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="new-org-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        display: 'grid',
-        placeItems: 'center',
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        padding: 'var(--space-4)',
-      }}
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      title={t('organizations.newOrganizationTitle')}
+      size="sm"
+      footer={<>
+        <button type="button" className="btn btn--secondary" onClick={onClose}>
+          {t('common.cancel')}
+        </button>
+        <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
+          {mutation.isPending ? t('organizations.creating') : t('common.create')}
+        </button>
+      </>}
+      formProps={{ onSubmit: handleSubmit }}
     >
-      <div className="card" style={{ maxWidth: 460, width: '100%' }} onClick={(e) => e.stopPropagation()}>
-        <div className="card__header">
-          <h2 id="new-org-title">{t('organizations.newOrganizationTitle')}</h2>
-        </div>
-        <form onSubmit={handleSubmit}>
-          <div className="card__body stack">
-            {formError ? <Alert tone="error">{formError}</Alert> : null}
-            <Field label={t('organizations.name')} htmlFor="org-name" required error={errors.name}>
-              <input
-                id="org-name"
-                value={name}
-                onChange={(event) => {
-                  setName(event.target.value)
-                  if (!slug) {
-                    setSlug(
-                      event.target.value
-                        .toLowerCase()
-                        .replace(/[^a-z0-9]+/g, '-')
-                        .replace(/^-|-$/g, ''),
-                    )
-                  }
-                }}
-                required
-              />
-            </Field>
-            <Field
-              label={t('organizations.slug')}
-              htmlFor="org-slug"
-              required
-              error={errors.slug}
-              hint={t('organizations.slugHint')}
-            >
-              <input
-                id="org-slug"
-                className="mono"
-                value={slug}
-                onChange={(event) => setSlug(event.target.value)}
-                required
-              />
-            </Field>
-          </div>
-          <div className="form-actions">
-            <button type="button" className="btn btn--secondary" onClick={onClose}>
-              {t('common.cancel')}
-            </button>
-            <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
-              {mutation.isPending ? t('organizations.creating') : t('common.create')}
-            </button>
-          </div>
-        </form>
+      <div className="stack">
+        {formError ? <Alert tone="error">{formError}</Alert> : null}
+        <Field label={t('organizations.name')} htmlFor="org-name" required error={errors.name}>
+          <input
+            id="org-name"
+            value={name}
+            onChange={(event) => {
+              setName(event.target.value)
+              if (!slug) {
+                setSlug(
+                  event.target.value
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/^-|-$/g, ''),
+                )
+              }
+            }}
+            required
+          />
+        </Field>
+        <Field
+          label={t('organizations.slug')}
+          htmlFor="org-slug"
+          required
+          error={errors.slug}
+          hint={t('organizations.slugHint')}
+        >
+          <input
+            id="org-slug"
+            className="mono"
+            value={slug}
+            onChange={(event) => setSlug(event.target.value)}
+            required
+          />
+        </Field>
       </div>
-    </div>
+    </Modal>
   )
 }

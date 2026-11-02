@@ -8,7 +8,14 @@ import type { MigrationDiscovery, MigrationJob, MigrationReconciliation } from '
 import { useAuth } from '../hooks/useAuth'
 import { useT, type TFunction } from '../i18n'
 import { ResourceList, type Column } from '../components/ResourceList'
-import { Alert, Field, PageHeader, StatusBadge, Timestamp } from '../components/ui'
+import {
+  Alert,
+  Field,
+  Modal,
+  PageHeader,
+  StatusBadge,
+  Timestamp,
+} from '../components/ui'
 
 /**
  * The source vocabulary is read from the server, never hard-coded.
@@ -193,60 +200,49 @@ function SchemaDialog({
   onClose: () => void
 }) {
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="schema-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        overflowY: 'auto',
-        padding: 'var(--space-5)',
-      }}
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      title={<>Source schema — {job.name || job.source_kind}</>}
+      extra={<>
+        <span className="badge">{result.read_only ? 'read-only' : 'read-write'}</span>
+      </>}
+      size="lg"
+      footer={<>
+        <button type="button" className="btn btn--secondary" onClick={onClose}>
+          Close
+        </button>
+      </>}
     >
-      <div className="card" style={{ maxWidth: 760, margin: '0 auto' }} onClick={(e) => e.stopPropagation()}>
-        <div className="card__header">
-          <h2 id="schema-title">Source schema — {job.name || job.source_kind}</h2>
-          <span className="badge">{result.read_only ? 'read-only' : 'read-write'}</span>
-        </div>
-        <div className="card__body stack">
-          {result.tables.length === 0 ? (
-            <p className="text-muted text-sm">
-              The account returned no tables. Check that it can read the source schema.
-            </p>
-          ) : (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Table</th>
-                    <th className="numeric">Rows</th>
-                    <th className="numeric">Columns</th>
+      <div className="stack">
+        {result.tables.length === 0 ? (
+          <p className="text-muted text-sm">
+            The account returned no tables. Check that it can read the source schema.
+          </p>
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Table</th>
+                  <th className="numeric">Rows</th>
+                  <th className="numeric">Columns</th>
+                </tr>
+              </thead>
+              <tbody>
+                {result.tables.map((table) => (
+                  <tr key={table.name}>
+                    <td className="mono">{table.name}</td>
+                    <td className="numeric">{table.rows}</td>
+                    <td className="numeric">{table.columns.length}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {result.tables.map((table) => (
-                    <tr key={table.name}>
-                      <td className="mono">{table.name}</td>
-                      <td className="numeric">{table.rows}</td>
-                      <td className="numeric">{table.columns.length}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-        <div className="form-actions">
-          <button type="button" className="btn btn--secondary" onClick={onClose}>
-            Close
-          </button>
-        </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -278,77 +274,62 @@ function ReconcileDialog({
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="reconcile-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        overflowY: 'auto',
-        padding: 'var(--space-5)',
-      }}
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      title={<>Reconcile {job.name || job.source_kind}</>}
+      footer={<>
+        <button type="button" className="btn btn--secondary" onClick={onClose}>
+          Close
+        </button>
+        <button
+          type="submit"
+          className="btn btn--primary"
+          disabled={mutation.isPending || !sourceTable || !targetEntity}
+        >
+          {mutation.isPending ? 'Reconciling…' : 'Reconcile'}
+        </button>
+      </>}
+      formProps={{ onSubmit: handleSubmit }}
     >
-      <div className="card" style={{ maxWidth: 560, margin: '0 auto' }} onClick={(e) => e.stopPropagation()}>
-        <div className="card__header">
-          <h2 id="reconcile-title">Reconcile {job.name || job.source_kind}</h2>
-        </div>
-        <form onSubmit={handleSubmit}>
-          <div className="card__body stack">
-            {mutation.error ? <Alert tone="error">{errorMessage(mutation.error)}</Alert> : null}
+      <div className="stack">
+        {mutation.error ? <Alert tone="error">{errorMessage(mutation.error)}</Alert> : null}
 
-            <Field label="Source table" htmlFor="reconcile-source" required>
-              <input
-                id="reconcile-source"
-                value={sourceTable}
-                onChange={(event) => setSourceTable(event.target.value)}
-                placeholder="customers"
-              />
-            </Field>
-            <Field label="Target entity" htmlFor="reconcile-target" required>
-              <input
-                id="reconcile-target"
-                value={targetEntity}
-                onChange={(event) => setTargetEntity(event.target.value)}
-                placeholder="customers"
-              />
-            </Field>
+        <Field label="Source table" htmlFor="reconcile-source" required>
+          <input
+            id="reconcile-source"
+            value={sourceTable}
+            onChange={(event) => setSourceTable(event.target.value)}
+            placeholder="customers"
+          />
+        </Field>
+        <Field label="Target entity" htmlFor="reconcile-target" required>
+          <input
+            id="reconcile-target"
+            value={targetEntity}
+            onChange={(event) => setTargetEntity(event.target.value)}
+            placeholder="customers"
+          />
+        </Field>
 
-            {result ? (
-              <dl className="dl">
-                <dt>Status</dt>
-                <dd>
-                  <StatusBadge status={result.status} />
-                </dd>
-                <dt>Source rows</dt>
-                <dd>{result.source_count}</dd>
-                <dt>Target rows</dt>
-                <dd>{result.target_count}</dd>
-                <dt>Matched</dt>
-                <dd>{result.matched_count}</dd>
-                <dt>Mismatched</dt>
-                <dd>{result.mismatched_count}</dd>
-              </dl>
-            ) : null}
-          </div>
-          <div className="form-actions">
-            <button type="button" className="btn btn--secondary" onClick={onClose}>
-              Close
-            </button>
-            <button
-              type="submit"
-              className="btn btn--primary"
-              disabled={mutation.isPending || !sourceTable || !targetEntity}
-            >
-              {mutation.isPending ? 'Reconciling…' : 'Reconcile'}
-            </button>
-          </div>
-        </form>
+        {result ? (
+          <dl className="dl">
+            <dt>Status</dt>
+            <dd>
+              <StatusBadge status={result.status} />
+            </dd>
+            <dt>Source rows</dt>
+            <dd>{result.source_count}</dd>
+            <dt>Target rows</dt>
+            <dd>{result.target_count}</dd>
+            <dt>Matched</dt>
+            <dd>{result.matched_count}</dd>
+            <dt>Mismatched</dt>
+            <dd>{result.mismatched_count}</dd>
+          </dl>
+        ) : null}
       </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -407,108 +388,93 @@ function NewMigrationDialog({
   if (!open) return null
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="new-migration-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        overflowY: 'auto',
-        padding: 'var(--space-5)',
-      }}
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      title={t('migrations.newMigrationTitle')}
+      footer={<>
+        <button type="button" className="btn btn--secondary" onClick={onClose}>
+          {t('common.cancel')}
+        </button>
+        <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
+          {mutation.isPending ? t('migrations.creating') : t('common.create')}
+        </button>
+      </>}
+      formProps={{ onSubmit: handleSubmit }}
     >
-      <div className="card" style={{ maxWidth: 640, margin: '0 auto' }} onClick={(e) => e.stopPropagation()}>
-        <div className="card__header">
-          <h2 id="new-migration-title">{t('migrations.newMigrationTitle')}</h2>
+      <div className="stack">
+        {formError ? <Alert tone="error">{formError}</Alert> : null}
+
+        <Field label={t('migrations.name')} htmlFor="migration-name" error={errors.name}>
+          <input
+            id="migration-name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder={t('migrations.namePlaceholder')}
+          />
+        </Field>
+
+        <div className="form-grid">
+          <Field label={t('migrations.sourceType')} htmlFor="migration-source" required>
+            <select
+              id="migration-source"
+              value={sourceType || sourceTypes[0] || ''}
+              onChange={(event) => setSourceType(event.target.value)}
+              disabled={sourcesLoading || sourceTypes.length === 0}
+            >
+              {sourceTypes.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label={t('migrations.strategy')} htmlFor="migration-strategy">
+            <select
+              id="migration-strategy"
+              value={strategy}
+              onChange={(event) => setStrategy(event.target.value)}
+            >
+              {STRATEGIES.map((item) => (
+                <option key={item} value={item}>
+                  {item.replace('_', ' ')}
+                </option>
+              ))}
+            </select>
+          </Field>
         </div>
-        <form onSubmit={handleSubmit}>
-          <div className="card__body stack">
-            {formError ? <Alert tone="error">{formError}</Alert> : null}
 
-            <Field label={t('migrations.name')} htmlFor="migration-name" error={errors.name}>
-              <input
-                id="migration-name"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder={t('migrations.namePlaceholder')}
-              />
-            </Field>
+        <Field
+          label={t('migrations.connectionJson')}
+          htmlFor="migration-config"
+          hint={t('migrations.connectionHint')}
+        >
+          <textarea
+            id="migration-config"
+            className="mono"
+            rows={8}
+            value={configText}
+            onChange={(event) => setConfigText(event.target.value)}
+          />
+        </Field>
 
-            <div className="form-grid">
-              <Field label={t('migrations.sourceType')} htmlFor="migration-source" required>
-                <select
-                  id="migration-source"
-                  value={sourceType || sourceTypes[0] || ''}
-                  onChange={(event) => setSourceType(event.target.value)}
-                  disabled={sourcesLoading || sourceTypes.length === 0}
-                >
-                  {sourceTypes.map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label={t('migrations.strategy')} htmlFor="migration-strategy">
-                <select
-                  id="migration-strategy"
-                  value={strategy}
-                  onChange={(event) => setStrategy(event.target.value)}
-                >
-                  {STRATEGIES.map((item) => (
-                    <option key={item} value={item}>
-                      {item.replace('_', ' ')}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            </div>
+        <Field
+          label={t('migrations.password')}
+          htmlFor="migration-password"
+          hint={t('migrations.passwordHint')}
+        >
+          <input
+            id="migration-password"
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+        </Field>
 
-            <Field
-              label={t('migrations.connectionJson')}
-              htmlFor="migration-config"
-              hint={t('migrations.connectionHint')}
-            >
-              <textarea
-                id="migration-config"
-                className="mono"
-                rows={8}
-                value={configText}
-                onChange={(event) => setConfigText(event.target.value)}
-              />
-            </Field>
-
-            <Field
-              label={t('migrations.password')}
-              htmlFor="migration-password"
-              hint={t('migrations.passwordHint')}
-            >
-              <input
-                id="migration-password"
-                type="password"
-                autoComplete="new-password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-              />
-            </Field>
-
-            <Alert tone="warning">{t('migrations.readOnlyWarning')}</Alert>
-          </div>
-          <div className="form-actions">
-            <button type="button" className="btn btn--secondary" onClick={onClose}>
-              {t('common.cancel')}
-            </button>
-            <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
-              {mutation.isPending ? t('migrations.creating') : t('common.create')}
-            </button>
-          </div>
-        </form>
+        <Alert tone="warning">{t('migrations.readOnlyWarning')}</Alert>
       </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -526,95 +492,84 @@ function MigrationDetailDialog({
   })
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="migration-detail-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        overflowY: 'auto',
-        padding: 'var(--space-5)',
-      }}
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      title={migration.name || migration.source_kind}
+      extra={<>
+        <StatusBadge status={migration.status} />
+      </>}
+      size="lg"
+      footer={<>
+        <button type="button" className="btn btn--secondary" onClick={onClose}>
+          {t('common.close')}
+        </button>
+      </>}
     >
-      <div className="card" style={{ maxWidth: 760, margin: '0 auto' }} onClick={(e) => e.stopPropagation()}>
-        <div className="card__header">
-          <h2 id="migration-detail-title">{migration.name || migration.source_kind}</h2>
-          <StatusBadge status={migration.status} />
-        </div>
-        <div className="card__body stack">
-          <dl className="dl">
-            <dt>{t('migrations.source')}</dt>
-            <dd>{migration.source_kind}</dd>
-            <dt>{t('migrations.strategy')}</dt>
-            <dd>{migration.strategy?.replace('_', ' ') ?? '—'}</dd>
-            <dt>{t('migrations.created')}</dt>
-            <dd>
-              <Timestamp value={migration.created_at} />
-            </dd>
-            {migration.error ? (
-              <>
-                <dt>{t('migrations.lastError')}</dt>
-                <dd className="text-danger">{migration.error}</dd>
-              </>
-            ) : null}
-          </dl>
+      <div className="stack">
+        <dl className="dl">
+          <dt>{t('migrations.source')}</dt>
+          <dd>{migration.source_kind}</dd>
+          <dt>{t('migrations.strategy')}</dt>
+          <dd>{migration.strategy?.replace('_', ' ') ?? '—'}</dd>
+          <dt>{t('migrations.created')}</dt>
+          <dd>
+            <Timestamp value={migration.created_at} />
+          </dd>
+          {migration.error ? (
+            <>
+              <dt>{t('migrations.lastError')}</dt>
+              <dd className="text-danger">{migration.error}</dd>
+            </>
+          ) : null}
+        </dl>
 
-          <div>
-            <h3 style={{ marginBottom: 'var(--space-2)' }}>{t('migrations.reconciliations')}</h3>
-            {reconciliations.isLoading ? (
-              <p className="text-muted text-sm">{t('common.loading')}</p>
-            ) : reconciliations.data?.items.length ? (
-              <div className="table-wrap">
-                <table className="table--stack">
-                  <thead>
-                    <tr>
-                      <th>{t('common.status')}</th>
-                      <th>{t('migrations.columnTable')}</th>
-                      <th className="numeric">{t('migrations.columnSourceCount')}</th>
-                      <th className="numeric">{t('migrations.columnTargetCount')}</th>
-                      <th className="numeric">{t('migrations.columnMismatches')}</th>
-                      <th>{t('migrations.columnWhen')}</th>
+        <div>
+          <h3 style={{ marginBottom: 'var(--space-2)' }}>{t('migrations.reconciliations')}</h3>
+          {reconciliations.isLoading ? (
+            <p className="text-muted text-sm">{t('common.loading')}</p>
+          ) : reconciliations.data?.items.length ? (
+            <div className="table-wrap">
+              <table className="table--stack">
+                <thead>
+                  <tr>
+                    <th>{t('common.status')}</th>
+                    <th>{t('migrations.columnTable')}</th>
+                    <th className="numeric">{t('migrations.columnSourceCount')}</th>
+                    <th className="numeric">{t('migrations.columnTargetCount')}</th>
+                    <th className="numeric">{t('migrations.columnMismatches')}</th>
+                    <th>{t('migrations.columnWhen')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reconciliations.data.items.map((row) => (
+                    <tr key={row.id}>
+                      <td data-label={t('common.status')}>
+                        <StatusBadge status={row.status} />
+                      </td>
+                      <td data-label={t('migrations.columnTable')}>{row.source_table}</td>
+                      <td className="numeric" data-label={t('migrations.columnSourceCount')}>
+                        {row.source_count ?? '—'}
+                      </td>
+                      <td className="numeric" data-label={t('migrations.columnTargetCount')}>
+                        {row.target_count ?? '—'}
+                      </td>
+                      <td className="numeric" data-label={t('migrations.columnMismatches')}>
+                        {row.mismatched_count ?? '—'}
+                      </td>
+                      <td data-label={t('migrations.columnWhen')}>
+                        <Timestamp value={row.created_at} />
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {reconciliations.data.items.map((row) => (
-                      <tr key={row.id}>
-                        <td data-label={t('common.status')}>
-                          <StatusBadge status={row.status} />
-                        </td>
-                        <td data-label={t('migrations.columnTable')}>{row.source_table}</td>
-                        <td className="numeric" data-label={t('migrations.columnSourceCount')}>
-                          {row.source_count ?? '—'}
-                        </td>
-                        <td className="numeric" data-label={t('migrations.columnTargetCount')}>
-                          {row.target_count ?? '—'}
-                        </td>
-                        <td className="numeric" data-label={t('migrations.columnMismatches')}>
-                          {row.mismatched_count ?? '—'}
-                        </td>
-                        <td data-label={t('migrations.columnWhen')}>
-                          <Timestamp value={row.created_at} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p className="text-muted text-sm">{t('migrations.noReconciliations')}</p>
-            )}
-          </div>
-        </div>
-        <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
-          <button type="button" className="btn btn--secondary" onClick={onClose}>
-            {t('common.close')}
-          </button>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-muted text-sm">{t('migrations.noReconciliations')}</p>
+          )}
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }

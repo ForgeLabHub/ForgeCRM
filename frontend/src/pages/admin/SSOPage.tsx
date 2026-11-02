@@ -23,6 +23,7 @@ import {
   ConfirmDialog,
   ErrorState,
   Field,
+  Modal,
   PageHeader,
   TableSkeleton,
 } from '../../components/ui'
@@ -259,32 +260,24 @@ function ProviderDialog({
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="provider-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        display: 'grid',
-        placeItems: 'center',
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        padding: 'var(--space-4)',
-        overflowY: 'auto',
-      }}
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      title={isEdit ? t('sso.editTitle') : t('sso.newTitle')}
+      size="md"
+      formProps={{ onSubmit: handleSubmit }}
+      footer={
+        <>
+          <button type="button" className="btn btn--secondary" onClick={onClose}>
+            {t('common.cancel')}
+          </button>
+          <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
+            {mutation.isPending ? t('sso.saving') : t('common.save')}
+          </button>
+        </>
+      }
     >
-      <form
-        className="card"
-        style={{ maxWidth: 560, width: '100%', margin: 'auto' }}
-        onClick={(event) => event.stopPropagation()}
-        onSubmit={handleSubmit}
-      >
-        <div className="card__header">
-          <h2 id="provider-title">{isEdit ? t('sso.editTitle') : t('sso.newTitle')}</h2>
-        </div>
-        <div className="card__body stack">
+      <div className="stack">
           {formError ? <Alert tone="error">{formError}</Alert> : null}
 
           <div className="form-grid">
@@ -402,17 +395,8 @@ function ProviderDialog({
             />
             <span>{t('sso.enabledLabel')}</span>
           </label>
-        </div>
-        <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
-          <button type="button" className="btn btn--secondary" onClick={onClose}>
-            {t('common.cancel')}
-          </button>
-          <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
-            {mutation.isPending ? t('sso.saving') : t('common.save')}
-          </button>
-        </div>
-      </form>
-    </div>
+      </div>
+    </Modal>
   )
 }
 

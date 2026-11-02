@@ -5,7 +5,14 @@ import { errorMessage } from '../api/client'
 import type { Job } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
 import { ResourceList, type Column } from '../components/ResourceList'
-import { Alert, PageHeader, Stat, StatusBadge, Timestamp } from '../components/ui'
+import {
+  Alert,
+  Modal,
+  PageHeader,
+  Stat,
+  StatusBadge,
+  Timestamp,
+} from '../components/ui'
 import { useT } from '../i18n'
 
 export function JobsPage() {
@@ -159,58 +166,44 @@ export function JobsPage() {
       />
 
       {detail ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="job-detail-title"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'var(--color-overlay)',
-            zIndex: 60,
-            overflowY: 'auto',
-            padding: 'var(--space-5)',
-          }}
-          onClick={() => setDetail(null)}
+        <Modal
+          open
+          onClose={() => setDetail(null)}
+          title={detail.kind}
+          extra={<>
+            <StatusBadge status={detail.status} />
+          </>}
+          footer={<>
+            <button type="button" className="btn btn--secondary" onClick={() => setDetail(null)}>
+              {t('common.close')}
+            </button>
+          </>}
         >
-          <div className="card" style={{ maxWidth: 620, margin: '0 auto' }} onClick={(e) => e.stopPropagation()}>
-            <div className="card__header">
-              <h2 id="job-detail-title">{detail.kind}</h2>
-              <StatusBadge status={detail.status} />
-            </div>
-            <div className="card__body">
-              <dl className="dl">
-                <dt>{t('jobs.jobId')}</dt>
-                <dd className="mono truncate">{detail.id}</dd>
-                <dt>{t('jobs.columnAttempts')}</dt>
-                <dd>{t('jobs.attemptsOf', { done: detail.attempts, total: detail.max_attempts })}</dd>
-                <dt>{t('jobs.scheduledFor')}</dt>
-                <dd>
-                  <Timestamp value={detail.run_after} />
-                </dd>
-                <dt>{t('common.created')}</dt>
-                <dd>
-                  <Timestamp value={detail.created_at} />
-                </dd>
-                <dt>{t('jobs.columnFinished')}</dt>
-                <dd>
-                  <Timestamp value={detail.finished_at} />
-                </dd>
-                {detail.last_error ? (
-                  <>
-                    <dt>{t('jobs.lastError')}</dt>
-                    <dd className="text-danger">{detail.last_error}</dd>
-                  </>
-                ) : null}
-              </dl>
-            </div>
-            <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
-              <button type="button" className="btn btn--secondary" onClick={() => setDetail(null)}>
-                {t('common.close')}
-              </button>
-            </div>
-          </div>
-        </div>
+          <dl className="dl">
+            <dt>{t('jobs.jobId')}</dt>
+            <dd className="mono truncate">{detail.id}</dd>
+            <dt>{t('jobs.columnAttempts')}</dt>
+            <dd>{t('jobs.attemptsOf', { done: detail.attempts, total: detail.max_attempts })}</dd>
+            <dt>{t('jobs.scheduledFor')}</dt>
+            <dd>
+              <Timestamp value={detail.run_after} />
+            </dd>
+            <dt>{t('common.created')}</dt>
+            <dd>
+              <Timestamp value={detail.created_at} />
+            </dd>
+            <dt>{t('jobs.columnFinished')}</dt>
+            <dd>
+              <Timestamp value={detail.finished_at} />
+            </dd>
+            {detail.last_error ? (
+              <>
+                <dt>{t('jobs.lastError')}</dt>
+                <dd className="text-danger">{detail.last_error}</dd>
+              </>
+            ) : null}
+          </dl>
+        </Modal>
       ) : null}
 
       {stats.isError ? (

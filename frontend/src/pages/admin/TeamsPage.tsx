@@ -7,7 +7,16 @@ import { usersApi } from '../../api/auth'
 import { errorMessage, fieldErrors } from '../../api/client'
 import { useAuth } from '../../hooks/useAuth'
 import { useT } from '../../i18n'
-import { Alert, Card, ErrorState, Field, PageHeader, TableSkeleton, Timestamp } from '../../components/ui'
+import {
+  Alert,
+  Card,
+  ErrorState,
+  Field,
+  Modal,
+  PageHeader,
+  TableSkeleton,
+  Timestamp,
+} from '../../components/ui'
 
 export function TeamsPage() {
   const { can } = useAuth()
@@ -150,55 +159,40 @@ function NewTeamDialog({
   if (!open) return null
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="new-team-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        display: 'grid',
-        placeItems: 'center',
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        padding: 'var(--space-4)',
-      }}
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      title={t('teams.newTeamTitle')}
+      size="sm"
+      footer={<>
+        <button type="button" className="btn btn--secondary" onClick={onClose}>
+          {t('common.cancel')}
+        </button>
+        <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
+          {mutation.isPending ? t('teams.creating') : t('common.create')}
+        </button>
+      </>}
+      formProps={{ onSubmit: handleSubmit }}
     >
-      <div className="card" style={{ maxWidth: 460, width: '100%' }} onClick={(e) => e.stopPropagation()}>
-        <div className="card__header">
-          <h2 id="new-team-title">{t('teams.newTeamTitle')}</h2>
-        </div>
-        <form onSubmit={handleSubmit}>
-          <div className="card__body stack">
-            {formError ? <Alert tone="error">{formError}</Alert> : null}
-            <Field label={t('teams.columnName')} htmlFor="team-name" required error={errors.name}>
-              <input
-                id="team-name"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                required
-              />
-            </Field>
-            <Field label={t('teams.description')} htmlFor="team-description">
-              <input
-                id="team-description"
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-              />
-            </Field>
-          </div>
-          <div className="form-actions">
-            <button type="button" className="btn btn--secondary" onClick={onClose}>
-              {t('common.cancel')}
-            </button>
-            <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
-              {mutation.isPending ? t('teams.creating') : t('common.create')}
-            </button>
-          </div>
-        </form>
+      <div className="stack">
+        {formError ? <Alert tone="error">{formError}</Alert> : null}
+        <Field label={t('teams.columnName')} htmlFor="team-name" required error={errors.name}>
+          <input
+            id="team-name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            required
+          />
+        </Field>
+        <Field label={t('teams.description')} htmlFor="team-description">
+          <input
+            id="team-description"
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+          />
+        </Field>
       </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -227,52 +221,38 @@ function AddMemberDialog({
   })
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="add-member-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        display: 'grid',
-        placeItems: 'center',
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        padding: 'var(--space-4)',
-      }}
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      title={t('teams.addMemberTitle', { team: team.name })}
+      size="sm"
+      footer={<>
+        <button type="button" className="btn btn--secondary" onClick={onClose}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="btn btn--primary"
+          disabled={!userId || mutation.isPending}
+          onClick={() => mutation.mutate()}
+        >
+          {mutation.isPending ? t('teams.adding') : t('teams.addMember')}
+        </button>
+      </>}
     >
-      <div className="card" style={{ maxWidth: 460, width: '100%' }} onClick={(e) => e.stopPropagation()}>
-        <div className="card__header">
-          <h2 id="add-member-title">{t('teams.addMemberTitle', { team: team.name })}</h2>
-        </div>
-        <div className="card__body stack">
-          {error ? <Alert tone="error">{error}</Alert> : null}
-          <Field label={t('teams.user')} htmlFor="team-member" required>
-            <select id="team-member" value={userId} onChange={(event) => setUserId(event.target.value)}>
-              <option value="">{t('teams.selectUser')}</option>
-              {(users.data?.items ?? []).map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.display_name} ({user.email})
-                </option>
-              ))}
-            </select>
-          </Field>
-        </div>
-        <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
-          <button type="button" className="btn btn--secondary" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={!userId || mutation.isPending}
-            onClick={() => mutation.mutate()}
-          >
-            {mutation.isPending ? t('teams.adding') : t('teams.addMember')}
-          </button>
-        </div>
+      <div className="stack">
+        {error ? <Alert tone="error">{error}</Alert> : null}
+        <Field label={t('teams.user')} htmlFor="team-member" required>
+          <select id="team-member" value={userId} onChange={(event) => setUserId(event.target.value)}>
+            <option value="">{t('teams.selectUser')}</option>
+            {(users.data?.items ?? []).map((user) => (
+              <option key={user.id} value={user.id}>
+                {user.display_name} ({user.email})
+              </option>
+            ))}
+          </select>
+        </Field>
       </div>
-    </div>
+    </Modal>
   )
 }

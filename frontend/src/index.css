@@ -1858,6 +1858,22 @@ tbody tr:last-child td { border-bottom: none; }
   border-bottom: 1px solid var(--color-border);
 }
 
+.modal__heading {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+/* A badge or status pill the caller renders beside the title. It stays on the
+   header line, between the heading and the close button, so a dialog that
+   reports state (a job's status, a migration's read-only flag) shows it without
+   the body having to repeat it. */
+.modal__extra {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
 .modal__title { font-size: 16px; letter-spacing: -0.012em; }
 
 .modal__description {
@@ -1886,6 +1902,17 @@ tbody tr:last-child td { border-bottom: none; }
   overflow-y: auto;
 }
 
+/* A form dialog spans body and footer with one <form>. The form is the flex
+   child of the panel, so it takes the remaining height and lets the body
+   scroll while the footer's submit button stays in place. */
+.modal__form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
 .modal__footer {
   display: flex;
   justify-content: flex-end;
@@ -1893,6 +1920,88 @@ tbody tr:last-child td { border-bottom: none; }
   padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--color-border);
   background: var(--color-surface-sunken);
+}
+
+/* On a phone the panel becomes a bottom sheet: it is anchored to the bottom
+   edge, where a thumb reaches, instead of floating in the middle of the screen
+   under the browser chrome. The sheet rounds only its top corners and grows to
+   the viewport height minus a strip of scrim, so a tall form scrolls inside the
+   sheet rather than pushing its actions off the bottom. */
+@media (max-width: 640px) {
+  .modal {
+    place-items: end stretch;
+    padding: 0;
+  }
+
+  .modal__panel,
+  .modal__panel--sm,
+  .modal__panel--md,
+  .modal__panel--lg {
+    max-width: none;
+    max-height: calc(100vh - var(--space-6));
+    max-height: calc(100dvh - var(--space-6));
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+
+  .modal__header {
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .modal__footer {
+    /* Clear the home indicator so the primary action is not under it. */
+    padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
+  }
+}
+
+/* ------------------------------------------------------- search palette -- */
+
+/* The command palette is a Modal, so it inherits the scrim, the focus trap and
+   the phone bottom-sheet treatment. Its body opts out of the modal padding so
+   the field and the results can run edge to edge. */
+.search-palette {
+  margin: calc(-1 * var(--space-4)) calc(-1 * var(--space-4)) 0;
+}
+
+.search-palette__field {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.search-palette__results {
+  max-height: min(380px, 55vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.search-palette__result {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+}
+
+.search-palette__result[data-active='true'] {
+  background: var(--color-accent-soft);
+}
+
+.search-palette__result:hover {
+  background: var(--color-accent-soft);
+}
+
+/* The one-time credential reveal: a long secret has to wrap rather than widen
+   the dialog, and it reads as a monospaced code block, not body copy. */
+.token-reveal {
+  word-break: break-all;
+  padding: var(--space-3);
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  font-size: 12.5px;
+  line-height: 1.6;
 }
 
 /* ---------------------------------------------------------------- avatar -- */

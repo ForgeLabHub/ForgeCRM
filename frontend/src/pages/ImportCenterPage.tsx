@@ -9,7 +9,15 @@ import type { ImportJob } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
 import { useT, type TFunction } from '../i18n'
 import { ResourceList, type Column } from '../components/ResourceList'
-import { Alert, Field, PageHeader, StatusBadge, Timestamp, formatBytes } from '../components/ui'
+import {
+  Alert,
+  Field,
+  Modal,
+  PageHeader,
+  StatusBadge,
+  Timestamp,
+  formatBytes,
+} from '../components/ui'
 
 const columns = (t: TFunction): Column<ImportJob>[] => [
   {
@@ -150,78 +158,55 @@ function ExportDialog({ open, onClose }: { open: boolean; onClose: () => void })
   if (!open) return null
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="export-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        overflowY: 'auto',
-        padding: 'var(--space-5)',
-      }}
-      onClick={onClose}
-    >
-      <div
-        className="card"
-        style={{ maxWidth: 480, margin: '0 auto' }}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="card__header">
-          <h2 id="export-title">{t('imports.exportTitle')}</h2>
-        </div>
-        <form
-          onSubmit={(event: FormEvent) => {
+    <Modal
+      open
+      onClose={onClose}
+      title={t('imports.exportTitle')}
+      footer={<>
+        <button type="button" className="btn btn--secondary" onClick={onClose}>
+          {t('common.cancel')}
+        </button>
+        <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
+          {mutation.isPending ? t('imports.preparing') : t('imports.download')}
+        </button>
+      </>}
+      formProps={{ onSubmit: (event: FormEvent) => {
             event.preventDefault()
             setError(null)
             mutation.mutate()
-          }}
-        >
-          <div className="card__body">
-            {error ? (
-              <div style={{ marginBottom: 'var(--space-4)' }}>
-                <Alert tone="error">{error}</Alert>
-              </div>
-            ) : null}
-            <div className="form-grid">
-              <Field label={t('imports.entity')} htmlFor="export-entity">
-                <select
-                  id="export-entity"
-                  value={entityType}
-                  onChange={(event) => setEntityType(event.target.value)}
-                >
-                  {IMPORT_ENTITY_TYPES.map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label={t('imports.format')} htmlFor="export-format">
-                <select
-                  id="export-format"
-                  value={format}
-                  onChange={(event) => setFormat(event.target.value as 'csv' | 'jsonl')}
-                >
-                  <option value="csv">CSV</option>
-                  <option value="jsonl">JSONL</option>
-                </select>
-              </Field>
-            </div>
-          </div>
-          <div className="form-actions">
-            <button type="button" className="btn btn--secondary" onClick={onClose}>
-              {t('common.cancel')}
-            </button>
-            <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
-              {mutation.isPending ? t('imports.preparing') : t('imports.download')}
-            </button>
-          </div>
-        </form>
+          } }}
+    >
+      {error ? (
+        <div style={{ marginBottom: 'var(--space-4)' }}>
+          <Alert tone="error">{error}</Alert>
+        </div>
+      ) : null}
+      <div className="form-grid">
+        <Field label={t('imports.entity')} htmlFor="export-entity">
+          <select
+            id="export-entity"
+            value={entityType}
+            onChange={(event) => setEntityType(event.target.value)}
+          >
+            {IMPORT_ENTITY_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t('imports.format')} htmlFor="export-format">
+          <select
+            id="export-format"
+            value={format}
+            onChange={(event) => setFormat(event.target.value as 'csv' | 'jsonl')}
+          >
+            <option value="csv">CSV</option>
+            <option value="jsonl">JSONL</option>
+          </select>
+        </Field>
       </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -282,94 +267,75 @@ function NewImportDialog({
   if (!open) return null
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="new-import-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        overflowY: 'auto',
-        padding: 'var(--space-5)',
-      }}
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      title={t('imports.newTitle')}
+      footer={<>
+        <button type="button" className="btn btn--secondary" onClick={onClose} disabled={mutation.isPending}>
+          {t('common.cancel')}
+        </button>
+        <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
+          {mutation.isPending ? t('common.uploading') : t('imports.createAndUpload')}
+        </button>
+      </>}
+      formProps={{ onSubmit: handleSubmit }}
     >
-      <div
-        className="card"
-        style={{ maxWidth: 560, margin: '0 auto' }}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="card__header">
-          <h2 id="new-import-title">{t('imports.newTitle')}</h2>
-        </div>
-        <form onSubmit={handleSubmit}>
-          <div className="card__body stack">
-            {formError ? <Alert tone="error">{formError}</Alert> : null}
+      <div className="stack">
+        {formError ? <Alert tone="error">{formError}</Alert> : null}
 
-            <Field label={t('imports.name')} htmlFor="import-name" hint={t('imports.nameHint')}>
-              <input
-                id="import-name"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder={t('imports.namePlaceholder')}
-              />
-            </Field>
+        <Field label={t('imports.name')} htmlFor="import-name" hint={t('imports.nameHint')}>
+          <input
+            id="import-name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder={t('imports.namePlaceholder')}
+          />
+        </Field>
 
-            <Field
-                          label={t('imports.targetEntity')}
-                          htmlFor="import-entity"
-                          required
-                          error={errors.entity_type}
-                        >
-              <select
-                id="import-entity"
-                value={entityType}
-                onChange={(event) => setEntityType(event.target.value)}
-              >
-                {IMPORT_ENTITY_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-            </Field>
+        <Field
+                      label={t('imports.targetEntity')}
+                      htmlFor="import-entity"
+                      required
+                      error={errors.entity_type}
+                    >
+          <select
+            id="import-entity"
+            value={entityType}
+            onChange={(event) => setEntityType(event.target.value)}
+          >
+            {IMPORT_ENTITY_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+          </select>
+        </Field>
 
-            <Field
-                            label={t('imports.sourceFile')}
-                            htmlFor="import-file"
-                            required
-                            error={errors.file}
-                            hint={t('imports.sourceFileHint')}
-            >
-              <input
-                id="import-file"
-                type="file"
-                accept=".csv,.tsv,.txt,.xlsx,.json,.jsonl,.ndjson,.xml,.zip,.tar,.gz,.tgz,.bz2,.xz,.7z"
-                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-                className={errors.file ? 'input--invalid' : undefined}
-              />
-            </Field>
+        <Field
+                        label={t('imports.sourceFile')}
+                        htmlFor="import-file"
+                        required
+                        error={errors.file}
+                        hint={t('imports.sourceFileHint')}
+        >
+          <input
+            id="import-file"
+            type="file"
+            accept=".csv,.tsv,.txt,.xlsx,.json,.jsonl,.ndjson,.xml,.zip,.tar,.gz,.tgz,.bz2,.xz,.7z"
+            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+            className={errors.file ? 'input--invalid' : undefined}
+          />
+        </Field>
 
-            {file ? (
-              <p className="text-sm text-muted">
-                {file.name} · {formatBytes(file.size)}
-              </p>
-            ) : null}
+        {file ? (
+          <p className="text-sm text-muted">
+            {file.name} · {formatBytes(file.size)}
+          </p>
+        ) : null}
 
-            <Alert tone="info">{t('imports.nothingWritten')}</Alert>
-          </div>
-          <div className="form-actions">
-            <button type="button" className="btn btn--secondary" onClick={onClose} disabled={mutation.isPending}>
-              {t('common.cancel')}
-            </button>
-            <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
-              {mutation.isPending ? t('common.uploading') : t('imports.createAndUpload')}
-            </button>
-          </div>
-        </form>
+        <Alert tone="info">{t('imports.nothingWritten')}</Alert>
       </div>
-    </div>
+    </Modal>
   )
 }

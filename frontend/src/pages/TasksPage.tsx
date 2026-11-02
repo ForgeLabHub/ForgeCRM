@@ -12,7 +12,16 @@ import { AssistPanel } from '../components/AssistPanel'
 import { RecordCollabPanel } from '../components/RecordCollabPanel'
 import { ResourceList, type Column } from '../components/ResourceList'
 import { SavedViewsBar } from '../components/SavedViewsBar'
-import { Alert, Badge, Card, Field, PageHeader, StatusBadge, Timestamp } from '../components/ui'
+import {
+  Alert,
+  Badge,
+  Card,
+  Field,
+  Modal,
+  PageHeader,
+  StatusBadge,
+  Timestamp,
+} from '../components/ui'
 import { useT, type TFunction } from '../i18n'
 
 const PRIORITIES = ['low', 'normal', 'high', 'urgent']
@@ -281,155 +290,134 @@ export function TaskFormDialog({
   if (!open) return null
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="task-form-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        overflowY: 'auto',
-        padding: 'var(--space-5)',
-      }}
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      title={editing ? t('tasks.editTask') : t('tasks.newTask')}
+      footer={<>
+        <button type="button" className="btn btn--secondary" onClick={onClose}>
+          {t('common.cancel')}
+        </button>
+        <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
+          {mutation.isPending
+            ? t('common.saving')
+            : editing
+              ? t('common.saveChanges')
+              : t('tasks.createTask')}
+        </button>
+      </>}
+      formProps={{ onSubmit: handleSubmit }}
     >
-      <div
-        className="card"
-        style={{ maxWidth: 640, margin: '0 auto' }}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="card__header">
-          <h2 id="task-form-title">{editing ? t('tasks.editTask') : t('tasks.newTask')}</h2>
+      {formError ? (
+        <div style={{ marginBottom: 'var(--space-4)' }}>
+          <Alert tone="error">{formError}</Alert>
         </div>
-        <form onSubmit={handleSubmit}>
-          <div className="card__body">
-            {formError ? (
-              <div style={{ marginBottom: 'var(--space-4)' }}>
-                <Alert tone="error">{formError}</Alert>
-              </div>
-            ) : null}
-            {editing && task ? (
-              <div style={{ marginBottom: 'var(--space-4)' }}>
-                <AssistPanel entityType="task" entityId={task.id} />
-                <RecordCollabPanel entityType="task" entityId={task.id} />
-              </div>
-            ) : null}
-            <div className="form-grid">
-              <Field label={t('tasks.titleField')} htmlFor="task-title" required error={errors.title} full>
-                <input
-                  id="task-title"
-                  value={form.title}
-                  onChange={(event) => update('title', event.target.value)}
-                  className={errors.title ? 'input--invalid' : undefined}
-                  required
-                />
-              </Field>
-              <Field label={t('tasks.statusField')} htmlFor="task-status">
-                <select
-                  id="task-status"
-                  value={form.status ?? 'open'}
-                  onChange={(event) => update('status', event.target.value)}
-                >
-                  {STATUSES.map((status) => (
-                    <option key={status} value={status}>
-                      {t(`status.${status}` as Parameters<TFunction>[0])}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label={t('tasks.priorityField')} htmlFor="task-priority">
-                <select
-                  id="task-priority"
-                  value={form.priority ?? 'normal'}
-                  onChange={(event) => update('priority', event.target.value)}
-                >
-                  {PRIORITIES.map((priority) => (
-                    <option key={priority} value={priority}>
-                      {priorityLabel(t, priority)}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label={t('tasks.dueField')} htmlFor="task-due">
-                <input
-                  id="task-due"
-                  type="datetime-local"
-                  value={toLocalInput(form.due_at ?? null)}
-                  onChange={(event) =>
-                    update('due_at', event.target.value ? new Date(event.target.value).toISOString() : null)
-                  }
-                />
-              </Field>
-              <Field label={t('tasks.relatedAccount')} htmlFor="task-account">
-                <select
-                  id="task-account"
-                  value={form.account_id ?? ''}
-                  onChange={(event) => update('account_id', event.target.value || null)}
-                >
-                  <option value="">{t('common.none')}</option>
-                  {(accounts.data?.items ?? []).map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label={t('tasks.relatedContact')} htmlFor="task-contact">
-                <select
-                  id="task-contact"
-                  value={form.contact_id ?? ''}
-                  onChange={(event) => update('contact_id', event.target.value || null)}
-                >
-                  <option value="">{t('common.none')}</option>
-                  {(contacts.data?.items ?? []).map((contact) => (
-                    <option key={contact.id} value={contact.id}>
-                      {[contact.first_name, contact.last_name].filter(Boolean).join(' ') ||
-                        contact.email ||
-                        contact.id}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label={t('tasks.relatedDeal')} htmlFor="task-deal">
-                <select
-                  id="task-deal"
-                  value={form.deal_id ?? ''}
-                  onChange={(event) => update('deal_id', event.target.value || null)}
-                >
-                  <option value="">{t('common.none')}</option>
-                  {(deals.data?.items ?? []).map((deal) => (
-                    <option key={deal.id} value={deal.id}>
-                      {deal.title}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label={t('tasks.descriptionField')} htmlFor="task-description" full>
-                <textarea
-                  id="task-description"
-                  value={form.description ?? ''}
-                  onChange={(event) => update('description', event.target.value || null)}
-                />
-              </Field>
-            </div>
-          </div>
-          <div className="form-actions">
-            <button type="button" className="btn btn--secondary" onClick={onClose}>
-              {t('common.cancel')}
-            </button>
-            <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
-              {mutation.isPending
-                ? t('common.saving')
-                : editing
-                  ? t('common.saveChanges')
-                  : t('tasks.createTask')}
-            </button>
-          </div>
-        </form>
+      ) : null}
+      {editing && task ? (
+        <div style={{ marginBottom: 'var(--space-4)' }}>
+          <AssistPanel entityType="task" entityId={task.id} />
+          <RecordCollabPanel entityType="task" entityId={task.id} />
+        </div>
+      ) : null}
+      <div className="form-grid">
+        <Field label={t('tasks.titleField')} htmlFor="task-title" required error={errors.title} full>
+          <input
+            id="task-title"
+            value={form.title}
+            onChange={(event) => update('title', event.target.value)}
+            className={errors.title ? 'input--invalid' : undefined}
+            required
+          />
+        </Field>
+        <Field label={t('tasks.statusField')} htmlFor="task-status">
+          <select
+            id="task-status"
+            value={form.status ?? 'open'}
+            onChange={(event) => update('status', event.target.value)}
+          >
+            {STATUSES.map((status) => (
+              <option key={status} value={status}>
+                {t(`status.${status}` as Parameters<TFunction>[0])}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t('tasks.priorityField')} htmlFor="task-priority">
+          <select
+            id="task-priority"
+            value={form.priority ?? 'normal'}
+            onChange={(event) => update('priority', event.target.value)}
+          >
+            {PRIORITIES.map((priority) => (
+              <option key={priority} value={priority}>
+                {priorityLabel(t, priority)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t('tasks.dueField')} htmlFor="task-due">
+          <input
+            id="task-due"
+            type="datetime-local"
+            value={toLocalInput(form.due_at ?? null)}
+            onChange={(event) =>
+              update('due_at', event.target.value ? new Date(event.target.value).toISOString() : null)
+            }
+          />
+        </Field>
+        <Field label={t('tasks.relatedAccount')} htmlFor="task-account">
+          <select
+            id="task-account"
+            value={form.account_id ?? ''}
+            onChange={(event) => update('account_id', event.target.value || null)}
+          >
+            <option value="">{t('common.none')}</option>
+            {(accounts.data?.items ?? []).map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t('tasks.relatedContact')} htmlFor="task-contact">
+          <select
+            id="task-contact"
+            value={form.contact_id ?? ''}
+            onChange={(event) => update('contact_id', event.target.value || null)}
+          >
+            <option value="">{t('common.none')}</option>
+            {(contacts.data?.items ?? []).map((contact) => (
+              <option key={contact.id} value={contact.id}>
+                {[contact.first_name, contact.last_name].filter(Boolean).join(' ') ||
+                  contact.email ||
+                  contact.id}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t('tasks.relatedDeal')} htmlFor="task-deal">
+          <select
+            id="task-deal"
+            value={form.deal_id ?? ''}
+            onChange={(event) => update('deal_id', event.target.value || null)}
+          >
+            <option value="">{t('common.none')}</option>
+            {(deals.data?.items ?? []).map((deal) => (
+              <option key={deal.id} value={deal.id}>
+                {deal.title}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t('tasks.descriptionField')} htmlFor="task-description" full>
+          <textarea
+            id="task-description"
+            value={form.description ?? ''}
+            onChange={(event) => update('description', event.target.value || null)}
+          />
+        </Field>
       </div>
-    </div>
+    </Modal>
   )
 }
 

@@ -11,6 +11,7 @@ import {
   ConfirmDialog,
   EmptyState,
   Field,
+  Modal,
   PageHeader,
   StatusBadge,
   TableSkeleton,
@@ -279,108 +280,99 @@ function ReviewDialog({
   onReject: () => void
 }) {
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="agent-action-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        overflowY: 'auto',
-        padding: 'var(--space-5)',
-      }}
-      onClick={onClose}
-    >
-      <div className="card" style={{ maxWidth: 720, margin: '0 auto' }} onClick={(e) => e.stopPropagation()}>
-        <div className="card__header">
-          <h2 id="agent-action-title">{action.summary}</h2>
-          <div className="row" style={{ marginTop: 'var(--space-2)' }}>
-            <Badge tone={TIER_TONE[action.risk_tier] ?? 'neutral'}>{action.risk_tier}</Badge>
-            <StatusBadge status={action.status} />
-            <span className="mono text-sm text-muted">{action.tool_name}</span>
-          </div>
+    <Modal
+      open
+      onClose={onClose}
+      title={action.summary}
+      extra={<>
+        <div className="row" style={{ marginTop: 'var(--space-2)' }}>
+          <Badge tone={TIER_TONE[action.risk_tier] ?? 'neutral'}>{action.risk_tier}</Badge>
+          <StatusBadge status={action.status} />
+          <span className="mono text-sm text-muted">{action.tool_name}</span>
         </div>
-
-        <div className="card__body stack">
-          <div>
-            <h3 className="text-sm">{t('approvals.arguments')}</h3>
-            <pre className="mono text-sm" style={{ whiteSpace: 'pre-wrap', margin: 0 }}>
-              {JSON.stringify(action.arguments, null, 2)}
-            </pre>
-          </div>
-
-          <div>
-            <h3 className="text-sm">{t('approvals.bindingHash')}</h3>
-            <p className="text-muted text-sm" style={{ marginBottom: 'var(--space-1)' }}>
-              {t('approvals.bindingHashNote')}
-            </p>
-            <div className="mono text-sm" style={{ wordBreak: 'break-all' }}>
-              {action.arguments_hash}
-            </div>
-          </div>
-
-          <div className="text-muted text-sm">
-            {t('approvals.expires')} <Timestamp value={action.expires_at} />
-          </div>
-
-          <Field label={t('approvals.commentOptional')} htmlFor="review-comment">
-            <textarea id="review-comment" rows={2} value={comment} onChange={(e) => onComment(e.target.value)} />
-          </Field>
-
-          {stepUpNeeded ? (
-            <Alert tone="warning">
-              <strong>{t('approvals.stepUpTitle')}</strong> {t('approvals.stepUpText')}
-              <form
-                className="row"
-                style={{ marginTop: 'var(--space-2)' }}
-                onSubmit={(e) => {
+      </>}
+      size="lg"
+      footer={<>
+        <button type="button" className="btn btn--secondary" onClick={onClose}>
+          {t('common.close')}
+        </button>
+        {canDecide ? (
+          <>
+            <button type="button" className="btn btn--danger" onClick={onReject} disabled={busy}>
+              {t('approvals.reject')}
+            </button>
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={onApprove}
+              disabled={busy || stepUpNeeded}
+              title={stepUpNeeded ? t('approvals.stepUpFirst') : undefined}
+            >
+              {busy ? t('common.working') : t('approvals.approve')}
+            </button>
+          </>
+        ) : null}
+      </>}
+      formProps={{ onSubmit: (e) => {
                   e.preventDefault()
                   onStepUp()
-                }}
-              >
-                <Field label={t('approvals.stepUpField')} htmlFor="stepup-secret">
-                  <input
-                    id="stepup-secret"
-                    type="password"
-                    autoComplete="one-time-code"
-                    value={stepUpSecret}
-                    onChange={(e) => onStepUpSecret(e.target.value)}
-                  />
-                </Field>
-                <button type="submit" className="btn btn--primary" disabled={stepUpBusy || stepUpSecret === ''}>
-                  {stepUpBusy ? t('approvals.verifying') : t('approvals.verify')}
-                </button>
-              </form>
-            </Alert>
-          ) : null}
-
-          {!canDecide ? <Alert tone="info">{t('approvals.readOnly')}</Alert> : null}
+                } }}
+    >
+      <div className="stack">
+        <div>
+          <h3 className="text-sm">{t('approvals.arguments')}</h3>
+          <pre className="mono text-sm" style={{ whiteSpace: 'pre-wrap', margin: 0 }}>
+            {JSON.stringify(action.arguments, null, 2)}
+          </pre>
         </div>
 
-        <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
-          <button type="button" className="btn btn--secondary" onClick={onClose}>
-            {t('common.close')}
-          </button>
-          {canDecide ? (
-            <>
-              <button type="button" className="btn btn--danger" onClick={onReject} disabled={busy}>
-                {t('approvals.reject')}
-              </button>
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={onApprove}
-                disabled={busy || stepUpNeeded}
-                title={stepUpNeeded ? t('approvals.stepUpFirst') : undefined}
-              >
-                {busy ? t('common.working') : t('approvals.approve')}
-              </button>
-            </>
-          ) : null}
+        <div>
+          <h3 className="text-sm">{t('approvals.bindingHash')}</h3>
+          <p className="text-muted text-sm" style={{ marginBottom: 'var(--space-1)' }}>
+            {t('approvals.bindingHashNote')}
+          </p>
+          <div className="mono text-sm" style={{ wordBreak: 'break-all' }}>
+            {action.arguments_hash}
+          </div>
         </div>
+
+        <div className="text-muted text-sm">
+          {t('approvals.expires')} <Timestamp value={action.expires_at} />
+        </div>
+
+        <Field label={t('approvals.commentOptional')} htmlFor="review-comment">
+          <textarea id="review-comment" rows={2} value={comment} onChange={(e) => onComment(e.target.value)} />
+        </Field>
+
+        {stepUpNeeded ? (
+          <Alert tone="warning">
+            <strong>{t('approvals.stepUpTitle')}</strong> {t('approvals.stepUpText')}
+            <form
+              className="row"
+              style={{ marginTop: 'var(--space-2)' }}
+              onSubmit={(e) => {
+                e.preventDefault()
+                onStepUp()
+              }}
+            >
+              <Field label={t('approvals.stepUpField')} htmlFor="stepup-secret">
+                <input
+                  id="stepup-secret"
+                  type="password"
+                  autoComplete="one-time-code"
+                  value={stepUpSecret}
+                  onChange={(e) => onStepUpSecret(e.target.value)}
+                />
+              </Field>
+              <button type="submit" className="btn btn--primary" disabled={stepUpBusy || stepUpSecret === ''}>
+                {stepUpBusy ? t('approvals.verifying') : t('approvals.verify')}
+              </button>
+            </form>
+          </Alert>
+        ) : null}
+
+        {!canDecide ? <Alert tone="info">{t('approvals.readOnly')}</Alert> : null}
       </div>
-    </div>
+    </Modal>
   )
 }

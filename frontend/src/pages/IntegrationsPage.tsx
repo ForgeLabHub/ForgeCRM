@@ -12,6 +12,7 @@ import {
   Badge,
   ConfirmDialog,
   Field,
+  Modal,
   PageHeader,
   StatusBadge,
   Timestamp,
@@ -244,89 +245,70 @@ function NewIntegrationDialog({
   if (!open) return null
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="new-integration-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        overflowY: 'auto',
-        padding: 'var(--space-5)',
-      }}
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      title={t('integrations.newIntegrationTitle')}
+      footer={<>
+        <button type="button" className="btn btn--secondary" onClick={onClose}>
+          {t('common.cancel')}
+        </button>
+        <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
+          {mutation.isPending ? t('integrations.creating') : t('common.create')}
+        </button>
+      </>}
+      formProps={{ onSubmit: handleSubmit }}
     >
-      <div
-        className="card"
-        style={{ maxWidth: 620, margin: '0 auto' }}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="card__header">
-          <h2 id="new-integration-title">{t('integrations.newIntegrationTitle')}</h2>
-        </div>
-        <form onSubmit={handleSubmit}>
-          <div className="card__body stack">
-            {formError ? <Alert tone="error">{formError}</Alert> : null}
+      <div className="stack">
+        {formError ? <Alert tone="error">{formError}</Alert> : null}
 
-            <Field label={t('integrations.kind')} htmlFor="integration-kind" required error={errors.key}>
-              <select
-                id="integration-kind"
-                value={key}
-                onChange={(event) => {
-                  setKey(event.target.value)
-                  const kind = kinds.data?.items.find((item) => item.key === event.target.value)
-                  if (kind && !name) setName(kind.name)
-                }}
-                required
-              >
-                <option value="">{t('integrations.selectKind')}</option>
-                {(kinds.data?.items ?? []).map((kind) => (
-                  <option key={kind.key} value={kind.key}>
-                    {kind.name}
-                  </option>
-                ))}
-              </select>
-              {kinds.isError ? (
-                <span className="field__hint text-danger">{t('integrations.kindLoadError')}</span>
-              ) : null}
-            </Field>
+        <Field label={t('integrations.kind')} htmlFor="integration-kind" required error={errors.key}>
+          <select
+            id="integration-kind"
+            value={key}
+            onChange={(event) => {
+              setKey(event.target.value)
+              const kind = kinds.data?.items.find((item) => item.key === event.target.value)
+              if (kind && !name) setName(kind.name)
+            }}
+            required
+          >
+            <option value="">{t('integrations.selectKind')}</option>
+            {(kinds.data?.items ?? []).map((kind) => (
+              <option key={kind.key} value={kind.key}>
+                {kind.name}
+              </option>
+            ))}
+          </select>
+          {kinds.isError ? (
+            <span className="field__hint text-danger">{t('integrations.kindLoadError')}</span>
+          ) : null}
+        </Field>
 
-            <Field label={t('integrations.name')} htmlFor="integration-name" required error={errors.name}>
-              <input
-                id="integration-name"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                required
-              />
-            </Field>
+        <Field label={t('integrations.name')} htmlFor="integration-name" required error={errors.name}>
+          <input
+            id="integration-name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            required
+          />
+        </Field>
 
-            <Field
-              label={t('integrations.configuration')}
-              htmlFor="integration-config"
-              hint={t('integrations.configurationHint')}
-            >
-              <textarea
-                id="integration-config"
-                className="mono"
-                rows={8}
-                value={configText}
-                onChange={(event) => setConfigText(event.target.value)}
-              />
-            </Field>
-          </div>
-          <div className="form-actions">
-            <button type="button" className="btn btn--secondary" onClick={onClose}>
-              {t('common.cancel')}
-            </button>
-            <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
-              {mutation.isPending ? t('integrations.creating') : t('common.create')}
-            </button>
-          </div>
-        </form>
+        <Field
+          label={t('integrations.configuration')}
+          htmlFor="integration-config"
+          hint={t('integrations.configurationHint')}
+        >
+          <textarea
+            id="integration-config"
+            className="mono"
+            rows={8}
+            value={configText}
+            onChange={(event) => setConfigText(event.target.value)}
+          />
+        </Field>
       </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -368,127 +350,112 @@ function IntegrationDetailDialog({
 
   return (
     <>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="integration-detail-title"
-        style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'var(--color-overlay)',
-          zIndex: 60,
-          overflowY: 'auto',
-          padding: 'var(--space-5)',
-        }}
-        onClick={onClose}
-      >
-        <div
-          className="card"
-          style={{ maxWidth: 760, margin: '0 auto' }}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <div className="card__header">
-            <h2 id="integration-detail-title">{integration.name}</h2>
-            <StatusBadge status={integration.status} />
-          </div>
-          <div className="card__body stack">
-            {error ? <Alert tone="error">{error}</Alert> : null}
-
-            <dl className="dl">
-              <dt>{t('integrations.kind')}</dt>
-              <dd>{integration.kind}</dd>
-              <dt>{t('integrations.direction')}</dt>
-              <dd>{integration.direction ?? '—'}</dd>
-              <dt>{t('integrations.columnLastChecked')}</dt>
-              <dd>
-                <Timestamp value={integration.last_test_at} />
-              </dd>
-              <dt>{t('integrations.columnLastSync')}</dt>
-              <dd>
-                <Timestamp value={integration.last_sync_at} />
-              </dd>
-              {integration.last_test_error ? (
-                <>
-                  <dt>{t('integrations.lastError')}</dt>
-                  <dd className="text-danger">{integration.last_test_error}</dd>
-                </>
-              ) : null}
-            </dl>
-
-            {status.data ? (
-              <div>
-                <h3 style={{ marginBottom: 'var(--space-2)' }}>{t('integrations.statusTitle')}</h3>
-                <pre
-                  className="mono"
-                  style={{
-                    background: 'var(--color-bg)',
-                    padding: 'var(--space-3)',
-                    borderRadius: 'var(--radius-sm)',
-                    overflowX: 'auto',
-                    margin: 0,
-                  }}
-                >
-                  {JSON.stringify(status.data, null, 2)}
-                </pre>
-              </div>
-            ) : null}
-
-            <div>
-              <h3 style={{ marginBottom: 'var(--space-2)' }}>{t('integrations.recentRuns')}</h3>
-              {runs.isLoading ? (
-                <p className="text-muted text-sm">{t('common.loading')}</p>
-              ) : runs.data?.items.length ? (
-                <div className="table-wrap">
-                  <table className="table--stack">
-                    <thead>
-                      <tr>
-                        <th>{t('common.status')}</th>
-                        <th>{t('integrations.columnOperation')}</th>
-                        <th className="numeric">{t('integrations.columnRead')}</th>
-                        <th className="numeric">{t('integrations.columnWritten')}</th>
-                        <th>{t('integrations.columnStarted')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {runs.data.items.map((run) => (
-                        <tr key={run.id}>
-                          <td data-label={t('common.status')}>
-                            <StatusBadge status={run.status} />
-                          </td>
-                          <td data-label={t('integrations.columnOperation')}>
-                            {run.operation ?? '—'}
-                          </td>
-                          <td className="numeric" data-label={t('integrations.columnRead')}>
-                            {run.records_read ?? '—'}
-                          </td>
-                          <td className="numeric" data-label={t('integrations.columnWritten')}>
-                            {run.records_written ?? '—'}
-                          </td>
-                          <td data-label={t('integrations.columnStarted')}>
-                            <Timestamp value={run.started_at} />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="text-muted text-sm">{t('integrations.notRunYet')}</p>
-              )}
-            </div>
-          </div>
-          <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
-            <button type="button" className="btn btn--secondary" onClick={onClose}>
-              {t('common.close')}
+      <Modal
+        open
+        onClose={onClose}
+        title={integration.name}
+        extra={<>
+          <StatusBadge status={integration.status} />
+        </>}
+        size="lg"
+        footer={<>
+          <button type="button" className="btn btn--secondary" onClick={onClose}>
+            {t('common.close')}
+          </button>
+          {canConfigure ? (
+            <button type="button" className="btn btn--danger" onClick={() => setRevoking(true)}>
+              {t('integrations.revokeCredentials')}
             </button>
-            {canConfigure ? (
-              <button type="button" className="btn btn--danger" onClick={() => setRevoking(true)}>
-                {t('integrations.revokeCredentials')}
-              </button>
+          ) : null}
+        </>}
+      >
+        <div className="stack">
+          {error ? <Alert tone="error">{error}</Alert> : null}
+
+          <dl className="dl">
+            <dt>{t('integrations.kind')}</dt>
+            <dd>{integration.kind}</dd>
+            <dt>{t('integrations.direction')}</dt>
+            <dd>{integration.direction ?? '—'}</dd>
+            <dt>{t('integrations.columnLastChecked')}</dt>
+            <dd>
+              <Timestamp value={integration.last_test_at} />
+            </dd>
+            <dt>{t('integrations.columnLastSync')}</dt>
+            <dd>
+              <Timestamp value={integration.last_sync_at} />
+            </dd>
+            {integration.last_test_error ? (
+              <>
+                <dt>{t('integrations.lastError')}</dt>
+                <dd className="text-danger">{integration.last_test_error}</dd>
+              </>
             ) : null}
+          </dl>
+
+          {status.data ? (
+            <div>
+              <h3 style={{ marginBottom: 'var(--space-2)' }}>{t('integrations.statusTitle')}</h3>
+              <pre
+                className="mono"
+                style={{
+                  background: 'var(--color-bg)',
+                  padding: 'var(--space-3)',
+                  borderRadius: 'var(--radius-sm)',
+                  overflowX: 'auto',
+                  margin: 0,
+                }}
+              >
+                {JSON.stringify(status.data, null, 2)}
+              </pre>
+            </div>
+          ) : null}
+
+          <div>
+            <h3 style={{ marginBottom: 'var(--space-2)' }}>{t('integrations.recentRuns')}</h3>
+            {runs.isLoading ? (
+              <p className="text-muted text-sm">{t('common.loading')}</p>
+            ) : runs.data?.items.length ? (
+              <div className="table-wrap">
+                <table className="table--stack">
+                  <thead>
+                    <tr>
+                      <th>{t('common.status')}</th>
+                      <th>{t('integrations.columnOperation')}</th>
+                      <th className="numeric">{t('integrations.columnRead')}</th>
+                      <th className="numeric">{t('integrations.columnWritten')}</th>
+                      <th>{t('integrations.columnStarted')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {runs.data.items.map((run) => (
+                      <tr key={run.id}>
+                        <td data-label={t('common.status')}>
+                          <StatusBadge status={run.status} />
+                        </td>
+                        <td data-label={t('integrations.columnOperation')}>
+                          {run.operation ?? '—'}
+                        </td>
+                        <td className="numeric" data-label={t('integrations.columnRead')}>
+                          {run.records_read ?? '—'}
+                        </td>
+                        <td className="numeric" data-label={t('integrations.columnWritten')}>
+                          {run.records_written ?? '—'}
+                        </td>
+                        <td data-label={t('integrations.columnStarted')}>
+                          <Timestamp value={run.started_at} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-muted text-sm">{t('integrations.notRunYet')}</p>
+            )}
           </div>
         </div>
-      </div>
+      </Modal>
 
       <ConfirmDialog
         open={revoking}

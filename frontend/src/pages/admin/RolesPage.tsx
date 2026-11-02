@@ -11,6 +11,7 @@ import {
   Card,
   ConfirmDialog,
   ErrorState,
+  Modal,
   PageHeader,
   TableSkeleton,
 } from '../../components/ui'
@@ -162,80 +163,69 @@ function PermissionEditor({
 
   return (
     <>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="permission-editor-title"
-        style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'var(--color-overlay)',
-          zIndex: 60,
-          overflowY: 'auto',
-          padding: 'var(--space-5)',
-        }}
-        onClick={onClose}
+      <Modal
+        open
+        onClose={onClose}
+        title={t('roles.editorTitle', { role: role.name })}
+        extra={<>
+          <Badge tone="accent">{t('roles.selectedCount', { count: selected.length })}</Badge>
+        </>}
+        size="lg"
+        footer={<>
+          <button type="button" className="btn btn--secondary" onClick={onClose} disabled={busy}>
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={busy || !dirty}
+            onClick={() => (removed.length > 0 ? setConfirming(true) : onSave(selected))}
+          >
+            {busy ? t('common.saving') : t('roles.savePermissions')}
+          </button>
+        </>}
       >
-        <div className="card" style={{ maxWidth: 760, margin: '0 auto' }} onClick={(e) => e.stopPropagation()}>
-          <div className="card__header">
-            <h2 id="permission-editor-title">{t('roles.editorTitle', { role: role.name })}</h2>
-            <Badge tone="accent">{t('roles.selectedCount', { count: selected.length })}</Badge>
-          </div>
-          <div className="card__body stack">
-            <Alert tone="warning">{t('roles.removalWarning')}</Alert>
+        <div className="stack">
+          <Alert tone="warning">{t('roles.removalWarning')}</Alert>
 
-            {Array.from(groups.entries()).map(([group, items]) => (
-              <fieldset key={group} style={{ border: 'none', padding: 0, margin: 0 }}>
-                <legend
-                  className="field__label"
-                  style={{ textTransform: 'capitalize', marginBottom: 'var(--space-2)' }}
-                >
-                  {group}
-                </legend>
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-                    gap: 'var(--space-2)',
-                  }}
-                >
-                  {items.map((permission) => (
-                    <label key={permission.key} className="checkbox">
-                      <input
-                        type="checkbox"
-                        checked={selected.includes(permission.key)}
-                        onChange={(event) =>
-                          setSelected((previous) =>
-                            event.target.checked
-                              ? [...previous, permission.key]
-                              : previous.filter((key) => key !== permission.key),
-                          )
-                        }
-                      />
-                      <span className="mono" title={permission.description}>
-                        {permission.key}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-            ))}
-          </div>
-          <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
-            <button type="button" className="btn btn--secondary" onClick={onClose} disabled={busy}>
-              {t('common.cancel')}
-            </button>
-            <button
-              type="button"
-              className="btn btn--primary"
-              disabled={busy || !dirty}
-              onClick={() => (removed.length > 0 ? setConfirming(true) : onSave(selected))}
-            >
-              {busy ? t('common.saving') : t('roles.savePermissions')}
-            </button>
-          </div>
+          {Array.from(groups.entries()).map(([group, items]) => (
+            <fieldset key={group} style={{ border: 'none', padding: 0, margin: 0 }}>
+              <legend
+                className="field__label"
+                style={{ textTransform: 'capitalize', marginBottom: 'var(--space-2)' }}
+              >
+                {group}
+              </legend>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+                  gap: 'var(--space-2)',
+                }}
+              >
+                {items.map((permission) => (
+                  <label key={permission.key} className="checkbox">
+                    <input
+                      type="checkbox"
+                      checked={selected.includes(permission.key)}
+                      onChange={(event) =>
+                        setSelected((previous) =>
+                          event.target.checked
+                            ? [...previous, permission.key]
+                            : previous.filter((key) => key !== permission.key),
+                        )
+                      }
+                    />
+                    <span className="mono" title={permission.description}>
+                      {permission.key}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ))}
         </div>
-      </div>
+      </Modal>
 
       <ConfirmDialog
         open={confirming}

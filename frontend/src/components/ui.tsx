@@ -1,6 +1,6 @@
 /** Small presentational primitives shared by every page. */
 import { useEffect, useId, useRef } from 'react'
-import type { ReactNode } from 'react'
+import type { FormEventHandler, ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useLocale, useT, type TranslationKey } from '../i18n'
 import { IconClose, IconInbox } from './icons'
@@ -366,22 +366,32 @@ export function ConfirmDialog({
  * focus into the panel on open, keeps Tab inside it while it is open, and
  * returns focus to whatever opened it on close — so a keyboard user is never
  * stranded behind the overlay.
+ *
+ * When `formProps` is given the body and the footer are wrapped in a single
+ * <form>. A form dialog that instead put its <form> inside the body would leave
+ * the actions outside it, so Enter in a text field would submit nothing and the
+ * browser's implicit submission would be lost; one <form> spanning both keeps
+ * Enter working and lets the footer hold the submit button.
  */
 export function Modal({
   open,
   onClose,
   title,
   description,
+  extra,
   size = 'md',
   footer,
+  formProps,
   children,
 }: {
   open: boolean
   onClose: () => void
-  title: string
+  title: ReactNode
   description?: string
+  extra?: ReactNode
   size?: 'sm' | 'md' | 'lg'
   footer?: ReactNode
+  formProps?: { onSubmit: FormEventHandler<HTMLFormElement> }
   children: ReactNode
 }) {
   const t = useT()
@@ -432,6 +442,16 @@ export function Modal({
 
   if (!open) return null
 
+  // One <form> spans the body and the footer, so Enter in a field submits and
+  // the actions row can own the submit button. A non-form dialog keeps the same
+  // markup without the extra element.
+  const body = (
+    <>
+      <div className="modal__body">{children}</div>
+      {footer ? <div className="modal__footer">{footer}</div> : null}
+    </>
+  )
+
   return (
     <div className="modal" onClick={onClose}>
       <div
@@ -444,18 +464,24 @@ export function Modal({
         onClick={(event) => event.stopPropagation()}
       >
         <div className="modal__header">
-          <div>
+          <div className="modal__heading">
             <h2 id={titleId} className="modal__title">
               {title}
             </h2>
             {description ? <p className="modal__description">{description}</p> : null}
           </div>
+          {extra ? <div className="modal__extra">{extra}</div> : null}
           <button type="button" className="modal__close" aria-label={t('common.close')} onClick={onClose}>
             <IconClose size={18} />
           </button>
         </div>
-        <div className="modal__body">{children}</div>
-        {footer ? <div className="modal__footer">{footer}</div> : null}
+        {formProps ? (
+          <form className="modal__form" onSubmit={formProps.onSubmit}>
+            {body}
+          </form>
+        ) : (
+          body
+        )}
       </div>
     </div>
   )

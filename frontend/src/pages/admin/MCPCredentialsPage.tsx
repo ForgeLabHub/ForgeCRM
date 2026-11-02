@@ -34,6 +34,7 @@ import {
   ConfirmDialog,
   ErrorState,
   Field,
+  Modal,
   PageHeader,
   TableSkeleton,
   Timestamp,
@@ -384,32 +385,28 @@ function CredentialDialog({
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="credential-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        display: 'grid',
-        placeItems: 'center',
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        padding: 'var(--space-4)',
-        overflowY: 'auto',
-      }}
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      title={t('mcpCredentials.newTitle')}
+      size="lg"
+      footer={
+        <>
+          <button type="button" className="btn btn--secondary" onClick={onClose}>
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={mutation.isPending}
+            onClick={handleSubmit}
+          >
+            {mutation.isPending ? t('mcpCredentials.creating') : t('mcpCredentials.createCredential')}
+          </button>
+        </>
+      }
     >
-      <form
-        className="card"
-        style={{ maxWidth: 640, width: '100%', margin: 'auto' }}
-        onClick={(event) => event.stopPropagation()}
-        onSubmit={handleSubmit}
-      >
-        <div className="card__header">
-          <h2 id="credential-title">{t('mcpCredentials.newTitle')}</h2>
-        </div>
-        <div className="card__body stack">
+      <div className="stack">
           {formError ? <Alert tone="error">{formError}</Alert> : null}
 
           <div className="form-grid">
@@ -495,22 +492,8 @@ function CredentialDialog({
               </fieldset>
             ))
           )}
-        </div>
-        <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
-          <button type="button" className="btn btn--secondary" onClick={onClose}>
-            {t('common.cancel')}
-          </button>
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={mutation.isPending}
-            onClick={handleSubmit}
-          >
-            {mutation.isPending ? t('mcpCredentials.creating') : t('mcpCredentials.createCredential')}
-          </button>
-        </div>
-      </form>
-    </div>
+      </div>
+    </Modal>
   )
 }
 
@@ -533,51 +516,33 @@ function RotateDialog({
   if (!credential) return null
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="rotate-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        display: 'grid',
-        placeItems: 'center',
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        padding: 'var(--space-4)',
-      }}
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      title={t('mcpCredentials.rotateTitle')}
+      size="sm"
+      footer={<>
+        <button type="button" className="btn btn--secondary" onClick={onClose}>
+          {t('common.cancel')}
+        </button>
+        <button
+          type="button"
+          className="btn btn--primary"
+          disabled={mutation.isPending}
+          onClick={() => mutation.mutate(credential.id)}
+        >
+          {mutation.isPending ? 'Rotating…' : 'Rotate'}
+        </button>
+      </>}
     >
-      <div
-        className="card"
-        style={{ maxWidth: 460, width: '100%' }}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="card__header">
-          <h2 id="rotate-title">{t('mcpCredentials.rotateTitle')}</h2>
-        </div>
-        <div className="card__body stack">
-          <p className="text-muted">
-            {t('mcpCredentials.rotateText1')} <strong>{credential.name}</strong>{' '}
-            {t('mcpCredentials.rotateText2')}
-          </p>
-          {mutation.isError ? <Alert tone="error">{errorMessage(mutation.error)}</Alert> : null}
-        </div>
-        <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
-          <button type="button" className="btn btn--secondary" onClick={onClose}>
-            {t('common.cancel')}
-          </button>
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={mutation.isPending}
-            onClick={() => mutation.mutate(credential.id)}
-          >
-            {mutation.isPending ? 'Rotating…' : 'Rotate'}
-          </button>
-        </div>
+      <div className="stack">
+        <p className="text-muted">
+          {t('mcpCredentials.rotateText1')} <strong>{credential.name}</strong>{' '}
+          {t('mcpCredentials.rotateText2')}
+        </p>
+        {mutation.isError ? <Alert tone="error">{errorMessage(mutation.error)}</Alert> : null}
       </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -602,53 +567,30 @@ function TokenDialog({
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="token-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        display: 'grid',
-        placeItems: 'center',
-        background: 'var(--color-overlay)',
-        zIndex: 70,
-        padding: 'var(--space-4)',
-      }}
-    >
-      <div className="card" style={{ maxWidth: 560, width: '100%' }}>
-        <div className="card__header">
-          <h2 id="token-title">{t('mcpCredentials.copyTokenTitle')}</h2>
-        </div>
-        <div className="card__body stack">
-          <Alert tone="warning">{t('mcpCredentials.copyTokenWarning')}</Alert>
-          <div
-            className="mono"
-            style={{
-              wordBreak: 'break-all',
-              padding: 'var(--space-3)',
-              background: 'var(--color-bg)',
-              borderRadius: 6,
-            }}
-          >
-            {created.token}
-          </div>
-          <p className="text-muted text-sm">
-            {t('mcpCredentials.credentials')} <strong>{created.credential.name}</strong>{
-              ' '
-            }
-            {t('mcpCredentials.permissions', { count: created.credential.permissions.length })}
-          </p>
-        </div>
-        <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
+    <Modal
+      open
+      onClose={onClose}
+      title={t('mcpCredentials.copyTokenTitle')}
+      size="md"
+      footer={
+        <>
           <button type="button" className="btn btn--secondary" onClick={() => void copy()}>
             {copied ? t('mcpCredentials.copied') : t('mcpCredentials.copyToken')}
           </button>
           <button type="button" className="btn btn--primary" onClick={onClose}>
             {t('mcpCredentials.done')}
           </button>
-        </div>
+        </>
+      }
+    >
+      <div className="stack">
+        <Alert tone="warning">{t('mcpCredentials.copyTokenWarning')}</Alert>
+        <div className="token-reveal mono">{created.token}</div>
+        <p className="text-muted text-sm">
+          {t('mcpCredentials.credentials')} <strong>{created.credential.name}</strong>{' '}
+          {t('mcpCredentials.permissions', { count: created.credential.permissions.length })}
+        </p>
       </div>
-    </div>
+    </Modal>
   )
 }
