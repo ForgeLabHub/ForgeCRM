@@ -7,7 +7,7 @@ import { LoginControls } from '../components/LoginControls'
 import { useAuth } from '../hooks/useAuth'
 import { errorMessage, fieldErrors } from '../api/client'
 import { ssoApi, type SSOProvider } from '../api/auth'
-import { useI18n } from '../i18n'
+import { useI18n, translationExists } from '../i18n'
 
 /**
  * Sign-in page.
@@ -114,8 +114,14 @@ export function LoginPage() {
     }
   }
 
+  // The code arrives from the identity provider's redirect and is not a value this
+  // page controls, so it is validated against the dictionary before use. An
+  // unrecognised code falls back to the generic message rather than rendering the
+  // raw key "login.errors.<code>" on the page.
   const ssoMessage = ssoError
-    ? t(`login.errors.${ssoError}` as 'login.errors.sign_in_failed') || t('login.errors.sign_in_failed')
+    ? translationExists(`login.errors.${ssoError}`)
+      ? t(`login.errors.${ssoError}` as 'login.errors.sign_in_failed')
+      : t('login.errors.sign_in_failed')
     : null
 
   return (

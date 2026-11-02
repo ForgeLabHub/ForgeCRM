@@ -111,6 +111,7 @@ is idempotent and refuses to overwrite an existing owner.
 | `FORGECRM_WORKER_CONCURRENCY` | Worker | no | `4` | Jobs processed in parallel. | `4` | no | no |
 | `FORGECRM_WORKER_POLL` | Worker | no | `2s` | How often the worker polls for new jobs. | `2s` | no | no |
 | `FORGECRM_WORKER_SHUTDOWN_GRACE` | Worker | no | `30s` | Time the worker waits for an in-flight job after SIGTERM. Keep Compose's `stop_grace_period` above this. | `30s` | no | no |
+| `FORGECRM_WORKER_SCHEMA_WAIT` | Worker | no | `5m` | How long the worker waits for the API to finish applying migrations before it exits with an error. The worker never migrates itself. | `5m` | no | no |
 | `FORGECRM_JOB_MAX_ATTEMPTS` | Worker | no | `5` | Default retry budget for background jobs. | `5` | no | no |
 
 ## Data retention (opt-in)
