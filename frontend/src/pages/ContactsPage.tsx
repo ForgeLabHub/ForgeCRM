@@ -6,6 +6,7 @@ import { accountsApi, contactsApi } from '../api/crm'
 import { errorMessage, fieldErrors } from '../api/client'
 import type { Contact, ContactInput } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
+import { useCreateParam } from '../hooks/useCreateParam'
 import { ResourceList, type Column } from '../components/ResourceList'
 import { AssistPanel } from '../components/AssistPanel'
 import { AttachmentPanel } from '../components/AttachmentPanel'
@@ -67,7 +68,7 @@ export function ContactsPage() {
   const navigate = useNavigate()
   const { can } = useAuth()
   const t = useT()
-  const [creating, setCreating] = useState(false)
+  const [creating, setCreating] = useCreateParam(can('contacts.create'))
 
   return (
     <>

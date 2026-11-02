@@ -7,6 +7,7 @@ import { errorMessage, fieldErrors } from '../api/client'
 import type { ViewFilters } from '../api/views'
 import type { Ticket, TicketInput } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
+import { useCreateParam } from '../hooks/useCreateParam'
 import { ResourceList, type Column } from '../components/ResourceList'
 import { SavedViewsBar } from '../components/SavedViewsBar'
 import { AssistPanel } from '../components/AssistPanel'
@@ -35,7 +36,7 @@ export function TicketsPage() {
   const { can } = useAuth()
   const navigate = useNavigate()
   const t = useT()
-  const [creating, setCreating] = useState(false)
+  const [creating, setCreating] = useCreateParam(can('tickets.create'))
   const [editing, setEditing] = useState<Ticket | null>(null)
   const [statusFilter, setStatusFilter] = useState('')
   const [activeViewId, setActiveViewId] = useState<string | undefined>(undefined)

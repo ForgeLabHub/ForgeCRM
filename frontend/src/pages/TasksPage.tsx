@@ -7,6 +7,7 @@ import { errorMessage, fieldErrors } from '../api/client'
 import type { ViewFilters } from '../api/views'
 import type { Task, TaskInput } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
+import { useCreateParam } from '../hooks/useCreateParam'
 import { AssistPanel } from '../components/AssistPanel'
 import { RecordCollabPanel } from '../components/RecordCollabPanel'
 import { ResourceList, type Column } from '../components/ResourceList'
@@ -31,7 +32,7 @@ export function TasksPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const t = useT()
-  const [creating, setCreating] = useState(false)
+  const [creating, setCreating] = useCreateParam(can('tasks.create'))
   const [editing, setEditing] = useState<Task | null>(null)
   const [statusFilter, setStatusFilter] = useState('')
   const [actionError, setActionError] = useState<string | null>(null)

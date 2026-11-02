@@ -6,6 +6,7 @@ import { accountsApi, tasksApi } from '../api/crm'
 import { errorMessage, fieldErrors } from '../api/client'
 import type { Account, AccountInput } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
+import { useCreateParam } from '../hooks/useCreateParam'
 import { useT, type TFunction } from '../i18n'
 import { ResourceList, type Column } from '../components/ResourceList'
 import { AssistPanel } from '../components/AssistPanel'
@@ -73,7 +74,7 @@ export function AccountsPage() {
   const navigate = useNavigate()
   const { can } = useAuth()
   const t = useT()
-  const [creating, setCreating] = useState(false)
+  const [creating, setCreating] = useCreateParam(can('accounts.create'))
 
   return (
     <>

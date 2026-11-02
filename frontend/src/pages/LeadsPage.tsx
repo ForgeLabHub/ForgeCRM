@@ -6,6 +6,7 @@ import { errorMessage, fieldErrors } from '../api/client'
 import type { ViewFilters } from '../api/views'
 import type { Lead } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
+import { useCreateParam } from '../hooks/useCreateParam'
 import { ResourceList, type Column } from '../components/ResourceList'
 import { SavedViewsBar } from '../components/SavedViewsBar'
 import { Alert, Field, PageHeader, StatusBadge, Timestamp } from '../components/ui'
@@ -53,7 +54,7 @@ function columns(t: TFunction): Column<Lead>[] {
 export function LeadsPage() {
   const { can } = useAuth()
   const t = useT()
-  const [creating, setCreating] = useState(false)
+  const [creating, setCreating] = useCreateParam(can('leads.create'))
   const [converting, setConverting] = useState<Lead | null>(null)
   const [statusFilter, setStatusFilter] = useState('')
   const [activeViewId, setActiveViewId] = useState<string | undefined>(undefined)
