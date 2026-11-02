@@ -75,6 +75,11 @@ type Config struct {
 	// finish after a shutdown signal. Past it the job's context is cancelled and the
 	// run is abandoned, so the process still exits inside its container stop window.
 	WorkerShutdownGrace time.Duration
+	// WorkerSchemaWait bounds how long the worker waits for the API to finish
+	// applying migrations before it gives up and exits. A worker that served a
+	// half-migrated schema would fail every job, so it waits; a worker that waited
+	// forever would look like a hung deploy, so it does not.
+	WorkerSchemaWait time.Duration
 
 	ImportMaxUploadBytes   int64
 	ImportMaxUnpackedBytes int64
@@ -402,6 +407,9 @@ func Load() (*Config, error) {
 	if c.WorkerShutdownGrace, err = envDuration("FORGECRM_WORKER_SHUTDOWN_GRACE", 30*time.Second); err != nil {
 		return nil, err
 	}
+	if c.WorkerSchemaWait, err = envDuration("FORGECRM_WORKER_SCHEMA_WAIT", 5*time.Minute); err != nil {
+		return nil, err
+	}
 
 	c.Email = EmailConfig{
 		Enabled:   envBool("FORGECRM_SMTP_ENABLED", false),
@@ -611,6 +619,9 @@ func (c *Config) Validate() error {
 	}
 	if c.SessionTTL <= 0 {
 		return fmt.Errorf("FORGECRM_SESSION_TTL must be positive")
+	}
+	if c.WorkerSchemaWait <= 0 {
+		return fmt.Errorf("FORGECRM_WORKER_SCHEMA_WAIT must be positive, got %s", c.WorkerSchemaWait)
 	}
 	if c.ImportMaxUploadBytes <= 0 || c.ImportMaxUnpackedBytes <= 0 {
 		return fmt.Errorf("import size limits must be positive")

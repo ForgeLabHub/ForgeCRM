@@ -142,4 +142,23 @@ describe('LoginPage single sign-on', () => {
     renderLogin('/login?sso_error=no_account')
     expect(await screen.findByText(/no ForgeCRM account is linked/i)).toBeTruthy()
   })
+
+  it('falls back to the generic message for an unrecognised error code', async () => {
+    // The code is attacker-controllable through the query string. Without a
+    // dictionary check the page rendered the raw key "login.errors.<code>".
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url.includes('/api/v1/auth/oidc/providers')) {
+          return Promise.resolve(json({ enabled: false, providers: [] }))
+        }
+        return Promise.resolve(json({}))
+      }),
+    )
+
+    renderLogin('/login?sso_error=some_unknown_code')
+    expect(await screen.findByText(/single sign-on could not be completed/i)).toBeTruthy()
+    expect(screen.queryByText(/login\.errors\./)).toBeNull()
+  })
 })

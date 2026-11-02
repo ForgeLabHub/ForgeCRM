@@ -78,6 +78,19 @@ function interpolate(template: string, vars?: Record<string, string | number>): 
   )
 }
 
+/**
+ * Reports whether a key resolves in the English reference dictionary.
+ *
+ * `t` falls back to the raw key so a developer notices a missing translation,
+ * which is right for keys the code owns. It is wrong for a key built from a
+ * value the user can influence — an SSO error code arrives in the URL, and an
+ * unrecognised one would otherwise render "login.errors.whatever" on the page.
+ * Callers validate against this first and show a generic message instead.
+ */
+export function translationExists(key: string): boolean {
+  return lookup(en, key) !== undefined
+}
+
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(resolveInitialLocale)
 

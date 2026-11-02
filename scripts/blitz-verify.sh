@@ -213,6 +213,28 @@ case "${api404_ct}" in
   *) check "unknown /api path stays JSON" "json" "${api404_ct}" ;;
 esac
 
+# The worker is the second binary in the image and the second process that must
+# not serve before the schema is ready. It does not migrate; it waits for the API
+# and then starts. It is run here so the entrypoint's worker dispatch and the
+# schema gate are exercised on the real artefact, not just unit-tested.
+echo
+echo "Worker startup"
+worker="${run_id}-worker"
+docker rm -f "${worker}" >/dev/null 2>&1
+docker run -d --name "${worker}" --network "${network}" \
+  "${prod_env[@]}" -e "FORGECRM_ROLE=worker" -e "FORGECRM_WORKER_SCHEMA_WAIT=30s" \
+  "${image}" >/dev/null
+worker_ready="no"
+for i in $(seq 1 30); do
+  if docker logs "${worker}" 2>&1 | grep -q "schema readiness check passed"; then worker_ready="yes"; break; fi
+  sleep 1
+done
+check "worker starts once the schema is ready" "yes" "${worker_ready}"
+if [[ "${worker_ready}" != "yes" ]]; then
+  docker logs "${worker}" 2>&1 | tail -10 | sed 's/^/    /'
+fi
+docker rm -f "${worker}" >/dev/null 2>&1
+
 # --- 5. Full authentication round trip --------------------------------------
 echo
 echo "Authentication"
@@ -254,6 +276,15 @@ rm -f "${jar}"
 # --- 6. The probe distinguishes "process up" from "schema ready" ------------
 echo
 echo "Readiness is not liveness"
+# A schema a migration left half-applied has every table, so a table-only check
+# would call it ready. Mark it dirty the way golang-migrate does and require the
+# probe to notice: the process stays alive, but it must not be sent traffic.
+docker exec "${pg}" psql -U forgecrm -d forgecrm -c "UPDATE schema_migrations SET dirty = true;" >/dev/null 2>&1
+check "GET /health with a dirty schema (still alive)" "200" "$(code "${base}/health")"
+check "GET /ready with a dirty schema (not ready)" "503" "$(code "${base}/ready")"
+docker exec "${pg}" psql -U forgecrm -d forgecrm -c "UPDATE schema_migrations SET dirty = false;" >/dev/null 2>&1
+check "GET /ready once the schema is clean again" "200" "$(code "${base}/ready")"
+
 # Drop the schema under the running API: /health must stay 200 (the process is
 # alive) while /ready must become 503 (the schema is gone). This is the exact
 # distinction that hid `relation "users" does not exist` behind a green probe.

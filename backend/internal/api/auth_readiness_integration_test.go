@@ -123,6 +123,56 @@ func TestReadyRefusesASchemaBehindTheBuild(t *testing.T) {
 	}
 }
 
+// TestReadyRefusesADirtySchema covers the third readiness case, and the one the
+// table check cannot see. A migration that fails partway leaves every table in
+// place and the version unchanged, so only the dirty flag distinguishes it from a
+// healthy schema. Serving it means the first query touching whatever the failed
+// migration was adding fails with `column ... does not exist`. The probe must
+// refuse it, and must recover once the schema is clean again.
+func TestReadyRefusesADirtySchema(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+
+	if _, err := h.db.Pool().Exec(ctx, `UPDATE schema_migrations SET dirty = true`); err != nil {
+		t.Fatalf("mark the schema dirty: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = h.db.Pool().Exec(context.Background(), `UPDATE schema_migrations SET dirty = false`)
+	})
+
+	health := h.do(nil, http.MethodGet, "/health", "")
+	if health.Code != http.StatusOK {
+		t.Fatalf("/health on a dirty schema = %d, want 200 (the process is alive)", health.Code)
+	}
+	ready := h.do(nil, http.MethodGet, "/ready", "")
+	if ready.Code != http.StatusServiceUnavailable {
+		t.Fatalf("/ready on a dirty schema = %d, want 503 (body %s)", ready.Code, ready.Body.String())
+	}
+	var body struct {
+		Status string `json:"status"`
+		Reason string `json:"reason"`
+		Detail string `json:"detail"`
+	}
+	if err := json.Unmarshal(ready.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode /ready: %v (body %s)", err, ready.Body.String())
+	}
+	if body.Status != "unavailable" || body.Reason != "database schema is not ready" {
+		t.Fatalf("/ready body = %+v, want an unavailable status naming the schema", body)
+	}
+	if !strings.Contains(body.Detail, "dirty") {
+		t.Fatalf("/ready detail does not say the schema is dirty: %q", body.Detail)
+	}
+
+	// Clearing the flag must restore readiness: the probe reports the current
+	// state, it does not latch the failure.
+	if _, err := h.db.Pool().Exec(ctx, `UPDATE schema_migrations SET dirty = false`); err != nil {
+		t.Fatalf("clear the dirty flag: %v", err)
+	}
+	if again := h.do(nil, http.MethodGet, "/ready", ""); again.Code != http.StatusOK {
+		t.Fatalf("/ready after clearing the dirty flag = %d, want 200 (body %s)", again.Code, again.Body.String())
+	}
+}
+
 // TestFullSignInLifecycle walks the whole authentication scenario the task lists,
 // including the negative cases. It is one test rather than several because the
 // steps share state — the account created by the bootstrap is the one that signs
