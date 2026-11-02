@@ -12,9 +12,10 @@ import {
   type WorkflowTemplate,
 } from '../api/workflows'
 import { ResourceList, type Column } from '../components/ResourceList'
-import { Badge, PageHeader, StatusBadge, Timestamp } from '../components/ui'
+import { Badge, Modal, PageHeader, StatusBadge, Timestamp } from '../components/ui'
 import { WorkflowEditor, definitionToJSON, validateDefinition } from '../components/WorkflowEditor'
 import { useAuth } from '../hooks/useAuth'
+import { useT, type TFunction } from '../i18n'
 
 /**
  * The event vocabulary is read from the server, never hard-coded.
@@ -35,14 +36,17 @@ function useEventTypes() {
 }
 
 /** The trigger of a workflow, rendered as one line. */
-function triggerLabel(wf: Workflow): string {
+function triggerLabel(t: TFunction, wf: Workflow): string {
   switch (wf.trigger_type) {
     case 'event':
-      return `on ${wf.event_type ?? 'an event'}`
+      return t('workflows.triggerOnEvent', { event: wf.event_type ?? t('workflows.anEvent') })
     case 'schedule':
-      return `every ${wf.schedule_cron ?? '—'} (${wf.schedule_timezone ?? 'UTC'})`
+      return t('workflows.triggerEvery', {
+        cron: wf.schedule_cron ?? '—',
+        timezone: wf.schedule_timezone ?? 'UTC',
+      })
     default:
-      return 'manual'
+      return t('workflows.triggerManual')
   }
 }
 
@@ -68,6 +72,7 @@ async function downloadExport(wf: Workflow) {
 
 export function WorkflowsPage() {
   const { can } = useAuth()
+  const t = useT()
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState<Workflow | null>(null)
   const [creating, setCreating] = useState(false)
@@ -85,8 +90,8 @@ export function WorkflowsPage() {
         tone: result.status === 'failed' ? 'danger' : 'success',
         text:
           result.status === 'failed'
-            ? `The run failed: ${result.summary ?? 'no summary'}`
-            : `The run ${result.status}.`,
+            ? t('workflows.runFailed', { summary: result.summary ?? t('workflows.noSummary') })
+                        : t('workflows.runStatus', { status: result.status }),
       })
       invalidate()
     },
@@ -107,8 +112,8 @@ export function WorkflowsPage() {
 
   const columns: Column<Workflow>[] = [
     {
-      key: 'name',
-      header: 'Workflow',
+            key: 'name',
+            header: t('workflows.columnWorkflow'),
       render: (row) => (
         <div className="stack" style={{ gap: 2 }}>
           <strong>{row.name}</strong>
@@ -118,24 +123,28 @@ export function WorkflowsPage() {
     },
     {
       key: 'trigger',
-      header: 'Trigger',
-      render: (row) => <span className="mono text-sm">{triggerLabel(row)}</span>,
+            header: t('workflows.columnTrigger'),
+            render: (row) => <span className="mono text-sm">{triggerLabel(t, row)}</span>,
     },
     {
       key: 'steps',
-      header: 'Steps',
+            header: t('workflows.columnSteps'),
       numeric: true,
       render: (row) => row.definition?.steps?.length ?? 0,
     },
     {
       key: 'enabled',
-      header: 'State',
+            header: t('workflows.columnState'),
       render: (row) =>
-        row.enabled ? <Badge tone="success">enabled</Badge> : <Badge tone="neutral">disabled</Badge>,
+        row.enabled ? (
+                  <Badge tone="success">{t('workflows.enabled')}</Badge>
+                ) : (
+                  <Badge tone="neutral">{t('workflows.disabled')}</Badge>
+                ),
     },
     {
       key: 'updated',
-      header: 'Updated',
+            header: t('common.updated'),
       render: (row) => <Timestamp value={row.updated_at} />,
     },
     {
@@ -145,21 +154,21 @@ export function WorkflowsPage() {
       render: (row) => (
         <div className="row" style={{ gap: 6, justifyContent: 'flex-end' }}>
           <button type="button" className="btn btn--ghost btn--sm" onClick={() => setHistoryFor(row)}>
-            Runs
-          </button>
+            {t('workflows.runs')}
+                      </button>
           <button type="button" className="btn btn--ghost btn--sm" onClick={() => downloadExport(row)}>
-            Export
-          </button>
+            {t('workflows.export')}
+                      </button>
           {can('workflows.run') ? (
             <button
               type="button"
               className="btn btn--ghost btn--sm"
               disabled={!row.enabled || runMutation.isPending}
-              title={row.enabled ? 'Run now' : 'Enable the workflow first'}
+              title={row.enabled ? t('workflows.runNow') : t('workflows.enableFirst')}
               onClick={() => runMutation.mutate(row.id)}
             >
-              Run
-            </button>
+              {t('workflows.run')}
+                          </button>
           ) : null}
           {can('workflows.manage') ? (
             <>
@@ -168,22 +177,22 @@ export function WorkflowsPage() {
                 className="btn btn--ghost btn--sm"
                 onClick={() => toggleMutation.mutate({ id: row.id, enabled: !row.enabled })}
               >
-                {row.enabled ? 'Disable' : 'Enable'}
+                {row.enabled ? t('workflows.disable') : t('workflows.enable')}
               </button>
               <button type="button" className="btn btn--ghost btn--sm" onClick={() => setEditing(row)}>
-                Edit
-              </button>
+                {t('workflows.edit')}
+                              </button>
               <button
                 type="button"
                 className="btn btn--ghost btn--sm"
                 onClick={() => {
-                  if (window.confirm(`Archive "${row.name}"? It will stop running.`)) {
+                  if (window.confirm(t('workflows.archiveConfirm', { name: row.name }))) {
                     archiveMutation.mutate(row.id)
                   }
                 }}
               >
-                Archive
-              </button>
+                {t('workflows.archive')}
+                              </button>
             </>
           ) : null}
         </div>
@@ -194,41 +203,41 @@ export function WorkflowsPage() {
   return (
     <>
       <PageHeader
-        title="Workflows"
-        meta="Automate what happens when a record changes, on a schedule, or on demand. A workflow runs as its author, with that author's permissions checked on every run."
-      />
+                title={t('workflows.title')}
+                meta={t('workflows.meta')}
+              />
 
       {notice ? (
         <div className={`alert alert--${notice.tone}`} role="status" style={{ marginBottom: 'var(--space-4)' }}>
           <span>{notice.text}</span>
           <button type="button" className="btn btn--ghost btn--sm" onClick={() => setNotice(null)}>
-            Dismiss
-          </button>
+            {t('common.close')}
+                      </button>
         </div>
       ) : null}
 
       <ResourceList
-        title="Workflow definitions"
+                title={t('workflows.definitions')}
         queryKey={['workflows']}
         fetchPage={(params) => workflowsApi.list(params)}
         columns={columns}
         rowKey={(row) => row.id}
-        emptyTitle="No workflows yet"
-        emptyText="A workflow reacts to an event, runs on a schedule, or runs when you ask it to. Start from a template or write one."
+                emptyTitle={t('workflows.emptyTitle')}
+                emptyText={t('workflows.emptyText')}
         searchable
-        searchPlaceholder="Search workflows…"
+                searchPlaceholder={t('workflows.searchPlaceholder')}
         actions={
           can('workflows.manage') ? (
             <div className="row" style={{ gap: 6 }}>
               <button type="button" className="btn btn--secondary btn--sm" onClick={() => setBrowsingTemplates(true)}>
-                From a template
-              </button>
+                {t('workflows.fromTemplate')}
+                              </button>
               <button type="button" className="btn btn--secondary btn--sm" onClick={() => setImporting(true)}>
-                Import
-              </button>
+                {t('workflows.import')}
+                              </button>
               <button type="button" className="btn btn--primary btn--sm" onClick={() => setCreating(true)}>
-                New workflow
-              </button>
+                {t('workflows.newWorkflow')}
+                              </button>
             </div>
           ) : null
         }
@@ -244,7 +253,7 @@ export function WorkflowsPage() {
           onSaved={() => {
             setCreating(false)
             setEditing(null)
-            setNotice({ tone: 'success', text: 'Saved.' })
+            setNotice({ tone: 'success', text: t('workflows.saved') })
             invalidate()
           }}
         />
@@ -255,7 +264,7 @@ export function WorkflowsPage() {
           onClose={() => setBrowsingTemplates(false)}
           onCreated={(name) => {
             setBrowsingTemplates(false)
-            setNotice({ tone: 'success', text: `Created "${name}" from a template.` })
+            setNotice({ tone: 'success', text: t('workflows.createdFromTemplate', { name }) })
             invalidate()
           }}
         />
@@ -266,7 +275,7 @@ export function WorkflowsPage() {
           onClose={() => setImporting(false)}
           onImported={(name) => {
             setImporting(false)
-            setNotice({ tone: 'success', text: `Imported "${name}".` })
+            setNotice({ tone: 'success', text: t('workflows.importedNotice', { name }) })
             invalidate()
           }}
         />
@@ -289,6 +298,7 @@ interface WorkflowDialogProps {
  * would hide the shape a user needs to understand.
  */
 function WorkflowDialog({ workflow, onClose, onSaved }: WorkflowDialogProps) {
+  const t = useT()
   const isEdit = workflow !== null
   const [name, setName] = useState(workflow?.name ?? '')
   const [description, setDescription] = useState(workflow?.description ?? '')
@@ -313,7 +323,7 @@ function WorkflowDialog({ workflow, onClose, onSaved }: WorkflowDialogProps) {
   const [rawJSON, setRawJSON] = useState(() => definitionToJSON(steps))
   const [error, setError] = useState<string | null>(null)
 
-  const validation = validateDefinition(steps)
+  const validation = validateDefinition(steps, t)
 
   const saveMutation = useMutation({
     mutationFn: (body: WorkflowInput) =>
@@ -331,44 +341,44 @@ function WorkflowDialog({ workflow, onClose, onSaved }: WorkflowDialogProps) {
     setError(null)
     try {
       const parsed = JSON.parse(rawJSON)
-      if (!parsed || !Array.isArray(parsed.steps)) {
-        setError('The definition needs a "steps" array.')
-        return
-      }
-      setSteps(parsed.steps as WorkflowStep[])
-      setMode('structured')
-    } catch {
-      setError('The definition is not valid JSON.')
-    }
-  }
-
-  function submit() {
-    setError(null)
-    let finalSteps = steps
-    if (mode === 'json') {
-      try {
-        const parsed = JSON.parse(rawJSON)
-        if (!parsed || !Array.isArray(parsed.steps) || parsed.steps.length === 0) {
-          setError('The definition needs a non-empty "steps" array.')
-          return
+            if (!parsed || !Array.isArray(parsed.steps)) {
+              setError(t('workflows.definitionNeedsSteps'))
+              return
+            }
+            setSteps(parsed.steps as WorkflowStep[])
+            setMode('structured')
+          } catch {
+            setError(t('workflows.definitionNotJSON'))
+          }
         }
-        finalSteps = parsed.steps as WorkflowStep[]
-        setSteps(finalSteps)
-      } catch {
-        setError('The definition is not valid JSON.')
-        return
-      }
+
+        function submit() {
+          setError(null)
+          let finalSteps = steps
+          if (mode === 'json') {
+            try {
+              const parsed = JSON.parse(rawJSON)
+              if (!parsed || !Array.isArray(parsed.steps) || parsed.steps.length === 0) {
+                setError(t('workflows.definitionNeedsStepsNonEmpty'))
+                return
+              }
+              finalSteps = parsed.steps as WorkflowStep[]
+              setSteps(finalSteps)
+            } catch {
+              setError(t('workflows.definitionNotJSON'))
+              return
+            }
     }
     if (!name.trim()) {
-      setError('Give the workflow a name.')
+      setError(t('workflows.nameRequired'))
       return
     }
     if (triggerType === 'event' && !eventType) {
-      setError('Choose the event this workflow reacts to.')
+      setError(t('workflows.chooseEvent'))
       return
     }
     if (triggerType === 'schedule' && !cron.trim()) {
-      setError('A schedule trigger needs a cron expression.')
+      setError(t('workflows.cronRequired'))
       return
     }
     const body: WorkflowInput = {
@@ -387,184 +397,170 @@ function WorkflowDialog({ workflow, onClose, onSaved }: WorkflowDialogProps) {
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="workflow-dialog-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        overflowY: 'auto',
-        padding: 'var(--space-5)',
-      }}
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      title={isEdit ? t('workflows.editTitle') : t('workflows.newTitle')}
+      size="lg"
+      footer={<>
+        <button type="button" className="btn btn--secondary" onClick={onClose}>
+          Cancel
+        </button>
+        <button type="button" className="btn btn--primary" disabled={saveMutation.isPending} onClick={submit}>
+          {saveMutation.isPending ? t('common.saving') : t('common.save')}
+        </button>
+      </>}
     >
-      <div className="card" style={{ maxWidth: 760, margin: '0 auto' }} onClick={(e) => e.stopPropagation()}>
-        <div className="card__header">
-          <h2 id="workflow-dialog-title">{isEdit ? 'Edit workflow' : 'New workflow'}</h2>
-        </div>
-        <div className="card__body stack">
-          {error ? <div className="alert alert--danger" role="alert">{error}</div> : null}
+      <div className="stack">
+        {error ? <div className="alert alert--danger" role="alert">{error}</div> : null}
 
-          <label className="field" htmlFor="workflow-name">
-            <span className="field__label">Name</span>
-            <input
-              id="workflow-name"
-              className="input"
-              value={name}
-              maxLength={200}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Notify the owner when a deal is won"
-            />
-          </label>
+        <label className="field" htmlFor="workflow-name">
+                      <span className="field__label">{t('common.name')}</span>
+          <input
+            id="workflow-name"
+            className="input"
+            value={name}
+            maxLength={200}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={t('workflows.namePlaceholder')}
+          />
+        </label>
 
-          <label className="field" htmlFor="workflow-description">
-            <span className="field__label">Description (optional)</span>
-            <input
-              id="workflow-description"
-              className="input"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </label>
+        <label className="field" htmlFor="workflow-description">
+                      <span className="field__label">{t('workflows.descriptionOptional')}</span>
+          <input
+            id="workflow-description"
+            className="input"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+        </label>
 
-          <label className="field" htmlFor="workflow-trigger">
-            <span className="field__label">Trigger</span>
+        <label className="field" htmlFor="workflow-trigger">
+                      <span className="field__label">{t('workflows.trigger')}</span>
+          <select
+            id="workflow-trigger"
+            className="input"
+            value={triggerType}
+            onChange={(e) => setTriggerType(e.target.value as WorkflowInput['trigger_type'])}
+          >
+            <option value="manual">{t('workflows.triggerManualOption')}</option>
+                          <option value="event">{t('workflows.triggerEventOption')}</option>
+                          <option value="schedule">{t('workflows.triggerScheduleOption')}</option>
+          </select>
+        </label>
+
+        {triggerType === 'event' ? (
+          <label className="field" htmlFor="workflow-event-type">
+                          <span className="field__label">{t('workflows.eventType')}</span>
             <select
-              id="workflow-trigger"
-              className="input"
-              value={triggerType}
-              onChange={(e) => setTriggerType(e.target.value as WorkflowInput['trigger_type'])}
+              id="workflow-event-type"
+              className="input mono"
+              value={eventType}
+              onChange={(e) => setEventType(e.target.value)}
+              disabled={eventsLoading}
             >
-              <option value="manual">Manual — run when asked</option>
-              <option value="event">Event — react to a committed event</option>
-              <option value="schedule">Schedule — run on a cron</option>
+                              <option value="">{t('workflows.chooseEventOption')}</option>
+              {eventTypes.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
             </select>
+                          <span className="field__hint">{t('workflows.eventHint')}</span>
           </label>
+        ) : null}
 
-          {triggerType === 'event' ? (
-            <label className="field" htmlFor="workflow-event-type">
-              <span className="field__label">Event type</span>
-              <select
-                id="workflow-event-type"
+        {triggerType === 'schedule' ? (
+          <div className="row" style={{ gap: 'var(--space-3)', alignItems: 'flex-start' }}>
+            <label className="field" htmlFor="workflow-cron" style={{ flex: 1 }}>
+                              <span className="field__label">{t('workflows.cronExpression')}</span>
+              <input
+                id="workflow-cron"
                 className="input mono"
-                value={eventType}
-                onChange={(e) => setEventType(e.target.value)}
-                disabled={eventsLoading}
-              >
-                <option value="">Choose an event…</option>
-                {eventTypes.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-              <span className="field__hint">
-                The canonical event names the server emits. A workflow matches one of these
-                exactly; a name that is not in this list never fires.
-              </span>
-            </label>
-          ) : null}
-
-          {triggerType === 'schedule' ? (
-            <div className="row" style={{ gap: 'var(--space-3)', alignItems: 'flex-start' }}>
-              <label className="field" htmlFor="workflow-cron" style={{ flex: 1 }}>
-                <span className="field__label">Cron expression</span>
-                <input
-                  id="workflow-cron"
-                  className="input mono"
-                  value={cron}
-                  onChange={(e) => setCron(e.target.value)}
-                />
-                <span className="field__hint">Five fields: minute hour day month weekday.</span>
-              </label>
-              <label className="field" htmlFor="workflow-timezone" style={{ flex: 1 }}>
-                <span className="field__label">Timezone</span>
-                <input
-                  id="workflow-timezone"
-                  className="input mono"
-                  value={timezone}
-                  onChange={(e) => setTimezone(e.target.value)}
-                />
-              </label>
-            </div>
-          ) : null}
-
-          <div className="field">
-            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-              <span className="field__label">Definition</span>
-              <div className="row" style={{ gap: 6 }}>
-                {mode === 'structured' ? (
-                  <button type="button" className="btn btn--ghost btn--sm" onClick={switchToJSON}>
-                    Edit as JSON
-                  </button>
-                ) : (
-                  <button type="button" className="btn btn--ghost btn--sm" onClick={switchToStructured}>
-                    Edit as form
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {mode === 'structured' ? (
-              <WorkflowEditor steps={steps} eventTypes={eventTypes} onChange={setSteps} />
-            ) : (
-              <textarea
-                id="workflow-definition"
-                className="input mono"
-                rows={14}
-                value={rawJSON}
-                aria-label="workflow definition JSON"
-                onChange={(e) => setRawJSON(e.target.value)}
-                spellCheck={false}
+                value={cron}
+                onChange={(e) => setCron(e.target.value)}
               />
-            )}
+                              <span className="field__hint">{t('workflows.cronHint')}</span>
+            </label>
+            <label className="field" htmlFor="workflow-timezone" style={{ flex: 1 }}>
+                              <span className="field__label">{t('workflows.timezone')}</span>
+              <input
+                id="workflow-timezone"
+                className="input mono"
+                value={timezone}
+                onChange={(e) => setTimezone(e.target.value)}
+              />
+            </label>
+          </div>
+        ) : null}
 
-            {mode === 'structured' && !validation.ok ? (
-              <ul className="text-danger text-sm" style={{ margin: 0, paddingLeft: 18 }} role="alert">
-                {validation.errors.map((msg) => (
-                  <li key={msg}>{msg}</li>
-                ))}
-              </ul>
-            ) : null}
-
-            <span className="field__hint">
-              Steps: condition, branch, create_task, update_deal, create_ticket, notify, delay, find_deals,
-              foreach. Use <code>{'{{path}}'}</code> to reference the triggering event; inside a foreach,{' '}
-              <code>{'{{item.field}}'}</code> reads the current item.
-            </span>
+        <div className="field">
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span className="field__label">{t('workflows.definition')}</span>
+            <div className="row" style={{ gap: 6 }}>
+              {mode === 'structured' ? (
+                <button type="button" className="btn btn--ghost btn--sm" onClick={switchToJSON}>
+                  {t('workflows.editAsJson')}
+                                    </button>
+              ) : (
+                <button type="button" className="btn btn--ghost btn--sm" onClick={switchToStructured}>
+                  {t('workflows.editAsForm')}
+                                    </button>
+              )}
+            </div>
           </div>
 
-          <label className="field" htmlFor="workflow-max-depth" style={{ maxWidth: 200 }}>
-            <span className="field__label">Max chain depth</span>
-            <input
-              id="workflow-max-depth"
-              className="input"
-              type="number"
-              min={1}
-              max={20}
-              value={maxDepth}
-              onChange={(e) => setMaxDepth(Number(e.target.value))}
+          {mode === 'structured' ? (
+            <WorkflowEditor steps={steps} eventTypes={eventTypes} onChange={setSteps} />
+          ) : (
+            <textarea
+              id="workflow-definition"
+              className="input mono"
+              rows={14}
+              value={rawJSON}
+                              aria-label={t('workflows.definitionAria')}
+              onChange={(e) => setRawJSON(e.target.value)}
+              spellCheck={false}
             />
-            <span className="field__hint">Stops workflows that trigger each other.</span>
-          </label>
+          )}
+
+          {mode === 'structured' && !validation.ok ? (
+            <ul className="text-danger text-sm" style={{ margin: 0, paddingLeft: 18 }} role="alert">
+              {validation.errors.map((msg) => (
+                <li key={msg}>{msg}</li>
+              ))}
+            </ul>
+          ) : null}
+
+                      <span className="field__hint">
+                        {t('workflows.stepsHint', {
+                          open: '{{path}}',
+                          item: '{{item.field}}',
+                        })}
+                      </span>
         </div>
-        <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
-          <button type="button" className="btn btn--secondary" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="button" className="btn btn--primary" disabled={saveMutation.isPending} onClick={submit}>
-            {saveMutation.isPending ? 'Saving…' : 'Save'}
-          </button>
-        </div>
+
+        <label className="field" htmlFor="workflow-max-depth" style={{ maxWidth: 200 }}>
+                      <span className="field__label">{t('workflows.maxDepth')}</span>
+          <input
+            id="workflow-max-depth"
+            className="input"
+            type="number"
+            min={1}
+            max={20}
+            value={maxDepth}
+            onChange={(e) => setMaxDepth(Number(e.target.value))}
+          />
+                      <span className="field__hint">{t('workflows.maxDepthHint')}</span>
+        </label>
       </div>
-    </div>
+    </Modal>
   )
 }
 
 function RunHistoryDrawer({ workflow, onClose }: { workflow: Workflow; onClose: () => void }) {
+  const t = useT()
   const [selected, setSelected] = useState<string | null>(null)
 
   const runsQuery = useQuery({
@@ -581,98 +577,93 @@ function RunHistoryDrawer({ workflow, onClose }: { workflow: Workflow; onClose: 
   const runs: WorkflowRun[] = runsQuery.data?.items ?? []
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="run-history-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        overflowY: 'auto',
-        padding: 'var(--space-5)',
-      }}
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      title={t('workflows.runsTitle', { name: workflow.name })}
+      size="lg"
+      footer={<>
+        <button type="button" className="btn btn--secondary" onClick={onClose}>
+          Close
+        </button>
+      </>}
     >
-      <div className="card" style={{ maxWidth: 900, margin: '0 auto' }} onClick={(e) => e.stopPropagation()}>
-        <div className="card__header">
-          <h2 id="run-history-title">Runs — {workflow.name}</h2>
-        </div>
-        <div className="card__body">
-          {runsQuery.isLoading ? <p className="text-subtle">Loading…</p> : null}
-          {runsQuery.isError ? (
-            <div className="alert alert--danger" role="alert">{errorMessage(runsQuery.error)}</div>
-          ) : null}
-          {!runsQuery.isLoading && runs.length === 0 ? (
-            <p className="text-subtle">This workflow has not run yet.</p>
-          ) : null}
+      {runsQuery.isLoading ? <p className="text-subtle">Loading…</p> : null}
+      {runsQuery.isError ? (
+        <div className="alert alert--danger" role="alert">{errorMessage(runsQuery.error)}</div>
+      ) : null}
+      {!runsQuery.isLoading && runs.length === 0 ? (
+        <p className="text-subtle">{t('workflows.notRunYet')}</p>
+      ) : null}
 
-          {runs.length > 0 ? (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Started</th>
-                  <th>Trigger</th>
-                  <th>Status</th>
-                  <th>Steps</th>
-                  <th>Depth</th>
-                  <th />
+      {runs.length > 0 ? (
+        <div className="table-wrap">
+          <table className="table table--stack">
+            <thead>
+              <tr>
+                <th>{t('workflows.columnStarted')}</th>
+                <th>{t('workflows.columnTrigger')}</th>
+                <th>{t('common.status')}</th>
+                <th>{t('workflows.columnSteps')}</th>
+                <th>{t('workflows.columnDepth')}</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {runs.map((run) => (
+                <tr key={run.id}>
+                  <td data-label={t('workflows.columnStarted')}>
+                    <Timestamp value={run.started_at} />
+                  </td>
+                  <td className="mono text-sm" data-label={t('workflows.columnTrigger')}>
+                    {run.trigger_type}
+                  </td>
+                  <td data-label={t('common.status')}>
+                    <StatusBadge status={run.status} />
+                  </td>
+                  <td className="numeric" data-label={t('workflows.columnSteps')}>
+                    {run.steps_succeeded}/{run.steps_total}
+                    {run.steps_failed > 0 ? (
+                      <span className="text-danger">
+                        {t('workflows.failedSuffix', { count: run.steps_failed })}
+                      </span>
+                    ) : null}
+                  </td>
+                  <td className="numeric" data-label={t('workflows.columnDepth')}>
+                    {run.run_depth}
+                  </td>
+                  <td>
+                    <button type="button" className="btn btn--ghost btn--sm" onClick={() => setSelected(run.id)}>
+                      {t('workflows.stepsCount')}
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {runs.map((run) => (
-                  <tr key={run.id}>
-                    <td>
-                      <Timestamp value={run.started_at} />
-                    </td>
-                    <td className="mono text-sm">{run.trigger_type}</td>
-                    <td>
-                      <StatusBadge status={run.status} />
-                    </td>
-                    <td className="numeric">
-                      {run.steps_succeeded}/{run.steps_total}
-                      {run.steps_failed > 0 ? <span className="text-danger"> ({run.steps_failed} failed)</span> : null}
-                    </td>
-                    <td className="numeric">{run.run_depth}</td>
-                    <td>
-                      <button type="button" className="btn btn--ghost btn--sm" onClick={() => setSelected(run.id)}>
-                        Steps
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : null}
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
 
-          {selected ? (
-            <div style={{ marginTop: 'var(--space-4)' }}>
-              <h3>Steps</h3>
-              {stepsQuery.isLoading ? <p className="text-subtle">Loading…</p> : null}
-              {stepsQuery.isError ? (
-                <div className="alert alert--danger" role="alert">{errorMessage(stepsQuery.error)}</div>
-              ) : null}
-              <ul className="stack" style={{ listStyle: 'none', padding: 0 }}>
-                {(stepsQuery.data?.items ?? []).map((step) => (
-                  <li key={step.id} className="row" style={{ gap: 'var(--space-3)', alignItems: 'baseline' }}>
-                    <span className="mono text-sm" style={{ minWidth: 28 }}>{step.step_index}</span>
-                    <Badge tone="neutral">{step.step_type}</Badge>
-                    <StatusBadge status={step.status} />
-                    <span className="text-subtle text-sm">{step.error ?? ''}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+      {selected ? (
+        <div style={{ marginTop: 'var(--space-4)' }}>
+                        <h3>{t('workflows.steps')}</h3>
+          {stepsQuery.isLoading ? <p className="text-subtle">Loading…</p> : null}
+          {stepsQuery.isError ? (
+            <div className="alert alert--danger" role="alert">{errorMessage(stepsQuery.error)}</div>
           ) : null}
+          <ul className="stack" style={{ listStyle: 'none', padding: 0 }}>
+            {(stepsQuery.data?.items ?? []).map((step) => (
+              <li key={step.id} className="row" style={{ gap: 'var(--space-3)', alignItems: 'baseline' }}>
+                <span className="mono text-sm" style={{ minWidth: 28 }}>{step.step_index}</span>
+                <Badge tone="neutral">{step.step_type}</Badge>
+                <StatusBadge status={step.status} />
+                <span className="text-subtle text-sm">{step.error ?? ''}</span>
+              </li>
+            ))}
+          </ul>
         </div>
-        <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
-          <button type="button" className="btn btn--secondary" onClick={onClose}>
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
+      ) : null}
+    </Modal>
   )
 }
 
@@ -687,6 +678,7 @@ function RunHistoryDrawer({ workflow, onClose }: { workflow: Workflow; onClose: 
  * enabled and never fire.
  */
 function TemplatePicker({ onClose, onCreated }: { onClose: () => void; onCreated: (name: string) => void }) {
+  const tr = useT()
   const [selected, setSelected] = useState<WorkflowTemplate | null>(null)
   const [name, setName] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -710,7 +702,8 @@ function TemplatePicker({ onClose, onCreated }: { onClose: () => void; onCreated
   }, {})
 
   return (
-    <Modal title="Start from a template" onClose={onClose}>
+    <Modal open title={tr('workflows.templateTitle')} onClose={onClose} size="lg">
+      <div className="stack">
       {error ? <div className="alert alert--danger" role="alert">{error}</div> : null}
       {templatesQuery.isLoading ? <p className="text-subtle">Loading…</p> : null}
       {templatesQuery.isError ? (
@@ -743,11 +736,14 @@ function TemplatePicker({ onClose, onCreated }: { onClose: () => void; onCreated
                     <span className="text-subtle text-sm">{t.description}</span>
                     <span className="mono text-sm">
                       {t.trigger_type === 'event'
-                        ? `on ${t.event_type}`
+                        ? tr('workflows.triggerOnEvent', { event: t.event_type ?? tr('workflows.anEvent') })
                         : t.trigger_type === 'schedule'
-                          ? `every ${t.schedule_cron} (${t.schedule_timezone ?? 'UTC'})`
-                          : 'manual'}{' '}
-                      · {t.definition.steps.length} step(s)
+                          ? tr('workflows.triggerEvery', {
+                              cron: t.schedule_cron ?? '—',
+                              timezone: t.schedule_timezone ?? 'UTC',
+                            })
+                          : tr('workflows.triggerManual')}{' '}
+                      · {t.definition.steps.length}
                     </span>
                   </div>
                 </button>
@@ -759,7 +755,7 @@ function TemplatePicker({ onClose, onCreated }: { onClose: () => void; onCreated
 
       {selected ? (
         <label className="field" htmlFor="template-name">
-          <span className="field__label">Name for the new workflow</span>
+                    <span className="field__label">{tr('workflows.templateNameLabel')}</span>
           <input id="template-name" className="input" value={name} onChange={(e) => setName(e.target.value)} />
         </label>
       ) : null}
@@ -774,8 +770,9 @@ function TemplatePicker({ onClose, onCreated }: { onClose: () => void; onCreated
           disabled={!selected || createMutation.isPending}
           onClick={() => createMutation.mutate()}
         >
-          {createMutation.isPending ? 'Creating…' : 'Create'}
+          {createMutation.isPending ? tr('workflows.creating') : tr('common.create')}
         </button>
+      </div>
       </div>
     </Modal>
   )
@@ -788,6 +785,7 @@ function TemplatePicker({ onClose, onCreated }: { onClose: () => void; onCreated
  * says why.
  */
 function ImportDialog({ onClose, onImported }: { onClose: () => void; onImported: (name: string) => void }) {
+  const t = useT()
   const [text, setText] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -803,17 +801,18 @@ function ImportDialog({ onClose, onImported }: { onClose: () => void; onImported
     try {
       doc = JSON.parse(text) as WorkflowExportDocument
     } catch {
-      setError('That is not valid JSON.')
+      setError(t('workflows.notValidJSON'))
       return
     }
     importMutation.mutate(doc)
   }
 
   return (
-    <Modal title="Import a workflow" onClose={onClose}>
+    <Modal open title={t('workflows.importTitle')} onClose={onClose} size="lg">
+      <div className="stack">
       {error ? <div className="alert alert--danger" role="alert">{error}</div> : null}
       <label className="field" htmlFor="import-document">
-        <span className="field__label">Portable document</span>
+                <span className="field__label">{t('workflows.importLabel')}</span>
         <textarea
           id="import-document"
           className="input mono"
@@ -823,10 +822,7 @@ function ImportDialog({ onClose, onImported }: { onClose: () => void; onImported
           placeholder='{"format":"forgecrm.workflow","format_version":1,…}'
           onChange={(e) => setText(e.target.value)}
         />
-        <span className="field__hint">
-          Paste a document produced by Export. The server rejects a document whose format, version or event
-          it does not recognise, and says which.
-        </span>
+                <span className="field__hint">{t('workflows.importHint')}</span>
       </label>
       <div className="form-actions" style={{ margin: 0 }}>
         <button type="button" className="btn btn--secondary" onClick={onClose}>
@@ -838,36 +834,11 @@ function ImportDialog({ onClose, onImported }: { onClose: () => void; onImported
           disabled={!text.trim() || importMutation.isPending}
           onClick={submit}
         >
-          {importMutation.isPending ? 'Importing…' : 'Import'}
+          {importMutation.isPending ? t('workflows.importing') : t('workflows.import')}
         </button>
+      </div>
       </div>
     </Modal>
   )
 }
 
-/** A shared modal shell, so every dialog has the same focus and dismissal behaviour. */
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        overflowY: 'auto',
-        padding: 'var(--space-5)',
-      }}
-      onClick={onClose}
-    >
-      <div className="card" style={{ maxWidth: 760, margin: '0 auto' }} onClick={(e) => e.stopPropagation()}>
-        <div className="card__header">
-          <h2>{title}</h2>
-        </div>
-        <div className="card__body stack">{children}</div>
-      </div>
-    </div>
-  )
-}

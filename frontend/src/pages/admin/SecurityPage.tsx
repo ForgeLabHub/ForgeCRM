@@ -7,11 +7,13 @@ import { useAuth } from '../../hooks/useAuth'
 import { ResourceList, type Column } from '../../components/ResourceList'
 import { Alert, Badge, Card, ConfirmDialog, PageHeader, TableSkeleton, Timestamp } from '../../components/ui'
 import type { SecurityEvent, Session } from '../../types/api'
+import { useT, type TFunction } from '../../i18n'
 
-const eventColumns: Column<SecurityEvent>[] = [
+function buildEventColumns(t: TFunction): Column<SecurityEvent>[] {
+  return [
   {
     key: 'type',
-    header: 'Event',
+    header: t('security.columnEvent'),
     render: (row) => (
       <div>
         <div className="table__primary mono">{row.event_type}</div>
@@ -21,7 +23,7 @@ const eventColumns: Column<SecurityEvent>[] = [
   },
   {
     key: 'severity',
-    header: 'Severity',
+    header: t('security.columnSeverity'),
     render: (row) => (
       <Badge
         tone={
@@ -38,7 +40,7 @@ const eventColumns: Column<SecurityEvent>[] = [
   },
   {
     key: 'actor',
-    header: 'User',
+    header: t('security.columnUser'),
     render: (row) =>
       row.user_id ? (
         <span className="mono text-sm">{row.user_id.slice(0, 8)}</span>
@@ -48,26 +50,25 @@ const eventColumns: Column<SecurityEvent>[] = [
   },
   {
     key: 'ip',
-    header: 'Source',
+    header: t('security.columnSource'),
     render: (row) => row.ip ?? <span className="text-subtle">—</span>,
-  },
-  {
+    },
+    {
     key: 'when',
-    header: 'When',
+    header: t('security.columnWhen'),
     render: (row) => <Timestamp value={row.created_at} />,
-  },
-]
+    },
+    ]
+    }
 
 export function SecurityPage() {
   const { can } = useAuth()
+  const t = useT()
   const [tab, setTab] = useState<'events' | 'sessions'>('events')
 
   return (
     <>
-      <PageHeader
-        title="Security"
-        meta="Authentication events and the sessions that are currently active."
-      />
+      <PageHeader title={t('security.title')} meta={t('security.meta')} />
 
       <div className="row" style={{ marginBottom: 'var(--space-4)' }}>
         <button
@@ -76,33 +77,33 @@ export function SecurityPage() {
           onClick={() => setTab('events')}
           aria-pressed={tab === 'events'}
         >
-          Security events
-        </button>
+          {t('security.tabEvents')}
+          </button>
         <button
           type="button"
           className={tab === 'sessions' ? 'btn btn--secondary btn--sm' : 'btn btn--ghost btn--sm'}
           onClick={() => setTab('sessions')}
           aria-pressed={tab === 'sessions'}
         >
-          My sessions
-        </button>
+          {t('security.tabSessions')}
+          </button>
       </div>
 
       {tab === 'events' ? (
         can('security.read') ? (
           <ResourceList
-            title="Security events"
+            title={t('security.eventsTitle')}
             queryKey={['security-events']}
             fetchPage={(params) => auditApi.securityEvents(params)}
-            columns={eventColumns}
+            columns={buildEventColumns(t)}
             rowKey={(row) => row.id}
-            emptyTitle="No security events"
-            emptyText="Sign-ins, failures and account changes are recorded here."
+            emptyTitle={t('security.emptyEventsTitle')}
+            emptyText={t('security.emptyEventsText')}
             searchable
-            searchPlaceholder="Search by event type…"
+            searchPlaceholder={t('security.searchEvents')}
           />
         ) : (
-          <Alert tone="warning">You do not have permission to read security events.</Alert>
+          <Alert tone="warning">{t('security.noPermission')}</Alert>
         )
       ) : (
         <MySessions />
@@ -111,30 +112,31 @@ export function SecurityPage() {
   )
 }
 
-const sessionColumns: Column<Session>[] = [
+function buildSessionColumns(t: TFunction): Column<Session>[] {
+  return [
   {
     key: 'created',
-    header: 'Started',
+    header: t('security.columnStarted'),
     render: (row) => <Timestamp value={row.created_at} />,
   },
   {
     key: 'lastSeen',
-    header: 'Last used',
+    header: t('security.columnLastUsed'),
     render: (row) => <Timestamp value={row.last_seen_at} />,
   },
   {
     key: 'expires',
-    header: 'Expires',
+    header: t('security.columnExpires'),
     render: (row) => <Timestamp value={row.expires_at} />,
   },
   {
     key: 'ip',
-    header: 'Source',
+    header: t('security.columnSource'),
     render: (row) => row.ip ?? <span className="text-subtle">—</span>,
   },
   {
     key: 'agent',
-    header: 'Client',
+    header: t('security.columnClient'),
     render: (row) => (
       <span className="truncate text-sm" style={{ maxWidth: 260 }} title={row.user_agent ?? ''}>
         {row.user_agent ?? <span className="text-subtle">—</span>}
@@ -144,11 +146,14 @@ const sessionColumns: Column<Session>[] = [
   {
     key: 'current',
     header: '',
-    render: (row) => (row.current ? <Badge tone="accent">this session</Badge> : null),
-  },
-]
+    render: (row) =>
+      row.current ? <Badge tone="accent">{t('security.thisSession')}</Badge> : null,
+    },
+    ]
+    }
 
 function MySessions() {
+  const t = useT()
   const queryClient = useQueryClient()
   const sessions = useQuery({ queryKey: ['sessions'], queryFn: () => sessionsApi.list() })
   const [pending, setPending] = useState<Session | null>(null)
@@ -162,7 +167,7 @@ function MySessions() {
   })
 
   return (
-    <Card title="Active sessions" flush>
+    <Card title={t('security.activeSessions')} flush>
       {revoke.isError ? (
         <div className="card__body">
           <Alert tone="error">{errorMessage(revoke.error)}</Alert>
@@ -176,10 +181,10 @@ function MySessions() {
         <TableSkeleton rows={3} columns={6} />
       ) : sessions.data?.items.length ? (
         <div className="table-wrap">
-          <table>
+          <table className="table--stack">
             <thead>
               <tr>
-                {sessionColumns.map((column) => (
+                {buildSessionColumns(t).map((column) => (
                   <th key={column.key}>{column.header}</th>
                 ))}
                 <th />
@@ -188,12 +193,16 @@ function MySessions() {
             <tbody>
               {sessions.data.items.map((session) => (
                 <tr key={session.id}>
-                  {sessionColumns.map((column) => (
-                    <td key={column.key}>{column.render(session)}</td>
+                  {buildSessionColumns(t).map((column) => (
+                    /* The header row is hidden once the rows stack into cards on
+                       a phone, so each cell carries the header it belongs to. */
+                    <td key={column.key} data-label={column.header || undefined}>
+                      {column.render(session)}
+                    </td>
                   ))}
                   <td>
                     {session.current ? (
-                      <span className="text-subtle text-sm">Current</span>
+                      <span className="text-subtle text-sm">{t('security.current')}</span>
                     ) : (
                       <button
                         type="button"
@@ -201,8 +210,8 @@ function MySessions() {
                         onClick={() => setPending(session)}
                         disabled={revoke.isPending}
                       >
-                        Revoke
-                      </button>
+                        {t('security.revoke')}
+                        </button>
                     )}
                   </td>
                 </tr>
@@ -212,15 +221,15 @@ function MySessions() {
         </div>
       ) : (
         <div className="card__body">
-          <p className="text-muted">No active sessions.</p>
+          <p className="text-muted">{t('security.emptySessions')}</p>
         </div>
       )}
 
       <ConfirmDialog
         open={pending !== null}
-        title="Revoke this session?"
-        text="The device signed in with this session will be signed out and must authenticate again."
-        confirmLabel="Revoke session"
+        title={t('security.revokeTitle')}
+        text={t('security.revokeText')}
+        confirmLabel={t('security.revokeConfirm')}
         danger
         busy={revoke.isPending}
         onConfirm={() => {

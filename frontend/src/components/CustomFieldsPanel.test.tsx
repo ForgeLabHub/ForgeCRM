@@ -13,6 +13,7 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { CustomFieldsPanel } from './CustomFieldsPanel'
 import { AuthProvider } from '../hooks/useAuth'
+import { I18nProvider } from '../i18n'
 import type { CustomFields } from '../types/api'
 
 function json(body: unknown, status = 200): Response {
@@ -68,14 +69,16 @@ function renderPanel(
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
+      <I18nProvider>
+        <AuthProvider>
         <CustomFieldsPanel
           entityType="account"
           values={values}
           canEdit={canEdit}
           onSave={onSave}
         />
-      </AuthProvider>
+        </AuthProvider>
+      </I18nProvider>
     </QueryClientProvider>,
   )
 }

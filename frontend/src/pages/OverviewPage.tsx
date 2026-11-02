@@ -5,7 +5,15 @@ import { accountsApi, dealsApi, leadsApi, tasksApi, ticketsApi } from '../api/cr
 import { systemApi } from '../api/admin'
 import { errorMessage } from '../api/client'
 import { useAuth } from '../hooks/useAuth'
-import { Alert, Badge, Card, ErrorState, Timestamp } from '../components/ui'
+import {
+  Alert,
+  Badge,
+  Card,
+  ErrorState,
+  Skeleton,
+  StatusBadge,
+  Timestamp,
+} from '../components/ui'
 import {
   IconBuilding,
   IconChart,
@@ -35,11 +43,9 @@ function priorityTone(priority: string | undefined): Tone {
   }
 }
 
-/**
- * A count tile backed by its own query, so one failing count does not blank the
- * rest of the page. The whole tile is the link, matching the metric stylesheet:
- * the label and the value are one target rather than a number inside a box.
- */
+/** A count tile. Each owns its query so one failing endpoint does not blank the
+ *  page, and the whole tile is the link so the number and the label are one
+ *  target rather than a link buried inside a card. */
 function MetricTile({
   label,
   queryKey,
@@ -55,20 +61,55 @@ function MetricTile({
   link: string
   icon: ReactNode
 }) {
-  const query = useQuery({ queryKey: ['count', queryKey], queryFn: fetchCount })
-  const failed = query.isError
-  const value = query.isLoading ? '—' : failed ? '!' : query.data
+  const { t } = useI18n()
+  const query = useQuery({
+    queryKey: ['overview', 'metric', queryKey],
+    queryFn: fetchCount,
+    retry: false,
+  })
 
   return (
     <Link to={link} className="metric">
       <div className="metric__top">
+        <span className="metric__label">{label}</span>
         <span className="metric__icon" aria-hidden="true">
           {icon}
         </span>
       </div>
-      <div className="metric__label">{label}</div>
-      <div className={failed ? 'metric__value metric__value--error' : 'metric__value'}>{value}</div>
-      {hint ? <div className="metric__hint">{hint}</div> : null}
+      {query.isLoading ? (
+        <Skeleton width="56px" height={26} />
+      ) : (
+        <div className={query.isError ? 'metric__value metric__value--error' : 'metric__value'}>
+          {query.isError ? '—' : query.data}
+        </div>
+      )}
+      {query.isError ? (
+        <div className="metric__hint">{t('overview.metricUnavailable')}</div>
+      ) : hint ? (
+        <div className="metric__hint">{hint}</div>
+      ) : null}
+    </Link>
+  )
+}
+
+/** One quick action: a real link to the page where the work happens, not a tile
+ *  that describes work the user cannot start from here. */
+function QuickAction({
+  to,
+  labelKey,
+  icon,
+}: {
+  to: string
+  labelKey: TranslationKey
+  icon: ReactNode
+}) {
+  const { t } = useI18n()
+  return (
+    <Link to={to} className="quick-action">
+      <span className="quick-action__icon" aria-hidden="true">
+        {icon}
+      </span>
+      {t(labelKey)}
     </Link>
   )
 }
@@ -81,15 +122,15 @@ interface QuickAction {
 }
 
 const QUICK_ACTIONS: QuickAction[] = [
-  { to: '/accounts', labelKey: 'nav.accounts', permission: 'accounts.read', icon: <IconBuilding /> },
-  { to: '/contacts', labelKey: 'nav.contacts', permission: 'contacts.read', icon: <IconUsers /> },
-  { to: '/leads', labelKey: 'nav.leads', permission: 'leads.read', icon: <IconTarget /> },
-  { to: '/deals', labelKey: 'nav.deals', permission: 'deals.read', icon: <IconKanban /> },
-  { to: '/tasks', labelKey: 'nav.tasks', permission: 'tasks.read', icon: <IconCheckSquare /> },
-  { to: '/tickets', labelKey: 'nav.support', permission: 'tickets.read', icon: <IconLifeBuoy /> },
-  { to: '/reports', labelKey: 'nav.reports', permission: 'reports.read', icon: <IconChart /> },
-  { to: '/workflows', labelKey: 'nav.workflows', permission: 'workflows.read', icon: <IconWorkflow /> },
-  { to: '/imports', labelKey: 'nav.importCenter', permission: 'imports.read', icon: <IconInbox /> },
+  { to: '/accounts', labelKey: 'nav.accounts', permission: 'accounts.read', icon: <IconBuilding size={16} /> },
+  { to: '/contacts', labelKey: 'nav.contacts', permission: 'contacts.read', icon: <IconUsers size={16} /> },
+  { to: '/leads', labelKey: 'nav.leads', permission: 'leads.read', icon: <IconTarget size={16} /> },
+  { to: '/deals', labelKey: 'nav.deals', permission: 'deals.read', icon: <IconKanban size={16} /> },
+  { to: '/tasks', labelKey: 'nav.tasks', permission: 'tasks.read', icon: <IconCheckSquare size={16} /> },
+  { to: '/tickets', labelKey: 'nav.support', permission: 'tickets.read', icon: <IconLifeBuoy size={16} /> },
+  { to: '/reports', labelKey: 'nav.reports', permission: 'reports.read', icon: <IconChart size={16} /> },
+  { to: '/workflows', labelKey: 'nav.workflows', permission: 'workflows.read', icon: <IconWorkflow size={16} /> },
+  { to: '/imports', labelKey: 'nav.importCenter', permission: 'imports.read', icon: <IconInbox size={16} /> },
 ]
 
 export function OverviewPage() {
@@ -108,7 +149,21 @@ export function OverviewPage() {
     enabled: can('tickets.read'),
   })
 
-  const quickActions = QUICK_ACTIONS.filter((action) => can(action.permission))
+  // Create affordances are gated on the matching `.create` permission: a
+  // read-only user must not be offered a form the server will reject. Pages the
+  // user may only read are listed separately so the two are never confused.
+  const createActions = (
+    [
+      { to: '/accounts?new=1', labelKey: 'overview.actionNewAccount', icon: <IconBuilding size={16} />, permission: 'accounts.create' },
+      { to: '/deals?new=1', labelKey: 'overview.actionNewDeal', icon: <IconKanban size={16} />, permission: 'deals.create' },
+      { to: '/tasks?new=1', labelKey: 'overview.actionNewTask', icon: <IconCheckSquare size={16} />, permission: 'tasks.create' },
+      { to: '/tickets?new=1', labelKey: 'overview.actionNewTicket', icon: <IconLifeBuoy size={16} />, permission: 'tickets.create' },
+      { to: '/reports', labelKey: 'overview.actionReports', icon: <IconChart size={16} />, permission: 'reports.read' },
+      { to: '/workflows', labelKey: 'overview.actionWorkflows', icon: <IconWorkflow size={16} />, permission: 'workflows.read' },
+    ] as QuickAction[]
+  ).filter((action) => can(action.permission))
+
+  const quickActions = createActions.length > 0 ? createActions : QUICK_ACTIONS.filter((action) => can(action.permission))
 
   return (
     <>
@@ -131,6 +186,7 @@ export function OverviewPage() {
             <Badge tone="neutral">
               {t('overview.version')} {info.data.version}
             </Badge>
+            {info.data.commit ? <Badge tone="neutral">{info.data.commit.slice(0, 12)}</Badge> : null}
           </div>
         ) : null}
       </header>
@@ -192,17 +248,17 @@ export function OverviewPage() {
         ) : null}
       </div>
 
-      {quickActions.length ? (
+      {quickActions.length > 0 ? (
         <div style={{ marginBottom: 'var(--space-5)' }}>
           <Card title={t('overview.quickActions')}>
             <div className="quick-actions">
               {quickActions.map((action) => (
-                <Link key={action.to} to={action.to} className="quick-action">
-                  <span className="quick-action__icon" aria-hidden="true">
-                    {action.icon}
-                  </span>
-                  {t(action.labelKey)}
-                </Link>
+                <QuickAction
+                  key={action.to}
+                  to={action.to}
+                  labelKey={action.labelKey}
+                  icon={action.icon}
+                />
               ))}
             </div>
           </Card>
@@ -212,7 +268,7 @@ export function OverviewPage() {
       <div className="grid grid--split">
         {can('tasks.read') ? (
           <Card
-            title={t('overview.yourOpenTasks')}
+            title={t('overview.openTasks')}
             actions={
               <Link to="/tasks" className="btn btn--ghost btn--sm">
                 {t('overview.viewAll')}
@@ -226,7 +282,7 @@ export function OverviewPage() {
                 {recentTasks.data.items.map((task) => (
                   <Link key={task.id} to={`/tasks/${task.id}`} className="attention-item">
                     <div style={{ minWidth: 0 }}>
-                      <div className="attention-item__title truncate">{task.title}</div>
+                      <div className="truncate attention-item__title">{task.title}</div>
                       <div className="attention-item__meta">
                         {t('overview.due')} <Timestamp value={task.due_at} withTime={false} />
                       </div>
@@ -257,12 +313,12 @@ export function OverviewPage() {
                 {openTickets.data.items.map((ticket) => (
                   <Link key={ticket.id} to={`/tickets/${ticket.id}`} className="attention-item">
                     <div style={{ minWidth: 0 }}>
-                      <div className="attention-item__title truncate">{ticket.subject}</div>
+                      <div className="truncate attention-item__title">{ticket.subject}</div>
                       <div className="attention-item__meta">
                         {t('overview.opened')} <Timestamp value={ticket.created_at} />
                       </div>
                     </div>
-                    <Badge tone={priorityTone(ticket.priority)}>{ticket.priority}</Badge>
+                    <StatusBadge status={ticket.priority} />
                   </Link>
                 ))}
               </div>

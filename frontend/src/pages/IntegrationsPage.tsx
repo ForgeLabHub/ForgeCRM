@@ -5,12 +5,14 @@ import { integrationsApi } from '../api/integrations'
 import { errorMessage, fieldErrors } from '../api/client'
 import type { Integration } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
+import { useT } from '../i18n'
 import { ResourceList, type Column } from '../components/ResourceList'
 import {
   Alert,
   Badge,
   ConfirmDialog,
   Field,
+  Modal,
   PageHeader,
   StatusBadge,
   Timestamp,
@@ -18,6 +20,7 @@ import {
 
 export function IntegrationsPage() {
   const { can } = useAuth()
+  const t = useT()
   const queryClient = useQueryClient()
   const [creating, setCreating] = useState(false)
   const [detail, setDetail] = useState<Integration | null>(null)
@@ -48,7 +51,7 @@ export function IntegrationsPage() {
   const columns: Column<Integration>[] = [
     {
       key: 'name',
-      header: 'Integration',
+      header: t('integrations.columnIntegration'),
       render: (row) => (
         <div>
           <div className="table__primary">{row.name}</div>
@@ -59,28 +62,28 @@ export function IntegrationsPage() {
         </div>
       ),
     },
-    { key: 'status', header: 'Status', render: (row) => <StatusBadge status={row.status} /> },
+    { key: 'status', header: t('common.status'), render: (row) => <StatusBadge status={row.status} /> },
     {
       key: 'lastChecked',
-      header: 'Last checked',
+      header: t('integrations.columnLastChecked'),
       render: (row) => <Timestamp value={row.last_test_at} />,
     },
     {
       key: 'lastSync',
-      header: 'Last sync',
+      header: t('integrations.columnLastSync'),
       render: (row) => <Timestamp value={row.last_sync_at} />,
     },
     {
       key: 'connection',
-      header: 'Connection',
+      header: t('integrations.columnConnection'),
       render: (row) => {
         const result = testResult[row.id]
-        if (!result) return <span className="text-subtle">Not tested</span>
+        if (!result) return <span className="text-subtle">{t('integrations.notTested')}</span>
         return result.ok ? (
-          <Badge tone="success">reachable</Badge>
+          <Badge tone="success">{t('integrations.reachable')}</Badge>
         ) : (
           <span title={result.message}>
-            <Badge tone="danger">failed</Badge>
+            <Badge tone="danger">{t('integrations.failed')}</Badge>
           </span>
         )
       },
@@ -102,7 +105,7 @@ export function IntegrationsPage() {
                 }}
                 disabled={test.isPending}
               >
-                Test
+                {t('integrations.test')}
               </button>
               {row.status === 'active' ? (
                 <button
@@ -113,7 +116,7 @@ export function IntegrationsPage() {
                     setStatus.mutate({ id: row.id, status: 'paused' })
                   }}
                 >
-                  Pause
+                  {t('integrations.pause')}
                 </button>
               ) : (
                 <button
@@ -124,7 +127,7 @@ export function IntegrationsPage() {
                     setStatus.mutate({ id: row.id, status: 'active' })
                   }}
                 >
-                  Activate
+                  {t('integrations.activate')}
                 </button>
               )}
             </>
@@ -137,7 +140,7 @@ export function IntegrationsPage() {
               setDetail(row)
             }}
           >
-            Details
+            {t('integrations.details')}
           </button>
         </div>
       ),
@@ -146,10 +149,7 @@ export function IntegrationsPage() {
 
   return (
     <>
-      <PageHeader
-        title="Integrations"
-        meta="Connections to external systems, their health and their recent activity."
-      />
+      <PageHeader title={t('integrations.title')} meta={t('integrations.meta')} />
 
       {actionError ? (
         <div style={{ marginBottom: 'var(--space-4)' }}>
@@ -158,19 +158,19 @@ export function IntegrationsPage() {
       ) : null}
 
       <ResourceList
-        title="All integrations"
+        title={t('integrations.allTitle')}
         queryKey={['integrations']}
         fetchPage={(params) => integrationsApi.list(params)}
         columns={columns}
         rowKey={(row) => row.id}
-        emptyTitle="No integrations configured"
-        emptyText="Add a connection to exchange data with an external system."
+        emptyTitle={t('integrations.emptyTitle')}
+        emptyText={t('integrations.emptyText')}
         searchable
-        searchPlaceholder="Search integrations…"
+        searchPlaceholder={t('integrations.searchPlaceholder')}
         actions={
           can('integrations.configure') ? (
             <button type="button" className="btn btn--primary btn--sm" onClick={() => setCreating(true)}>
-              New integration
+              {t('integrations.newIntegration')}
             </button>
           ) : null
         }
@@ -205,6 +205,7 @@ function NewIntegrationDialog({
   onClose: () => void
   onCreated: () => void
 }) {
+  const t = useT()
   const [key, setKey] = useState('')
   const [name, setName] = useState('')
   const [configText, setConfigText] = useState('{\n  \n}')
@@ -223,7 +224,7 @@ function NewIntegrationDialog({
       try {
         config = JSON.parse(configText) as Record<string, unknown>
       } catch {
-        throw new Error('Configuration must be valid JSON.')
+        throw new Error(t('integrations.configurationInvalid'))
       }
       return integrationsApi.create({ key, name, config })
     },
@@ -244,91 +245,70 @@ function NewIntegrationDialog({
   if (!open) return null
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="new-integration-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        overflowY: 'auto',
-        padding: 'var(--space-5)',
-      }}
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      title={t('integrations.newIntegrationTitle')}
+      footer={<>
+        <button type="button" className="btn btn--secondary" onClick={onClose}>
+          {t('common.cancel')}
+        </button>
+        <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
+          {mutation.isPending ? t('integrations.creating') : t('common.create')}
+        </button>
+      </>}
+      formProps={{ onSubmit: handleSubmit }}
     >
-      <div
-        className="card"
-        style={{ maxWidth: 620, margin: '0 auto' }}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="card__header">
-          <h2 id="new-integration-title">New integration</h2>
-        </div>
-        <form onSubmit={handleSubmit}>
-          <div className="card__body stack">
-            {formError ? <Alert tone="error">{formError}</Alert> : null}
+      <div className="stack">
+        {formError ? <Alert tone="error">{formError}</Alert> : null}
 
-            <Field label="Kind" htmlFor="integration-kind" required error={errors.key}>
-              <select
-                id="integration-kind"
-                value={key}
-                onChange={(event) => {
-                  setKey(event.target.value)
-                  const kind = kinds.data?.items.find((item) => item.key === event.target.value)
-                  if (kind && !name) setName(kind.name)
-                }}
-                required
-              >
-                <option value="">Select a kind</option>
-                {(kinds.data?.items ?? []).map((kind) => (
-                  <option key={kind.key} value={kind.key}>
-                    {kind.name}
-                  </option>
-                ))}
-              </select>
-              {kinds.isError ? (
-                <span className="field__hint text-danger">
-                  Could not load the list of integration kinds.
-                </span>
-              ) : null}
-            </Field>
+        <Field label={t('integrations.kind')} htmlFor="integration-kind" required error={errors.key}>
+          <select
+            id="integration-kind"
+            value={key}
+            onChange={(event) => {
+              setKey(event.target.value)
+              const kind = kinds.data?.items.find((item) => item.key === event.target.value)
+              if (kind && !name) setName(kind.name)
+            }}
+            required
+          >
+            <option value="">{t('integrations.selectKind')}</option>
+            {(kinds.data?.items ?? []).map((kind) => (
+              <option key={kind.key} value={kind.key}>
+                {kind.name}
+              </option>
+            ))}
+          </select>
+          {kinds.isError ? (
+            <span className="field__hint text-danger">{t('integrations.kindLoadError')}</span>
+          ) : null}
+        </Field>
 
-            <Field label="Name" htmlFor="integration-name" required error={errors.name}>
-              <input
-                id="integration-name"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                required
-              />
-            </Field>
+        <Field label={t('integrations.name')} htmlFor="integration-name" required error={errors.name}>
+          <input
+            id="integration-name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            required
+          />
+        </Field>
 
-            <Field
-              label="Configuration (JSON)"
-              htmlFor="integration-config"
-              hint="Secrets are stored encrypted and never returned to the browser."
-            >
-              <textarea
-                id="integration-config"
-                className="mono"
-                rows={8}
-                value={configText}
-                onChange={(event) => setConfigText(event.target.value)}
-              />
-            </Field>
-          </div>
-          <div className="form-actions">
-            <button type="button" className="btn btn--secondary" onClick={onClose}>
-              Cancel
-            </button>
-            <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
-              {mutation.isPending ? 'Creating…' : 'Create'}
-            </button>
-          </div>
-        </form>
+        <Field
+          label={t('integrations.configuration')}
+          htmlFor="integration-config"
+          hint={t('integrations.configurationHint')}
+        >
+          <textarea
+            id="integration-config"
+            className="mono"
+            rows={8}
+            value={configText}
+            onChange={(event) => setConfigText(event.target.value)}
+          />
+        </Field>
       </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -341,6 +321,7 @@ function IntegrationDetailDialog({
   onClose: () => void
   canConfigure: boolean
 }) {
+  const t = useT()
   const queryClient = useQueryClient()
   const [revoking, setRevoking] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -369,127 +350,118 @@ function IntegrationDetailDialog({
 
   return (
     <>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="integration-detail-title"
-        style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'var(--color-overlay)',
-          zIndex: 60,
-          overflowY: 'auto',
-          padding: 'var(--space-5)',
-        }}
-        onClick={onClose}
-      >
-        <div
-          className="card"
-          style={{ maxWidth: 760, margin: '0 auto' }}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <div className="card__header">
-            <h2 id="integration-detail-title">{integration.name}</h2>
-            <StatusBadge status={integration.status} />
-          </div>
-          <div className="card__body stack">
-            {error ? <Alert tone="error">{error}</Alert> : null}
-
-            <dl className="dl">
-              <dt>Kind</dt>
-              <dd>{integration.kind}</dd>
-              <dt>Direction</dt>
-              <dd>{integration.direction ?? '—'}</dd>
-              <dt>Last checked</dt>
-              <dd>
-                <Timestamp value={integration.last_test_at} />
-              </dd>
-              <dt>Last sync</dt>
-              <dd>
-                <Timestamp value={integration.last_sync_at} />
-              </dd>
-              {integration.last_test_error ? (
-                <>
-                  <dt>Last error</dt>
-                  <dd className="text-danger">{integration.last_test_error}</dd>
-                </>
-              ) : null}
-            </dl>
-
-            {status.data ? (
-              <div>
-                <h3 style={{ marginBottom: 'var(--space-2)' }}>Status</h3>
-                <pre
-                  className="mono"
-                  style={{
-                    background: 'var(--color-bg)',
-                    padding: 'var(--space-3)',
-                    borderRadius: 'var(--radius-sm)',
-                    overflowX: 'auto',
-                    margin: 0,
-                  }}
-                >
-                  {JSON.stringify(status.data, null, 2)}
-                </pre>
-              </div>
-            ) : null}
-
-            <div>
-              <h3 style={{ marginBottom: 'var(--space-2)' }}>Recent runs</h3>
-              {runs.isLoading ? (
-                <p className="text-muted text-sm">Loading…</p>
-              ) : runs.data?.items.length ? (
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Status</th>
-                        <th>Operation</th>
-                        <th className="numeric">Read</th>
-                        <th className="numeric">Written</th>
-                        <th>Started</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {runs.data.items.map((run) => (
-                        <tr key={run.id}>
-                          <td>
-                            <StatusBadge status={run.status} />
-                          </td>
-                          <td>{run.operation ?? '—'}</td>
-                          <td className="numeric">{run.records_read ?? '—'}</td>
-                          <td className="numeric">{run.records_written ?? '—'}</td>
-                          <td>
-                            <Timestamp value={run.started_at} />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="text-muted text-sm">This integration has not run yet.</p>
-              )}
-            </div>
-          </div>
-          <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
-            <button type="button" className="btn btn--secondary" onClick={onClose}>
-              Close
+      <Modal
+        open
+        onClose={onClose}
+        title={integration.name}
+        extra={<>
+          <StatusBadge status={integration.status} />
+        </>}
+        size="lg"
+        footer={<>
+          <button type="button" className="btn btn--secondary" onClick={onClose}>
+            {t('common.close')}
+          </button>
+          {canConfigure ? (
+            <button type="button" className="btn btn--danger" onClick={() => setRevoking(true)}>
+              {t('integrations.revokeCredentials')}
             </button>
-            {canConfigure ? (
-              <button type="button" className="btn btn--danger" onClick={() => setRevoking(true)}>
-                Revoke credentials
-              </button>
+          ) : null}
+        </>}
+      >
+        <div className="stack">
+          {error ? <Alert tone="error">{error}</Alert> : null}
+
+          <dl className="dl">
+            <dt>{t('integrations.kind')}</dt>
+            <dd>{integration.kind}</dd>
+            <dt>{t('integrations.direction')}</dt>
+            <dd>{integration.direction ?? '—'}</dd>
+            <dt>{t('integrations.columnLastChecked')}</dt>
+            <dd>
+              <Timestamp value={integration.last_test_at} />
+            </dd>
+            <dt>{t('integrations.columnLastSync')}</dt>
+            <dd>
+              <Timestamp value={integration.last_sync_at} />
+            </dd>
+            {integration.last_test_error ? (
+              <>
+                <dt>{t('integrations.lastError')}</dt>
+                <dd className="text-danger">{integration.last_test_error}</dd>
+              </>
             ) : null}
+          </dl>
+
+          {status.data ? (
+            <div>
+              <h3 style={{ marginBottom: 'var(--space-2)' }}>{t('integrations.statusTitle')}</h3>
+              <pre
+                className="mono"
+                style={{
+                  background: 'var(--color-bg)',
+                  padding: 'var(--space-3)',
+                  borderRadius: 'var(--radius-sm)',
+                  overflowX: 'auto',
+                  margin: 0,
+                }}
+              >
+                {JSON.stringify(status.data, null, 2)}
+              </pre>
+            </div>
+          ) : null}
+
+          <div>
+            <h3 style={{ marginBottom: 'var(--space-2)' }}>{t('integrations.recentRuns')}</h3>
+            {runs.isLoading ? (
+              <p className="text-muted text-sm">{t('common.loading')}</p>
+            ) : runs.data?.items.length ? (
+              <div className="table-wrap">
+                <table className="table--stack">
+                  <thead>
+                    <tr>
+                      <th>{t('common.status')}</th>
+                      <th>{t('integrations.columnOperation')}</th>
+                      <th className="numeric">{t('integrations.columnRead')}</th>
+                      <th className="numeric">{t('integrations.columnWritten')}</th>
+                      <th>{t('integrations.columnStarted')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {runs.data.items.map((run) => (
+                      <tr key={run.id}>
+                        <td data-label={t('common.status')}>
+                          <StatusBadge status={run.status} />
+                        </td>
+                        <td data-label={t('integrations.columnOperation')}>
+                          {run.operation ?? '—'}
+                        </td>
+                        <td className="numeric" data-label={t('integrations.columnRead')}>
+                          {run.records_read ?? '—'}
+                        </td>
+                        <td className="numeric" data-label={t('integrations.columnWritten')}>
+                          {run.records_written ?? '—'}
+                        </td>
+                        <td data-label={t('integrations.columnStarted')}>
+                          <Timestamp value={run.started_at} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-muted text-sm">{t('integrations.notRunYet')}</p>
+            )}
           </div>
         </div>
-      </div>
+      </Modal>
 
       <ConfirmDialog
         open={revoking}
-        title="Revoke this integration?"
-        text="Its stored credentials are discarded and it stops running. Historical runs are kept."
-        confirmLabel="Revoke"
+        title={t('integrations.revokeTitle')}
+        text={t('integrations.revokeText')}
+        confirmLabel={t('integrations.revoke')}
         danger
         busy={revoke.isPending}
         onConfirm={() => revoke.mutate()}

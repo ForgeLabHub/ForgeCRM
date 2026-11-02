@@ -26,6 +26,7 @@ import {
 import { rolesApi } from '../../api/admin'
 import { errorMessage, fieldErrors } from '../../api/client'
 import { useAuth } from '../../hooks/useAuth'
+import { useT } from '../../i18n'
 import {
   Alert,
   Badge,
@@ -33,6 +34,7 @@ import {
   ConfirmDialog,
   ErrorState,
   Field,
+  Modal,
   PageHeader,
   TableSkeleton,
   Timestamp,
@@ -54,6 +56,7 @@ function statusTone(status: string): 'success' | 'neutral' | 'danger' {
 
 export function MCPCredentialsPage() {
   const { can } = useAuth()
+  const t = useT()
   const queryClient = useQueryClient()
   const [creating, setCreating] = useState(false)
   const [rotating, setRotating] = useState<MCPCredential | null>(null)
@@ -78,7 +81,7 @@ export function MCPCredentialsPage() {
 
   if (credentials.isError) {
     return (
-      <Card title="MCP client credentials">
+      <Card title={t('mcpCredentials.title')}>
         <ErrorState
           message={errorMessage(credentials.error)}
           onRetry={() => void credentials.refetch()}
@@ -91,24 +94,21 @@ export function MCPCredentialsPage() {
 
   return (
     <>
-      <PageHeader
-        title="MCP client credentials"
-        meta="Scoped, revocable tokens that let an external MCP client reach the CRM without a browser session."
-      />
+      <PageHeader title={t('mcpCredentials.title')} meta={t('mcpCredentials.meta')} />
 
-      <Card title="Connecting a client">
+      <Card title={t('mcpCredentials.connecting')}>
         <p className="text-muted text-sm">
-          Send the token in an <code className="mono">Authorization: Bearer …</code> header to{' '}
-          <code className="mono">/api/v1/mcp</code>. A credential acts only within the permissions
-          you grant it, never the full authority of your account, so a read-only token cannot change
-          CRM data even if you are an administrator.
+          {t('mcpCredentials.connectingHint1')}{' '}
+          <code className="mono">Authorization: Bearer …</code> {t('mcpCredentials.connectingHint2')}{' '}
+          <code className="mono">/api/v1/mcp</code>
+          {t('mcpCredentials.connectingHint3')}
         </p>
       </Card>
 
       <ClientConfigCard />
 
       <Card
-        title="Credentials"
+        title={t('mcpCredentials.credentials')}
         flush
         actions={
           mayManage ? (
@@ -117,8 +117,8 @@ export function MCPCredentialsPage() {
               className="btn btn--primary btn--sm"
               onClick={() => setCreating(true)}
             >
-              New credential
-            </button>
+              {t('mcpCredentials.newCredential')}
+              </button>
           ) : null
         }
       >
@@ -126,46 +126,47 @@ export function MCPCredentialsPage() {
           <TableSkeleton rows={3} columns={5} />
         ) : items.length ? (
           <div className="table-wrap">
-            <table>
+            <table className="table--stack">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Token</th>
-                  <th>Scope</th>
-                  <th>Status</th>
-                  <th>Last used</th>
+                  <th>{t('mcpCredentials.columnName')}</th>
+                  <th>{t('mcpCredentials.columnToken')}</th>
+                  <th>{t('mcpCredentials.columnScope')}</th>
+                  <th>{t('mcpCredentials.columnStatus')}</th>
+                  <th>{t('mcpCredentials.columnLastUsed')}</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
                 {items.map((credential) => (
                   <tr key={credential.id}>
-                    <td className="table__primary">
+                    <td className="table__primary" data-label={t('mcpCredentials.columnName')}>
                       <div>{credential.name}</div>
                       <div className="table__secondary text-sm">
                         <Timestamp value={credential.created_at} />
                       </div>
                     </td>
-                    <td className="mono text-sm">{credential.token_prefix}…</td>
-                    <td>
+                    <td className="mono text-sm" data-label={t('mcpCredentials.columnToken')}>
+                      {credential.token_prefix}…
+                    </td>
+                    <td data-label={t('mcpCredentials.columnScope')}>
                       <Badge tone="accent">
-                        {credential.permissions.length} permission
-                        {credential.permissions.length === 1 ? '' : 's'}
+                        {t('mcpCredentials.permissions', { count: credential.permissions.length })}
                       </Badge>
                     </td>
-                    <td>
+                    <td data-label={t('mcpCredentials.columnStatus')}>
                       <Badge tone={statusTone(credential.status)}>{credential.status}</Badge>
                       {credential.expires_at ? (
                         <div className="table__secondary text-sm">
-                          expires <Timestamp value={credential.expires_at} />
+                          {t('mcpCredentials.expires')} <Timestamp value={credential.expires_at} />
                         </div>
                       ) : null}
                     </td>
-                    <td className="text-sm">
+                    <td className="text-sm" data-label={t('mcpCredentials.columnLastUsed')}>
                       {credential.last_used_at ? (
                         <Timestamp value={credential.last_used_at} />
                       ) : (
-                        <span className="text-subtle">never</span>
+                        <span className="text-subtle">{t('mcpCredentials.never')}</span>
                       )}
                     </td>
                     <td>
@@ -176,16 +177,16 @@ export function MCPCredentialsPage() {
                             className="btn btn--secondary btn--sm"
                             onClick={() => setRotating(credential)}
                           >
-                            Rotate
-                          </button>
+                            {t('mcpCredentials.rotate')}
+                            </button>
                           <button
                             type="button"
                             className="btn btn--ghost btn--sm"
                             onClick={() => setRevoking(credential)}
                             disabled={credential.status === 'revoked'}
                           >
-                            Revoke
-                          </button>
+                            {t('mcpCredentials.revoke')}
+                            </button>
                         </div>
                       ) : null}
                     </td>
@@ -196,10 +197,7 @@ export function MCPCredentialsPage() {
           </div>
         ) : (
           <div className="card__body">
-            <p className="text-muted">
-              No credentials yet. A session cookie still works for this interface; a credential is
-              what lets an external client connect.
-            </p>
+            <p className="text-muted">{t('mcpCredentials.empty')}</p>
           </div>
         )}
       </Card>
@@ -231,9 +229,9 @@ export function MCPCredentialsPage() {
 
       <ConfirmDialog
         open={revoking !== null}
-        title="Revoke this credential?"
-        text={`"${revoking?.name ?? ''}" will stop working immediately. Any client using it is disconnected until it is given a new token. The row is kept for the audit trail.`}
-        confirmLabel="Revoke"
+        title={t('mcpCredentials.revokeTitle')}
+        text={t('mcpCredentials.revokeText', { name: revoking?.name ?? '' })}
+        confirmLabel={t('mcpCredentials.revoke')}
         danger
         busy={revoke.isPending}
         onCancel={() => setRevoking(null)}
@@ -256,6 +254,7 @@ export function MCPCredentialsPage() {
  * and this text may be copied into a shared place.
  */
 function ClientConfigCard() {
+  const t = useT()
   const origin = typeof window === 'undefined' ? 'https://your-forgecrm-host' : window.location.origin
   const endpoint = `${origin}/api/v1/mcp`
   const config = JSON.stringify(
@@ -273,14 +272,13 @@ function ClientConfigCard() {
   )
 
   return (
-    <Card title="Client configuration">
+    <Card title={t('mcpCredentials.clientConfig')}>
       <p className="text-muted text-sm" style={{ marginBottom: 'var(--space-3)' }}>
-        Point an MCP client at the endpoint below and give it a credential. The token is not filled
-        in here on purpose — paste it from your secret store.
+        {t('mcpCredentials.clientConfigHint')}
       </p>
       <div className="stack stack--sm">
         <div>
-          <span className="field__label">Endpoint</span>
+          <span className="field__label">{t('mcpCredentials.endpoint')}</span>
           <div className="mono text-sm">{endpoint}</div>
         </div>
         <CopyBlock label="mcpServers JSON" value={config} />
@@ -295,6 +293,7 @@ function ClientConfigCard() {
 
 /** A monospaced block with a copy control. */
 function CopyBlock({ label, value }: { label: string; value: string }) {
+  const t = useT()
   const [copied, setCopied] = useState(false)
 
   async function copy() {
@@ -312,7 +311,7 @@ function CopyBlock({ label, value }: { label: string; value: string }) {
       <div className="row row--between">
         <span className="field__label">{label}</span>
         <button type="button" className="btn btn--ghost btn--sm" onClick={() => void copy()}>
-          {copied ? 'Copied' : 'Copy'}
+          {copied ? t('mcpCredentials.copied') : t('mcpCredentials.copy')}
         </button>
       </div>
       <pre
@@ -339,7 +338,8 @@ function CredentialDialog({
   onClose: () => void
   onSaved: (created: MCPCredentialCreated) => void
 }) {
-  const [name, setName] = useState('')
+    const t = useT()
+    const [name, setName] = useState('')
   const [expiresInHours, setExpiresInHours] = useState(0)
   const [selected, setSelected] = useState<string[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -385,41 +385,37 @@ function CredentialDialog({
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="credential-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        display: 'grid',
-        placeItems: 'center',
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        padding: 'var(--space-4)',
-        overflowY: 'auto',
-      }}
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      title={t('mcpCredentials.newTitle')}
+      size="lg"
+      footer={
+        <>
+          <button type="button" className="btn btn--secondary" onClick={onClose}>
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={mutation.isPending}
+            onClick={handleSubmit}
+          >
+            {mutation.isPending ? t('mcpCredentials.creating') : t('mcpCredentials.createCredential')}
+          </button>
+        </>
+      }
     >
-      <form
-        className="card"
-        style={{ maxWidth: 640, width: '100%', margin: 'auto' }}
-        onClick={(event) => event.stopPropagation()}
-        onSubmit={handleSubmit}
-      >
-        <div className="card__header">
-          <h2 id="credential-title">New MCP credential</h2>
-        </div>
-        <div className="card__body stack">
+      <div className="stack">
           {formError ? <Alert tone="error">{formError}</Alert> : null}
 
           <div className="form-grid">
             <Field
-              label="Name"
+              label={t('mcpCredentials.name')}
               htmlFor="credential-name"
               required
               error={errors.name}
-              hint="A label to tell this client apart, for example Laptop agent"
+              hint={t('mcpCredentials.nameHint')}
             >
               <input
                 id="credential-name"
@@ -428,7 +424,7 @@ function CredentialDialog({
                 autoFocus
               />
             </Field>
-            <Field label="Expiry" htmlFor="credential-expiry" hint="A shorter life limits a leaked token">
+            <Field label={t('mcpCredentials.expiry')} htmlFor="credential-expiry" hint={t('mcpCredentials.expiryHint')}>
               <select
                 id="credential-expiry"
                 value={expiresInHours}
@@ -445,13 +441,10 @@ function CredentialDialog({
 
           <div>
             <div className="row" style={{ justifyContent: 'space-between' }}>
-              <span className="field__label">Permissions</span>
-              <Badge tone="accent">{selected.length} selected</Badge>
+              <span className="field__label">{t('mcpCredentials.permissions')}</span>
+              <Badge tone="accent">{t('mcpCredentials.selected', { count: selected.length })}</Badge>
             </div>
-            <p className="field__hint">
-              The credential can do only what is checked here. You cannot grant a permission you do
-              not hold yourself.
-            </p>
+            <p className="field__hint">{t('mcpCredentials.permissionsHint')}</p>
             {errors.permissions ? (
               <span className="field__error" role="alert">
                 {errors.permissions}
@@ -499,22 +492,8 @@ function CredentialDialog({
               </fieldset>
             ))
           )}
-        </div>
-        <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
-          <button type="button" className="btn btn--secondary" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={mutation.isPending}
-            onClick={handleSubmit}
-          >
-            {mutation.isPending ? 'Creating…' : 'Create credential'}
-          </button>
-        </div>
-      </form>
-    </div>
+      </div>
+    </Modal>
   )
 }
 
@@ -528,60 +507,42 @@ function RotateDialog({
   onClose: () => void
   onSaved: (created: MCPCredentialCreated) => void
 }) {
-  const mutation = useMutation({
-    mutationFn: (id: string) => mcpCredentialsApi.rotate(id),
-    onSuccess: onSaved,
-  })
+  const t = useT()
+    const mutation = useMutation({
+      mutationFn: (id: string) => mcpCredentialsApi.rotate(id),
+      onSuccess: onSaved,
+    })
 
   if (!credential) return null
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="rotate-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        display: 'grid',
-        placeItems: 'center',
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        padding: 'var(--space-4)',
-      }}
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      title={t('mcpCredentials.rotateTitle')}
+      size="sm"
+      footer={<>
+        <button type="button" className="btn btn--secondary" onClick={onClose}>
+          {t('common.cancel')}
+        </button>
+        <button
+          type="button"
+          className="btn btn--primary"
+          disabled={mutation.isPending}
+          onClick={() => mutation.mutate(credential.id)}
+        >
+          {mutation.isPending ? 'Rotating…' : 'Rotate'}
+        </button>
+      </>}
     >
-      <div
-        className="card"
-        style={{ maxWidth: 460, width: '100%' }}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="card__header">
-          <h2 id="rotate-title">Rotate this credential?</h2>
-        </div>
-        <div className="card__body stack">
-          <p className="text-muted">
-            A new token is issued for <strong>{credential.name}</strong> with the same permissions.
-            The current token stops working the instant the new one is issued, so update the client
-            right away.
-          </p>
-          {mutation.isError ? <Alert tone="error">{errorMessage(mutation.error)}</Alert> : null}
-        </div>
-        <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
-          <button type="button" className="btn btn--secondary" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={mutation.isPending}
-            onClick={() => mutation.mutate(credential.id)}
-          >
-            {mutation.isPending ? 'Rotating…' : 'Rotate'}
-          </button>
-        </div>
+      <div className="stack">
+        <p className="text-muted">
+          {t('mcpCredentials.rotateText1')} <strong>{credential.name}</strong>{' '}
+          {t('mcpCredentials.rotateText2')}
+        </p>
+        {mutation.isError ? <Alert tone="error">{errorMessage(mutation.error)}</Alert> : null}
       </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -593,11 +554,12 @@ function TokenDialog({
   created: MCPCredentialCreated
   onClose: () => void
 }) {
-  const [copied, setCopied] = useState(false)
+  const t = useT()
+    const [copied, setCopied] = useState(false)
 
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(created.token)
+    async function copy() {
+      try {
+        await navigator.clipboard.writeText(created.token)
       setCopied(true)
     } catch {
       setCopied(false)
@@ -605,55 +567,30 @@ function TokenDialog({
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="token-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        display: 'grid',
-        placeItems: 'center',
-        background: 'var(--color-overlay)',
-        zIndex: 70,
-        padding: 'var(--space-4)',
-      }}
-    >
-      <div className="card" style={{ maxWidth: 560, width: '100%' }}>
-        <div className="card__header">
-          <h2 id="token-title">Copy this token now</h2>
-        </div>
-        <div className="card__body stack">
-          <Alert tone="warning">
-            This is the only time the token is shown. It is stored hashed and cannot be recovered — if
-            you lose it, rotate the credential to get a new one.
-          </Alert>
-          <div
-            className="mono"
-            style={{
-              wordBreak: 'break-all',
-              padding: 'var(--space-3)',
-              background: 'var(--color-bg)',
-              borderRadius: 6,
-            }}
-          >
-            {created.token}
-          </div>
-          <p className="text-muted text-sm">
-            Credential <strong>{created.credential.name}</strong> carries{' '}
-            {created.credential.permissions.length} permission
-            {created.credential.permissions.length === 1 ? '' : 's'}.
-          </p>
-        </div>
-        <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
+    <Modal
+      open
+      onClose={onClose}
+      title={t('mcpCredentials.copyTokenTitle')}
+      size="md"
+      footer={
+        <>
           <button type="button" className="btn btn--secondary" onClick={() => void copy()}>
-            {copied ? 'Copied' : 'Copy token'}
+            {copied ? t('mcpCredentials.copied') : t('mcpCredentials.copyToken')}
           </button>
           <button type="button" className="btn btn--primary" onClick={onClose}>
-            Done
+            {t('mcpCredentials.done')}
           </button>
-        </div>
+        </>
+      }
+    >
+      <div className="stack">
+        <Alert tone="warning">{t('mcpCredentials.copyTokenWarning')}</Alert>
+        <div className="token-reveal mono">{created.token}</div>
+        <p className="text-muted text-sm">
+          {t('mcpCredentials.credentials')} <strong>{created.credential.name}</strong>{' '}
+          {t('mcpCredentials.permissions', { count: created.credential.permissions.length })}
+        </p>
       </div>
-    </div>
+    </Modal>
   )
 }

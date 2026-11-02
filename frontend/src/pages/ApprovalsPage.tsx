@@ -11,11 +11,13 @@ import {
   ConfirmDialog,
   EmptyState,
   Field,
+  Modal,
   PageHeader,
   StatusBadge,
   TableSkeleton,
   Timestamp,
 } from '../components/ui'
+import { useT, type TFunction } from '../i18n'
 
 const TIER_TONE = {
   safe: 'neutral',
@@ -38,6 +40,7 @@ const TIER_TONE = {
  *    re-verifies a factor and refreshes the session, which is a server fact.
  */
 export function ApprovalsPage() {
+  const t = useT()
   const { can } = useAuth()
   const queryClient = useQueryClient()
   const [detail, setDetail] = useState<AgentAction | null>(null)
@@ -71,7 +74,8 @@ export function ApprovalsPage() {
     },
     onError: (error) => {
       // The one failure the operator can act on is a missing second factor. Every
-      // other failure is surfaced as-is.
+      // other failure is surfaced as-is. The server's message is matched in English
+      // because it is part of the API contract, not a localized string.
       const message = errorMessage(error)
       setActionError(message)
       if (message.toLowerCase().includes('second authentication factor')) {
@@ -102,15 +106,12 @@ export function ApprovalsPage() {
 
   return (
     <>
-      <PageHeader
-        title="Agent approvals"
-        meta="Actions an agent proposed. Nothing takes effect until a person approves it."
-      />
+      <PageHeader title={t('approvals.title')} meta={t('approvals.meta')} />
 
       <div className="stack">
         {actionError ? <Alert tone="error">{actionError}</Alert> : null}
 
-        <Card title="Awaiting a decision" flush>
+        <Card title={t('approvals.awaiting')} flush>
           {pending.isLoading ? (
             <TableSkeleton rows={5} columns={5} />
           ) : pending.isError ? (
@@ -119,39 +120,34 @@ export function ApprovalsPage() {
             </div>
           ) : items.length === 0 ? (
             <div className="card__body">
-              <EmptyState
-                title="Nothing to review"
-                text="No agent action is waiting for a decision. New proposals appear here."
-              />
+              <EmptyState title={t('approvals.emptyTitle')} text={t('approvals.emptyText')} />
             </div>
           ) : (
             <div className="table-wrap">
-              <table>
+              <table className="table--stack">
                 <thead>
                   <tr>
-                    <th>Action</th>
-                    <th>Risk</th>
-                    <th>Status</th>
-                    <th>Proposed</th>
-                    <th aria-label="Actions" />
+                    <th>{t('approvals.columnAction')}</th>
+                    <th>{t('approvals.columnRisk')}</th>
+                    <th>{t('approvals.columnStatus')}</th>
+                    <th>{t('approvals.columnProposed')}</th>
+                    <th aria-label={t('approvals.columnAction')} />
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((action) => (
                     <tr key={action.id}>
-                      <td className="table__primary">
+                      <td className="table__primary" data-label={t('approvals.columnAction')}>
                         <div>{action.summary}</div>
                         <div className="table__secondary mono">{action.tool_name}</div>
                       </td>
-                      <td>
-                        <Badge tone={TIER_TONE[action.risk_tier] ?? 'neutral'}>
-                          {action.risk_tier}
-                        </Badge>
+                      <td data-label={t('approvals.columnRisk')}>
+                        <Badge tone={TIER_TONE[action.risk_tier] ?? 'neutral'}>{action.risk_tier}</Badge>
                       </td>
-                      <td>
+                      <td data-label={t('approvals.columnStatus')}>
                         <StatusBadge status={action.status} />
                       </td>
-                      <td>
+                      <td data-label={t('approvals.columnProposed')}>
                         <Timestamp value={action.proposed_at} />
                       </td>
                       <td className="table__actions">
@@ -164,7 +160,7 @@ export function ApprovalsPage() {
                             setStepUpNeeded(false)
                           }}
                         >
-                          Review
+                          {t('approvals.review')}
                         </button>
                       </td>
                     </tr>
@@ -178,6 +174,7 @@ export function ApprovalsPage() {
 
       {detail ? (
         <ReviewDialog
+          t={t}
           action={detail}
           canDecide={canDecide}
           busy={decide.isPending}
@@ -208,9 +205,9 @@ export function ApprovalsPage() {
 
       <ConfirmDialog
         open={confirming !== null}
-        title="Approve a destructive action?"
-        text="This action is marked destructive and may be difficult or impossible to undo. It runs as soon as you approve it."
-        confirmLabel="Approve and run"
+        title={t('approvals.approveDestructiveTitle')}
+        text={t('approvals.approveDestructiveText')}
+        confirmLabel={t('approvals.approveAndRun')}
         danger
         busy={decide.isPending}
         onCancel={() => setConfirming(null)}
@@ -227,9 +224,9 @@ export function ApprovalsPage() {
 
       <ConfirmDialog
         open={rejecting !== null}
-        title="Reject this action?"
-        text="The action is recorded as rejected and is never executed. The reason, if you gave one, is kept with the decision."
-        confirmLabel="Reject"
+        title={t('approvals.rejectTitle')}
+        text={t('approvals.rejectText')}
+        confirmLabel={t('approvals.reject')}
         danger
         busy={decide.isPending}
         onCancel={() => {
@@ -252,6 +249,7 @@ export function ApprovalsPage() {
 
 /** ReviewDialog shows exactly what will run, and binds the decision to it. */
 function ReviewDialog({
+  t,
   action,
   canDecide,
   busy,
@@ -266,6 +264,7 @@ function ReviewDialog({
   onApprove,
   onReject,
 }: {
+  t: TFunction
   action: AgentAction
   canDecide: boolean
   busy: boolean
@@ -281,129 +280,99 @@ function ReviewDialog({
   onReject: () => void
 }) {
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="agent-action-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        overflowY: 'auto',
-        padding: 'var(--space-5)',
-      }}
-      onClick={onClose}
-    >
-      <div
-        className="card"
-        style={{ maxWidth: 720, margin: '0 auto' }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="card__header">
-          <h2 id="agent-action-title">{action.summary}</h2>
-          <div className="row" style={{ marginTop: 'var(--space-2)' }}>
-            <Badge tone={TIER_TONE[action.risk_tier] ?? 'neutral'}>{action.risk_tier}</Badge>
-            <StatusBadge status={action.status} />
-            <span className="mono text-sm text-muted">{action.tool_name}</span>
-          </div>
+    <Modal
+      open
+      onClose={onClose}
+      title={action.summary}
+      extra={<>
+        <div className="row" style={{ marginTop: 'var(--space-2)' }}>
+          <Badge tone={TIER_TONE[action.risk_tier] ?? 'neutral'}>{action.risk_tier}</Badge>
+          <StatusBadge status={action.status} />
+          <span className="mono text-sm text-muted">{action.tool_name}</span>
         </div>
-
-        <div className="card__body stack">
-          <div>
-            <h3 className="text-sm">Arguments</h3>
-            <pre className="mono text-sm" style={{ whiteSpace: 'pre-wrap', margin: 0 }}>
-              {JSON.stringify(action.arguments, null, 2)}
-            </pre>
-          </div>
-
-          <div>
-            <h3 className="text-sm">Binding hash</h3>
-            <p className="text-muted text-sm" style={{ marginBottom: 'var(--space-1)' }}>
-              Your decision is recorded against this exact payload. If the arguments changed after
-              you opened this screen, the server refuses the decision.
-            </p>
-            <div className="mono text-sm" style={{ wordBreak: 'break-all' }}>
-              {action.arguments_hash}
-            </div>
-          </div>
-
-          <div className="text-muted text-sm">
-            Expires <Timestamp value={action.expires_at} />
-          </div>
-
-          <Field label="Comment (optional)" htmlFor="review-comment">
-            <textarea
-              id="review-comment"
-              rows={2}
-              value={comment}
-              onChange={(e) => onComment(e.target.value)}
-            />
-          </Field>
-
-          {stepUpNeeded ? (
-            <Alert tone="warning">
-              <strong>A second factor is required.</strong> This action is destructive, so the
-              server refused the decision until you confirm your identity. Enter a code from your
-              authenticator, or your password if the account has no second factor, then approve
-              again.
-              <form
-                className="row"
-                style={{ marginTop: 'var(--space-2)' }}
-                onSubmit={(e) => {
+      </>}
+      size="lg"
+      footer={<>
+        <button type="button" className="btn btn--secondary" onClick={onClose}>
+          {t('common.close')}
+        </button>
+        {canDecide ? (
+          <>
+            <button type="button" className="btn btn--danger" onClick={onReject} disabled={busy}>
+              {t('approvals.reject')}
+            </button>
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={onApprove}
+              disabled={busy || stepUpNeeded}
+              title={stepUpNeeded ? t('approvals.stepUpFirst') : undefined}
+            >
+              {busy ? t('common.working') : t('approvals.approve')}
+            </button>
+          </>
+        ) : null}
+      </>}
+      formProps={{ onSubmit: (e) => {
                   e.preventDefault()
                   onStepUp()
-                }}
-              >
-                <Field label="Multi-factor code or password" htmlFor="stepup-secret">
-                  <input
-                    id="stepup-secret"
-                    type="password"
-                    autoComplete="one-time-code"
-                    value={stepUpSecret}
-                    onChange={(e) => onStepUpSecret(e.target.value)}
-                  />
-                </Field>
-                <button
-                  type="submit"
-                  className="btn btn--primary"
-                  disabled={stepUpBusy || stepUpSecret === ''}
-                >
-                  {stepUpBusy ? 'Verifying…' : 'Verify'}
-                </button>
-              </form>
-            </Alert>
-          ) : null}
-
-          {!canDecide ? (
-            <Alert tone="info">
-              You can review this action but not decide it. Deciding requires the approval right.
-            </Alert>
-          ) : null}
+                } }}
+    >
+      <div className="stack">
+        <div>
+          <h3 className="text-sm">{t('approvals.arguments')}</h3>
+          <pre className="mono text-sm" style={{ whiteSpace: 'pre-wrap', margin: 0 }}>
+            {JSON.stringify(action.arguments, null, 2)}
+          </pre>
         </div>
 
-        <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
-          <button type="button" className="btn btn--secondary" onClick={onClose}>
-            Close
-          </button>
-          {canDecide ? (
-            <>
-              <button type="button" className="btn btn--danger" onClick={onReject} disabled={busy}>
-                Reject
-              </button>
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={onApprove}
-                disabled={busy || stepUpNeeded}
-                title={stepUpNeeded ? 'Confirm your identity above first' : undefined}
-              >
-                {busy ? 'Working…' : 'Approve'}
-              </button>
-            </>
-          ) : null}
+        <div>
+          <h3 className="text-sm">{t('approvals.bindingHash')}</h3>
+          <p className="text-muted text-sm" style={{ marginBottom: 'var(--space-1)' }}>
+            {t('approvals.bindingHashNote')}
+          </p>
+          <div className="mono text-sm" style={{ wordBreak: 'break-all' }}>
+            {action.arguments_hash}
+          </div>
         </div>
+
+        <div className="text-muted text-sm">
+          {t('approvals.expires')} <Timestamp value={action.expires_at} />
+        </div>
+
+        <Field label={t('approvals.commentOptional')} htmlFor="review-comment">
+          <textarea id="review-comment" rows={2} value={comment} onChange={(e) => onComment(e.target.value)} />
+        </Field>
+
+        {stepUpNeeded ? (
+          <Alert tone="warning">
+            <strong>{t('approvals.stepUpTitle')}</strong> {t('approvals.stepUpText')}
+            <form
+              className="row"
+              style={{ marginTop: 'var(--space-2)' }}
+              onSubmit={(e) => {
+                e.preventDefault()
+                onStepUp()
+              }}
+            >
+              <Field label={t('approvals.stepUpField')} htmlFor="stepup-secret">
+                <input
+                  id="stepup-secret"
+                  type="password"
+                  autoComplete="one-time-code"
+                  value={stepUpSecret}
+                  onChange={(e) => onStepUpSecret(e.target.value)}
+                />
+              </Field>
+              <button type="submit" className="btn btn--primary" disabled={stepUpBusy || stepUpSecret === ''}>
+                {stepUpBusy ? t('approvals.verifying') : t('approvals.verify')}
+              </button>
+            </form>
+          </Alert>
+        ) : null}
+
+        {!canDecide ? <Alert tone="info">{t('approvals.readOnly')}</Alert> : null}
       </div>
-    </div>
+    </Modal>
   )
 }

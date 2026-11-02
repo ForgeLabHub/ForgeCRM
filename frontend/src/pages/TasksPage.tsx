@@ -7,11 +7,22 @@ import { errorMessage, fieldErrors } from '../api/client'
 import type { ViewFilters } from '../api/views'
 import type { Task, TaskInput } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
+import { useCreateParam } from '../hooks/useCreateParam'
 import { AssistPanel } from '../components/AssistPanel'
 import { RecordCollabPanel } from '../components/RecordCollabPanel'
 import { ResourceList, type Column } from '../components/ResourceList'
 import { SavedViewsBar } from '../components/SavedViewsBar'
-import { Alert, Badge, Card, Field, PageHeader, StatusBadge, Timestamp } from '../components/ui'
+import {
+  Alert,
+  Badge,
+  Card,
+  Field,
+  Modal,
+  PageHeader,
+  StatusBadge,
+  Timestamp,
+} from '../components/ui'
+import { useT, type TFunction } from '../i18n'
 
 const PRIORITIES = ['low', 'normal', 'high', 'urgent']
 const STATUSES = ['open', 'in_progress', 'completed', 'cancelled']
@@ -21,11 +32,16 @@ function isOverdue(task: Task): boolean {
   return new Date(task.due_at).getTime() < Date.now()
 }
 
+function priorityLabel(t: TFunction, priority: string): string {
+  return t(`priority.${priority}` as Parameters<TFunction>[0])
+}
+
 export function TasksPage() {
   const { can } = useAuth()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [creating, setCreating] = useState(false)
+  const t = useT()
+  const [creating, setCreating] = useCreateParam(can('tasks.create'))
   const [editing, setEditing] = useState<Task | null>(null)
   const [statusFilter, setStatusFilter] = useState('')
   const [actionError, setActionError] = useState<string | null>(null)
@@ -56,7 +72,7 @@ export function TasksPage() {
   const columns: Column<Task>[] = [
     {
       key: 'title',
-      header: 'Task',
+      header: t('tasks.columnTask'),
       render: (row) => (
         <div>
           <div className="table__primary">{row.title}</div>
@@ -70,26 +86,26 @@ export function TasksPage() {
     },
     {
       key: 'priority',
-      header: 'Priority',
+      header: t('tasks.columnPriority'),
       render: (row) => (
         <Badge tone={row.priority === 'urgent' ? 'danger' : row.priority === 'high' ? 'warning' : 'neutral'}>
-          {row.priority}
+          {priorityLabel(t, row.priority)}
         </Badge>
       ),
     },
     {
       key: 'status',
-      header: 'Status',
+      header: t('tasks.columnStatus'),
       render: (row) => <StatusBadge status={row.status} />,
     },
     {
       key: 'due',
-      header: 'Due',
+      header: t('tasks.columnDue'),
       render: (row) =>
         row.due_at ? (
           <span className={isOverdue(row) ? 'text-danger' : undefined}>
             <Timestamp value={row.due_at} />
-            {isOverdue(row) ? ' · overdue' : ''}
+            {isOverdue(row) ? t('common.overdue') : ''}
           </span>
         ) : (
           <span className="text-subtle">—</span>
@@ -111,7 +127,7 @@ export function TasksPage() {
               }}
               disabled={complete.isPending}
             >
-              Complete
+              {t('tasks.complete')}
             </button>
           ) : null}
           {can('tasks.update') ? (
@@ -123,7 +139,7 @@ export function TasksPage() {
                 setEditing(row)
               }}
             >
-              Edit
+              {t('common.edit')}
             </button>
           ) : null}
         </div>
@@ -133,7 +149,7 @@ export function TasksPage() {
 
   return (
     <>
-      <PageHeader title="Tasks" meta="Work assigned to you and your team, with due dates and priority." />
+      <PageHeader title={t('tasks.title')} meta={t('tasks.meta')} />
 
       {actionError ? (
         <div style={{ marginBottom: 'var(--space-4)' }}>
@@ -142,16 +158,16 @@ export function TasksPage() {
       ) : null}
 
       <ResourceList
-        title="All tasks"
+        title={t('tasks.all')}
         queryKey={['tasks', statusFilter]}
         fetchPage={(params) => tasksApi.list({ ...params, status: statusFilter || undefined })}
         columns={columns}
         rowKey={(row) => row.id}
         onRowClick={(row) => navigate(`/tasks/${row.id}`)}
-        emptyTitle="No tasks"
-        emptyText="Create a task to track something that needs doing."
+        emptyTitle={t('tasks.emptyTitle')}
+        emptyText={t('tasks.emptyText')}
         searchable
-        searchPlaceholder="Search tasks…"
+        searchPlaceholder={t('tasks.searchPlaceholder')}
         filters={
           <>
             <SavedViewsBar
@@ -162,17 +178,17 @@ export function TasksPage() {
               onActiveChange={setActiveViewId}
             />
             <label className="field" style={{ maxWidth: 180 }}>
-              <span className="field__label">Status</span>
+              <span className="field__label">{t('tasks.statusFilter')}</span>
               <select
                 value={statusFilter}
                 onChange={(event) => {
                   setStatusFilter(event.target.value)
                 }}
               >
-                <option value="">All statuses</option>
+                <option value="">{t('common.allStatuses')}</option>
                 {STATUSES.map((status) => (
                   <option key={status} value={status}>
-                    {status.replace('_', ' ')}
+                    {t(`status.${status}` as Parameters<TFunction>[0])}
                   </option>
                 ))}
               </select>
@@ -182,7 +198,7 @@ export function TasksPage() {
         actions={
           can('tasks.create') ? (
             <button type="button" className="btn btn--primary btn--sm" onClick={() => setCreating(true)}>
-              New task
+              {t('tasks.newTask')}
             </button>
           ) : null
         }
@@ -216,6 +232,7 @@ export function TaskFormDialog({
   onSaved: (task: Task) => void
 }) {
   const queryClient = useQueryClient()
+  const t = useT()
   const editing = Boolean(task)
   const [form, setForm] = useState<TaskInput>(() => toInput(task))
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -273,151 +290,134 @@ export function TaskFormDialog({
   if (!open) return null
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="task-form-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        overflowY: 'auto',
-        padding: 'var(--space-5)',
-      }}
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      title={editing ? t('tasks.editTask') : t('tasks.newTask')}
+      footer={<>
+        <button type="button" className="btn btn--secondary" onClick={onClose}>
+          {t('common.cancel')}
+        </button>
+        <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
+          {mutation.isPending
+            ? t('common.saving')
+            : editing
+              ? t('common.saveChanges')
+              : t('tasks.createTask')}
+        </button>
+      </>}
+      formProps={{ onSubmit: handleSubmit }}
     >
-      <div
-        className="card"
-        style={{ maxWidth: 640, margin: '0 auto' }}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="card__header">
-          <h2 id="task-form-title">{editing ? 'Edit task' : 'New task'}</h2>
+      {formError ? (
+        <div style={{ marginBottom: 'var(--space-4)' }}>
+          <Alert tone="error">{formError}</Alert>
         </div>
-        <form onSubmit={handleSubmit}>
-          <div className="card__body">
-            {formError ? (
-              <div style={{ marginBottom: 'var(--space-4)' }}>
-                <Alert tone="error">{formError}</Alert>
-              </div>
-            ) : null}
-            {editing && task ? (
-              <div style={{ marginBottom: 'var(--space-4)' }}>
-                <AssistPanel entityType="task" entityId={task.id} />
-                <RecordCollabPanel entityType="task" entityId={task.id} />
-              </div>
-            ) : null}
-            <div className="form-grid">
-              <Field label="Title" htmlFor="task-title" required error={errors.title} full>
-                <input
-                  id="task-title"
-                  value={form.title}
-                  onChange={(event) => update('title', event.target.value)}
-                  className={errors.title ? 'input--invalid' : undefined}
-                  required
-                />
-              </Field>
-              <Field label="Status" htmlFor="task-status">
-                <select
-                  id="task-status"
-                  value={form.status ?? 'open'}
-                  onChange={(event) => update('status', event.target.value)}
-                >
-                  {STATUSES.map((status) => (
-                    <option key={status} value={status}>
-                      {status.replace('_', ' ')}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Priority" htmlFor="task-priority">
-                <select
-                  id="task-priority"
-                  value={form.priority ?? 'normal'}
-                  onChange={(event) => update('priority', event.target.value)}
-                >
-                  {PRIORITIES.map((priority) => (
-                    <option key={priority} value={priority}>
-                      {priority}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Due" htmlFor="task-due">
-                <input
-                  id="task-due"
-                  type="datetime-local"
-                  value={toLocalInput(form.due_at ?? null)}
-                  onChange={(event) =>
-                    update('due_at', event.target.value ? new Date(event.target.value).toISOString() : null)
-                  }
-                />
-              </Field>
-              <Field label="Related account" htmlFor="task-account">
-                <select
-                  id="task-account"
-                  value={form.account_id ?? ''}
-                  onChange={(event) => update('account_id', event.target.value || null)}
-                >
-                  <option value="">None</option>
-                  {(accounts.data?.items ?? []).map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Related contact" htmlFor="task-contact">
-                <select
-                  id="task-contact"
-                  value={form.contact_id ?? ''}
-                  onChange={(event) => update('contact_id', event.target.value || null)}
-                >
-                  <option value="">None</option>
-                  {(contacts.data?.items ?? []).map((contact) => (
-                    <option key={contact.id} value={contact.id}>
-                      {[contact.first_name, contact.last_name].filter(Boolean).join(' ') ||
-                        contact.email ||
-                        contact.id}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Related deal" htmlFor="task-deal">
-                <select
-                  id="task-deal"
-                  value={form.deal_id ?? ''}
-                  onChange={(event) => update('deal_id', event.target.value || null)}
-                >
-                  <option value="">None</option>
-                  {(deals.data?.items ?? []).map((deal) => (
-                    <option key={deal.id} value={deal.id}>
-                      {deal.title}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Description" htmlFor="task-description" full>
-                <textarea
-                  id="task-description"
-                  value={form.description ?? ''}
-                  onChange={(event) => update('description', event.target.value || null)}
-                />
-              </Field>
-            </div>
-          </div>
-          <div className="form-actions">
-            <button type="button" className="btn btn--secondary" onClick={onClose}>
-              Cancel
-            </button>
-            <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
-              {mutation.isPending ? 'Saving…' : editing ? 'Save changes' : 'Create task'}
-            </button>
-          </div>
-        </form>
+      ) : null}
+      {editing && task ? (
+        <div style={{ marginBottom: 'var(--space-4)' }}>
+          <AssistPanel entityType="task" entityId={task.id} />
+          <RecordCollabPanel entityType="task" entityId={task.id} />
+        </div>
+      ) : null}
+      <div className="form-grid">
+        <Field label={t('tasks.titleField')} htmlFor="task-title" required error={errors.title} full>
+          <input
+            id="task-title"
+            value={form.title}
+            onChange={(event) => update('title', event.target.value)}
+            className={errors.title ? 'input--invalid' : undefined}
+            required
+          />
+        </Field>
+        <Field label={t('tasks.statusField')} htmlFor="task-status">
+          <select
+            id="task-status"
+            value={form.status ?? 'open'}
+            onChange={(event) => update('status', event.target.value)}
+          >
+            {STATUSES.map((status) => (
+              <option key={status} value={status}>
+                {t(`status.${status}` as Parameters<TFunction>[0])}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t('tasks.priorityField')} htmlFor="task-priority">
+          <select
+            id="task-priority"
+            value={form.priority ?? 'normal'}
+            onChange={(event) => update('priority', event.target.value)}
+          >
+            {PRIORITIES.map((priority) => (
+              <option key={priority} value={priority}>
+                {priorityLabel(t, priority)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t('tasks.dueField')} htmlFor="task-due">
+          <input
+            id="task-due"
+            type="datetime-local"
+            value={toLocalInput(form.due_at ?? null)}
+            onChange={(event) =>
+              update('due_at', event.target.value ? new Date(event.target.value).toISOString() : null)
+            }
+          />
+        </Field>
+        <Field label={t('tasks.relatedAccount')} htmlFor="task-account">
+          <select
+            id="task-account"
+            value={form.account_id ?? ''}
+            onChange={(event) => update('account_id', event.target.value || null)}
+          >
+            <option value="">{t('common.none')}</option>
+            {(accounts.data?.items ?? []).map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t('tasks.relatedContact')} htmlFor="task-contact">
+          <select
+            id="task-contact"
+            value={form.contact_id ?? ''}
+            onChange={(event) => update('contact_id', event.target.value || null)}
+          >
+            <option value="">{t('common.none')}</option>
+            {(contacts.data?.items ?? []).map((contact) => (
+              <option key={contact.id} value={contact.id}>
+                {[contact.first_name, contact.last_name].filter(Boolean).join(' ') ||
+                  contact.email ||
+                  contact.id}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t('tasks.relatedDeal')} htmlFor="task-deal">
+          <select
+            id="task-deal"
+            value={form.deal_id ?? ''}
+            onChange={(event) => update('deal_id', event.target.value || null)}
+          >
+            <option value="">{t('common.none')}</option>
+            {(deals.data?.items ?? []).map((deal) => (
+              <option key={deal.id} value={deal.id}>
+                {deal.title}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t('tasks.descriptionField')} htmlFor="task-description" full>
+          <textarea
+            id="task-description"
+            value={form.description ?? ''}
+            onChange={(event) => update('description', event.target.value || null)}
+          />
+        </Field>
       </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -453,6 +453,7 @@ export function TaskDetailPage() {
   const { id = '' } = useParams()
   const { can } = useAuth()
   const queryClient = useQueryClient()
+  const t = useT()
   const [editing, setEditing] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
@@ -465,7 +466,7 @@ export function TaskDetailPage() {
   const complete = useMutation({
     mutationFn: () => {
       const current = task.data
-      if (!current) throw new Error('The task is not loaded')
+      if (!current) throw new Error(t('tasks.notLoaded'))
       return tasksApi.update(id, { ...toInput(current), status: 'completed' })
     },
     onSuccess: (saved) => {
@@ -478,7 +479,7 @@ export function TaskDetailPage() {
 
   if (task.isError) {
     return (
-      <Card title="Task">
+      <Card title={t('tasks.detailTitle')}>
         <Alert tone="error">{errorMessage(task.error)}</Alert>
       </Card>
     )
@@ -495,16 +496,15 @@ export function TaskDetailPage() {
     <>
       <PageHeader
         title={data.title}
+        breadcrumb={[{ label: t('nav.tasks'), to: '/tasks' }]}
         meta={
           <>
-            <StatusBadge status={data.status} /> · Updated <Timestamp value={data.updated_at} />
+            <StatusBadge status={data.status} /> · {t('common.updated')}{' '}
+            <Timestamp value={data.updated_at} />
           </>
         }
         actions={
           <>
-            <Link to="/tasks" className="btn btn--ghost btn--sm">
-              Back
-            </Link>
             {can('tasks.update') && data.status !== 'completed' ? (
               <button
                 type="button"
@@ -512,12 +512,12 @@ export function TaskDetailPage() {
                 onClick={() => complete.mutate()}
                 disabled={complete.isPending}
               >
-                Complete
+                {t('tasks.complete')}
               </button>
             ) : null}
             {can('tasks.update') ? (
               <button type="button" className="btn btn--secondary btn--sm" onClick={() => setEditing(true)}>
-                Edit
+                {t('common.edit')}
               </button>
             ) : null}
           </>
@@ -531,63 +531,63 @@ export function TaskDetailPage() {
       ) : null}
 
       <div className="grid grid--split">
-        <Card title="Details">
+        <Card title={t('tasks.details')}>
           <dl className="dl">
-            <dt>Status</dt>
+            <dt>{t('tasks.statusField')}</dt>
             <dd>
               <StatusBadge status={data.status} />
             </dd>
-            <dt>Priority</dt>
+            <dt>{t('tasks.priorityField')}</dt>
             <dd>
               <Badge
                 tone={
                   data.priority === 'urgent' ? 'danger' : data.priority === 'high' ? 'warning' : 'neutral'
                 }
               >
-                {data.priority}
+                {priorityLabel(t, data.priority)}
               </Badge>
             </dd>
-            <dt>Due</dt>
+            <dt>{t('tasks.dueField')}</dt>
             <dd className={overdue ? 'text-danger' : undefined}>
               <Timestamp value={data.due_at} />
-              {overdue ? ' · overdue' : ''}
+              {overdue ? t('common.overdue') : ''}
             </dd>
-            <dt>Completed</dt>
+            <dt>{t('common.completed')}</dt>
             <dd>
               <Timestamp value={data.completed_at} />
             </dd>
-            <dt>Description</dt>
+            <dt>{t('tasks.descriptionField')}</dt>
             <dd>{data.description ?? <span className="text-subtle">—</span>}</dd>
           </dl>
         </Card>
 
-        <Card title="Related records">
+        <Card title={t('tasks.relatedRecords')}>
           <dl className="dl">
-            <dt>Account</dt>
+            <dt>{t('contacts.accountField')}</dt>
             <dd>
               {data.account_id ? (
-                <Link to={`/accounts/${data.account_id}`}>View account</Link>
+                <Link to={`/accounts/${data.account_id}`}>{t('tasks.viewAccount')}</Link>
               ) : (
-                <span className="text-subtle">Not linked</span>
+                <span className="text-subtle">{t('common.notLinked')}</span>
               )}
             </dd>
-            <dt>Contact</dt>
+            <dt>{t('tasks.relatedContact')}</dt>
             <dd>
               {data.contact_id ? (
-                <Link to={`/contacts/${data.contact_id}`}>View contact</Link>
+                <Link to={`/contacts/${data.contact_id}`}>{t('tasks.viewContact')}</Link>
               ) : (
-                <span className="text-subtle">Not linked</span>
+                <span className="text-subtle">{t('common.notLinked')}</span>
               )}
             </dd>
-            <dt>Deal</dt>
+            <dt>{t('tasks.relatedDeal')}</dt>
             <dd>
               {data.deal_id ? (
-                <Link to={`/deals/${data.deal_id}`}>View deal</Link>
+                <Link to={`/deals/${data.deal_id}`}>{t('tasks.viewDeal')}</Link>
               ) : (
-                <span className="text-subtle">Not linked</span>
+                <span className="text-subtle">{t('common.notLinked')}</span>
               )}
             </dd>
-            <dt>Created</dt>
+            <dt>{t('common.created')}</dt>
             <dd>
               <Timestamp value={data.created_at} />
             </dd>

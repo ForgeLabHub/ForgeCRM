@@ -20,6 +20,7 @@ import { customFieldsApi } from '../api/crm'
 import { errorMessage } from '../api/client'
 import type { CustomFieldDefinition, CustomFieldType, CustomFields } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
+import { useT, type TFunction } from '../i18n'
 import { Alert, Card, Skeleton } from './ui'
 
 export type CustomFieldEntityType = 'account' | 'contact' | 'lead' | 'deal'
@@ -42,6 +43,7 @@ export function CustomFieldsPanel({
   saving = false,
   onSave,
 }: CustomFieldsPanelProps) {
+  const t = useT()
   const { can } = useAuth()
   const canManage = can('custom_fields.manage')
 
@@ -57,13 +59,13 @@ export function CustomFieldsPanel({
 
   return (
     <div style={{ marginTop: 'var(--space-5)' }}>
-      <Card title="Custom fields">
+      <Card title={t('customFields.title')}>
         {definitions.isError ? (
           <Alert tone="error">{errorMessage(definitions.error)}</Alert>
         ) : definitions.isLoading ? (
           <Skeleton height={64} />
         ) : fields.length === 0 ? (
-          <p className="text-muted text-sm">No custom fields are defined yet.</p>
+          <p className="text-muted text-sm">{t('customFields.none')}</p>
         ) : (
           <div className="stack stack--sm">
             {fields.map((field) => (
@@ -85,9 +87,9 @@ export function CustomFieldsPanel({
   )
 }
 
-function displayValue(field: CustomFieldDefinition, raw: unknown): string {
+function displayValue(t: TFunction, field: CustomFieldDefinition, raw: unknown): string {
   if (raw === undefined || raw === null || raw === '') return '—'
-  if (field.field_type === 'boolean') return raw ? 'Yes' : 'No'
+  if (field.field_type === 'boolean') return raw ? t('customFields.yes') : t('customFields.no')
   if (field.field_type === 'multiselect' && Array.isArray(raw)) return raw.join(', ')
   if (field.field_type === 'date') return String(raw).slice(0, 10)
   return String(raw)
@@ -106,6 +108,7 @@ function CustomFieldRow({
   saving: boolean
   onSave: (next: CustomFields) => Promise<unknown>
 }) {
+  const t = useT()
   const [error, setError] = useState<string | null>(null)
   const current = values[field.key]
 
@@ -118,7 +121,7 @@ function CustomFieldRow({
     return (
       <div className="row row--between">
         <span className="text-subtle text-sm">{field.label}</span>
-        <span className="text-sm">{displayValue(field, current)}</span>
+        <span className="text-sm">{displayValue(t, field, current)}</span>
       </div>
     )
   }
@@ -234,6 +237,7 @@ const NEW_FIELD_TYPES: CustomFieldType[] = [
 ]
 
 function DefineFieldForm({ entityType }: { entityType: CustomFieldEntityType }) {
+  const t = useT()
   const queryClient = useQueryClient()
   const [key, setKey] = useState('')
   const [label, setLabel] = useState('')
@@ -259,7 +263,7 @@ function DefineFieldForm({ entityType }: { entityType: CustomFieldEntityType }) 
     setError(null)
     const trimmedKey = key.trim().toLowerCase()
     if (!trimmedKey || !label.trim()) {
-      setError('A field needs a key and a label.')
+      setError(t('customFields.needKeyLabel'))
       return
     }
     const needsChoices = fieldType === 'select' || fieldType === 'multiselect'
@@ -268,7 +272,7 @@ function DefineFieldForm({ entityType }: { entityType: CustomFieldEntityType }) 
       .map((choice) => choice.trim())
       .filter(Boolean)
     if (needsChoices && parsed.length === 0) {
-      setError('A select field needs at least one choice.')
+      setError(t('customFields.needChoice'))
       return
     }
     create.mutate({
@@ -292,18 +296,18 @@ function DefineFieldForm({ entityType }: { entityType: CustomFieldEntityType }) 
       }}
       onSubmit={onSubmit}
     >
-      <span className="text-subtle text-sm">Define a new field</span>
+      <span className="text-subtle text-sm">{t('customFields.define')}</span>
       <div className="row" style={{ gap: 'var(--space-2)' }}>
         <input
-          aria-label="Field key"
+          aria-label={t('customFields.fieldKey')}
           placeholder="key"
           value={key}
           onChange={(event) => setKey(event.target.value)}
           disabled={create.isPending}
         />
         <input
-          aria-label="Field label"
-          placeholder="Label"
+          aria-label={t('customFields.fieldLabel')}
+          placeholder={t('customFields.fieldLabel')}
           value={label}
           onChange={(event) => setLabel(event.target.value)}
           disabled={create.isPending}
@@ -311,7 +315,7 @@ function DefineFieldForm({ entityType }: { entityType: CustomFieldEntityType }) 
       </div>
       <div className="row" style={{ gap: 'var(--space-2)' }}>
         <select
-          aria-label="Field type"
+          aria-label={t('customFields.fieldType')}
           value={fieldType}
           onChange={(event) => setFieldType(event.target.value as CustomFieldType)}
           disabled={create.isPending}
@@ -324,15 +328,15 @@ function DefineFieldForm({ entityType }: { entityType: CustomFieldEntityType }) 
         </select>
         {needsChoices ? (
           <input
-            aria-label="Choices"
-            placeholder="Comma-separated choices"
+            aria-label={t('customFields.choices')}
+            placeholder={t('customFields.choicesPlaceholder')}
             value={choices}
             onChange={(event) => setChoices(event.target.value)}
             disabled={create.isPending}
           />
         ) : null}
         <button type="submit" className="btn btn--secondary btn--sm" disabled={create.isPending}>
-          {create.isPending ? 'Adding…' : 'Add field'}
+          {create.isPending ? t('customFields.adding') : t('customFields.add')}
         </button>
       </div>
       {error ? <Alert tone="error">{error}</Alert> : null}

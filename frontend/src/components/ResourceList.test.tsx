@@ -24,7 +24,10 @@ function page(items: Row[], total: number, limit = 25, offset = 0): ListResponse
   return { items, total, limit, offset }
 }
 
-function renderList(fetchPage: (params: { limit?: number; offset?: number; q?: string }) => Promise<ListResponse<Row>>) {
+function renderList(
+  fetchPage: (params: { limit?: number; offset?: number; q?: string }) => Promise<ListResponse<Row>>,
+  props: { stackOnPhone?: boolean } = {},
+) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
@@ -41,6 +44,7 @@ function renderList(fetchPage: (params: { limit?: number; offset?: number; q?: s
         searchable
         searchPlaceholder="Search rows…"
         pageSize={2}
+        {...props}
       />
     </QueryClientProvider>,
   )
@@ -116,5 +120,33 @@ describe('ResourceList', () => {
 
     expect(await screen.findByText('No matches')).toBeInTheDocument()
     expect(screen.getByText('Try a different search term.')).toBeInTheDocument()
+  })
+
+  // The phone layout labels each cell from the column header, because the header
+  // row is hidden once the rows become cards. Without the label a phone user sees
+  // a column of bare values with nothing to say which field each one is.
+  it('labels every cell with its column header for the stacked phone layout', async () => {
+    renderList(async () => page([{ id: '1', name: 'Alpha' }], 1))
+
+    const cell = await screen.findByRole('cell', { name: 'Alpha' })
+    expect(cell).toHaveAttribute('data-label', 'Name')
+  })
+
+  it('marks the table for stacking on a phone by default', async () => {
+    renderList(async () => page([{ id: '1', name: 'Alpha' }], 1))
+
+    expect(await screen.findByRole('table')).toHaveClass('table--stack')
+  })
+
+  // A two-column key/value table reads better as a table than as a card per row,
+  // so a caller can turn the phone stack off; the cell then keeps no data-label.
+  it('leaves the table unstacked when the caller opts out', async () => {
+    renderList(async () => page([{ id: '1', name: 'Alpha' }], 1), { stackOnPhone: false })
+
+    const table = await screen.findByRole('table')
+    expect(table).not.toHaveClass('table--stack')
+
+    const cell = screen.getByRole('cell', { name: 'Alpha' })
+    expect(cell).not.toHaveAttribute('data-label')
   })
 })

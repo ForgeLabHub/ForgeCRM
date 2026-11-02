@@ -14,6 +14,7 @@ import {
 import { pipelinesApi } from '../api/crm'
 import { errorMessage } from '../api/client'
 import { useAuth } from '../hooks/useAuth'
+import { useT } from '../i18n'
 import { Alert, Badge, Card, EmptyState, ErrorState, PageHeader, Stat, Timestamp } from '../components/ui'
 
 /**
@@ -31,6 +32,7 @@ import { Alert, Badge, Card, EmptyState, ErrorState, PageHeader, Stat, Timestamp
  */
 export function SimulationPage() {
   const { can } = useAuth()
+  const t = useT()
   const queryClient = useQueryClient()
   const [selected, setSelected] = useState<Scenario | null>(null)
   const [building, setBuilding] = useState<ScenarioKind | null>(null)
@@ -68,10 +70,7 @@ export function SimulationPage() {
 
   return (
     <>
-      <PageHeader
-        title="Simulation Lab"
-        meta="Ask “what if” against the real pipeline. Observed figures and modelled figures are kept apart, and every assumption is stated."
-      />
+      <PageHeader title={t('simulation.title')} meta={t('simulation.meta')} />
 
       {actionError ? (
         <div style={{ marginBottom: 'var(--space-4)' }}>
@@ -79,11 +78,11 @@ export function SimulationPage() {
         </div>
       ) : null}
 
-      <div className="grid" style={{ gridTemplateColumns: 'minmax(280px, 340px) 1fr', gap: 'var(--space-5)' }}>
+      <div className="layout--aside">
         <div className="stack">
-          <Card title="Scenarios">
+          <Card title={t('simulation.scenarios')}>
             {scenariosQuery.isLoading ? (
-              <p className="text-subtle">Loading…</p>
+              <p className="text-subtle">{t('common.loading')}</p>
             ) : scenariosQuery.isError ? (
               <ErrorState
                 message={errorMessage(scenariosQuery.error)}
@@ -91,8 +90,8 @@ export function SimulationPage() {
               />
             ) : scenarios.length === 0 ? (
               <EmptyState
-                title="No scenarios yet"
-                text="Start from one of the scenario types below."
+                title={t('simulation.noScenariosTitle')}
+                text={t('simulation.noScenariosText')}
               />
             ) : (
               <ul className="stack" style={{ listStyle: 'none', padding: 0, gap: 6 }}>
@@ -127,9 +126,9 @@ export function SimulationPage() {
             )}
           </Card>
 
-          <Card title="Start a scenario">
+          <Card title={t('simulation.startScenario')}>
             {catalogQuery.isLoading ? (
-              <p className="text-subtle">Loading…</p>
+              <p className="text-subtle">{t('common.loading')}</p>
             ) : catalogQuery.isError ? (
               <ErrorState
                 message={errorMessage(catalogQuery.error)}
@@ -179,22 +178,11 @@ export function SimulationPage() {
               onArchive={() => archive.mutate(selected.id)}
             />
           ) : (
-            <Card title="How this works">
+            <Card title={t('simulation.howTitle')}>
               <div className="stack">
-                <p>
-                  Pick a saved scenario or start a new one. A scenario changes a small number of
-                  assumptions — how many deals enter the funnel, how a stage's win probability moves,
-                  how churn changes — and reports the expected effect as a comparison.
-                </p>
-                <p className="text-subtle text-sm">
-                  The baseline column is read from the CRM and is never modified. The variant column is
-                  computed from the baseline and your parameters. Both are shown so a figure can always
-                  be traced back to the data it came from.
-                </p>
-                <Alert tone="info">
-                  These are deterministic models, not forecasts. The assumptions behind each result are
-                  shown with it.
-                </Alert>
+                <p>{t('simulation.howP1')}</p>
+                <p className="text-subtle text-sm">{t('simulation.howP2')}</p>
+                <Alert tone="info">{t('simulation.howAlert')}</Alert>
               </div>
             </Card>
           )}
@@ -222,6 +210,7 @@ function ScenarioBuilder({
   canRun: boolean
   onSaved: (scenario: Scenario) => void
 }) {
+  const t = useT()
   const [name, setName] = useState(entry.name)
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(entry.parameters.map((p) => [p.key, p.default])),
@@ -282,7 +271,7 @@ function ScenarioBuilder({
         {error ? <Alert tone="error">{error}</Alert> : null}
 
         <label className="field" htmlFor="sim-name">
-          <span className="field__label">Name</span>
+          <span className="field__label">{t('simulation.name')}</span>
           <input
             id="sim-name"
             className="input"
@@ -302,15 +291,15 @@ function ScenarioBuilder({
 
         {entry.parameters.some((p) => p.stage_scoped) ? (
           <div className="stack" style={{ gap: 6 }}>
-            <span className="field__label">Per-stage conversion</span>
-            {stagesQuery.isLoading ? <p className="text-subtle text-sm">Loading stages…</p> : null}
+            <span className="field__label">{t('simulation.perStageConversion')}</span>
+            {stagesQuery.isLoading ? (
+              <p className="text-subtle text-sm">{t('simulation.loadingStages')}</p>
+            ) : null}
             {stagesQuery.isError ? (
               <p className="text-subtle text-sm">{errorMessage(stagesQuery.error)}</p>
             ) : null}
             {stageList.length === 0 && !stagesQuery.isLoading ? (
-              <p className="text-subtle text-sm">
-                No pipeline stages are configured, so a per-stage change has nothing to apply to.
-              </p>
+              <p className="text-subtle text-sm">{t('simulation.noStages')}</p>
             ) : null}
             {stageList.map((stage) => (
               <label key={stage.id} className="field" htmlFor={`sim-stage-${stage.id}`}>
@@ -341,7 +330,7 @@ function ScenarioBuilder({
             disabled={!canRun || previewMutation.isPending}
             onClick={() => previewMutation.mutate()}
           >
-            {previewMutation.isPending ? 'Computing…' : 'Preview'}
+            {previewMutation.isPending ? t('simulation.computing') : t('simulation.preview')}
           </button>
           <button
             type="button"
@@ -349,12 +338,12 @@ function ScenarioBuilder({
             disabled={!canManage || !name.trim() || saveMutation.isPending}
             onClick={() => saveMutation.mutate()}
           >
-            {saveMutation.isPending ? 'Saving…' : 'Save scenario'}
+            {saveMutation.isPending ? t('simulation.saving') : t('simulation.saveScenario')}
           </button>
         </div>
 
         {!canRun ? (
-          <p className="text-subtle text-sm">You can view scenarios but not compute them.</p>
+          <p className="text-subtle text-sm">{t('simulation.canViewOnly')}</p>
         ) : null}
 
         {preview ? <ComparisonView comparison={preview} /> : null}
@@ -408,6 +397,7 @@ function ScenarioRunner({
   canManage: boolean
   onArchive: () => void
 }) {
+  const t = useT()
   const [error, setError] = useState<string | null>(null)
   const [comparison, setComparison] = useState<Comparison | null>(null)
   const [openRun, setOpenRun] = useState<SimulationRun | null>(null)
@@ -441,7 +431,7 @@ function ScenarioRunner({
           <Badge tone="neutral">{scenario.kind}</Badge>
           {canManage ? (
             <button type="button" className="btn btn--ghost btn--sm" onClick={onArchive}>
-              Archive
+              {t('simulation.archive')}
             </button>
           ) : null}
         </div>
@@ -460,11 +450,11 @@ function ScenarioRunner({
               runMutation.mutate()
             }}
           >
-            {runMutation.isPending ? 'Computing…' : 'Run scenario'}
+            {runMutation.isPending ? t('simulation.computing') : t('simulation.runScenario')}
           </button>
           {openRun ? (
             <button type="button" className="btn btn--secondary btn--sm" onClick={() => setOpenRun(null)}>
-              Show latest
+              {t('simulation.showLatest')}
             </button>
           ) : null}
         </div>
@@ -472,13 +462,13 @@ function ScenarioRunner({
         {shown ? <ComparisonView comparison={shown} /> : null}
 
         <div>
-          <h3 style={{ marginBottom: 'var(--space-2)' }}>Run history</h3>
+          <h3 style={{ marginBottom: 'var(--space-2)' }}>{t('simulation.runHistory')}</h3>
           {runsQuery.isLoading ? (
-            <p className="text-subtle">Loading…</p>
+            <p className="text-subtle">{t('common.loading')}</p>
           ) : runsQuery.isError ? (
             <ErrorState message={errorMessage(runsQuery.error)} onRetry={() => void runsQuery.refetch()} />
           ) : runs.length === 0 ? (
-            <p className="text-subtle text-sm">This scenario has not been run yet.</p>
+            <p className="text-subtle text-sm">{t('simulation.notRunYet')}</p>
           ) : (
             <ul className="stack" style={{ listStyle: 'none', padding: 0, gap: 6 }}>
               {runs.map((run) => (
@@ -491,7 +481,7 @@ function ScenarioRunner({
                     className="btn btn--ghost btn--sm"
                     onClick={() => setOpenRun(run)}
                   >
-                    Open
+                    {t('simulation.open')}
                   </button>
                 </li>
               ))}
@@ -509,6 +499,7 @@ function ScenarioRunner({
  * assumptions and warnings the model depends on.
  */
 function ComparisonView({ comparison }: { comparison: Comparison }) {
+  const t = useT()
   const moneyMetrics = comparison.metrics.filter((m) => m.unit === 'money')
   const otherMetrics = comparison.metrics.filter((m) => m.unit !== 'money')
 
@@ -522,7 +513,7 @@ function ComparisonView({ comparison }: { comparison: Comparison }) {
             value={formatMetricValue(metric, metric.variant)}
             hint={
               <span>
-                from <strong>{formatMetricValue(metric, metric.baseline)}</strong>{' '}
+                {t('simulation.from')} <strong>{formatMetricValue(metric, metric.baseline)}</strong>{' '}
                 {metric.relative_defined ? (
                   <Badge tone={metric.delta >= 0 ? 'success' : 'danger'}>
                     {metric.delta >= 0 ? '+' : ''}
@@ -535,33 +526,41 @@ function ComparisonView({ comparison }: { comparison: Comparison }) {
         ))}
       </div>
 
-      <div className="card" style={{ overflow: 'hidden' }}>
-        <table className="table">
-          <caption className="sr-only">Baseline and variant by metric</caption>
-          <thead>
-            <tr>
-              <th scope="col">Metric</th>
-              <th scope="col">Observed (CRM)</th>
-              <th scope="col">Modelled</th>
-              <th scope="col">Change</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[...moneyMetrics, ...otherMetrics].map((metric) => (
-              <tr key={metric.key}>
-                <td>{metric.label}</td>
-                <td>{formatMetricValue(metric, metric.baseline)}</td>
-                <td>{formatMetricValue(metric, metric.variant)}</td>
-                <td>{formatChange(metric)}</td>
+      <div className="card">
+        <div className="table-wrap">
+          <table className="table table--stack">
+            <caption className="sr-only">{t('simulation.columnMetric')}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{t('simulation.columnMetric')}</th>
+                <th scope="col">{t('simulation.columnObserved')}</th>
+                <th scope="col">{t('simulation.columnModelled')}</th>
+                <th scope="col">{t('simulation.columnChange')}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {[...moneyMetrics, ...otherMetrics].map((metric) => (
+                <tr key={metric.key}>
+                  <td className="table__primary" data-label={t('simulation.columnMetric')}>
+                    {metric.label}
+                  </td>
+                  <td data-label={t('simulation.columnObserved')}>
+                    {formatMetricValue(metric, metric.baseline)}
+                  </td>
+                  <td data-label={t('simulation.columnModelled')}>
+                    {formatMetricValue(metric, metric.variant)}
+                  </td>
+                  <td data-label={t('simulation.columnChange')}>{formatChange(metric)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {comparison.assumptions.length > 0 ? (
         <div>
-          <h4 style={{ marginBottom: 'var(--space-1)' }}>Assumptions</h4>
+          <h4 style={{ marginBottom: 'var(--space-1)' }}>{t('simulation.assumptions')}</h4>
           <ul className="text-sm text-subtle">
             {comparison.assumptions.map((assumption) => (
               <li key={assumption}>{assumption}</li>

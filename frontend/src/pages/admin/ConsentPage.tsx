@@ -14,8 +14,10 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { ConsentPanel } from '../../components/ConsentPanel'
 import { Card, Field, PageHeader } from '../../components/ui'
+import { useT } from '../../i18n'
 
 export function ConsentPage() {
+  const t = useT()
   const [input, setInput] = useState('')
   // The address the panel is actually about, committed on submit. The panel keys its
   // queries off this, so an address is never queried while it is still being typed.
@@ -28,18 +30,15 @@ export function ConsentPage() {
 
   return (
     <>
-      <PageHeader
-        title="Consent"
-        meta="What a person agreed to be contacted about, on which channel — including people who are not contacts yet."
-      />
+      <PageHeader title={t('consentLookup.title')} meta={t('consentLookup.meta')} />
 
       <div className="stack">
-        <Card title="Look up an address">
+        <Card title={t('consentLookup.lookupTitle')}>
           <form className="form-grid" onSubmit={onSubmit}>
             <Field
-              label="Email address"
+              label={t('consentLookup.emailLabel')}
               htmlFor="consent-lookup-email"
-              hint="The address a message would go to. A contact is found from the contact page instead."
+              hint={t('consentLookup.emailHint')}
             >
               <input
                 id="consent-lookup-email"
@@ -52,7 +51,7 @@ export function ConsentPage() {
             </Field>
             <div className="form-grid__full">
               <button type="submit" className="btn btn--primary btn--sm" disabled={!input.trim()}>
-                Look up
+                {t('consentLookup.lookup')}
               </button>
             </div>
           </form>

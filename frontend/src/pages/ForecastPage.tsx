@@ -9,6 +9,7 @@ import {
 } from '../api/intelligence'
 import { errorMessage } from '../api/client'
 import { useAuth } from '../hooks/useAuth'
+import { useT } from '../i18n'
 import { Alert, Card, EmptyState, ErrorState, Field, PageHeader, Stat, Timestamp } from '../components/ui'
 
 /**
@@ -23,6 +24,7 @@ import { Alert, Card, EmptyState, ErrorState, Field, PageHeader, Stat, Timestamp
  */
 export function ForecastPage() {
   const { can } = useAuth()
+  const t = useT()
   const queryClient = useQueryClient()
   const [method, setMethod] = useState<ForecastMethod>('mean')
   const [window, setWindow] = useState(3)
@@ -60,10 +62,7 @@ export function ForecastPage() {
 
   return (
     <>
-      <PageHeader
-        title="Forecasting"
-        meta="Project revenue from the organization's own history. Each projection is shown with the observed series it came from and the accuracy it measured against a naive baseline."
-      />
+      <PageHeader title={t('forecast.title')} meta={t('forecast.meta')} />
 
       {actionError ? (
         <div style={{ marginBottom: 'var(--space-4)' }}>
@@ -71,18 +70,20 @@ export function ForecastPage() {
         </div>
       ) : null}
 
-      <div className="grid" style={{ gridTemplateColumns: 'minmax(280px, 340px) 1fr', gap: 'var(--space-5)' }}>
+      <div className="layout--aside">
         <div className="stack">
-          <Card title="New forecast">
+          <Card title={t('forecast.newForecast')}>
             <div className="stack">
-              <Field label="Method" htmlFor="forecast-method">
+              <Field label={t('forecast.method')} htmlFor="forecast-method">
                 <select
                   id="forecast-method"
                   className="input"
                   value={method}
                   onChange={(event) => setMethod(event.target.value as ForecastMethod)}
                 >
-                  {catalog.length === 0 ? <option value="mean">Historical average</option> : null}
+                  {catalog.length === 0 ? (
+                    <option value="mean">{t('forecast.historicalAverage')}</option>
+                  ) : null}
                   {catalog.map((entry) => (
                     <option key={entry.method} value={entry.method}>
                       {entry.name}
@@ -93,7 +94,7 @@ export function ForecastPage() {
               {selected ? <p className="text-subtle">{selected.description}</p> : null}
 
               {method === 'moving_average' ? (
-                <Field label="Window (periods)" htmlFor="forecast-window">
+                <Field label={t('forecast.window')} htmlFor="forecast-window">
                   <input
                     id="forecast-window"
                     className="input"
@@ -106,7 +107,7 @@ export function ForecastPage() {
                 </Field>
               ) : null}
 
-              <Field label="Horizon (periods)" htmlFor="forecast-horizon">
+              <Field label={t('forecast.horizon')} htmlFor="forecast-horizon">
                 <input
                   id="forecast-horizon"
                   className="input"
@@ -125,21 +126,21 @@ export function ForecastPage() {
                   disabled={run.isPending}
                   onClick={() => run.mutate()}
                 >
-                  {run.isPending ? 'Computing…' : 'Compute forecast'}
+                  {run.isPending ? t('forecast.computing') : t('forecast.computeForecast')}
                 </button>
               ) : (
-                <Alert tone="info">You do not have permission to compute a forecast.</Alert>
+                <Alert tone="info">{t('forecast.noPermission')}</Alert>
               )}
             </div>
           </Card>
 
-          <Card title="History">
+          <Card title={t('forecast.history')}>
             {runsQuery.isLoading ? (
-              <p className="text-subtle">Loading…</p>
+              <p className="text-subtle">{t('common.loading')}</p>
             ) : runsQuery.isError ? (
               <ErrorState message={errorMessage(runsQuery.error)} onRetry={() => void runsQuery.refetch()} />
             ) : runs.length === 0 ? (
-              <EmptyState title="No forecasts yet" text="Compute one to see it here." />
+              <EmptyState title={t('forecast.noForecastsTitle')} text={t('forecast.noForecastsText')} />
             ) : (
               <ul className="stack" style={{ listStyle: 'none', padding: 0 }}>
                 {runs.map((r) => (
@@ -150,7 +151,8 @@ export function ForecastPage() {
                       onClick={() => setSelectedId(r.id)}
                       style={{ width: '100%', textAlign: 'left' }}
                     >
-                      {r.method} · {r.horizon} periods · <Timestamp value={r.created_at} />
+                      {t('forecast.historyItem', { method: r.method, horizon: r.horizon })}
+                      <Timestamp value={r.created_at} />
                     </button>
                   </li>
                 ))}
@@ -163,10 +165,10 @@ export function ForecastPage() {
           {latest ? (
             <ForecastDetail run={latest} />
           ) : (
-            <Card title="Forecast">
+            <Card title={t('forecast.forecastTitle')}>
               <EmptyState
-                title="Nothing to show"
-                text="Compute a forecast to see the projection, the observed series and the measured accuracy."
+                title={t('forecast.nothingTitle')}
+                text={t('forecast.nothingText')}
               />
             </Card>
           )}
@@ -177,84 +179,115 @@ export function ForecastPage() {
 }
 
 function ForecastDetail({ run }: { run: ForecastRun }) {
+  const t = useT()
   const result = run.result
   const currency = result.currency
   return (
     <>
-      <Card title="Projection">
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-4)' }}>
-          <Stat label="Method" value={result.method} hint={result.algorithm_version} />
-          <Stat label="Horizon" value={`${run.horizon} periods`} />
+      <Card title={t('forecast.projection')}>
+        <div className="grid grid--stats">
+          <Stat label={t('forecast.method')} value={result.method} hint={result.algorithm_version} />
           <Stat
-            label="Beats naive baseline"
-            value={result.quality.beats_naive ? 'Yes' : 'No'}
+            label={t('forecast.horizon')}
+            value={t('forecast.horizonValue', { count: run.horizon })}
+          />
+          <Stat
+            label={t('forecast.beatsNaive')}
+            value={result.quality.beats_naive ? t('forecast.yes') : t('forecast.no')}
             hint={
               result.quality.beats_naive
-                ? 'This method has lower error than carrying the last value forward.'
-                : 'This method did not beat the naive baseline; treat the line with caution.'
+                ? t('forecast.beatsNaiveHint')
+                : t('forecast.notBeatsNaiveHint')
             }
           />
         </div>
 
-        <table className="table" style={{ marginTop: 'var(--space-4)' }}>
-          <thead>
-            <tr>
-              <th scope="col">Period</th>
-              <th scope="col">Projected</th>
-              <th scope="col">Error band</th>
-            </tr>
-          </thead>
-          <tbody>
-            {result.points.map((point) => (
-              <tr key={point.period}>
-                <td>{point.period}</td>
-                <td>{formatMinorUnits(point.value.amount_minor, currency)}</td>
-                <td className="text-subtle">
-                  {formatMinorUnits(point.lower.amount_minor, currency)} –{' '}
-                  {formatMinorUnits(point.upper.amount_minor, currency)}
-                </td>
+        <div className="table-wrap" style={{ marginTop: 'var(--space-4)' }}>
+          <table className="table table--stack">
+            <thead>
+              <tr>
+                <th scope="col">{t('forecast.period')}</th>
+                <th scope="col">{t('forecast.projected')}</th>
+                <th scope="col">{t('forecast.errorBand')}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
-
-      <Card title="Measured accuracy">
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-4)' }}>
-          <Stat label="Folds scored" value={result.quality.folds} />
-          <Stat label="MAE" value={formatMinorUnits(result.quality.mae.amount_minor, currency)} hint="Mean absolute error, out of sample" />
-          <Stat
-            label="Naive MAE"
-            value={formatMinorUnits(result.quality.naive_mae.amount_minor, currency)}
-            hint="The baseline this method must beat"
-          />
-          <Stat label="MAPE" value={formatBasisPoints(result.quality.mape.basis_points)} hint="Over folds with a non-zero actual" />
-          <Stat label="Naive MAPE" value={formatBasisPoints(result.quality.naive_mape.basis_points)} />
-          <Stat label="Zero-actual folds" value={result.quality.folds_with_zero_actual} hint="Excluded from MAPE" />
+            </thead>
+            <tbody>
+              {result.points.map((point) => (
+                <tr key={point.period}>
+                  <td className="table__primary" data-label={t('forecast.period')}>
+                    {point.period}
+                  </td>
+                  <td data-label={t('forecast.projected')}>
+                    {formatMinorUnits(point.value.amount_minor, currency)}
+                  </td>
+                  <td className="text-subtle" data-label={t('forecast.errorBand')}>
+                    {formatMinorUnits(point.lower.amount_minor, currency)} –{' '}
+                    {formatMinorUnits(point.upper.amount_minor, currency)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </Card>
 
-      <Card title="Observed series">
-        <table className="table">
-          <thead>
-            <tr>
-              <th scope="col">Period</th>
-              <th scope="col">Revenue (observed)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {result.history.map((point) => (
-              <tr key={point.period}>
-                <td>{point.period}</td>
-                <td>{formatMinorUnits(point.value.amount_minor, currency)}</td>
+      <Card title={t('forecast.measuredAccuracy')}>
+        <div className="grid grid--stats">
+          <Stat label={t('forecast.foldsScored')} value={result.quality.folds} />
+          <Stat
+            label={t('forecast.mae')}
+            value={formatMinorUnits(result.quality.mae.amount_minor, currency)}
+            hint={t('forecast.maeHint')}
+          />
+          <Stat
+            label={t('forecast.naiveMae')}
+            value={formatMinorUnits(result.quality.naive_mae.amount_minor, currency)}
+            hint={t('forecast.naiveMaeHint')}
+          />
+          <Stat
+            label={t('forecast.mape')}
+            value={formatBasisPoints(result.quality.mape.basis_points)}
+            hint={t('forecast.mapeHint')}
+          />
+          <Stat
+            label={t('forecast.naiveMape')}
+            value={formatBasisPoints(result.quality.naive_mape.basis_points)}
+          />
+          <Stat
+            label={t('forecast.zeroActualFolds')}
+            value={result.quality.folds_with_zero_actual}
+            hint={t('forecast.zeroActualFoldsHint')}
+          />
+        </div>
+      </Card>
+
+      <Card title={t('forecast.observedSeries')}>
+        <div className="table-wrap">
+          <table className="table table--stack">
+            <thead>
+              <tr>
+                <th scope="col">{t('forecast.period')}</th>
+                <th scope="col">{t('forecast.revenueObserved')}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {result.history.map((point) => (
+                <tr key={point.period}>
+                  <td className="table__primary" data-label={t('forecast.period')}>
+                    {point.period}
+                  </td>
+                  <td data-label={t('forecast.revenueObserved')}>
+                    {formatMinorUnits(point.value.amount_minor, currency)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
       {result.assumptions.length > 0 ? (
-        <Card title="Assumptions">
+        <Card title={t('forecast.assumptions')}>
           <ul>
             {result.assumptions.map((a, i) => (
               <li key={i}>{a}</li>
@@ -264,7 +297,7 @@ function ForecastDetail({ run }: { run: ForecastRun }) {
       ) : null}
 
       {result.warnings.length > 0 ? (
-        <Card title="Warnings">
+        <Card title={t('forecast.warnings')}>
           <div className="stack">
             {result.warnings.map((w, i) => (
               <Alert key={i} tone="warning">

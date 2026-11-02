@@ -4,12 +4,14 @@ import { emailApi } from '../../api/notifications'
 import { errorMessage } from '../../api/client'
 import { ResourceList, type Column } from '../../components/ResourceList'
 import { Alert, Badge, Card, Field, PageHeader, StatusBadge, Timestamp } from '../../components/ui'
+import { useT, type TFunction } from '../../i18n'
 import type { EmailLogEntry } from '../../api/notifications'
 
-const logColumns: Column<EmailLogEntry>[] = [
+function buildLogColumns(t: TFunction): Column<EmailLogEntry>[] {
+  return [
   {
     key: 'to',
-    header: 'Recipient',
+    header: t('emailAdmin.columnRecipient'),
     render: (row) => (
       <div>
         <div className="table__primary">{row.to_address}</div>
@@ -17,21 +19,23 @@ const logColumns: Column<EmailLogEntry>[] = [
       </div>
     ),
   },
-  { key: 'status', header: 'Status', render: (row) => <StatusBadge status={row.status} /> },
+  { key: 'status', header: t('emailAdmin.columnStatus'), render: (row) => <StatusBadge status={row.status} /> },
   {
     key: 'template',
-    header: 'Template',
+    header: t('emailAdmin.columnTemplate'),
     render: (row) => (row.template ? <span className="mono text-sm">{row.template}</span> : <span className="text-subtle">—</span>),
   },
-  { key: 'attempts', header: 'Attempts', numeric: true, render: (row) => row.attempts },
+  { key: 'attempts', header: t('emailAdmin.columnAttempts'), numeric: true, render: (row) => row.attempts },
   {
     key: 'sent',
-    header: 'Sent',
+    header: t('emailAdmin.columnSent'),
     render: (row) => <Timestamp value={row.sent_at} />,
   },
-]
+  ]
+}
 
 export function EmailPage() {
+  const t = useT()
   const queryClient = useQueryClient()
   const [testAddress, setTestAddress] = useState('')
   const [testResult, setTestResult] = useState<{ ok: boolean; message?: string } | null>(null)
@@ -49,42 +53,39 @@ export function EmailPage() {
 
   return (
     <>
-      <PageHeader
-        title="Email"
-        meta="Outbound mail configuration, delivery testing and the send log."
-      />
+      <PageHeader title={t('emailAdmin.title')} meta={t('emailAdmin.meta')} />
 
       <div className="stack">
-        <Card title="Configuration">
+        <Card title={t('emailAdmin.configuration')}>
           {status.isError ? (
             <Alert tone="error">{errorMessage(status.error)}</Alert>
           ) : status.isLoading ? (
-            <p className="text-muted">Loading…</p>
+            <p className="text-muted">{t('common.loading')}</p>
           ) : status.data ? (
             <div className="stack">
               <div className="row">
                 {status.data.enabled ? (
-                  <Badge tone="success">enabled</Badge>
+                  <Badge tone="success">{t('emailAdmin.enabled')}</Badge>
                 ) : (
-                  <Badge tone="neutral">disabled</Badge>
+                  <Badge tone="neutral">{t('emailAdmin.disabled')}</Badge>
                 )}
                 {status.data.configured ? (
-                  <Badge tone="success">configured</Badge>
+                  <Badge tone="success">{t('emailAdmin.configured')}</Badge>
                 ) : (
-                  <Badge tone="warning">not configured</Badge>
+                  <Badge tone="warning">{t('emailAdmin.notConfigured')}</Badge>
                 )}
                 {status.data.tls ? <Badge tone="accent">TLS</Badge> : null}
               </div>
               <dl className="dl">
-                <dt>Host</dt>
+                <dt>{t('emailAdmin.host')}</dt>
                 <dd className="mono">{status.data.host ?? '—'}</dd>
-                <dt>Port</dt>
+                <dt>{t('emailAdmin.port')}</dt>
                 <dd className="mono">{status.data.port ?? '—'}</dd>
-                <dt>From address</dt>
+                <dt>{t('emailAdmin.fromAddress')}</dt>
                 <dd>{status.data.from ?? '—'}</dd>
                 {status.data.last_error ? (
                   <>
-                    <dt>Last error</dt>
+                    <dt>{t('emailAdmin.lastError')}</dt>
                     <dd className="text-danger">{status.data.last_error}</dd>
                   </>
                 ) : null}
@@ -93,14 +94,11 @@ export function EmailPage() {
           ) : null}
         </Card>
 
-        <Card title="Send a test message">
+        <Card title={t('emailAdmin.sendTestTitle')}>
           <div className="stack">
-            <p className="text-muted text-sm">
-              This connects to the SMTP server and sends a real message to the address you give.
-              A successful result means the server accepted it, not that it reached an inbox.
-            </p>
+            <p className="text-muted text-sm">{t('emailAdmin.sendTestIntro')}</p>
             <div className="form-grid">
-              <Field label="Recipient" htmlFor="email-test-to" required>
+              <Field label={t('emailAdmin.recipient')} htmlFor="email-test-to" required>
                 <input
                   id="email-test-to"
                   type="email"
@@ -117,30 +115,30 @@ export function EmailPage() {
                 disabled={!testAddress || sendTest.isPending}
                 onClick={() => sendTest.mutate()}
               >
-                {sendTest.isPending ? 'Sending…' : 'Send test'}
+                {sendTest.isPending ? t('emailAdmin.sending') : t('emailAdmin.sendTest')}
               </button>
             </div>
 
             {testResult ? (
               <Alert tone={testResult.ok ? 'success' : 'error'}>
                 {testResult.ok
-                  ? 'The SMTP server accepted the message.'
-                  : `Failed: ${testResult.message ?? 'unknown error'}`}
+                  ? t('emailAdmin.accepted')
+                  : t('emailAdmin.failed', { message: testResult.message ?? t('emailAdmin.unknownError') })}
               </Alert>
             ) : null}
           </div>
         </Card>
 
         <ResourceList
-          title="Send log"
+          title={t('emailAdmin.logTitle')}
           queryKey={['email', 'log']}
           fetchPage={(params) => emailApi.log(params)}
-          columns={logColumns}
+          columns={buildLogColumns(t)}
           rowKey={(row) => row.id}
-          emptyTitle="No messages sent"
-          emptyText="Notifications and password resets appear here once they are queued."
+          emptyTitle={t('emailAdmin.emptyTitle')}
+          emptyText={t('emailAdmin.emptyText')}
           searchable
-          searchPlaceholder="Search recipients…"
+          searchPlaceholder={t('emailAdmin.searchPlaceholder')}
         />
       </div>
     </>

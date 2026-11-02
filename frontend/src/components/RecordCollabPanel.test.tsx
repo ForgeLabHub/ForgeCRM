@@ -13,6 +13,7 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RecordCollabPanel } from './RecordCollabPanel'
 import { AuthProvider } from '../hooks/useAuth'
+import { I18nProvider } from '../i18n'
 
 const ENTITY_ID = '11111111-1111-1111-1111-111111111111'
 
@@ -80,9 +81,11 @@ function renderPanel() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <RecordCollabPanel entityType="deal" entityId={ENTITY_ID} />
-      </AuthProvider>
+      <I18nProvider>
+        <AuthProvider>
+          <RecordCollabPanel entityType="deal" entityId={ENTITY_ID} />
+        </AuthProvider>
+      </I18nProvider>
     </QueryClientProvider>,
   )
 }

@@ -24,6 +24,7 @@ import { tenantSettingsApi } from '../../api/tenantSettings'
 import type { TenantSetting } from '../../api/tenantSettings'
 import { errorMessage, fieldErrors } from '../../api/client'
 import { useAuth } from '../../hooks/useAuth'
+import { useT, type TFunction } from '../../i18n'
 import {
   Alert,
   Badge,
@@ -36,14 +37,15 @@ import {
 } from '../../components/ui'
 
 /** Renders a value for display without pretending to know more than we do. */
-function showValue(value: unknown): string {
+function showValue(value: unknown, t: TFunction): string {
   if (value === undefined || value === null) return '—'
-  if (typeof value === 'boolean') return value ? 'on' : 'off'
+  if (typeof value === 'boolean') return value ? t('tenantSettings.booleanOn') : t('tenantSettings.booleanOff')
   return String(value)
 }
 
 export function TenantSettingsPage() {
   const { can } = useAuth()
+  const t = useT()
   const mayManage = can('tenant.settings.manage')
 
   const settings = useQuery({
@@ -53,7 +55,7 @@ export function TenantSettingsPage() {
 
   if (settings.isError) {
     return (
-      <Card title="Organization configuration">
+      <Card title={t('tenantSettings.title')}>
         <ErrorState
           message={errorMessage(settings.error)}
           onRetry={() => void settings.refetch()}
@@ -66,20 +68,14 @@ export function TenantSettingsPage() {
 
   return (
     <>
-      <PageHeader
-        title="Organization configuration"
-        meta="Defaults this organization chooses over the platform's. Each applies to the whole organization."
-      />
+      <PageHeader title={t('tenantSettings.title')} meta={t('tenantSettings.meta')} />
 
       {!mayManage ? (
-        <Alert tone="info">
-          You can see these values but not change them. Changing one affects every user in the
-          organization.
-        </Alert>
+        <Alert tone="info">{t('tenantSettings.readOnly')}</Alert>
       ) : null}
 
       {settings.isLoading ? (
-        <Card title="Settings">
+        <Card title={t('tenantSettings.settings')}>
           <Skeleton height={20} />
           <Skeleton height={20} />
           <Skeleton height={20} />
@@ -91,8 +87,8 @@ export function TenantSettingsPage() {
           ))}
         </div>
       ) : (
-        <Card title="Settings">
-          <p className="text-muted">The server publishes no settings.</p>
+        <Card title={t('tenantSettings.settings')}>
+          <p className="text-muted">{t('tenantSettings.none')}</p>
         </Card>
       )}
     </>
@@ -100,6 +96,7 @@ export function TenantSettingsPage() {
 }
 
 function SettingCard({ setting, mayManage }: { setting: TenantSetting; mayManage: boolean }) {
+  const t = useT()
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState<string>(() => toDraft(setting))
   const [confirmReset, setConfirmReset] = useState(false)
@@ -134,9 +131,9 @@ function SettingCard({ setting, mayManage }: { setting: TenantSetting; mayManage
         title={setting.title}
         actions={
           setting.has_override ? (
-            <Badge tone="accent">organization override</Badge>
+            <Badge tone="accent">{t('tenantSettings.override')}</Badge>
           ) : (
-            <Badge tone="neutral">platform default</Badge>
+            <Badge tone="neutral">{t('tenantSettings.platformDefault')}</Badge>
           )
         }
       >
@@ -145,8 +142,7 @@ function SettingCard({ setting, mayManage }: { setting: TenantSetting; mayManage
 
         {setting.stored_under_older_schema ? (
           <Alert tone="warning">
-            This value was stored under an older version of the catalog (schema{' '}
-            {setting.schema_version}). Review it before relying on it.
+            {t('tenantSettings.staleSchema', { version: setting.schema_version })}
           </Alert>
         ) : null}
 
@@ -155,10 +151,10 @@ function SettingCard({ setting, mayManage }: { setting: TenantSetting; mayManage
 
         <div className="form-grid">
           <Field
-            label="Value"
+            label={t('tenantSettings.value')}
             htmlFor={`setting-${setting.key}`}
             error={errors.value}
-            hint={`Default: ${showValue(setting.default)}`}
+            hint={t('tenantSettings.defaultHint', { value: showValue(setting.default, t) })}
           >
             <SettingInput setting={setting} value={draft} onChange={setDraft} disabled={!mayManage} />
           </Field>
@@ -166,7 +162,7 @@ function SettingCard({ setting, mayManage }: { setting: TenantSetting; mayManage
 
         <div className="form-actions">
           <span className="text-sm text-muted">
-            Effective now: <strong>{showValue(setting.effective)}</strong>
+            {t('tenantSettings.effectiveNow')} <strong>{showValue(setting.effective, t)}</strong>
           </span>
           {mayManage ? (
             <>
@@ -176,15 +172,15 @@ function SettingCard({ setting, mayManage }: { setting: TenantSetting; mayManage
                 onClick={() => setConfirmReset(true)}
                 disabled={!setting.has_override || reset.isPending}
               >
-                Reset to default
-              </button>
+                {t('tenantSettings.resetToDefault')}
+                </button>
               <button
                 type="button"
                 className="btn btn--primary"
                 onClick={onSave}
                 disabled={!dirty || save.isPending}
               >
-                {save.isPending ? 'Saving…' : 'Save'}
+                {save.isPending ? t('common.saving') : t('common.save')}
               </button>
             </>
           ) : null}
@@ -193,9 +189,12 @@ function SettingCard({ setting, mayManage }: { setting: TenantSetting; mayManage
 
       <ConfirmDialog
         open={confirmReset}
-        title={`Reset ${setting.title}?`}
-        text={`The organization's value (${showValue(setting.override)}) is removed and the platform default (${showValue(setting.default)}) applies again. The change is recorded in the history.`}
-        confirmLabel="Reset"
+        title={t('tenantSettings.resetTitle', { title: setting.title })}
+        text={t('tenantSettings.resetText', {
+          override: showValue(setting.override, t),
+          default: showValue(setting.default, t),
+        })}
+        confirmLabel={t('tenantSettings.reset')}
         danger
         busy={reset.isPending}
         onConfirm={() => reset.mutate()}
@@ -237,8 +236,9 @@ function SettingInput({
   value: string
   onChange: (next: string) => void
   disabled: boolean
-}) {
-  const id = `setting-${setting.key}`
+  }) {
+    const t = useT()
+    const id = `setting-${setting.key}`
   if (setting.kind === 'enum') {
     return (
       <select
@@ -265,8 +265,8 @@ function SettingInput({
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
       >
-        <option value="true">on</option>
-        <option value="false">off</option>
+        <option value="true">{t('tenantSettings.booleanOn')}</option>
+        <option value="false">{t('tenantSettings.booleanOff')}</option>
       </select>
     )
   }

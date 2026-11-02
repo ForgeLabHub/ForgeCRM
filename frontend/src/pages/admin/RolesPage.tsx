@@ -4,18 +4,21 @@ import { rolesApi } from '../../api/admin'
 import { errorMessage } from '../../api/client'
 import type { Role } from '../../types/api'
 import { useAuth } from '../../hooks/useAuth'
+import { useT } from '../../i18n'
 import {
   Alert,
   Badge,
   Card,
   ConfirmDialog,
   ErrorState,
+  Modal,
   PageHeader,
   TableSkeleton,
 } from '../../components/ui'
 
 export function RolesPage() {
   const { can } = useAuth()
+  const t = useT()
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState<Role | null>(null)
   const [saving, setSaving] = useState(false)
@@ -53,7 +56,7 @@ export function RolesPage() {
 
   if (roles.isError) {
     return (
-      <Card title="Roles">
+      <Card title={t('roles.title')}>
         <ErrorState message={errorMessage(roles.error)} onRetry={() => void roles.refetch()} />
       </Card>
     )
@@ -61,10 +64,7 @@ export function RolesPage() {
 
   return (
     <>
-      <PageHeader
-        title="Roles & permissions"
-        meta="A role is a named set of permissions. Changing a role affects every user who holds it."
-      />
+      <PageHeader title={t('roles.title')} meta={t('roles.meta')} />
 
       {actionError ? (
         <div style={{ marginBottom: 'var(--space-4)' }}>
@@ -81,11 +81,13 @@ export function RolesPage() {
               key={role.id}
               title={role.name}
               actions={
-                <div className="row">
+                <div className="row row--wrap">
                   <Badge tone="neutral" >{role.key}</Badge>
-                  <Badge tone="accent">{role.permissions.length} permissions</Badge>
+                  <Badge tone="accent">
+                    {t('roles.permissionsCount', { count: role.permissions.length })}
+                  </Badge>
                   {role.is_system ? (
-                    <Badge tone="warning">built-in</Badge>
+                    <Badge tone="warning">{t('roles.builtIn')}</Badge>
                   ) : null}
                   {can('roles.manage') ? (
                     <button
@@ -93,8 +95,8 @@ export function RolesPage() {
                       className="btn btn--secondary btn--sm"
                       onClick={() => setEditing(role)}
                     >
-                      Edit permissions
-                    </button>
+                      {t('roles.editPermissions')}
+                      </button>
                   ) : null}
                 </div>
               }
@@ -106,7 +108,7 @@ export function RolesPage() {
               ) : null}
               <div className="row row--wrap">
                 {role.permissions.length === 0 ? (
-                  <span className="text-subtle text-sm">No permissions</span>
+                  <span className="text-subtle text-sm">{t('roles.noPermissions')}</span>
                 ) : (
                   role.permissions.map((permission) => (
                     <Badge key={permission} tone="neutral">
@@ -149,6 +151,7 @@ function PermissionEditor({
   onClose: () => void
   onSave: (keys: string[]) => void
 }) {
+  const t = useT()
   const [selected, setSelected] = useState<string[]>(role.permissions)
   const [confirming, setConfirming] = useState(false)
 
@@ -160,89 +163,82 @@ function PermissionEditor({
 
   return (
     <>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="permission-editor-title"
-        style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'var(--color-overlay)',
-          zIndex: 60,
-          overflowY: 'auto',
-          padding: 'var(--space-5)',
-        }}
-        onClick={onClose}
+      <Modal
+        open
+        onClose={onClose}
+        title={t('roles.editorTitle', { role: role.name })}
+        extra={<>
+          <Badge tone="accent">{t('roles.selectedCount', { count: selected.length })}</Badge>
+        </>}
+        size="lg"
+        footer={<>
+          <button type="button" className="btn btn--secondary" onClick={onClose} disabled={busy}>
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={busy || !dirty}
+            onClick={() => (removed.length > 0 ? setConfirming(true) : onSave(selected))}
+          >
+            {busy ? t('common.saving') : t('roles.savePermissions')}
+          </button>
+        </>}
       >
-        <div className="card" style={{ maxWidth: 760, margin: '0 auto' }} onClick={(e) => e.stopPropagation()}>
-          <div className="card__header">
-            <h2 id="permission-editor-title">Permissions for {role.name}</h2>
-            <Badge tone="accent">{selected.length} selected</Badge>
-          </div>
-          <div className="card__body stack">
-            <Alert tone="warning">
-              Removing a permission takes effect on the next request made by every user holding this
-              role. It does not wait for them to sign in again.
-            </Alert>
+        <div className="stack">
+          <Alert tone="warning">{t('roles.removalWarning')}</Alert>
 
-            {Array.from(groups.entries()).map(([group, items]) => (
-              <fieldset key={group} style={{ border: 'none', padding: 0, margin: 0 }}>
-                <legend
-                  className="field__label"
-                  style={{ textTransform: 'capitalize', marginBottom: 'var(--space-2)' }}
-                >
-                  {group}
-                </legend>
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-                    gap: 'var(--space-2)',
-                  }}
-                >
-                  {items.map((permission) => (
-                    <label key={permission.key} className="checkbox">
-                      <input
-                        type="checkbox"
-                        checked={selected.includes(permission.key)}
-                        onChange={(event) =>
-                          setSelected((previous) =>
-                            event.target.checked
-                              ? [...previous, permission.key]
-                              : previous.filter((key) => key !== permission.key),
-                          )
-                        }
-                      />
-                      <span className="mono" title={permission.description}>
-                        {permission.key}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-            ))}
-          </div>
-          <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
-            <button type="button" className="btn btn--secondary" onClick={onClose} disabled={busy}>
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="btn btn--primary"
-              disabled={busy || !dirty}
-              onClick={() => (removed.length > 0 ? setConfirming(true) : onSave(selected))}
-            >
-              {busy ? 'Saving…' : 'Save permissions'}
-            </button>
-          </div>
+          {Array.from(groups.entries()).map(([group, items]) => (
+            <fieldset key={group} style={{ border: 'none', padding: 0, margin: 0 }}>
+              <legend
+                className="field__label"
+                style={{ textTransform: 'capitalize', marginBottom: 'var(--space-2)' }}
+              >
+                {group}
+              </legend>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+                  gap: 'var(--space-2)',
+                }}
+              >
+                {items.map((permission) => (
+                  <label key={permission.key} className="checkbox">
+                    <input
+                      type="checkbox"
+                      checked={selected.includes(permission.key)}
+                      onChange={(event) =>
+                        setSelected((previous) =>
+                          event.target.checked
+                            ? [...previous, permission.key]
+                            : previous.filter((key) => key !== permission.key),
+                        )
+                      }
+                    />
+                    <span className="mono" title={permission.description}>
+                      {permission.key}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ))}
         </div>
-      </div>
+      </Modal>
 
       <ConfirmDialog
         open={confirming}
-        title="Remove permissions?"
-        text={`This removes ${removed.length} permission${removed.length === 1 ? '' : 's'} from ${role.name}: ${removed.join(', ')}. Users holding this role lose that access immediately.`}
-        confirmLabel="Save changes"
+        title={t('roles.removeTitle')}
+        text={t('roles.removeText', {
+          count:
+            removed.length === 1
+              ? t('roles.permissionSingular', { count: removed.length })
+              : t('roles.permissionPlural', { count: removed.length }),
+          role: role.name,
+          list: removed.join(', '),
+        })}
+        confirmLabel={t('roles.saveChanges')}
         danger
         busy={busy}
         onConfirm={() => {

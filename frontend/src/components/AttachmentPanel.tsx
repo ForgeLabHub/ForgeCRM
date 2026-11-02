@@ -14,6 +14,7 @@ import { documentsApi, type DocumentEntityType, type DocumentRecord } from '../a
 import { systemApi } from '../api/admin'
 import { Alert, Card, Timestamp, formatBytes } from './ui'
 import { useAuth } from '../hooks/useAuth'
+import { useT } from '../i18n'
 
 /** The capability check, shared so the panel and its tests agree on the condition. */
 export function useStorageCapability() {
@@ -35,6 +36,7 @@ interface AttachmentPanelProps {
 }
 
 export function AttachmentPanel({ entityType, entityId }: AttachmentPanelProps) {
+  const t = useT()
   const { can } = useAuth()
   const queryClient = useQueryClient()
   const { storageEnabled, maxUploadBytes, isLoading } = useStorageCapability()
@@ -74,14 +76,16 @@ export function AttachmentPanel({ entityType, entityId }: AttachmentPanelProps) 
     if (!file) return
     setError(null)
     if (maxUploadBytes > 0 && file.size > maxUploadBytes) {
-      setError(`That file is ${formatBytes(file.size)}; the limit is ${formatBytes(maxUploadBytes)}.`)
+      setError(
+        t('attachments.tooLarge', { size: formatBytes(file.size), limit: formatBytes(maxUploadBytes) }),
+      )
       return
     }
     uploadMutation.mutate(file)
   }
 
   return (
-    <Card title={`Attachments${attachments.length ? ` (${attachments.length})` : ''}`}>
+    <Card title={`${t('attachments.title')}${attachments.length ? ` (${attachments.length})` : ''}`}>
       {error ? <Alert tone="error">{error}</Alert> : null}
       {listQuery.isError ? <Alert tone="error">{errorMessage(listQuery.error)}</Alert> : null}
 
@@ -101,7 +105,7 @@ export function AttachmentPanel({ entityType, entityId }: AttachmentPanelProps) 
                     className="btn btn--ghost btn--sm"
                     onClick={() => archiveMutation.mutate(doc.id)}
                   >
-                    Remove
+                    {t('attachments.remove')}
                   </button>
                 ) : null}
               </span>
@@ -109,7 +113,7 @@ export function AttachmentPanel({ entityType, entityId }: AttachmentPanelProps) 
           ))}
         </ul>
       ) : (
-        <p className="text-muted text-sm">No files attached yet.</p>
+        <p className="text-muted text-sm">{t('attachments.empty')}</p>
       )}
 
       {can('documents.create') ? (
@@ -117,16 +121,18 @@ export function AttachmentPanel({ entityType, entityId }: AttachmentPanelProps) 
           <input
             ref={fileInput}
             type="file"
-            aria-label="Attach a file"
+            aria-label={t('attachments.attachFile')}
             onChange={(e) => onPickFile(e.target.files?.[0])}
             disabled={uploadMutation.isPending}
           />
-          {uploadMutation.isPending ? <span className="text-subtle text-sm">Uploading…</span> : null}
+          {uploadMutation.isPending ? <span className="text-subtle text-sm">{t('common.uploading')}</span> : null}
         </div>
       ) : null}
 
       {maxUploadBytes > 0 ? (
-        <span className="field__hint">Files up to {formatBytes(maxUploadBytes)}.</span>
+        <span className="field__hint">
+            {t('attachments.limit', { size: formatBytes(maxUploadBytes) })}
+          </span>
       ) : null}
     </Card>
   )

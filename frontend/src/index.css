@@ -38,6 +38,9 @@
   --color-warning: #9a6212;
   --color-warning-soft: #fdf3e2;
 
+  /* A soft, modern radius scale. Controls sit at the small step, cards and
+     panels at the middle one, and the largest is reserved for modals and the
+     hero, so the size of a corner reads as the rank of the surface. */
   --radius-sm: 6px;
   --radius: 10px;
   --radius-lg: 14px;
@@ -86,9 +89,9 @@
      #78828f measured 4.09:1 on the raised surface, just under AA. */
   --color-text-subtle: #8f99a7;
 
-  --color-accent: #6c8cf5;
-  --color-accent-hover: #8aa4f8;
-  --color-accent-soft: #1d2740;
+  --color-accent: #5b83ff;
+  --color-accent-hover: #7d9cff;
+  --color-accent-soft: #1a2340;
   --color-on-accent: #0d1017;
   --color-danger: #f08b81;
   --color-danger-soft: #3a1f1c;
@@ -120,9 +123,9 @@
     --color-text-muted: #9aa4b2;
     --color-text-subtle: #8f99a7;
 
-    --color-accent: #6c8cf5;
-    --color-accent-hover: #8aa4f8;
-    --color-accent-soft: #1d2740;
+    --color-accent: #5b83ff;
+    --color-accent-hover: #7d9cff;
+    --color-accent-soft: #1a2340;
     --color-on-accent: #0d1017;
     --color-danger: #f08b81;
     --color-danger-soft: #3a1f1c;
@@ -162,6 +165,14 @@ body {
   text-rendering: optimizeLegibility;
   font-feature-settings: "cv11", "ss01";
   font-variant-numeric: tabular-nums;
+  /* Stops iOS Safari from inflating text in landscape, which silently breaks
+     any layout tuned to a fixed line height. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* A URL, a hash or an imported email can be one unbroken word wider than the
+     screen. Breaking it is ugly but never widens the document, which is the
+     failure that matters. */
+  overflow-wrap: break-word;
 }
 
 h1,
@@ -222,16 +233,24 @@ pre {
 .app-shell {
   display: grid;
   grid-template-columns: var(--sidebar-width) 1fr;
+  /* `100vh` is the tall viewport: on a phone whose browser chrome hides on
+     scroll it is taller than the screen, so the shell is cut off or scrolls a
+     sliver. `dvh` tracks the visible area; it is declared second so a browser
+     that does not know it keeps the `vh` fallback. */
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .sidebar {
   display: flex;
   flex-direction: column;
   padding: var(--space-3) var(--space-2) var(--space-2);
-  background: var(--color-surface);
+  /* A hair off the surface so the navigation reads as a rail beside the page
+     rather than as a second card. */
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-bg));
   border-right: 1px solid var(--color-border);
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .sidebar__brand {
@@ -244,6 +263,7 @@ pre {
   letter-spacing: -0.015em;
   color: var(--color-text);
   text-decoration: none;
+  border-radius: var(--radius);
 }
 
 .sidebar__brand:hover { text-decoration: none; }
@@ -288,7 +308,7 @@ pre {
   transition: background-color 0.12s ease, color 0.12s ease;
 }
 
-.nav-item svg { flex-shrink: 0; opacity: 0.85; }
+.nav-item svg { flex-shrink: 0; opacity: 0.8; }
 
 .nav-item:hover {
   background: var(--color-surface-sunken);
@@ -317,6 +337,15 @@ pre {
   background: var(--color-accent);
 }
 
+/* Touch targets: a finger is not a mouse, so on a touch screen the navigation
+   rows grow to the 44px minimum rather than the 32px a pointer needs. */
+@media (pointer: coarse) {
+  .nav-item { padding: 11px var(--space-2) 11px 10px; }
+  .menu__item { padding: 11px var(--space-2); }
+  .btn { padding: 10px 14px; }
+  .segmented__item { padding: 8px 10px; }
+}
+
 .main {
   display: flex;
   flex-direction: column;
@@ -329,9 +358,14 @@ pre {
   justify-content: space-between;
   gap: var(--space-4);
   height: var(--header-height);
-  padding: 0 var(--space-5);
+  /* The bar is sticky to the top edge, so on a notched phone it has to clear
+     the status bar and the rounded corner. max() keeps the designed padding
+     wherever the inset is zero. */
+  padding: 0 max(var(--space-5), env(safe-area-inset-right)) 0
+    max(var(--space-5), env(safe-area-inset-left));
   background: color-mix(in srgb, var(--color-surface) 86%, transparent);
   backdrop-filter: saturate(160%) blur(10px);
+  -webkit-backdrop-filter: saturate(160%) blur(10px);
   border-bottom: 1px solid var(--color-border);
   position: sticky;
   top: 0;
@@ -344,6 +378,23 @@ pre {
   gap: var(--space-2);
   font-size: 12.5px;
   color: var(--color-text-muted);
+  min-width: 0;
+}
+
+/* The wordmark beside the drawer toggle. Hidden until the rail collapses, where
+   it replaces the brand the rail used to show. */
+.topbar__brand {
+  display: none;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.topbar__brand-name {
+  font-weight: 650;
+  font-size: 14.5px;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
 }
 
 .topbar__org-name { font-weight: 600; color: var(--color-text); }
@@ -352,12 +403,15 @@ pre {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .topbar__user {
   display: flex;
   align-items: center;
   gap: var(--space-3);
+  min-width: 0;
 }
 
 /* The search affordance reads as a field, not a button, so its placement next to
@@ -382,7 +436,13 @@ pre {
   color: var(--color-text-muted);
 }
 
-.search-trigger__label { flex: 1; text-align: left; }
+.search-trigger__label {
+  flex: 1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* --------------------------------------------------------- account menu -- */
 
@@ -530,6 +590,11 @@ pre {
   padding: var(--space-5);
   max-width: 1400px;
   width: 100%;
+  /* A grid/flex child defaults to min-width:auto, so a wide descendant (a
+     table, a long unbroken string) would widen the whole column and push the
+     page sideways instead of scrolling inside its own box. Pinning the column
+     to min-width:0 keeps the overflow local to the element that can scroll. */
+  min-width: 0;
 }
 
 /* Scrim behind the mobile sidebar. It is a button so a tap anywhere dismisses
@@ -561,6 +626,8 @@ pre {
 .page-header__actions {
   display: flex;
   gap: var(--space-2);
+  flex-wrap: wrap;
+  min-width: 0;
   flex-shrink: 0;
 }
 
@@ -571,6 +638,17 @@ pre {
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
+  /* A card may be a grid or flex item, where the default `min-width: auto`
+     refuses to shrink below its widest descendant (a long JSON line, a wide
+     table). Allowing it to shrink lets the inner scroll container do its job. */
+  min-width: 0;
+}
+
+/* Children of a layout grid or stack likewise must be allowed to shrink, or one
+   wide child widens the whole page and every route scrolls sideways. */
+.grid > *,
+.stack > * {
+  min-width: 0;
 }
 
 .card__header {
@@ -580,6 +658,15 @@ pre {
   gap: var(--space-3);
   padding: var(--space-4);
   border-bottom: 1px solid var(--color-border);
+  /* A header whose title and actions do not both fit wraps onto a second line
+     rather than overflowing the card, which is what happens on a phone. */
+  flex-wrap: wrap;
+}
+
+/* The whole card becomes a tappable surface only when it holds a link, so a
+   static card never promises a click it cannot honour. */
+.card:has(a:hover) {
+  border-color: var(--color-border-strong);
 }
 
 .card__header h2 { letter-spacing: -0.012em; }
@@ -594,11 +681,29 @@ pre {
 }
 
 .grid--stats {
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
 }
 
 .grid--split {
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+}
+
+/* A sidebar-plus-main split. The sidebar keeps a readable fixed-ish width and
+   the main column takes the rest; both are allowed to shrink to zero so a wide
+   child (a table) scrolls in place instead of widening the page. Below the
+   breakpoint the two stack, because a 280px sidebar and a readable main column
+   cannot both fit on a phone. */
+.layout--aside {
+  display: grid;
+  grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.layout--aside > * { min-width: 0; }
+
+@media (max-width: 860px) {
+  .layout--aside { grid-template-columns: 1fr; }
 }
 
 .stat {
@@ -801,7 +906,7 @@ textarea {
 
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
   gap: var(--space-4);
 }
 
@@ -827,7 +932,12 @@ textarea {
 
 /* ----------------------------------------------------------------- table -- */
 
-.table-wrap { overflow-x: auto; }
+.table-wrap {
+  overflow-x: auto;
+  /* Keeps the scroll container from growing the page: the wrapper may be
+     narrower than the table it holds, and that is the point. */
+  max-width: 100%;
+}
 
 table {
   width: 100%;
@@ -877,6 +987,79 @@ tbody tr:last-child td { border-bottom: none; }
 }
 
 .numeric { font-variant-numeric: tabular-nums; text-align: right; }
+
+/* A table marked `.table--stack` stops being a table below the phone breakpoint
+   and becomes one card per row: the header row goes away and each cell is
+   labelled from its own `data-label`. This is the fix for the sideways scroll —
+   a phone cannot show six columns, and scrolling hides the ones that matter. */
+@media (max-width: 640px) {
+  .table--stack,
+  .table--stack thead,
+  .table--stack tbody,
+  .table--stack tr,
+  .table--stack td {
+    display: block;
+    width: 100%;
+  }
+
+  .table--stack thead { display: none; }
+
+  .table--stack tr {
+    padding: var(--space-2) var(--space-4);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .table--stack tr:last-child { border-bottom: none; }
+
+  /* A row hover is meaningless once rows are cards, and it fights the tap
+     highlight on a touch screen. */
+  .table--stack tbody tr:hover { background: transparent; }
+
+  .table--stack td {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-3);
+    padding: 5px 0;
+    border-bottom: none;
+    text-align: left;
+  }
+
+  .table--stack td::before {
+    content: attr(data-label);
+    flex: 0 0 40%;
+    max-width: 40%;
+    font-size: 11.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-subtle);
+  }
+
+  /* A cell with no label (the select checkbox, a bare action) keeps the full
+     width instead of reserving an empty label column. */
+  .table--stack td:not([data-label])::before { display: none; }
+
+  .table--stack td:not([data-label]) { padding-top: var(--space-1); }
+
+  /* The value half may itself be a row of chips or a button group; it wraps
+     rather than forcing the card wider than the phone. */
+  .table--stack td > * { min-width: 0; }
+
+  /* The value half grows to fill what the label leaves, so a wrapped value uses
+     the whole card width instead of hugging a fixed column and leaving a gap. */
+  .table--stack td > *:last-child { flex: 1 1 auto; }
+
+  .table--stack .numeric { text-align: left; }
+}
+
+/* A wrap of chips, tags or small badges. It wraps by default so a set that does
+   not fit a narrow column flows to the next line instead of widening it. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
 
 /* ------------------------------------------------------------------ chips -- */
 
@@ -1060,7 +1243,9 @@ tbody tr:last-child td { border-bottom: none; }
 
 .stack { display: flex; flex-direction: column; gap: var(--space-3); }
 .stack--sm { gap: var(--space-2); }
-.row { display: flex; align-items: center; gap: var(--space-2); }
+/* A row of controls. It wraps by default: a row that cannot wrap is a row that
+   pushes the page sideways the moment its controls are wider than the phone. */
+.row { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .row--between { justify-content: space-between; }
 .row--wrap { flex-wrap: wrap; }
 .spacer { flex: 1; }
@@ -1128,12 +1313,41 @@ tbody tr:last-child td { border-bottom: none; }
   .search-trigger__label,
   .search-trigger .kbd { display: none; }
 
-  .content { padding: var(--space-4); }
+  /* The brand returns to the top bar now that the rail has collapsed. */
+  .topbar__brand { display: inline-flex; }
+
+  .content {
+    padding: var(--space-4);
+    /* The last row must clear the home indicator rather than sit under it. */
+    padding-bottom: max(var(--space-4), env(safe-area-inset-bottom));
+  }
 
   .page-header { flex-direction: column; }
 
   .dl { grid-template-columns: 1fr; gap: var(--space-1); }
   .dl dt { margin-top: var(--space-2); }
+}
+
+/* Narrower than a phone: the top bar keeps the toggle, the brand and the
+   account avatar, and drops the search field to an icon and the account name to
+   nothing. Without this the user chip pushes the bar 46px past the viewport and
+   every page scrolls sideways on a 320px device. */
+@media (max-width: 560px) {
+  .topbar { padding: 0 var(--space-3); gap: var(--space-2); }
+
+  /* The brand name is the first thing to go: the avatar and the toggle still
+     say where you are, and the name is the widest, least load-bearing item. */
+  .topbar__brand-name { display: none; }
+
+  .topbar__org { display: none; }
+
+  .menu__name { display: none; }
+
+  .menu__trigger { padding: 3px; }
+
+  /* A 44px tap target for the drawer toggle, the one control every phone user
+     needs and the one a cramped bar would shrink. */
+  .sidebar-toggle { min-width: 40px; min-height: 40px; justify-content: center; }
 }
 
 /* Keyboard shortcut hint. Styled as a key rather than text so it reads as an
@@ -1158,6 +1372,7 @@ tbody tr:last-child td { border-bottom: none; }
    hard to read, and the whole page centres vertically. */
 .login {
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   grid-template-columns: minmax(360px, 1fr) minmax(420px, 1.05fr);
   background: var(--color-bg);
@@ -1294,7 +1509,9 @@ tbody tr:last-child td { border-bottom: none; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: var(--space-6) var(--space-5);
+  padding: var(--space-6) max(var(--space-5), env(safe-area-inset-right))
+    max(var(--space-6), env(safe-area-inset-bottom))
+    max(var(--space-5), env(safe-area-inset-left));
   position: relative;
 }
 
@@ -1306,6 +1523,11 @@ tbody tr:last-child td { border-bottom: none; }
   justify-content: space-between;
   gap: var(--space-3);
   margin-bottom: var(--space-7);
+  /* The brand and the language/theme controls together are wider than a
+     320px phone. Without wrapping they set a min-content floor on the whole
+     column, which pushes the page sideways; with it the controls drop to a
+     second line and the column can shrink. */
+  flex-wrap: wrap;
 }
 
 /* The compact brand is for the narrow layout; on the wide layout the aside
@@ -1596,7 +1818,10 @@ tbody tr:last-child td { border-bottom: none; }
   display: flex;
   flex-direction: column;
   width: 100%;
+  /* `dvh` so a tall modal on a phone stops at the visible bottom instead of
+     running under the browser chrome, which would hide its footer actions. */
   max-height: calc(100vh - 2 * var(--space-4));
+  max-height: calc(100dvh - 2 * var(--space-4));
   background: var(--color-surface-raised);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
@@ -1633,6 +1858,22 @@ tbody tr:last-child td { border-bottom: none; }
   border-bottom: 1px solid var(--color-border);
 }
 
+.modal__heading {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+/* A badge or status pill the caller renders beside the title. It stays on the
+   header line, between the heading and the close button, so a dialog that
+   reports state (a job's status, a migration's read-only flag) shows it without
+   the body having to repeat it. */
+.modal__extra {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
 .modal__title { font-size: 16px; letter-spacing: -0.012em; }
 
 .modal__description {
@@ -1661,6 +1902,17 @@ tbody tr:last-child td { border-bottom: none; }
   overflow-y: auto;
 }
 
+/* A form dialog spans body and footer with one <form>. The form is the flex
+   child of the panel, so it takes the remaining height and lets the body
+   scroll while the footer's submit button stays in place. */
+.modal__form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
 .modal__footer {
   display: flex;
   justify-content: flex-end;
@@ -1668,6 +1920,88 @@ tbody tr:last-child td { border-bottom: none; }
   padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--color-border);
   background: var(--color-surface-sunken);
+}
+
+/* On a phone the panel becomes a bottom sheet: it is anchored to the bottom
+   edge, where a thumb reaches, instead of floating in the middle of the screen
+   under the browser chrome. The sheet rounds only its top corners and grows to
+   the viewport height minus a strip of scrim, so a tall form scrolls inside the
+   sheet rather than pushing its actions off the bottom. */
+@media (max-width: 640px) {
+  .modal {
+    place-items: end stretch;
+    padding: 0;
+  }
+
+  .modal__panel,
+  .modal__panel--sm,
+  .modal__panel--md,
+  .modal__panel--lg {
+    max-width: none;
+    max-height: calc(100vh - var(--space-6));
+    max-height: calc(100dvh - var(--space-6));
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+
+  .modal__header {
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .modal__footer {
+    /* Clear the home indicator so the primary action is not under it. */
+    padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
+  }
+}
+
+/* ------------------------------------------------------- search palette -- */
+
+/* The command palette is a Modal, so it inherits the scrim, the focus trap and
+   the phone bottom-sheet treatment. Its body opts out of the modal padding so
+   the field and the results can run edge to edge. */
+.search-palette {
+  margin: calc(-1 * var(--space-4)) calc(-1 * var(--space-4)) 0;
+}
+
+.search-palette__field {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.search-palette__results {
+  max-height: min(380px, 55vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.search-palette__result {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+}
+
+.search-palette__result[data-active='true'] {
+  background: var(--color-accent-soft);
+}
+
+.search-palette__result:hover {
+  background: var(--color-accent-soft);
+}
+
+/* The one-time credential reveal: a long secret has to wrap rather than widen
+   the dialog, and it reads as a monospaced code block, not body copy. */
+.token-reveal {
+  word-break: break-all;
+  padding: var(--space-3);
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  font-size: 12.5px;
+  line-height: 1.6;
 }
 
 /* ---------------------------------------------------------------- avatar -- */
@@ -1780,7 +2114,7 @@ a.metric:hover {
    link to a real page rather than a decorative tile. */
 .quick-actions {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
   gap: var(--space-3);
 }
 
@@ -1868,3 +2202,30 @@ a.metric:hover {
   .spinner { animation-duration: 1.6s; }
   a.metric:hover { transform: none; }
 }
+
+/* ------------------------------------------------------------- breadcrumb -- */
+
+/* Where am I, and how do I get back. A detail view is reached from a list, so
+   the trail names that list and links to it; the current record is plain text,
+   because a link to the page you are already on is a dead end. */
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+}
+
+.breadcrumb__link { color: var(--color-text-muted); font-weight: 500; }
+
+.breadcrumb__link:hover { color: var(--color-accent); }
+
+.breadcrumb__sep { color: var(--color-border-strong); }
+
+/* The lead column holds the breadcrumb, the title and its meta, so they stay
+   together when the action group wraps below on narrow screens. */
+.page-header__lead { min-width: 0; }
+
+.breadcrumb__current { color: var(--color-text); font-weight: 550; }

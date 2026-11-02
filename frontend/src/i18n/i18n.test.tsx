@@ -19,6 +19,7 @@ import {
 } from '../theme'
 import { en } from './en'
 import { ru } from './ru'
+import { WORKFLOW_STEP_TYPES } from '../api/workflows'
 
 function LocaleProbe() {
   const { locale, setLocale, t } = useI18n()
@@ -119,13 +120,28 @@ describe('locale', () => {
 
   it('leaves no untranslated English words in the Russian dictionary', () => {
     // The reverse of the check above: a Russian string that still carries an
-    // English word reads as a half-finished translation. Brand names, protocol
-    // acronyms and interpolation placeholders are the only allowed exceptions.
+    // English word reads as a half-finished translation. What is allowed is
+    // names and literals that have no translation: brands, protocol and format
+    // acronyms, and the tokens a user must type verbatim.
     const allowed = new Set([
-      'ForgeCRM', 'Telegram', 'S3', 'MinIO', 'MCP', 'AI', 'OIDC', 'OAuth', 'SSO',
-      'API', 'URL', 'UUID', 'JSON', 'HTML', 'HTTP', 'HTTPS', 'SQL', 'RBAC', 'CRM',
-      'SDK', 'CSV', 'SMTP', 'Webhook', 'Webhooks',
+      // Brands and products.
+      'ForgeCRM', 'Telegram', 'MinIO', 'OpenID',
+      // Protocols, formats and standards.
+      'OIDC', 'OAuth', 'SSO', 'API', 'URL', 'UUID', 'JSON', 'JSONL', 'HTML',
+      'HTTP', 'HTTPS', 'SQL', 'RBAC', 'CRM', 'SDK', 'CSV', 'TSV', 'XLSX', 'XML',
+      'SMTP', 'S3', 'MCP', 'AI', 'MAPE', 'SSRF', 'HMAC', 'PKCE', 'Webhook',
+      'Webhooks', 'Cookie',
+      // Literals the interface shows but a translator must not rewrite.
+      'cron', 'Cron', 'steps',
+      // A payload path is an identifier a user types verbatim, not prose.
+      'payload', 'priority',
     ])
+    // The hint that lists the workflow step types must name them exactly, so the
+    // identifiers are taken from the one place they are declared instead of being
+    // repeated here, where they would drift.
+    for (const stepType of WORKFLOW_STEP_TYPES) {
+      for (const part of stepType.split('_')) allowed.add(part)
+    }
     const offenders: string[] = []
     const walk = (obj: Record<string, unknown>, prefix: string): void => {
       for (const [key, value] of Object.entries(obj)) {

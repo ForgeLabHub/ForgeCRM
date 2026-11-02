@@ -15,7 +15,8 @@ import { errorMessage } from '../api/client'
 import { viewsApi } from '../api/views'
 import type { SavedView, SavedViewInput, ViewEntityType, ViewFilters } from '../api/views'
 import { useAuth } from '../hooks/useAuth'
-import { Alert, ConfirmDialog, Field } from './ui'
+import { useT } from '../i18n'
+import { Alert, ConfirmDialog, Field, Modal } from './ui'
 
 interface SavedViewsBarProps {
   entityType: ViewEntityType
@@ -51,6 +52,7 @@ export function SavedViewsBar({
   activeId,
   onActiveChange,
 }: SavedViewsBarProps) {
+  const t = useT()
   const { can } = useAuth()
   const queryClient = useQueryClient()
   const [saving, setSaving] = useState(false)
@@ -83,23 +85,23 @@ export function SavedViewsBar({
   }
 
   return (
-    <div className="saved-views" role="group" aria-label="Saved views">
+    <div className="saved-views" role="group" aria-label={t('savedViews.groupLabel')}>
       {query.isError ? (
         <Alert tone="error">{errorMessage(query.error)}</Alert>
       ) : (
         <>
           <label className="field saved-views__select">
-            <span className="field__label">View</span>
+            <span className="field__label">{t('savedViews.view')}</span>
             <select
               value={activeId ?? ''}
               onChange={(event) => select(event.target.value)}
               disabled={query.isLoading}
             >
-              <option value="">All records</option>
+              <option value="">{t('savedViews.allRecords')}</option>
               {items.map((view) => (
                 <option key={view.id} value={view.id}>
                   {view.name}
-                  {view.shared ? ' (shared)' : ''}
+                  {view.shared ? ` (${t('savedViews.sharedBadge')})` : ''}
                   {view.pinned ? ' ★' : ''}
                 </option>
               ))}
@@ -107,12 +109,12 @@ export function SavedViewsBar({
           </label>
 
           {active && !active.is_mine ? (
-            <span className="text-subtle text-sm" title="A shared view may be applied but only its owner may change it">
-              shared view
+            <span className="text-subtle text-sm" title={t('savedViews.sharedNote')}>
+              {t('savedViews.sharedBadge')}
             </span>
           ) : null}
 
-          {modified ? <span className="text-sm text-subtle">modified</span> : null}
+          {modified ? <span className="text-sm text-subtle">{t('savedViews.modified')}</span> : null}
 
           {mayManage ? (
             <>
@@ -121,7 +123,7 @@ export function SavedViewsBar({
                 className="btn btn--secondary btn--sm"
                 onClick={() => setSaving(true)}
               >
-                {active ? 'Save as new' : 'Save view'}
+                {active ? t('savedViews.saveAsNew') : t('savedViews.saveView')}
               </button>
               {active && active.is_mine ? (
                 <button
@@ -129,7 +131,7 @@ export function SavedViewsBar({
                   className="btn btn--ghost btn--sm"
                   onClick={() => setDeleting(active)}
                 >
-                  Delete
+                  {t('common.delete')}
                 </button>
               ) : null}
             </>
@@ -151,9 +153,9 @@ export function SavedViewsBar({
 
       <ConfirmDialog
         open={deleting !== null}
-        title="Delete this view?"
-        text={`"${deleting?.name ?? ''}" will be removed from your views. The records it showed are not affected.`}
-        confirmLabel="Delete"
+        title={t('savedViews.deleteTitle')}
+        text={t('savedViews.deleteText', { name: deleting?.name ?? '' })}
+        confirmLabel={t('common.delete')}
         danger
         onCancel={() => setDeleting(null)}
         onConfirm={() => {
@@ -183,6 +185,7 @@ function SaveViewDialog({
   onClose: () => void
   onSaved: (view: SavedView) => void
 }) {
+  const t = useT()
   const [name, setName] = useState('')
   const [shared, setShared] = useState(false)
   const [pinned, setPinned] = useState(false)
@@ -213,67 +216,51 @@ function SaveViewDialog({
   if (!open) return null
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="save-view-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        display: 'grid',
-        placeItems: 'center',
-        background: 'var(--color-overlay)',
-        zIndex: 60,
-        padding: 'var(--space-4)',
-      }}
-      onClick={onClose}
-    >
-      <form
-        className="card"
-        style={{ maxWidth: 460, width: '100%' }}
-        onClick={(event) => event.stopPropagation()}
-        onSubmit={handleSubmit}
-      >
-        <div className="card__header">
-          <h2 id="save-view-title">Save this view</h2>
-        </div>
-        <div className="card__body">
-          {error ? <Alert tone="error">{error}</Alert> : null}
-          <Field label="Name" htmlFor="view-name" required>
-            <input
-              id="view-name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              autoFocus
-              maxLength={100}
-            />
-          </Field>
-          <label className="row" style={{ gap: 'var(--space-2)' }}>
-            <input
-              type="checkbox"
-              checked={shared}
-              onChange={(event) => setShared(event.target.checked)}
-            />
-            <span>Share with my organization</span>
-          </label>
-          <label className="row" style={{ gap: 'var(--space-2)' }}>
-            <input
-              type="checkbox"
-              checked={pinned}
-              onChange={(event) => setPinned(event.target.checked)}
-            />
-            <span>Pin to the top</span>
-          </label>
-        </div>
-        <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
+    <Modal
+      open
+      onClose={onClose}
+      title={t('savedViews.saveTitle')}
+      size="sm"
+      formProps={{ onSubmit: handleSubmit }}
+      footer={
+        <>
           <button type="button" className="btn btn--secondary" onClick={onClose}>
             Cancel
           </button>
           <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
             {mutation.isPending ? 'Saving…' : 'Save'}
           </button>
-        </div>
-      </form>
-    </div>
+        </>
+      }
+    >
+      <div className="stack">
+        {error ? <Alert tone="error">{error}</Alert> : null}
+        <Field label={t('savedViews.name')} htmlFor="view-name" required>
+          <input
+            id="view-name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            autoFocus
+            maxLength={100}
+          />
+        </Field>
+        <label className="row" style={{ gap: 'var(--space-2)' }}>
+          <input
+            type="checkbox"
+            checked={shared}
+            onChange={(event) => setShared(event.target.checked)}
+          />
+          <span>{t('savedViews.share')}</span>
+        </label>
+        <label className="row" style={{ gap: 'var(--space-2)' }}>
+          <input
+            type="checkbox"
+            checked={pinned}
+            onChange={(event) => setPinned(event.target.checked)}
+          />
+          <span>{t('savedViews.pin')}</span>
+        </label>
+      </div>
+    </Modal>
   )
 }

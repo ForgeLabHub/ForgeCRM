@@ -2,9 +2,16 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover lets the layout reach into the notch and the home
+         indicator area; the safe-area insets are then applied in CSS. Without
+         it, a notched phone letterboxes the whole app in a white frame. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" content="#2563eb" />
+    <!-- Two theme colours so the browser chrome matches the page in either mode
+         instead of tinting a dark screen with the light accent. -->
+    <meta name="theme-color" content="#f5f7fa" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0f1219" media="(prefers-color-scheme: dark)" />
+    <meta name="description" content="ForgeCRM — the ForgeLabHub business platform: CRM, automation, analytics and intelligence in one workspace." />
     <title>ForgeCRM</title>
     <script>
       /*

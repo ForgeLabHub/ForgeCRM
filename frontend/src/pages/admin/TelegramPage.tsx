@@ -3,8 +3,10 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { telegramApi } from '../../api/notifications'
 import { errorMessage } from '../../api/client'
 import { Alert, Badge, Card, ConfirmDialog, PageHeader } from '../../components/ui'
+import { useT } from '../../i18n'
 
 export function TelegramPage() {
+  const t = useT()
   const [linkCode, setLinkCode] = useState<{ code: string; expires_at: string } | null>(null)
   const [unlinking, setUnlinking] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -35,47 +37,43 @@ export function TelegramPage() {
 
   return (
     <>
-      <PageHeader
-        title="Telegram"
-        meta="Optional bot that can send you notifications and let you look at your own tasks."
-      />
+      <PageHeader title={t('telegram.title')} meta={t('telegram.meta')} />
 
       <div className="stack">
         {error ? <Alert tone="error">{error}</Alert> : null}
 
-        <Card title="Bot status">
+        <Card title={t('telegram.botStatus')}>
           {status.isError ? (
             <Alert tone="error">{errorMessage(status.error)}</Alert>
           ) : status.isLoading ? (
-            <p className="text-muted">Loading…</p>
+            <p className="text-muted">{t('common.loading')}</p>
           ) : status.data ? (
             <div className="stack">
               <div className="row">
                 {status.data.enabled ? (
-                  <Badge tone="success">enabled</Badge>
+                  <Badge tone="success">{t('telegram.enabled')}</Badge>
                 ) : (
-                  <Badge tone="neutral">disabled</Badge>
+                  <Badge tone="neutral">{t('telegram.disabled')}</Badge>
                 )}
                 {status.data.configured ? (
-                  <Badge tone="success">token set</Badge>
+                  <Badge tone="success">{t('telegram.tokenSet')}</Badge>
                 ) : (
-                  <Badge tone="warning">no token</Badge>
+                  <Badge tone="warning">{t('telegram.noToken')}</Badge>
                 )}
-                {status.data.webhook_set ? <Badge tone="accent">webhook registered</Badge> : null}
+                {status.data.webhook_set ? (
+                  <Badge tone="accent">{t('telegram.webhookRegistered')}</Badge>
+                ) : null}
               </div>
 
               {!status.data.configured ? (
-                <Alert tone="info">
-                  No bot token is configured. ForgeCRM runs normally without Telegram; set a token in
-                  the server configuration to enable the bot.
-                </Alert>
+                <Alert tone="info">{t('telegram.noTokenInfo')}</Alert>
               ) : (
                 <dl className="dl">
-                  <dt>Bot</dt>
+                  <dt>{t('telegram.bot')}</dt>
                   <dd className="mono">{status.data.bot_username ?? '—'}</dd>
                   {status.data.last_error ? (
                     <>
-                      <dt>Last error</dt>
+                      <dt>{t('telegram.lastError')}</dt>
                       <dd className="text-danger">{status.data.last_error}</dd>
                     </>
                   ) : null}
@@ -86,13 +84,9 @@ export function TelegramPage() {
         </Card>
 
         {status.data?.configured ? (
-          <Card title="Link your account">
+          <Card title={t('telegram.linkAccount')}>
             <div className="stack">
-              <p className="text-muted text-sm">
-                Generate a code, then send it to the bot in Telegram. The code expires shortly and
-                can only be used once. Linking is per user, so the bot always acts as you and is
-                bound by your permissions.
-              </p>
+              <p className="text-muted text-sm">{t('telegram.linkIntro')}</p>
 
               <div className="row">
                 <button
@@ -101,18 +95,21 @@ export function TelegramPage() {
                   onClick={() => requestCode.mutate()}
                   disabled={requestCode.isPending}
                 >
-                  {requestCode.isPending ? 'Generating…' : 'Generate link code'}
+                  {requestCode.isPending ? t('telegram.generating') : t('telegram.generateCode')}
                 </button>
                 <button type="button" className="btn btn--danger btn--sm" onClick={() => setUnlinking(true)}>
-                  Unlink my account
+                  {t('telegram.unlinkAccount')}
                 </button>
               </div>
 
               {linkCode ? (
                 <Alert tone="success">
-                  Send this code to the bot: <strong className="mono">{linkCode.code}</strong>
+                  {t('telegram.codeMessage')}
+                  <strong className="mono">{linkCode.code}</strong>
                   <br />
-                  It expires at {new Date(linkCode.expires_at).toLocaleTimeString()}.
+                  {t('telegram.codeExpires', {
+                    time: new Date(linkCode.expires_at).toLocaleTimeString(),
+                  })}
                 </Alert>
               ) : null}
             </div>
@@ -122,9 +119,9 @@ export function TelegramPage() {
 
       <ConfirmDialog
         open={unlinking}
-        title="Unlink your Telegram account?"
-        text="The bot stops recognising you immediately and cannot read your tasks until you link again."
-        confirmLabel="Unlink"
+        title={t('telegram.unlinkTitle')}
+        text={t('telegram.unlinkText')}
+        confirmLabel={t('telegram.unlink')}
         danger
         busy={unlink.isPending}
         onConfirm={() => unlink.mutate()}
