@@ -8,7 +8,7 @@ import { useAuth } from '../hooks/useAuth'
 import { fieldErrors } from '../api/client'
 import { ssoApi, type SSOProvider } from '../api/auth'
 import { useI18n, translationExists } from '../i18n'
-import { localizeError } from '../i18n/errors'
+import { localizeLoginError } from '../i18n/errors'
 
 /**
  * Sign-in page.
@@ -119,7 +119,7 @@ export function LoginPage() {
   }
 
   // Localise at render time so the message follows the active language.
-  const errorText = formError ? localizeError(formError, t, locale) : null
+  const errorText = formError ? localizeLoginError(formError, t, locale) : null
 
   // The provider redirects back with a code in the URL. An unrecognised code
   // must fall back to a real sentence, not render the raw key.
