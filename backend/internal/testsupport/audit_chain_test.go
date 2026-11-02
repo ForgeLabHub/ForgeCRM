@@ -1,56 +1,34 @@
-//go:build integration
-
 // The audit hash chain is checked against the real schema and the real
 // append-only trigger. Whether a chain is intact is a property of the rows and
 // their order in PostgreSQL, not of Go code a mock could stand in for: the
 // tamper cases have to actually alter a stored row, and the concurrency case has
 // to actually run several writers against one table.
 //
+// It lives here rather than in internal/audit because it needs the migration
+// runner, and internal/audit must stay extractable — the extraction proof for
+// every module that depends on audit would fail if the package imported the
+// monolith's migrate package, even from a test file.
+//
 // Run with:
 //
-//	FORGECRM_TEST_DATABASE_URL=postgres://... go test -tags=integration ./internal/audit/...
-package audit
+// FORGECRM_TEST_DATABASE_URL=postgres://... go test -tags=integration ./internal/testsupport/...
+package testsupport
 
 import (
 	"context"
 	"fmt"
-	"log/slog"
-	"os"
 	"sync"
 	"testing"
 
 	"github.com/google/uuid"
 
+	"github.com/geff1778/forgecrm/internal/audit"
 	"github.com/geff1778/forgecrm/internal/database"
-	"github.com/geff1778/forgecrm/internal/migrate"
 )
 
-func connectOrSkip(t *testing.T) *database.DB {
-	t.Helper()
-	url := os.Getenv("FORGECRM_TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("FORGECRM_TEST_DATABASE_URL is not set; skipping integration test")
-	}
-	db, err := database.Connect(context.Background(), url)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(db.Close)
-	return db
-}
-
-func freshSchema(t *testing.T, db *database.DB) {
-	t.Helper()
-	ctx := context.Background()
-	if _, err := db.Pool().Exec(ctx, `DROP SCHEMA public CASCADE; CREATE SCHEMA public;`); err != nil {
-		t.Fatalf("reset schema: %v", err)
-	}
-	if _, err := migrate.Up(os.Getenv("FORGECRM_TEST_DATABASE_URL"), slog.Default()); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-}
-
-func seedOrg(t *testing.T, db *database.DB, name string) uuid.UUID {
+// seedAuditOrg inserts an organization and returns its id. Named to avoid
+// colliding with the seed helpers other testsupport files define.
+func seedAuditOrg(t *testing.T, db *database.DB, name string) uuid.UUID {
 	t.Helper()
 	var id uuid.UUID
 	err := db.Pool().QueryRow(context.Background(),
@@ -61,9 +39,9 @@ func seedOrg(t *testing.T, db *database.DB, name string) uuid.UUID {
 	return id
 }
 
-func record(t *testing.T, l *Logger, org uuid.UUID, action string) {
+func recordAudit(t *testing.T, l *audit.Logger, org uuid.UUID, action string) {
 	t.Helper()
-	if err := l.Record(context.Background(), Entry{
+	if err := l.Record(context.Background(), audit.Entry{
 		OrganizationID: &org,
 		ActorType:      "user",
 		Action:         action,
@@ -81,11 +59,11 @@ func record(t *testing.T, l *Logger, org uuid.UUID, action string) {
 func TestChainIsIntactAfterOrdinaryWrites(t *testing.T) {
 	db := connectOrSkip(t)
 	freshSchema(t, db)
-	l := New(db)
-	org := seedOrg(t, db, "acme")
+	l := audit.New(db)
+	org := seedAuditOrg(t, db, "acme")
 
 	for i := 0; i < 5; i++ {
-		record(t, l, org, fmt.Sprintf("contacts.created.%d", i))
+		recordAudit(t, l, org, fmt.Sprintf("contacts.created.%d", i))
 	}
 
 	res, err := l.Verify(context.Background(), &org)
@@ -111,12 +89,12 @@ func TestChainIsIntactAfterOrdinaryWrites(t *testing.T) {
 func TestVerifyDetectsAnAlteredEntry(t *testing.T) {
 	db := connectOrSkip(t)
 	freshSchema(t, db)
-	l := New(db)
-	org := seedOrg(t, db, "acme")
+	l := audit.New(db)
+	org := seedAuditOrg(t, db, "acme")
 	ctx := context.Background()
 
 	for i := 0; i < 4; i++ {
-		record(t, l, org, fmt.Sprintf("contacts.created.%d", i))
+		recordAudit(t, l, org, fmt.Sprintf("contacts.created.%d", i))
 	}
 
 	// Find the id of the third entry and rewrite its action.
@@ -154,12 +132,12 @@ func TestVerifyDetectsAnAlteredEntry(t *testing.T) {
 func TestVerifyDetectsARemovedEntry(t *testing.T) {
 	db := connectOrSkip(t)
 	freshSchema(t, db)
-	l := New(db)
-	org := seedOrg(t, db, "acme")
+	l := audit.New(db)
+	org := seedAuditOrg(t, db, "acme")
 	ctx := context.Background()
 
 	for i := 0; i < 4; i++ {
-		record(t, l, org, fmt.Sprintf("contacts.created.%d", i))
+		recordAudit(t, l, org, fmt.Sprintf("contacts.created.%d", i))
 	}
 
 	var removedID, followerID int64
@@ -203,14 +181,14 @@ func TestVerifyDetectsARemovedEntry(t *testing.T) {
 func TestChainsAreIndependentPerOrganization(t *testing.T) {
 	db := connectOrSkip(t)
 	freshSchema(t, db)
-	l := New(db)
-	orgA := seedOrg(t, db, "alpha")
-	orgB := seedOrg(t, db, "beta")
+	l := audit.New(db)
+	orgA := seedAuditOrg(t, db, "alpha")
+	orgB := seedAuditOrg(t, db, "beta")
 	ctx := context.Background()
 
 	for i := 0; i < 3; i++ {
-		record(t, l, orgA, fmt.Sprintf("contacts.created.a%d", i))
-		record(t, l, orgB, fmt.Sprintf("contacts.created.b%d", i))
+		recordAudit(t, l, orgA, fmt.Sprintf("contacts.created.a%d", i))
+		recordAudit(t, l, orgB, fmt.Sprintf("contacts.created.b%d", i))
 	}
 
 	for _, org := range []uuid.UUID{orgA, orgB} {
@@ -229,8 +207,8 @@ func TestChainsAreIndependentPerOrganization(t *testing.T) {
 func TestConcurrentWritesKeepTheChainIntact(t *testing.T) {
 	db := connectOrSkip(t)
 	freshSchema(t, db)
-	l := New(db)
-	org := seedOrg(t, db, "acme")
+	l := audit.New(db)
+	org := seedAuditOrg(t, db, "acme")
 	ctx := context.Background()
 
 	const writers, perWriter = 8, 6
@@ -241,7 +219,7 @@ func TestConcurrentWritesKeepTheChainIntact(t *testing.T) {
 		go func(w int) {
 			defer wg.Done()
 			for i := 0; i < perWriter; i++ {
-				if err := l.Record(ctx, Entry{
+				if err := l.Record(ctx, audit.Entry{
 					OrganizationID: &org,
 					ActorType:      "user",
 					Action:         fmt.Sprintf("contacts.created.%d.%d", w, i),
@@ -277,18 +255,18 @@ func TestConcurrentWritesKeepTheChainIntact(t *testing.T) {
 func TestSkipChainWritesAnUnchainedEntry(t *testing.T) {
 	db := connectOrSkip(t)
 	freshSchema(t, db)
-	l := New(db)
-	org := seedOrg(t, db, "acme")
+	l := audit.New(db)
+	org := seedAuditOrg(t, db, "acme")
 	ctx := context.Background()
 
-	record(t, l, org, "contacts.created.0")
-	if err := l.Record(ctx, Entry{
+	recordAudit(t, l, org, "contacts.created.0")
+	if err := l.Record(ctx, audit.Entry{
 		OrganizationID: &org, ActorType: "system", Action: "system.note",
 		EntityType: "system", SkipChain: true,
 	}); err != nil {
 		t.Fatalf("skip-chain record: %v", err)
 	}
-	record(t, l, org, "contacts.created.1")
+	recordAudit(t, l, org, "contacts.created.1")
 
 	res, err := l.Verify(ctx, &org)
 	if err != nil {
@@ -310,11 +288,11 @@ func TestSkipChainWritesAnUnchainedEntry(t *testing.T) {
 func TestRecordWithoutTransactionIsStillChained(t *testing.T) {
 	db := connectOrSkip(t)
 	freshSchema(t, db)
-	l := New(db)
-	org := seedOrg(t, db, "acme")
+	l := audit.New(db)
+	org := seedAuditOrg(t, db, "acme")
 
-	record(t, l, org, "contacts.created.0")
-	record(t, l, org, "contacts.created.1")
+	recordAudit(t, l, org, "contacts.created.0")
+	recordAudit(t, l, org, "contacts.created.1")
 
 	res, err := l.Verify(context.Background(), &org)
 	if err != nil {
