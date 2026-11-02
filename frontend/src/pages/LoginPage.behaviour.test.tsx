@@ -290,4 +290,33 @@ describe('LoginPage form', () => {
       expect(document.activeElement).toBe(alert.closest('[tabindex="-1"]'))
     })
   })
+
+  it('names a blocked account instead of a permission refusal', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url.includes('/api/v1/auth/oidc/providers')) {
+          return Promise.resolve(json({ enabled: false, providers: [] }))
+        }
+        if (url.includes('/api/v1/auth/login')) {
+          // The API reports a suspended account as 403 forbidden with this
+          // detail sentence — the same status a permissions refusal uses.
+          return Promise.resolve(
+            json({ error: { code: 'forbidden', message: 'this account is not active' } }, 403),
+          )
+        }
+        return Promise.resolve(json({}))
+      }),
+    )
+
+    renderLogin()
+    await userEvent.type(await screen.findByLabelText(en.common.email), 'owner@example.com')
+    await userEvent.type(screen.getByLabelText(en.common.password), 'a-password')
+    await userEvent.click(screen.getByRole('button', { name: en.login.submit }))
+
+    expect(await screen.findByText(en.login.errors.account_inactive)).toBeTruthy()
+    // The generic permission sentence must not be what the locked-out person sees.
+    expect(screen.queryByText(en.errors.forbidden)).toBeNull()
+  })
 })
