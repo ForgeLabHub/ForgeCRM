@@ -21,70 +21,74 @@ import {
   PageHeader,
   Timestamp,
 } from '../components/ui'
+import { useT, type TFunction } from '../i18n'
 
-function fullName(contact: Contact): string {
+function fullName(contact: Contact, fallback: string): string {
   const name = [contact.first_name, contact.last_name].filter(Boolean).join(' ')
-  return name || contact.email || 'Unnamed contact'
+  return name || contact.email || fallback
 }
 
-const columns: Column<Contact>[] = [
-  {
-    key: 'name',
-    header: 'Name',
-    render: (row) => (
-      <div>
-        <div className="table__primary">{fullName(row)}</div>
-        {row.job_title ? <div className="table__secondary">{row.job_title}</div> : null}
-      </div>
-    ),
-  },
-  {
-    key: 'email',
-    header: 'Email',
-    render: (row) => row.email ?? <span className="text-subtle">—</span>,
-  },
-  {
-    key: 'phone',
-    header: 'Phone',
-    render: (row) => row.phone ?? row.mobile ?? <span className="text-subtle">—</span>,
-  },
-  {
-    key: 'department',
-    header: 'Department',
-    render: (row) => row.department ?? <span className="text-subtle">—</span>,
-  },
-  {
-    key: 'updated',
-    header: 'Updated',
-    render: (row) => <Timestamp value={row.updated_at} />,
-  },
-]
+function columns(t: TFunction): Column<Contact>[] {
+  return [
+    {
+      key: 'name',
+      header: t('contacts.columnName'),
+      render: (row) => (
+        <div>
+          <div className="table__primary">{fullName(row, t('contacts.unnamed'))}</div>
+          {row.job_title ? <div className="table__secondary">{row.job_title}</div> : null}
+        </div>
+      ),
+    },
+    {
+      key: 'email',
+      header: t('contacts.columnEmail'),
+      render: (row) => row.email ?? <span className="text-subtle">—</span>,
+    },
+    {
+      key: 'phone',
+      header: t('contacts.columnPhone'),
+      render: (row) => row.phone ?? row.mobile ?? <span className="text-subtle">—</span>,
+    },
+    {
+      key: 'department',
+      header: t('contacts.columnDepartment'),
+      render: (row) => row.department ?? <span className="text-subtle">—</span>,
+    },
+    {
+      key: 'updated',
+      header: t('contacts.columnUpdated'),
+      render: (row) => <Timestamp value={row.updated_at} />,
+    },
+  ]
+}
 
 export function ContactsPage() {
   const navigate = useNavigate()
   const { can } = useAuth()
+  const t = useT()
   const [creating, setCreating] = useState(false)
 
   return (
     <>
-      <PageHeader title="Contacts" meta="The people you work with at each account." />
+      <PageHeader title={t('contacts.title')} meta={t('contacts.meta')} />
       <ResourceList
-        title="All contacts"
+        title={t('contacts.all')}
         queryKey={['contacts']}
         fetchPage={(params) => contactsApi.list(params)}
-        columns={columns}
+        columns={columns(t)}
         rowKey={(row) => row.id}
         onRowClick={(row) => navigate(`/contacts/${row.id}`)}
-        emptyTitle="No contacts yet"
-        emptyText="Add a contact to start recording interactions against a person."
+        emptyTitle={t('contacts.emptyTitle')}
+        emptyText={t('contacts.emptyText')}
         searchable
-        searchPlaceholder="Search by name or email…"
+        searchPlaceholder={t('contacts.searchPlaceholder')}
         bulkActions={
           can('contacts.archive')
             ? (selected, clear) => (
                 <BulkArchiveButton
                   ids={selected}
-                  entityLabel="contacts"
+                  entityLabel={t('contacts.bulkNoun')}
                   archive={contactsApi.bulkArchive}
                   onDone={clear}
                 />
@@ -94,7 +98,7 @@ export function ContactsPage() {
         actions={
           can('contacts.create') ? (
             <button type="button" className="btn btn--primary btn--sm" onClick={() => setCreating(true)}>
-              New contact
+              {t('contacts.newContact')}
             </button>
           ) : null
         }
@@ -123,6 +127,7 @@ export function ContactFormDialog({
   onSaved: (contact: Contact) => void
 }) {
   const queryClient = useQueryClient()
+  const t = useT()
   const editing = Boolean(contact)
   const [form, setForm] = useState<ContactInput>(() => toInput(contact))
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -192,7 +197,7 @@ export function ContactFormDialog({
         onClick={(event) => event.stopPropagation()}
       >
         <div className="card__header">
-          <h2 id="contact-form-title">{editing ? 'Edit contact' : 'New contact'}</h2>
+          <h2 id="contact-form-title">{editing ? t('contacts.editContact') : t('contacts.newContact')}</h2>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="card__body">
@@ -203,14 +208,14 @@ export function ContactFormDialog({
             ) : null}
 
             <div className="form-grid">
-              <Field label="First name" htmlFor="contact-first" error={errors.name}>
+              <Field label={t('contacts.firstNameField')} htmlFor="contact-first" error={errors.name}>
                 <input
                   id="contact-first"
                   value={form.first_name ?? ''}
                   onChange={(event) => update('first_name', event.target.value || null)}
                 />
               </Field>
-              <Field label="Last name" htmlFor="contact-last">
+              <Field label={t('contacts.lastNameField')} htmlFor="contact-last">
                 <input
                   id="contact-last"
                   value={form.last_name ?? ''}
@@ -218,10 +223,10 @@ export function ContactFormDialog({
                 />
               </Field>
               <Field
-                label="Email"
+                label={t('contacts.emailField')}
                 htmlFor="contact-email"
                 error={errors.email}
-                hint={errors.name ? undefined : 'A name or an email is required.'}
+                hint={errors.name ? undefined : t('contacts.nameOrEmailHint')}
               >
                 <input
                   id="contact-email"
@@ -230,41 +235,41 @@ export function ContactFormDialog({
                   onChange={(event) => update('email', event.target.value || null)}
                 />
               </Field>
-              <Field label="Phone" htmlFor="contact-phone">
+              <Field label={t('contacts.phoneField')} htmlFor="contact-phone">
                 <input
                   id="contact-phone"
                   value={form.phone ?? ''}
                   onChange={(event) => update('phone', event.target.value || null)}
                 />
               </Field>
-              <Field label="Mobile" htmlFor="contact-mobile">
+              <Field label={t('contacts.mobileField')} htmlFor="contact-mobile">
                 <input
                   id="contact-mobile"
                   value={form.mobile ?? ''}
                   onChange={(event) => update('mobile', event.target.value || null)}
                 />
               </Field>
-              <Field label="Job title" htmlFor="contact-title">
+              <Field label={t('contacts.jobTitleField')} htmlFor="contact-title">
                 <input
                   id="contact-title"
                   value={form.job_title ?? ''}
                   onChange={(event) => update('job_title', event.target.value || null)}
                 />
               </Field>
-              <Field label="Department" htmlFor="contact-department">
+              <Field label={t('contacts.departmentField')} htmlFor="contact-department">
                 <input
                   id="contact-department"
                   value={form.department ?? ''}
                   onChange={(event) => update('department', event.target.value || null)}
                 />
               </Field>
-              <Field label="Account" htmlFor="contact-account">
+              <Field label={t('contacts.accountField')} htmlFor="contact-account">
                 <select
                   id="contact-account"
                   value={form.account_id ?? ''}
                   onChange={(event) => update('account_id', event.target.value || null)}
                 >
-                  <option value="">No account</option>
+                  <option value="">{t('contacts.noAccount')}</option>
                   {(accounts.data?.items ?? []).map((account) => (
                     <option key={account.id} value={account.id}>
                       {account.name}
@@ -272,7 +277,7 @@ export function ContactFormDialog({
                   ))}
                 </select>
               </Field>
-              <Field label="Primary contact" htmlFor="contact-primary" full>
+              <Field label={t('contacts.primaryField')} htmlFor="contact-primary" full>
                 <label className="checkbox">
                   <input
                     id="contact-primary"
@@ -280,17 +285,21 @@ export function ContactFormDialog({
                     checked={form.is_primary ?? false}
                     onChange={(event) => update('is_primary', event.target.checked)}
                   />
-                  This is the main contact for the account
+                  {t('contacts.primaryHint')}
                 </label>
               </Field>
             </div>
           </div>
           <div className="form-actions">
             <button type="button" className="btn btn--secondary" onClick={onClose}>
-              Cancel
+              {t('common.cancel')}
             </button>
             <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
-              {mutation.isPending ? 'Saving…' : editing ? 'Save changes' : 'Create contact'}
+              {mutation.isPending
+                ? t('common.saving')
+                : editing
+                  ? t('common.saveChanges')
+                  : t('contacts.createContact')}
             </button>
           </div>
         </form>
@@ -321,6 +330,7 @@ export function ContactDetailPage() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
   const { can } = useAuth()
+  const t = useT()
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState(false)
   const [archiving, setArchiving] = useState(false)
@@ -355,7 +365,7 @@ export function ContactDetailPage() {
 
   if (contact.isError) {
     return (
-      <Card title="Contact">
+      <Card title={t('contacts.detailTitle')}>
         <Alert tone="error">{errorMessage(contact.error)}</Alert>
       </Card>
     )
@@ -370,26 +380,26 @@ export function ContactDetailPage() {
   return (
     <>
       <PageHeader
-        title={fullName(data)}
+        title={fullName(data, t('contacts.unnamed'))}
         meta={
           <>
             {data.job_title ? <>{data.job_title} · </> : null}
-            Updated <Timestamp value={data.updated_at} />
+            {t('common.updated')} <Timestamp value={data.updated_at} />
           </>
         }
         actions={
           <>
             <Link to="/contacts" className="btn btn--ghost btn--sm">
-              Back
+              {t('common.back')}
             </Link>
             {can('contacts.update') ? (
               <button type="button" className="btn btn--secondary btn--sm" onClick={() => setEditing(true)}>
-                Edit
+                {t('common.edit')}
               </button>
             ) : null}
             {can('contacts.archive') ? (
               <button type="button" className="btn btn--danger btn--sm" onClick={() => setArchiving(true)}>
-                Archive
+                {t('common.archive')}
               </button>
             ) : null}
           </>
@@ -402,27 +412,27 @@ export function ContactDetailPage() {
         </div>
       ) : null}
 
-      <Card title="Details">
+      <Card title={t('contacts.details')}>
         <dl className="dl">
-          <dt>Email</dt>
+          <dt>{t('contacts.emailField')}</dt>
           <dd>{data.email ?? <span className="text-subtle">—</span>}</dd>
-          <dt>Phone</dt>
+          <dt>{t('contacts.phoneField')}</dt>
           <dd>{data.phone ?? <span className="text-subtle">—</span>}</dd>
-          <dt>Mobile</dt>
+          <dt>{t('contacts.mobileField')}</dt>
           <dd>{data.mobile ?? <span className="text-subtle">—</span>}</dd>
-          <dt>Department</dt>
+          <dt>{t('contacts.departmentField')}</dt>
           <dd>{data.department ?? <span className="text-subtle">—</span>}</dd>
-          <dt>Account</dt>
+          <dt>{t('contacts.accountField')}</dt>
           <dd>
             {data.account_id ? (
-              <Link to={`/accounts/${data.account_id}`}>View account</Link>
+              <Link to={`/accounts/${data.account_id}`}>{t('contacts.viewAccount')}</Link>
             ) : (
-              <span className="text-subtle">Not linked</span>
+              <span className="text-subtle">{t('common.notLinked')}</span>
             )}
           </dd>
-          <dt>Primary contact</dt>
-          <dd>{data.is_primary ? 'Yes' : 'No'}</dd>
-          <dt>Created</dt>
+          <dt>{t('contacts.primaryField')}</dt>
+          <dd>{data.is_primary ? t('contacts.yes') : t('contacts.no')}</dd>
+          <dt>{t('common.created')}</dt>
           <dd>
             <Timestamp value={data.created_at} />
           </dd>
@@ -457,9 +467,9 @@ export function ContactDetailPage() {
 
       <ConfirmDialog
         open={archiving}
-        title="Archive this contact?"
-        text="The contact is kept but hidden from lists. Interaction history is preserved."
-        confirmLabel="Archive"
+        title={t('contacts.archiveTitle')}
+        text={t('contacts.archiveText')}
+        confirmLabel={t('common.archive')}
         danger
         busy={archive.isPending}
         onConfirm={() => archive.mutate()}

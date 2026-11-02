@@ -9,38 +9,50 @@ import { useAuth } from '../hooks/useAuth'
 import { ResourceList, type Column } from '../components/ResourceList'
 import { SavedViewsBar } from '../components/SavedViewsBar'
 import { Alert, Field, PageHeader, StatusBadge, Timestamp } from '../components/ui'
+import { useT, type TFunction } from '../i18n'
 
 const LEAD_STATUSES = ['new', 'contacted', 'qualified', 'unqualified', 'converted']
 
-const columns: Column<Lead>[] = [
-  {
-    key: 'name',
-    header: 'Name',
-    render: (row) => (
-      <div>
-        <div className="table__primary">
-          {[row.first_name, row.last_name].filter(Boolean).join(' ') || row.email || '—'}
+function columns(t: TFunction): Column<Lead>[] {
+  return [
+    {
+      key: 'name',
+      header: t('leads.columnName'),
+      render: (row) => (
+        <div>
+          <div className="table__primary">
+            {[row.first_name, row.last_name].filter(Boolean).join(' ') || row.email || '—'}
+          </div>
+          {row.company ? <div className="table__secondary">{row.company}</div> : null}
         </div>
-        {row.company ? <div className="table__secondary">{row.company}</div> : null}
-      </div>
-    ),
-  },
-  { key: 'email', header: 'Email', render: (row) => row.email ?? <span className="text-subtle">—</span> },
-  { key: 'source', header: 'Source', render: (row) => row.source ?? <span className="text-subtle">—</span> },
-  {
-    key: 'status',
-    header: 'Status',
-    render: (row) => <StatusBadge status={row.status} />,
-  },
-  {
-    key: 'created',
-    header: 'Created',
-    render: (row) => <Timestamp value={row.created_at} />,
-  },
-]
+      ),
+    },
+    {
+      key: 'email',
+      header: t('leads.columnEmail'),
+      render: (row) => row.email ?? <span className="text-subtle">—</span>,
+    },
+    {
+      key: 'source',
+      header: t('leads.columnSource'),
+      render: (row) => row.source ?? <span className="text-subtle">—</span>,
+    },
+    {
+      key: 'status',
+      header: t('leads.columnStatus'),
+      render: (row) => <StatusBadge status={row.status} />,
+    },
+    {
+      key: 'created',
+      header: t('leads.columnCreated'),
+      render: (row) => <Timestamp value={row.created_at} />,
+    },
+  ]
+}
 
 export function LeadsPage() {
   const { can } = useAuth()
+  const t = useT()
   const [creating, setCreating] = useState(false)
   const [converting, setConverting] = useState<Lead | null>(null)
   const [statusFilter, setStatusFilter] = useState('')
@@ -48,17 +60,17 @@ export function LeadsPage() {
 
   return (
     <>
-      <PageHeader title="Leads" meta="Unqualified interest, before it becomes an account and a deal." />
+      <PageHeader title={t('leads.title')} meta={t('leads.meta')} />
       <ResourceList
-        title="All leads"
+        title={t('leads.all')}
         queryKey={['leads', statusFilter]}
         fetchPage={(params) => leadsApi.list({ ...params, status: statusFilter || undefined })}
-        columns={columns}
+        columns={columns(t)}
         rowKey={(row) => row.id}
-        emptyTitle="No leads yet"
-        emptyText="Capture interest here, then qualify and convert it into a deal."
+        emptyTitle={t('leads.emptyTitle')}
+        emptyText={t('leads.emptyText')}
         searchable
-        searchPlaceholder="Search leads…"
+        searchPlaceholder={t('leads.searchPlaceholder')}
         filters={
           <>
             <SavedViewsBar
@@ -69,15 +81,15 @@ export function LeadsPage() {
               onActiveChange={setActiveViewId}
             />
             <label className="field" style={{ maxWidth: 180 }}>
-              <span className="field__label">Status</span>
+              <span className="field__label">{t('leads.statusFilter')}</span>
               <select
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value)}
               >
-                <option value="">All statuses</option>
+                <option value="">{t('common.allStatuses')}</option>
                 {LEAD_STATUSES.map((status) => (
                   <option key={status} value={status}>
-                    {status}
+                    {t(`status.${status}` as Parameters<TFunction>[0])}
                   </option>
                 ))}
               </select>
@@ -94,14 +106,14 @@ export function LeadsPage() {
                   const first = document.querySelector<HTMLInputElement>('#lead-convert-id')
                   if (first) first.focus()
                 }}
-                title="Open a lead, then use Convert"
+                title={t('leads.convertHint')}
               >
-                Convert a lead
+                {t('leads.convertLead')}
               </button>
             ) : null}
             {can('leads.create') ? (
               <button type="button" className="btn btn--primary btn--sm" onClick={() => setCreating(true)}>
-                New lead
+                {t('leads.newLead')}
               </button>
             ) : null}
           </div>
@@ -125,6 +137,7 @@ export function LeadFormDialog({
   onSaved: (lead: Lead) => void
 }) {
   const queryClient = useQueryClient()
+  const t = useT()
   const editing = Boolean(lead)
   const [form, setForm] = useState<Partial<Lead>>(() => ({ ...lead, status: lead?.status ?? 'new' }))
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -177,7 +190,7 @@ export function LeadFormDialog({
         onClick={(event) => event.stopPropagation()}
       >
         <div className="card__header">
-          <h2 id="lead-form-title">{editing ? 'Edit lead' : 'New lead'}</h2>
+          <h2 id="lead-form-title">{editing ? t('leads.editLead') : t('leads.newLead')}</h2>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="card__body">
@@ -187,21 +200,21 @@ export function LeadFormDialog({
               </div>
             ) : null}
             <div className="form-grid">
-              <Field label="First name" htmlFor="lead-first">
+              <Field label={t('leads.firstNameField')} htmlFor="lead-first">
                 <input
                   id="lead-first"
                   value={form.first_name ?? ''}
                   onChange={(event) => update('first_name', event.target.value)}
                 />
               </Field>
-              <Field label="Last name" htmlFor="lead-last">
+              <Field label={t('leads.lastNameField')} htmlFor="lead-last">
                 <input
                   id="lead-last"
                   value={form.last_name ?? ''}
                   onChange={(event) => update('last_name', event.target.value)}
                 />
               </Field>
-              <Field label="Email" htmlFor="lead-email" error={errors.email}>
+              <Field label={t('leads.emailField')} htmlFor="lead-email" error={errors.email}>
                 <input
                   id="lead-email"
                   type="email"
@@ -209,35 +222,35 @@ export function LeadFormDialog({
                   onChange={(event) => update('email', event.target.value)}
                 />
               </Field>
-              <Field label="Phone" htmlFor="lead-phone">
+              <Field label={t('leads.phoneField')} htmlFor="lead-phone">
                 <input
                   id="lead-phone"
                   value={form.phone ?? ''}
                   onChange={(event) => update('phone', event.target.value)}
                 />
               </Field>
-              <Field label="Company" htmlFor="lead-company">
+              <Field label={t('leads.companyField')} htmlFor="lead-company">
                 <input
                   id="lead-company"
                   value={form.company ?? ''}
                   onChange={(event) => update('company', event.target.value)}
                 />
               </Field>
-              <Field label="Job title" htmlFor="lead-title">
+              <Field label={t('leads.jobTitleField')} htmlFor="lead-title">
                 <input
                   id="lead-title"
                   value={form.title ?? ''}
                   onChange={(event) => update('title', event.target.value)}
                 />
               </Field>
-              <Field label="Source" htmlFor="lead-source" hint="Where the lead came from.">
+              <Field label={t('leads.sourceField')} htmlFor="lead-source" hint={t('leads.sourceHint')}>
                 <input
                   id="lead-source"
                   value={form.source ?? ''}
                   onChange={(event) => update('source', event.target.value)}
                 />
               </Field>
-              <Field label="Status" htmlFor="lead-status">
+              <Field label={t('leads.statusField')} htmlFor="lead-status">
                 <select
                   id="lead-status"
                   value={form.status ?? 'new'}
@@ -245,12 +258,12 @@ export function LeadFormDialog({
                 >
                   {LEAD_STATUSES.map((status) => (
                     <option key={status} value={status}>
-                      {status}
+                      {t(`status.${status}` as Parameters<TFunction>[0])}
                     </option>
                   ))}
                 </select>
               </Field>
-              <Field label="Notes" htmlFor="lead-notes" full>
+              <Field label={t('leads.notesField')} htmlFor="lead-notes" full>
                 <textarea
                   id="lead-notes"
                   value={form.notes ?? ''}
@@ -261,10 +274,14 @@ export function LeadFormDialog({
           </div>
           <div className="form-actions">
             <button type="button" className="btn btn--secondary" onClick={onClose}>
-              Cancel
+              {t('common.cancel')}
             </button>
             <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
-              {mutation.isPending ? 'Saving…' : editing ? 'Save changes' : 'Create lead'}
+              {mutation.isPending
+                ? t('common.saving')
+                : editing
+                  ? t('common.saveChanges')
+                  : t('leads.createLead')}
             </button>
           </div>
         </form>
@@ -276,6 +293,7 @@ export function LeadFormDialog({
 /** Converting a lead creates an account, a contact and optionally a deal. */
 export function ConvertLeadDialog({ lead, onClose }: { lead: Lead; onClose: () => void }) {
   const queryClient = useQueryClient()
+  const t = useT()
   const [createDeal, setCreateDeal] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -309,27 +327,24 @@ export function ConvertLeadDialog({ lead, onClose }: { lead: Lead; onClose: () =
     >
       <div className="card" style={{ maxWidth: 460, width: '100%' }} onClick={(e) => e.stopPropagation()}>
         <div className="card__header">
-          <h2 id="convert-lead-title">Convert lead</h2>
+          <h2 id="convert-lead-title">{t('leads.convertTitle')}</h2>
         </div>
         <div className="card__body stack">
           {error ? <Alert tone="error">{error}</Alert> : null}
-          <p className="text-muted">
-            This creates an account and a contact from the lead's details, and marks the lead as
-            converted. The original lead is kept for reporting.
-          </p>
+          <p className="text-muted">{t('leads.convertText')}</p>
           <label className="checkbox">
             <input
               type="checkbox"
               checked={createDeal}
               onChange={(event) => setCreateDeal(event.target.checked)}
             />
-            Also open a deal in the default pipeline
+            {t('leads.alsoDeal')}
           </label>
           <input id="lead-convert-id" type="hidden" value={lead.id} readOnly />
         </div>
         <div className="form-actions" style={{ margin: 0, padding: 'var(--space-4)' }}>
           <button type="button" className="btn btn--secondary" onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -337,7 +352,7 @@ export function ConvertLeadDialog({ lead, onClose }: { lead: Lead; onClose: () =
             disabled={mutation.isPending}
             onClick={() => mutation.mutate()}
           >
-            {mutation.isPending ? 'Converting…' : 'Convert'}
+            {mutation.isPending ? t('leads.converting') : t('leads.convert')}
           </button>
         </div>
       </div>
