@@ -6,11 +6,13 @@ import { errorMessage } from '../../api/client'
 import { ResourceList, type Column } from '../../components/ResourceList'
 import { Alert, Badge, Card, PageHeader, Timestamp } from '../../components/ui'
 import type { AuditEntry } from '../../types/api'
+import { useT, type TFunction } from '../../i18n'
 
-const auditColumns: Column<AuditEntry>[] = [
+function buildAuditColumns(t: TFunction): Column<AuditEntry>[] {
+  return [
   {
     key: 'action',
-    header: 'Action',
+    header: t('auditLog.columnAction'),
     render: (row) => (
       <div>
         <div className="table__primary mono">{row.action}</div>
@@ -25,44 +27,43 @@ const auditColumns: Column<AuditEntry>[] = [
   },
   {
     key: 'actor',
-    header: 'Actor',
+    header: t('auditLog.columnActor'),
     render: (row) =>
       row.actor_user_id ? (
         <span className="mono text-sm">{row.actor_user_id.slice(0, 8)}</span>
       ) : (
-        <Badge tone="neutral">system</Badge>
+        <Badge tone="neutral">{t('auditLog.system')}</Badge>
       ),
   },
   {
     key: 'ip',
-    header: 'Source',
+    header: t('auditLog.columnSource'),
     render: (row) => row.ip ?? <span className="text-subtle">—</span>,
   },
   {
     key: 'correlation',
-    header: 'Correlation',
+    header: t('auditLog.columnCorrelation'),
     render: (row) => (
       <span className="mono text-sm truncate" style={{ maxWidth: 180 }}>
         {row.correlation_id ?? '—'}
       </span>
     ),
-  },
-  {
+    },
+    {
     key: 'when',
-    header: 'When',
+    header: t('auditLog.columnWhen'),
     render: (row) => <Timestamp value={row.created_at} />,
-  },
-]
+    },
+    ]
+    }
 
 export function AuditPage() {
+  const t = useT()
   const [tab, setTab] = useState<'audit' | 'logs'>('audit')
 
   return (
     <>
-      <PageHeader
-        title="Audit & logs"
-        meta="Who changed what, and the application's own structured log."
-      />
+      <PageHeader title={t('auditLog.title')} meta={t('auditLog.meta')} />
 
       <div className="row" style={{ marginBottom: 'var(--space-4)' }}>
         <button
@@ -71,31 +72,31 @@ export function AuditPage() {
           onClick={() => setTab('audit')}
           aria-pressed={tab === 'audit'}
         >
-          Audit trail
-        </button>
+          {t('auditLog.tabAudit')}
+          </button>
         <button
           type="button"
           className={tab === 'logs' ? 'btn btn--secondary btn--sm' : 'btn btn--ghost btn--sm'}
           onClick={() => setTab('logs')}
           aria-pressed={tab === 'logs'}
         >
-          Application log
-        </button>
+          {t('auditLog.tabLogs')}
+          </button>
       </div>
 
       {tab === 'audit' ? (
         <>
           <IntegrityCheck />
           <ResourceList
-            title="Audit trail"
+            title={t('auditLog.auditTitle')}
             queryKey={['audit']}
             fetchPage={(params) => auditApi.list(params)}
-            columns={auditColumns}
+            columns={buildAuditColumns(t)}
             rowKey={(row) => row.id}
-            emptyTitle="No audit entries"
-            emptyText="Changes to records, roles and configuration are recorded here."
+            emptyTitle={t('auditLog.emptyAuditTitle')}
+            emptyText={t('auditLog.emptyAuditText')}
             searchable
-            searchPlaceholder="Search by action…"
+            searchPlaceholder={t('auditLog.searchAudit')}
           />
         </>
       ) : (
@@ -114,6 +115,7 @@ export function AuditPage() {
  * runs it when they want to make a claim about integrity, not on every visit.
  */
 function IntegrityCheck() {
+  const t = useT()
   const [result, setResult] = useState<AuditChainVerification | null>(null)
   const check = useMutation({
     mutationFn: () => auditApi.verify(),
@@ -122,7 +124,7 @@ function IntegrityCheck() {
 
   return (
     <Card
-      title="Integrity"
+      title={t('auditLog.integrityTitle')}
       actions={
         <button
           type="button"
@@ -130,44 +132,42 @@ function IntegrityCheck() {
           onClick={() => check.mutate()}
           disabled={check.isPending}
         >
-          {check.isPending ? 'Verifying…' : 'Verify integrity'}
+          {check.isPending ? t('auditLog.verifying') : t('auditLog.verifyIntegrity')}
         </button>
       }
     >
       <p className="text-sm text-subtle" style={{ marginTop: 0 }}>
-        Every entry is chained to the one before it with a SHA-256 hash. If a row was removed or
-        altered outside the API, the chain breaks and the first affected entry is reported.
+        {t('auditLog.integrityExplanation')}
       </p>
 
       {check.isError ? <Alert tone="error">{errorMessage(check.error)}</Alert> : null}
 
       {result ? (
         <Alert tone={result.intact ? 'success' : 'error'}>
-          {result.intact ? (
-            <>
-              The trail is intact. {result.checked} chained{' '}
-              {result.checked === 1 ? 'entry' : 'entries'} verified
-              {result.unchained > 0
-                ? `, ${result.unchained} written before the chain existed and skipped`
-                : ''}
-              .
-            </>
-          ) : (
-            <>
-              The trail is broken at entry #{result.first_break_id}: {result.reason}. This means a
-              row was removed or changed outside the API.
-            </>
-          )}
+          {result.intact
+            ? `${t('auditLog.integrityIntact', {
+                count: result.checked,
+                entries: result.checked === 1 ? 'entry' : 'entries',
+              })}${
+                result.unchained > 0
+                  ? t('auditLog.integrityUnchained', { count: result.unchained })
+                  : ''
+              }`
+            : t('auditLog.integrityBroken', {
+                id: String(result.first_break_id),
+                reason: result.reason ?? '',
+              })}
         </Alert>
       ) : null}
     </Card>
   )
 }
 
-const logColumns: Column<LogLine>[] = [
-  {
+function buildLogColumns(t: TFunction): Column<LogLine>[] {
+  return [
+    {
     key: 'level',
-    header: 'Level',
+    header: t('auditLog.columnLevel'),
     render: (row) => (
       <Badge
         tone={
@@ -186,7 +186,7 @@ const logColumns: Column<LogLine>[] = [
   },
   {
     key: 'message',
-    header: 'Message',
+    header: t('auditLog.columnMessage'),
     render: (row) => (
       <div>
         <div className="table__primary">{row.message}</div>
@@ -196,21 +196,23 @@ const logColumns: Column<LogLine>[] = [
   },
   {
     key: 'correlation',
-    header: 'Correlation',
+    header: t('auditLog.columnCorrelation'),
     render: (row) => (
       <span className="mono text-sm truncate" style={{ maxWidth: 180 }}>
         {row.correlation_id ?? '—'}
       </span>
     ),
-  },
-  {
+    },
+    {
     key: 'time',
-    header: 'When',
+    header: t('auditLog.columnWhen'),
     render: (row) => <Timestamp value={row.time} />,
-  },
-]
+    },
+    ]
+    }
 
 function ApplicationLog() {
+  const t = useT()
   const [level, setLevel] = useState('')
 
   // A single cheap request decides whether the log is reachable at all, so a
@@ -222,31 +224,29 @@ function ApplicationLog() {
 
   return (
     <>
-      <Alert tone="info">
-        Logs are redacted at write time: passwords, tokens and full personal data never reach them.
-      </Alert>
+      <Alert tone="info">{t('auditLog.redactionNote')}</Alert>
 
       <div style={{ marginTop: 'var(--space-4)' }}>
         {logs.isError ? (
-          <Card title="Application log">
+          <Card title={t('auditLog.tabLogs')}>
             <Alert tone="error">{errorMessage(logs.error)}</Alert>
           </Card>
         ) : (
           <ResourceList
-            title="Application log"
+            title={t('auditLog.tabLogs')}
             queryKey={['logs', level]}
             fetchPage={(params) => diagnosticsApi.logs({ ...params, level: level || undefined })}
-            columns={logColumns}
+            columns={buildLogColumns(t)}
             rowKey={(row) => `${row.time}-${row.message}`}
-            emptyTitle="No log entries"
-            emptyText="Nothing has been logged at this level."
+            emptyTitle={t('auditLog.emptyLogTitle')}
+            emptyText={t('auditLog.emptyLogText')}
             searchable
-            searchPlaceholder="Search messages…"
+            searchPlaceholder={t('auditLog.searchLog')}
             filters={
               <label className="field" style={{ maxWidth: 160 }}>
-                <span className="field__label">Level</span>
+                <span className="field__label">{t('auditLog.level')}</span>
                 <select value={level} onChange={(event) => setLevel(event.target.value)}>
-                  <option value="">All levels</option>
+                  <option value="">{t('auditLog.allLevels')}</option>
                   {['debug', 'info', 'warn', 'error'].map((item) => (
                     <option key={item} value={item}>
                       {item}

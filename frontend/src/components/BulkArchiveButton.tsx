@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { errorMessage } from '../api/client'
+import { useT } from '../i18n'
 import type { BulkArchiveResult } from '../types/api'
 import { Alert, ConfirmDialog } from './ui'
 
@@ -35,6 +36,7 @@ export function BulkArchiveButton({
   /** Clears the selection. Called only when every record was archived. */
   onDone: () => void
 }) {
+  const t = useT()
   const queryClient = useQueryClient()
   const [confirming, setConfirming] = useState(false)
   const [result, setResult] = useState<BulkArchiveResult | null>(null)
@@ -64,18 +66,26 @@ export function BulkArchiveButton({
           setConfirming(true)
         }}
       >
-        Archive {count} {noun}
+        {t('bulkArchive.button', { count, noun })}
       </button>
 
       {result ? (
         <div style={{ width: '100%', marginTop: 'var(--space-2)' }}>
           <Alert tone={result.failed.length === 0 ? 'success' : 'warning'}>
             {result.failed.length === 0
-              ? `Archived ${result.archived.length} ${result.archived.length === 1 ? noun : entityLabel}.`
-              : `Archived ${result.archived.length} of ${count}. ${result.failed.length} could not be archived: ${result.failed
-                  .map((f) => f.reason)
-                  .filter((reason, index, all) => all.indexOf(reason) === index)
-                  .join('; ')}.`}
+              ? t('bulkArchive.archived', {
+                  count: result.archived.length,
+                  noun: result.archived.length === 1 ? noun : entityLabel,
+                })
+              : t('bulkArchive.partial', {
+                  archived: result.archived.length,
+                  count,
+                  failed: result.failed.length,
+                  reasons: result.failed
+                    .map((f) => f.reason)
+                    .filter((reason, index, all) => all.indexOf(reason) === index)
+                    .join('; '),
+                })}
           </Alert>
         </div>
       ) : null}
@@ -88,9 +98,9 @@ export function BulkArchiveButton({
 
       <ConfirmDialog
         open={confirming}
-        title={`Archive ${count} ${noun}?`}
-        text={`They disappear from lists but are kept, and an administrator can restore them. Records that are already archived, or that you cannot see, are reported rather than archived.`}
-        confirmLabel={`Archive ${count}`}
+        title={t('bulkArchive.confirmTitle', { count, noun })}
+        text={t('bulkArchive.confirmText')}
+        confirmLabel={t('bulkArchive.confirmLabel', { count })}
         danger
         busy={mutation.isPending}
         onConfirm={() => mutation.mutate()}

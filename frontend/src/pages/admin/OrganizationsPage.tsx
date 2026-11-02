@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { organizationsApi } from '../../api/admin'
 import { errorMessage, fieldErrors } from '../../api/client'
 import { useAuth } from '../../hooks/useAuth'
+import { useT } from '../../i18n'
 import {
   Alert,
   Card,
@@ -17,6 +18,7 @@ import {
 
 export function OrganizationsPage() {
   const { can } = useAuth()
+  const t = useT()
   const queryClient = useQueryClient()
   const [creating, setCreating] = useState(false)
 
@@ -27,7 +29,7 @@ export function OrganizationsPage() {
 
   if (organizations.isError) {
     return (
-      <Card title="Organizations">
+      <Card title={t('organizations.title')}>
         <ErrorState
           message={errorMessage(organizations.error)}
           onRetry={() => void organizations.refetch()}
@@ -38,18 +40,15 @@ export function OrganizationsPage() {
 
   return (
     <>
-      <PageHeader
-        title="Organizations"
-        meta="Tenants on this instance. Every record belongs to exactly one organization."
-      />
+      <PageHeader title={t('organizations.title')} meta={t('organizations.meta')} />
 
       <Card
-        title="All organizations"
+        title={t('organizations.all')}
         flush
         actions={
           can('organizations.manage') ? (
             <button type="button" className="btn btn--primary btn--sm" onClick={() => setCreating(true)}>
-              New organization
+              {t('organizations.newOrganization')}
             </button>
           ) : null
         }
@@ -58,24 +57,28 @@ export function OrganizationsPage() {
           <TableSkeleton rows={4} columns={4} />
         ) : organizations.data?.items.length ? (
           <div className="table-wrap">
-            <table>
+            <table className="table--stack">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Slug</th>
-                  <th>Status</th>
-                  <th>Created</th>
+                  <th>{t('organizations.columnName')}</th>
+                  <th>{t('organizations.columnSlug')}</th>
+                  <th>{t('organizations.columnStatus')}</th>
+                  <th>{t('organizations.columnCreated')}</th>
                 </tr>
               </thead>
               <tbody>
                 {organizations.data.items.map((organization) => (
                   <tr key={organization.id}>
-                    <td className="table__primary">{organization.name}</td>
-                    <td className="mono">{organization.slug}</td>
-                    <td>
+                    <td className="table__primary" data-label={t('organizations.columnName')}>
+                      {organization.name}
+                    </td>
+                    <td className="mono" data-label={t('organizations.columnSlug')}>
+                      {organization.slug}
+                    </td>
+                    <td data-label={t('organizations.columnStatus')}>
                       <StatusBadge status={organization.status} />
                     </td>
-                    <td>
+                    <td data-label={t('organizations.columnCreated')}>
                       <Timestamp value={organization.created_at} />
                     </td>
                   </tr>
@@ -85,7 +88,7 @@ export function OrganizationsPage() {
           </div>
         ) : (
           <div className="card__body">
-            <p className="text-muted">No organizations.</p>
+            <p className="text-muted">{t('organizations.empty')}</p>
           </div>
         )}
       </Card>
@@ -110,8 +113,9 @@ function NewOrganizationDialog({
   open: boolean
   onClose: () => void
   onCreated: () => void
-}) {
-  const [name, setName] = useState('')
+  }) {
+    const t = useT()
+    const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [formError, setFormError] = useState<string | null>(null)
@@ -152,12 +156,12 @@ function NewOrganizationDialog({
     >
       <div className="card" style={{ maxWidth: 460, width: '100%' }} onClick={(e) => e.stopPropagation()}>
         <div className="card__header">
-          <h2 id="new-org-title">New organization</h2>
+          <h2 id="new-org-title">{t('organizations.newOrganizationTitle')}</h2>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="card__body stack">
             {formError ? <Alert tone="error">{formError}</Alert> : null}
-            <Field label="Name" htmlFor="org-name" required error={errors.name}>
+            <Field label={t('organizations.name')} htmlFor="org-name" required error={errors.name}>
               <input
                 id="org-name"
                 value={name}
@@ -176,11 +180,11 @@ function NewOrganizationDialog({
               />
             </Field>
             <Field
-              label="Slug"
+              label={t('organizations.slug')}
               htmlFor="org-slug"
               required
               error={errors.slug}
-              hint="Used in URLs and must be unique across the instance."
+              hint={t('organizations.slugHint')}
             >
               <input
                 id="org-slug"
@@ -193,10 +197,10 @@ function NewOrganizationDialog({
           </div>
           <div className="form-actions">
             <button type="button" className="btn btn--secondary" onClick={onClose}>
-              Cancel
+              {t('common.cancel')}
             </button>
             <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
-              {mutation.isPending ? 'Creating…' : 'Create'}
+              {mutation.isPending ? t('organizations.creating') : t('common.create')}
             </button>
           </div>
         </form>

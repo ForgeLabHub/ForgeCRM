@@ -71,7 +71,7 @@ describe('WorkflowEditor', () => {
   it('adds a step and reports it through onChange', async () => {
     const onChange = vi.fn()
     render(<WorkflowEditor steps={[{ id: 's1', type: 'create_task' }]} eventTypes={[]} onChange={onChange} />)
-    await userEvent.click(screen.getByRole('button', { name: '+ Add step' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Add step' }))
     expect(onChange).toHaveBeenCalledTimes(1)
     const next = onChange.mock.calls[0][0] as WorkflowStep[]
     expect(next).toHaveLength(2)

@@ -7,6 +7,8 @@ import { errorMessage, fieldErrors } from '../api/client'
 import type { ViewFilters } from '../api/views'
 import type { Deal, DealInput, Pipeline } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
+import { useCreateParam } from '../hooks/useCreateParam'
+import { useT, type TFunction } from '../i18n'
 import { ResourceList, type Column } from '../components/ResourceList'
 import { SavedViewsBar } from '../components/SavedViewsBar'
 import { AssistPanel } from '../components/AssistPanel'
@@ -30,34 +32,40 @@ function amountCell(deal: Deal) {
   return formatMoney(deal.amount, deal.currency)
 }
 
-const columns: Column<Deal>[] = [
+const columns = (t: TFunction): Column<Deal>[] => [
   {
     key: 'title',
-    header: 'Deal',
+    header: t('deals.columnDeal'),
     render: (row) => (
       <div>
         <div className="table__primary">{row.title}</div>
         {row.expected_close_date ? (
-          <div className="table__secondary">Close {row.expected_close_date}</div>
+          <div className="table__secondary">
+            {t('deals.closeOn', { date: row.expected_close_date })}
+          </div>
         ) : null}
       </div>
     ),
   },
   {
     key: 'amount',
-    header: 'Amount',
+    header: t('deals.columnAmount'),
     numeric: true,
     render: (row) => amountCell(row),
   },
   {
     key: 'discount',
-    header: 'Discount',
+    header: t('deals.columnDiscount'),
     numeric: true,
     render: (row) =>
       row.discount_percent > 0 ? (
         <span className="row" style={{ justifyContent: 'flex-end' }}>
           {row.discount_percent}%
-          {row.discount_approved_at ? <Badge tone="success">approved</Badge> : <Badge tone="warning">pending</Badge>}
+          {row.discount_approved_at ? (
+            <Badge tone="success">{t('deals.approved')}</Badge>
+          ) : (
+            <Badge tone="warning">{t('deals.pending')}</Badge>
+          )}
         </span>
       ) : (
         <span className="text-subtle">—</span>
@@ -65,12 +73,12 @@ const columns: Column<Deal>[] = [
   },
   {
     key: 'status',
-    header: 'Status',
+    header: t('deals.columnStatus'),
     render: (row) => <StatusBadge status={row.status} />,
   },
   {
     key: 'updated',
-    header: 'Updated',
+    header: t('deals.columnUpdated'),
     render: (row) => <Timestamp value={row.updated_at} />,
   },
 ]
@@ -78,7 +86,8 @@ const columns: Column<Deal>[] = [
 export function DealsPage() {
   const navigate = useNavigate()
   const { can } = useAuth()
-  const [creating, setCreating] = useState(false)
+  const t = useT()
+  const [creating, setCreating] = useCreateParam(can('deals.create'))
   const [view, setView] = useState<'table' | 'board'>('table')
   const [statusFilter, setStatusFilter] = useState('')
   const [activeViewId, setActiveViewId] = useState<string | undefined>(undefined)
@@ -86,8 +95,8 @@ export function DealsPage() {
   return (
     <>
       <PageHeader
-        title="Deals"
-        meta="Every opportunity in the pipeline, with its stage and value."
+        title={t('deals.title')}
+        meta={t('deals.meta')}
         actions={
           <div className="row">
             <button
@@ -96,7 +105,7 @@ export function DealsPage() {
               onClick={() => setView('table')}
               aria-pressed={view === 'table'}
             >
-              Table
+              {t('deals.viewTable')}
             </button>
             <button
               type="button"
@@ -104,11 +113,11 @@ export function DealsPage() {
               onClick={() => setView('board')}
               aria-pressed={view === 'board'}
             >
-              Board
+              {t('deals.viewBoard')}
             </button>
             {can('deals.create') ? (
               <button type="button" className="btn btn--primary btn--sm" onClick={() => setCreating(true)}>
-                New deal
+                {t('deals.newDeal')}
               </button>
             ) : null}
           </div>
@@ -117,16 +126,16 @@ export function DealsPage() {
 
       {view === 'table' ? (
         <ResourceList
-          title="All deals"
+          title={t('deals.all')}
           queryKey={['deals', statusFilter]}
           fetchPage={(params) => dealsApi.list({ ...params, status: statusFilter || undefined })}
-          columns={columns}
+          columns={columns(t)}
           rowKey={(row) => row.id}
           onRowClick={(row) => navigate(`/deals/${row.id}`)}
-          emptyTitle="No deals yet"
-          emptyText="Create a deal to track an opportunity through your pipeline."
+          emptyTitle={t('deals.emptyTitle')}
+          emptyText={t('deals.emptyText')}
           searchable
-          searchPlaceholder="Search deals…"
+          searchPlaceholder={t('deals.searchPlaceholder')}
           filters={
             <>
               <SavedViewsBar
@@ -137,15 +146,15 @@ export function DealsPage() {
                 onActiveChange={setActiveViewId}
               />
               <label className="field" style={{ maxWidth: 180 }}>
-                <span className="field__label">Status</span>
+                <span className="field__label">{t('common.status')}</span>
                 <select
                   value={statusFilter}
                   onChange={(event) => setStatusFilter(event.target.value)}
                 >
-                  <option value="">All statuses</option>
-                  {['open', 'won', 'lost'].map((status) => (
+                  <option value="">{t('common.allStatuses')}</option>
+                  {(['open', 'won', 'lost'] as const).map((status) => (
                     <option key={status} value={status}>
-                      {status}
+                      {t(`status.${status}`)}
                     </option>
                   ))}
                 </select>
@@ -157,7 +166,7 @@ export function DealsPage() {
               ? (selected, clear) => (
                   <BulkArchiveButton
                     ids={selected}
-                    entityLabel="deals"
+                    entityLabel={t('deals.bulkNoun')}
                     archive={dealsApi.bulkArchive}
                     onDone={clear}
                   />
@@ -184,6 +193,7 @@ export function DealsPage() {
 /** Kanban view. Moving a card calls the same stage endpoint the table would. */
 function PipelineBoard({ onOpen }: { onOpen: (deal: Deal) => void }) {
   const { can } = useAuth()
+  const t = useT()
   const queryClient = useQueryClient()
   const [pipelineId, setPipelineId] = useState<string>('')
   const [moveError, setMoveError] = useState<string | null>(null)
@@ -218,7 +228,7 @@ function PipelineBoard({ onOpen }: { onOpen: (deal: Deal) => void }) {
 
   if (pipelines.isError) {
     return (
-      <Card title="Pipeline">
+      <Card title={t('deals.pipeline')}>
         <Alert tone="error">{errorMessage(pipelines.error)}</Alert>
       </Card>
     )
@@ -226,10 +236,8 @@ function PipelineBoard({ onOpen }: { onOpen: (deal: Deal) => void }) {
 
   if (!active) {
     return (
-      <Card title="Pipeline">
-        <p className="text-muted">
-          No pipeline is configured yet. Create one to see deals on a board.
-        </p>
+      <Card title={t('deals.pipeline')}>
+        <p className="text-muted">{t('deals.noPipelineText')}</p>
       </Card>
     )
   }
@@ -241,7 +249,7 @@ function PipelineBoard({ onOpen }: { onOpen: (deal: Deal) => void }) {
     <div className="stack">
       <div className="row row--wrap">
         <label className="field" style={{ maxWidth: 280 }}>
-          <span className="field__label">Pipeline</span>
+          <span className="field__label">{t('deals.pipelineField')}</span>
           <select value={active.id} onChange={(event) => setPipelineId(event.target.value)}>
             {(pipelines.data?.items ?? []).map((pipeline) => (
               <option key={pipeline.id} value={pipeline.id}>
@@ -252,7 +260,7 @@ function PipelineBoard({ onOpen }: { onOpen: (deal: Deal) => void }) {
         </label>
         <div className="spacer" />
         {deals.data ? (
-          <Badge tone="neutral">{deals.data.total} deals</Badge>
+          <Badge tone="neutral">{t('deals.dealCount', { count: deals.data.total })}</Badge>
         ) : null}
       </div>
 
@@ -282,7 +290,7 @@ function PipelineBoard({ onOpen }: { onOpen: (deal: Deal) => void }) {
               </div>
               <div className="card__body stack stack--sm" style={{ padding: 'var(--space-3)' }}>
                 {stageDeals.length === 0 ? (
-                  <p className="text-subtle text-sm">Empty</p>
+                  <p className="text-subtle text-sm">{t('deals.emptyStage')}</p>
                 ) : (
                   stageDeals.map((deal) => (
                     <div
@@ -308,7 +316,7 @@ function PipelineBoard({ onOpen }: { onOpen: (deal: Deal) => void }) {
                         </span>
                         {can('deals.change_stage') && stages.length > 1 ? (
                           <select
-                            aria-label={`Move ${deal.title} to another stage`}
+                            aria-label={t('deals.moveStageLabel', { title: deal.title })}
                             value={deal.stage_id}
                             style={{ width: 'auto', fontSize: 12, padding: '2px 4px' }}
                             onClick={(event) => event.stopPropagation()}
@@ -349,6 +357,7 @@ export function DealFormDialog({
   onSaved: (deal: Deal) => void
 }) {
   const queryClient = useQueryClient()
+  const t = useT()
   const editing = Boolean(deal)
   const [form, setForm] = useState<DealInput>(() => toInput(deal))
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -437,7 +446,7 @@ export function DealFormDialog({
         onClick={(event) => event.stopPropagation()}
       >
         <div className="card__header">
-          <h2 id="deal-form-title">{editing ? 'Edit deal' : 'New deal'}</h2>
+          <h2 id="deal-form-title">{editing ? t('deals.editDeal') : t('deals.newDeal')}</h2>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="card__body">
@@ -447,7 +456,7 @@ export function DealFormDialog({
               </div>
             ) : null}
             <div className="form-grid">
-              <Field label="Title" htmlFor="deal-title" required error={errors.title} full>
+              <Field label={t('deals.titleField')} htmlFor="deal-title" required error={errors.title} full>
                 <input
                   id="deal-title"
                   value={form.title}
@@ -456,7 +465,7 @@ export function DealFormDialog({
                   required
                 />
               </Field>
-              <Field label="Pipeline" htmlFor="deal-pipeline" required error={errors.pipeline_id}>
+              <Field label={t('deals.pipelineField')} htmlFor="deal-pipeline" required error={errors.pipeline_id}>
                 <select
                   id="deal-pipeline"
                   value={form.pipeline_id}
@@ -470,7 +479,7 @@ export function DealFormDialog({
                   }}
                   required
                 >
-                  <option value="">Select a pipeline</option>
+                  <option value="">{t('deals.selectPipeline')}</option>
                   {pipelineList.map((pipeline) => (
                     <option key={pipeline.id} value={pipeline.id}>
                       {pipeline.name}
@@ -478,7 +487,7 @@ export function DealFormDialog({
                   ))}
                 </select>
               </Field>
-              <Field label="Stage" htmlFor="deal-stage" required error={errors.stage_id}>
+              <Field label={t('deals.stageField')} htmlFor="deal-stage" required error={errors.stage_id}>
                 <select
                   id="deal-stage"
                   value={form.stage_id}
@@ -486,7 +495,7 @@ export function DealFormDialog({
                   disabled={stages.length === 0}
                   required
                 >
-                  <option value="">Select a stage</option>
+                  <option value="">{t('deals.selectStage')}</option>
                   {stages.map((stage) => (
                     <option key={stage.id} value={stage.id}>
                       {stage.name}
@@ -494,7 +503,7 @@ export function DealFormDialog({
                   ))}
                 </select>
               </Field>
-              <Field label="Amount" htmlFor="deal-amount" error={errors.amount}>
+              <Field label={t('deals.amountField')} htmlFor="deal-amount" error={errors.amount}>
                 <input
                   id="deal-amount"
                   type="number"
@@ -504,7 +513,7 @@ export function DealFormDialog({
                   onChange={(event) => update('amount', Number(event.target.value))}
                 />
               </Field>
-              <Field label="Currency" htmlFor="deal-currency">
+              <Field label={t('deals.currencyField')} htmlFor="deal-currency">
                 <input
                   id="deal-currency"
                   maxLength={3}
@@ -513,10 +522,10 @@ export function DealFormDialog({
                 />
               </Field>
               <Field
-                label="Discount %"
+                label={t('deals.discountField')}
                 htmlFor="deal-discount"
                 error={errors.discount_percent}
-                hint="Above the approval threshold this needs a manager's approval."
+                hint={t('deals.discountHint')}
               >
                 <input
                   id="deal-discount"
@@ -528,7 +537,7 @@ export function DealFormDialog({
                   onChange={(event) => update('discount_percent', Number(event.target.value))}
                 />
               </Field>
-              <Field label="Expected close" htmlFor="deal-close">
+              <Field label={t('deals.expectedClose')} htmlFor="deal-close">
                 <input
                   id="deal-close"
                   type="date"
@@ -536,13 +545,13 @@ export function DealFormDialog({
                   onChange={(event) => update('expected_close_date', event.target.value || null)}
                 />
               </Field>
-              <Field label="Account" htmlFor="deal-account">
+              <Field label={t('deals.accountField')} htmlFor="deal-account">
                 <select
                   id="deal-account"
                   value={form.account_id ?? ''}
                   onChange={(event) => update('account_id', event.target.value || null)}
                 >
-                  <option value="">No account</option>
+                  <option value="">{t('deals.noAccount')}</option>
                   {(accounts.data?.items ?? []).map((account) => (
                     <option key={account.id} value={account.id}>
                       {account.name}
@@ -550,7 +559,7 @@ export function DealFormDialog({
                   ))}
                 </select>
               </Field>
-              <Field label="Description" htmlFor="deal-description" full>
+              <Field label={t('deals.descriptionField')} htmlFor="deal-description" full>
                 <textarea
                   id="deal-description"
                   value={form.description ?? ''}
@@ -561,10 +570,10 @@ export function DealFormDialog({
           </div>
           <div className="form-actions">
             <button type="button" className="btn btn--secondary" onClick={onClose}>
-              Cancel
+              {t('common.cancel')}
             </button>
             <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
-              {mutation.isPending ? 'Saving…' : editing ? 'Save changes' : 'Create deal'}
+              {mutation.isPending ? t('common.saving') : editing ? t('common.saveChanges') : t('deals.createDeal')}
             </button>
           </div>
         </form>
@@ -596,6 +605,7 @@ export function DealDetailPage() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
   const { can } = useAuth()
+  const t = useT()
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState(false)
   const [archiving, setArchiving] = useState(false)
@@ -636,7 +646,7 @@ export function DealDetailPage() {
 
   if (deal.isError) {
     return (
-      <Card title="Deal">
+      <Card title={t('deals.detailTitle')}>
         <Alert tone="error">{errorMessage(deal.error)}</Alert>
       </Card>
     )
@@ -652,25 +662,23 @@ export function DealDetailPage() {
     <>
       <PageHeader
         title={data.title}
+        breadcrumb={[{ label: t('nav.deals'), to: '/deals' }]}
         meta={
           <>
-            {formatMoney(data.amount, data.currency)} · Updated{' '}
+            {formatMoney(data.amount, data.currency)} · {t('common.updated')}{' '}
             <Timestamp value={data.updated_at} />
           </>
         }
         actions={
           <>
-            <Link to="/deals" className="btn btn--ghost btn--sm">
-              Back
-            </Link>
             {can('deals.update') ? (
               <button type="button" className="btn btn--secondary btn--sm" onClick={() => setEditing(true)}>
-                Edit
+                {t('common.edit')}
               </button>
             ) : null}
             {can('deals.archive') ? (
               <button type="button" className="btn btn--danger btn--sm" onClick={() => setArchiving(true)}>
-                Archive
+                {t('common.archive')}
               </button>
             ) : null}
           </>
@@ -684,60 +692,60 @@ export function DealDetailPage() {
       ) : null}
 
       <div className="grid grid--split">
-        <Card title="Details">
+        <Card title={t('deals.details')}>
           <dl className="dl">
-            <dt>Status</dt>
+            <dt>{t('common.status')}</dt>
             <dd>
               <StatusBadge status={data.status} />
             </dd>
-            <dt>Amount</dt>
+            <dt>{t('deals.amountField')}</dt>
             <dd className="numeric">{formatMoney(data.amount, data.currency)}</dd>
-            <dt>Discount</dt>
+            <dt>{t('deals.columnDiscount')}</dt>
             <dd>
               {data.discount_percent}%{' '}
               {data.discount_approved_at ? (
-                <Badge tone="success">approved</Badge>
+                <Badge tone="success">{t('deals.approved')}</Badge>
               ) : data.discount_percent > 0 ? (
-                <Badge tone="warning">awaiting approval</Badge>
+                <Badge tone="warning">{t('deals.awaitingApproval')}</Badge>
               ) : null}
             </dd>
-            <dt>Expected close</dt>
+            <dt>{t('deals.expectedClose')}</dt>
             <dd>{data.expected_close_date ?? <span className="text-subtle">—</span>}</dd>
-            <dt>Closed</dt>
+            <dt>{t('status.closed')}</dt>
             <dd>
               <Timestamp value={data.closed_at} />
             </dd>
             {data.lost_reason ? (
               <>
-                <dt>Lost reason</dt>
+                <dt>{t('deals.lostReason')}</dt>
                 <dd>{data.lost_reason}</dd>
               </>
             ) : null}
-            <dt>Account</dt>
+            <dt>{t('deals.accountField')}</dt>
             <dd>
               {data.account_id ? (
-                <Link to={`/accounts/${data.account_id}`}>View account</Link>
+                <Link to={`/accounts/${data.account_id}`}>{t('deals.viewAccount')}</Link>
               ) : (
-                <span className="text-subtle">Not linked</span>
+                <span className="text-subtle">{t('common.notLinked')}</span>
               )}
             </dd>
-            <dt>Description</dt>
+            <dt>{t('deals.descriptionField')}</dt>
             <dd>{data.description ?? <span className="text-subtle">—</span>}</dd>
           </dl>
         </Card>
 
-        <Card title="Stage history">
+        <Card title={t('deals.stageHistory')}>
           {history.data?.items.length ? (
             <div className="stack stack--sm">
               {history.data.items.map((entry) => (
                 <div key={entry.id} className="row row--between">
-                  <span className="text-sm">Stage changed</span>
+                  <span className="text-sm">{t('deals.stageChanged')}</span>
                   <Timestamp value={entry.changed_at} />
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-muted text-sm">The deal has not changed stage yet.</p>
+            <p className="text-muted text-sm">{t('deals.noStageChange')}</p>
           )}
         </Card>
       </div>
@@ -768,9 +776,9 @@ export function DealDetailPage() {
 
       <ConfirmDialog
         open={archiving}
-        title="Archive this deal?"
-        text="The deal leaves the pipeline but its history is kept."
-        confirmLabel="Archive"
+        title={t('deals.archiveTitle')}
+        text={t('deals.archiveText')}
+        confirmLabel={t('common.archive')}
         danger
         busy={archive.isPending}
         onConfirm={() => archive.mutate()}

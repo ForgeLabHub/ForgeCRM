@@ -6,6 +6,7 @@ import { accountsApi, tasksApi } from '../api/crm'
 import { errorMessage, fieldErrors } from '../api/client'
 import type { Account, AccountInput } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
+import { useCreateParam } from '../hooks/useCreateParam'
 import { useT, type TFunction } from '../i18n'
 import { ResourceList, type Column } from '../components/ResourceList'
 import { AssistPanel } from '../components/AssistPanel'
@@ -73,7 +74,7 @@ export function AccountsPage() {
   const navigate = useNavigate()
   const { can } = useAuth()
   const t = useT()
-  const [creating, setCreating] = useState(false)
+  const [creating, setCreating] = useCreateParam(can('accounts.create'))
 
   return (
     <>
@@ -436,6 +437,7 @@ export function AccountDetailPage() {
     <>
       <PageHeader
         title={data.name}
+        breadcrumb={[{ label: t('nav.accounts'), to: '/accounts' }]}
         meta={
           <>
             {data.industry ? <>{data.industry} · </> : null}
@@ -444,9 +446,6 @@ export function AccountDetailPage() {
         }
         actions={
           <>
-            <Link to="/accounts" className="btn btn--ghost btn--sm">
-              {t('common.back')}
-            </Link>
             {can('accounts.update') ? (
               <button type="button" className="btn btn--secondary btn--sm" onClick={() => setEditing(true)}>
                 {t('accounts.edit')}

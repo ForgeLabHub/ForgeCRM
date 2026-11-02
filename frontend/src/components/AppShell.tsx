@@ -338,6 +338,13 @@ export function AppShell() {
             >
               {menuOpen ? <IconClose size={18} /> : <IconMenu size={18} />}
             </button>
+            {/* The wordmark only appears once the sidebar is a drawer: on a wide
+                screen the brand already sits at the top of the rail, and showing
+                it twice would read as two different things. */}
+            <span className="topbar__brand">
+              <Avatar name="ForgeCRM" size="sm" />
+              <span className="topbar__brand-name">{t('brand.name')}</span>
+            </span>
             <button
               type="button"
               className="search-trigger"

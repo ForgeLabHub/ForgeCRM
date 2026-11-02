@@ -1,10 +1,10 @@
 /**
  * Tests for the Overview page.
  *
- * The page is assembled from independent queries, so these pin the two things
- * that break silently: a count that arrives wrapped rather than as a number, and
- * the hero heading the e2e fixture waits on. A missing heading is invisible in a
- * unit test but fails every browser scenario, so it is asserted here too.
+ * Two things break silently here and are pinned below: a count that arrives
+ * wrapped rather than as a number (and the hero heading the e2e fixture waits
+ * on), and the create affordances, which must not be offered to a caller who
+ * cannot perform them.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
@@ -21,31 +21,36 @@ function json(body: unknown, status = 200): Response {
   })
 }
 
-const PERMISSIONS = [
+const ALL_PERMISSIONS = [
   'accounts.read',
+  'accounts.create',
   'deals.read',
+  'deals.create',
   'leads.read',
   'tasks.read',
+  'tasks.create',
   'tickets.read',
+  'tickets.create',
   'reports.read',
   'workflows.read',
   'imports.read',
 ]
 
-function stubFetch() {
+function stubFetch(permissions: string[] = ALL_PERMISSIONS) {
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input.toString()
-    if (url.includes('/api/v1/auth/me')) {
+    const path = url.replace(/^https?:\/\/[^/]+/, '')
+    if (path.includes('/api/v1/auth/me')) {
       return Promise.resolve(
         json({
           user: { id: 'u1', email: 'a@example.com', display_name: 'Ada' },
           organization: { id: 'o1', name: 'ForgeLab' },
-          permissions: PERMISSIONS,
+          permissions,
           csrf_token: 't',
         }),
       )
     }
-    if (url.includes('/api/v1/system/info')) {
+    if (path.includes('/api/v1/system/info')) {
       return Promise.resolve(
         json({
           service: 'forgecrm-api',
@@ -59,16 +64,16 @@ function stubFetch() {
         }),
       )
     }
-    if (url.includes('/api/v1/accounts')) {
+    if (path.includes('/api/v1/accounts')) {
       return Promise.resolve(json({ items: [], total: 7, limit: 1, offset: 0 }))
     }
-    if (url.includes('/api/v1/deals')) {
+    if (path.includes('/api/v1/deals')) {
       return Promise.resolve(json({ items: [], total: 3, limit: 1, offset: 0 }))
     }
-    if (url.includes('/api/v1/leads')) {
+    if (path.includes('/api/v1/leads')) {
       return Promise.resolve(json({ items: [], total: 4, limit: 1, offset: 0 }))
     }
-    if (url.includes('/api/v1/tasks')) {
+    if (path.includes('/api/v1/tasks')) {
       return Promise.resolve(
         json({
           items: [
@@ -80,7 +85,7 @@ function stubFetch() {
         }),
       )
     }
-    if (url.includes('/api/v1/tickets')) {
+    if (path.includes('/api/v1/tickets')) {
       return Promise.resolve(
         json({
           items: [
@@ -97,17 +102,19 @@ function stubFetch() {
         }),
       )
     }
-    return Promise.resolve(json({}))
+    return Promise.resolve(json({ items: [], total: 0, limit: 5, offset: 0 }))
   })
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
 }
 
 function renderPage() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/']}>
         <I18nProvider>
           <AuthProvider>
             <OverviewPage />
@@ -126,9 +133,7 @@ describe('OverviewPage', () => {
   it('renders the greeting as the page heading', async () => {
     stubFetch()
     renderPage()
-    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent(
-      'Welcome back, Ada',
-    )
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Welcome back, Ada')
   })
 
   it('shows each permitted count in its own tile', async () => {
@@ -159,5 +164,36 @@ describe('OverviewPage', () => {
     const actions = await screen.findByText('Quick actions')
     expect(actions).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Workflows/ })).toHaveAttribute('href', '/workflows')
+  })
+
+  it('offers the create actions to a user who may create records', async () => {
+    stubFetch()
+    renderPage()
+
+    expect(await screen.findByRole('link', { name: /new account/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /new deal/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /new task/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /new ticket/i })).toBeInTheDocument()
+  })
+
+  it('hides every create action from a read-only user', async () => {
+    stubFetch([
+      'accounts.read',
+      'deals.read',
+      'tasks.read',
+      'tickets.read',
+      'reports.read',
+      'workflows.read',
+    ])
+
+    renderPage()
+
+    // Wait for the session to load before asserting absence. The reports action
+    // stays, because it only reads.
+    expect(await screen.findByRole('link', { name: /reports/i })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /new account/i })).toBeNull()
+    expect(screen.queryByRole('link', { name: /new deal/i })).toBeNull()
+    expect(screen.queryByRole('link', { name: /new task/i })).toBeNull()
+    expect(screen.queryByRole('link', { name: /new ticket/i })).toBeNull()
   })
 })

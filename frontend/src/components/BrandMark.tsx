@@ -1,3 +1,5 @@
+import { useT } from '../i18n'
+
 /**
  * The ForgeCRM mark.
  *
@@ -6,13 +8,14 @@
  * product's identity; it is intentionally simple so it stays legible at 20px.
  */
 export function BrandMark({ size = 28 }: { size?: number }) {
+  const t = useT()
   return (
     <svg
       width={size}
       height={size}
       viewBox="0 0 32 32"
       role="img"
-      aria-label="ForgeCRM"
+      aria-label={t('common.brand')}
       className="brand-mark"
     >
       <rect width="32" height="32" rx="8" fill="var(--color-accent)" />

@@ -13,6 +13,7 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ConsentPanel } from './ConsentPanel'
 import { AuthProvider } from '../hooks/useAuth'
+import { I18nProvider } from '../i18n'
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -63,9 +64,11 @@ function renderPanel() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <ConsentPanel subject={{ contact_id: 'c1' }} />
-      </AuthProvider>
+      <I18nProvider>
+        <AuthProvider>
+          <ConsentPanel subject={{ contact_id: 'c1' }} />
+        </AuthProvider>
+      </I18nProvider>
     </QueryClientProvider>,
   )
 }
@@ -74,9 +77,11 @@ function renderPanelForEmail(email: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <ConsentPanel subject={{ email }} subjectLabel={email} />
-      </AuthProvider>
+      <I18nProvider>
+        <AuthProvider>
+          <ConsentPanel subject={{ email }} subjectLabel={email} />
+        </AuthProvider>
+      </I18nProvider>
     </QueryClientProvider>,
   )
 }

@@ -7,15 +7,21 @@ import { errorMessage, fieldErrors } from '../api/client'
 import type { ViewFilters } from '../api/views'
 import type { Ticket, TicketInput } from '../types/api'
 import { useAuth } from '../hooks/useAuth'
+import { useCreateParam } from '../hooks/useCreateParam'
 import { ResourceList, type Column } from '../components/ResourceList'
 import { SavedViewsBar } from '../components/SavedViewsBar'
 import { AssistPanel } from '../components/AssistPanel'
 import { AttachmentPanel } from '../components/AttachmentPanel'
 import { RecordCollabPanel } from '../components/RecordCollabPanel'
 import { Alert, Badge, Card, Field, PageHeader, StatusBadge, Timestamp } from '../components/ui'
+import { useT, type TFunction } from '../i18n'
 
 const STATUSES = ['new', 'open', 'pending', 'resolved', 'closed']
 const PRIORITIES = ['low', 'normal', 'high', 'urgent']
+
+function priorityLabel(t: TFunction, priority: string): string {
+  return t(`priority.${priority}` as Parameters<TFunction>[0])
+}
 
 function slaState(ticket: Ticket): 'breached' | 'due-soon' | 'ok' | 'none' {
   if (!ticket.resolution_due_at || ticket.resolved_at) return 'none'
@@ -29,7 +35,8 @@ function slaState(ticket: Ticket): 'breached' | 'due-soon' | 'ok' | 'none' {
 export function TicketsPage() {
   const { can } = useAuth()
   const navigate = useNavigate()
-  const [creating, setCreating] = useState(false)
+  const t = useT()
+  const [creating, setCreating] = useCreateParam(can('tickets.create'))
   const [editing, setEditing] = useState<Ticket | null>(null)
   const [statusFilter, setStatusFilter] = useState('')
   const [activeViewId, setActiveViewId] = useState<string | undefined>(undefined)
@@ -37,32 +44,38 @@ export function TicketsPage() {
   const columns: Column<Ticket>[] = [
     {
       key: 'subject',
-      header: 'Ticket',
+      header: t('tickets.columnTicket'),
       render: (row) => (
         <div>
           <div className="table__primary">{row.subject}</div>
-          {row.channel ? <div className="table__secondary">via {row.channel}</div> : null}
+          {row.channel ? (
+            <div className="table__secondary">{t('tickets.viaChannel', { channel: row.channel })}</div>
+          ) : null}
         </div>
       ),
     },
     {
       key: 'priority',
-      header: 'Priority',
+      header: t('tickets.columnPriority'),
       render: (row) => (
         <Badge tone={row.priority === 'urgent' ? 'danger' : row.priority === 'high' ? 'warning' : 'neutral'}>
-          {row.priority}
+          {priorityLabel(t, row.priority)}
         </Badge>
       ),
     },
-    { key: 'status', header: 'Status', render: (row) => <StatusBadge status={row.status} /> },
+    {
+      key: 'status',
+      header: t('tickets.columnStatus'),
+      render: (row) => <StatusBadge status={row.status} />,
+    },
     {
       key: 'sla',
-      header: 'SLA',
+      header: t('tickets.columnSla'),
       render: (row) => {
         const state = slaState(row)
         if (state === 'none') return <span className="text-subtle">—</span>
-        if (state === 'breached') return <Badge tone="danger">breached</Badge>
-        if (state === 'due-soon') return <Badge tone="warning">due soon</Badge>
+        if (state === 'breached') return <Badge tone="danger">{t('tickets.slaBreached')}</Badge>
+        if (state === 'due-soon') return <Badge tone="warning">{t('tickets.slaDueSoon')}</Badge>
         return <Timestamp value={row.resolution_due_at} />
       },
     },
@@ -80,7 +93,7 @@ export function TicketsPage() {
               setEditing(row)
             }}
           >
-            Edit
+            {t('common.edit')}
           </button>
         ) : null,
     },
@@ -88,18 +101,18 @@ export function TicketsPage() {
 
   return (
     <>
-      <PageHeader title="Support" meta="Customer requests, their priority and SLA position." />
+      <PageHeader title={t('tickets.title')} meta={t('tickets.meta')} />
       <ResourceList
-        title="All tickets"
+        title={t('tickets.all')}
         queryKey={['tickets', statusFilter]}
         fetchPage={(params) => ticketsApi.list({ ...params, status: statusFilter || undefined })}
         columns={columns}
         rowKey={(row) => row.id}
         onRowClick={(row) => navigate(`/tickets/${row.id}`)}
-        emptyTitle="No tickets"
-        emptyText="Tickets raised by customers or staff appear here."
+        emptyTitle={t('tickets.emptyTitle')}
+        emptyText={t('tickets.emptyText')}
         searchable
-        searchPlaceholder="Search tickets…"
+        searchPlaceholder={t('tickets.searchPlaceholder')}
         filters={
           <>
             <SavedViewsBar
@@ -110,15 +123,15 @@ export function TicketsPage() {
               onActiveChange={setActiveViewId}
             />
             <label className="field" style={{ maxWidth: 180 }}>
-              <span className="field__label">Status</span>
+              <span className="field__label">{t('tickets.statusFilter')}</span>
               <select
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value)}
               >
-                <option value="">All statuses</option>
+                <option value="">{t('common.allStatuses')}</option>
                 {STATUSES.map((status) => (
                   <option key={status} value={status}>
-                    {status}
+                    {t(`status.${status}` as Parameters<TFunction>[0])}
                   </option>
                 ))}
               </select>
@@ -128,7 +141,7 @@ export function TicketsPage() {
         actions={
           can('tickets.create') ? (
             <button type="button" className="btn btn--primary btn--sm" onClick={() => setCreating(true)}>
-              New ticket
+              {t('tickets.newTicket')}
             </button>
           ) : null
         }
@@ -161,6 +174,7 @@ export function TicketFormDialog({
   onSaved: (ticket: Ticket) => void
 }) {
   const queryClient = useQueryClient()
+  const t = useT()
   const editing = Boolean(ticket)
   const [form, setForm] = useState<TicketInput>(() => toInput(ticket))
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -222,7 +236,7 @@ export function TicketFormDialog({
         onClick={(event) => event.stopPropagation()}
       >
         <div className="card__header">
-          <h2 id="ticket-form-title">{editing ? 'Update ticket' : 'New ticket'}</h2>
+          <h2 id="ticket-form-title">{editing ? t('tickets.editTicket') : t('tickets.newTicket')}</h2>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="card__body">
@@ -239,7 +253,7 @@ export function TicketFormDialog({
               </div>
             ) : null}
             <div className="form-grid">
-              <Field label="Subject" htmlFor="ticket-subject" required error={errors.subject} full>
+              <Field label={t('tickets.subjectField')} htmlFor="ticket-subject" required error={errors.subject} full>
                 <input
                   id="ticket-subject"
                   value={form.subject}
@@ -248,7 +262,7 @@ export function TicketFormDialog({
                   required
                 />
               </Field>
-              <Field label="Status" htmlFor="ticket-status">
+              <Field label={t('tickets.statusField')} htmlFor="ticket-status">
                 <select
                   id="ticket-status"
                   value={form.status ?? 'new'}
@@ -256,12 +270,12 @@ export function TicketFormDialog({
                 >
                   {STATUSES.map((status) => (
                     <option key={status} value={status}>
-                      {status}
+                      {t(`status.${status}` as Parameters<TFunction>[0])}
                     </option>
                   ))}
                 </select>
               </Field>
-              <Field label="Priority" htmlFor="ticket-priority">
+              <Field label={t('tickets.priorityField')} htmlFor="ticket-priority">
                 <select
                   id="ticket-priority"
                   value={form.priority ?? 'normal'}
@@ -269,26 +283,26 @@ export function TicketFormDialog({
                 >
                   {PRIORITIES.map((priority) => (
                     <option key={priority} value={priority}>
-                      {priority}
+                      {priorityLabel(t, priority)}
                     </option>
                   ))}
                 </select>
               </Field>
-              <Field label="Channel" htmlFor="ticket-channel">
+              <Field label={t('tickets.channelField')} htmlFor="ticket-channel">
                 <select
                   id="ticket-channel"
                   value={form.channel ?? ''}
                   onChange={(event) => update('channel', event.target.value || null)}
                 >
-                  <option value="">Not set</option>
+                  <option value="">{t('tickets.channelNotSet')}</option>
                   {['email', 'phone', 'web', 'chat', 'telegram'].map((channel) => (
                     <option key={channel} value={channel}>
-                      {channel}
+                      {t(`channel.${channel}` as Parameters<TFunction>[0])}
                     </option>
                   ))}
                 </select>
               </Field>
-              <Field label="Description" htmlFor="ticket-description" full>
+              <Field label={t('tickets.descriptionField')} htmlFor="ticket-description" full>
                 <textarea
                   id="ticket-description"
                   value={form.description ?? ''}
@@ -299,10 +313,14 @@ export function TicketFormDialog({
           </div>
           <div className="form-actions">
             <button type="button" className="btn btn--secondary" onClick={onClose}>
-              Cancel
+              {t('common.cancel')}
             </button>
             <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
-              {mutation.isPending ? 'Saving…' : editing ? 'Save changes' : 'Create ticket'}
+              {mutation.isPending
+                ? t('common.saving')
+                : editing
+                  ? t('common.saveChanges')
+                  : t('tickets.createTicket')}
             </button>
           </div>
         </form>
@@ -330,6 +348,7 @@ export function TicketDetailPage() {
   const { id = '' } = useParams()
   const { can } = useAuth()
   const queryClient = useQueryClient()
+  const t = useT()
   const [editing, setEditing] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
@@ -342,7 +361,7 @@ export function TicketDetailPage() {
   const resolve = useMutation({
     mutationFn: () => {
       const current = ticket.data
-      if (!current) throw new Error('The ticket is not loaded')
+      if (!current) throw new Error(t('tickets.notLoaded'))
       return ticketsApi.update(id, { ...toInput(current), status: 'resolved' })
     },
     onSuccess: (saved) => {
@@ -355,7 +374,7 @@ export function TicketDetailPage() {
 
   if (ticket.isError) {
     return (
-      <Card title="Ticket">
+      <Card title={t('tickets.detailTitle')}>
         <Alert tone="error">{errorMessage(ticket.error)}</Alert>
       </Card>
     )
@@ -373,16 +392,15 @@ export function TicketDetailPage() {
     <>
       <PageHeader
         title={data.subject}
+        breadcrumb={[{ label: t('nav.support'), to: '/tickets' }]}
         meta={
           <>
-            <StatusBadge status={data.status} /> · Updated <Timestamp value={data.updated_at} />
+            <StatusBadge status={data.status} /> · {t('common.updated')}{' '}
+            <Timestamp value={data.updated_at} />
           </>
         }
         actions={
           <>
-            <Link to="/tickets" className="btn btn--ghost btn--sm">
-              Back
-            </Link>
             {can('tickets.update') && !closed ? (
               <button
                 type="button"
@@ -390,12 +408,12 @@ export function TicketDetailPage() {
                 onClick={() => resolve.mutate()}
                 disabled={resolve.isPending}
               >
-                Resolve
+                {t('tickets.resolve')}
               </button>
             ) : null}
             {can('tickets.update') ? (
               <button type="button" className="btn btn--secondary btn--sm" onClick={() => setEditing(true)}>
-                Edit
+                {t('common.edit')}
               </button>
             ) : null}
           </>
@@ -409,67 +427,75 @@ export function TicketDetailPage() {
       ) : null}
 
       <div className="grid grid--split">
-        <Card title="Details">
+        <Card title={t('tickets.details')}>
           <dl className="dl">
-            <dt>Status</dt>
+            <dt>{t('tickets.statusField')}</dt>
             <dd>
               <StatusBadge status={data.status} />
             </dd>
-            <dt>Priority</dt>
+            <dt>{t('tickets.priorityField')}</dt>
             <dd>
               <Badge
                 tone={
                   data.priority === 'urgent' ? 'danger' : data.priority === 'high' ? 'warning' : 'neutral'
                 }
               >
-                {data.priority}
+                {priorityLabel(t, data.priority)}
               </Badge>
             </dd>
-            <dt>Channel</dt>
-            <dd>{data.channel ?? <span className="text-subtle">—</span>}</dd>
-            <dt>SLA due</dt>
+            <dt>{t('tickets.channelField')}</dt>
+            <dd>
+              {data.channel
+                ? t(`channel.${data.channel}` as Parameters<TFunction>[0])
+                : <span className="text-subtle">—</span>}
+            </dd>
+            <dt>{t('tickets.slaDue')}</dt>
             <dd className={sla === 'breached' ? 'text-danger' : undefined}>
               {sla === 'none' ? (
                 <span className="text-subtle">—</span>
               ) : (
                 <>
                   <Timestamp value={data.resolution_due_at} />
-                  {sla === 'breached' ? ' · breached' : sla === 'due-soon' ? ' · due soon' : ''}
+                  {sla === 'breached'
+                    ? ` · ${t('tickets.slaBreached')}`
+                    : sla === 'due-soon'
+                      ? ` · ${t('tickets.slaDueSoon')}`
+                      : ''}
                 </>
               )}
             </dd>
-            <dt>First response</dt>
+            <dt>{t('tickets.firstResponse')}</dt>
             <dd>
               <Timestamp value={data.first_responded_at} />
             </dd>
-            <dt>Resolved</dt>
+            <dt>{t('tickets.resolved')}</dt>
             <dd>
               <Timestamp value={data.resolved_at} />
             </dd>
-            <dt>Description</dt>
+            <dt>{t('tickets.descriptionField')}</dt>
             <dd>{data.description ?? <span className="text-subtle">—</span>}</dd>
           </dl>
         </Card>
 
-        <Card title="Related records">
+        <Card title={t('tickets.relatedRecords')}>
           <dl className="dl">
-            <dt>Account</dt>
+            <dt>{t('contacts.accountField')}</dt>
             <dd>
               {data.account_id ? (
-                <Link to={`/accounts/${data.account_id}`}>View account</Link>
+                <Link to={`/accounts/${data.account_id}`}>{t('tickets.viewAccount')}</Link>
               ) : (
-                <span className="text-subtle">Not linked</span>
+                <span className="text-subtle">{t('common.notLinked')}</span>
               )}
             </dd>
-            <dt>Contact</dt>
+            <dt>{t('tickets.relatedContact')}</dt>
             <dd>
               {data.contact_id ? (
-                <Link to={`/contacts/${data.contact_id}`}>View contact</Link>
+                <Link to={`/contacts/${data.contact_id}`}>{t('tickets.viewContact')}</Link>
               ) : (
-                <span className="text-subtle">Not linked</span>
+                <span className="text-subtle">{t('common.notLinked')}</span>
               )}
             </dd>
-            <dt>Created</dt>
+            <dt>{t('common.created')}</dt>
             <dd>
               <Timestamp value={data.created_at} />
             </dd>

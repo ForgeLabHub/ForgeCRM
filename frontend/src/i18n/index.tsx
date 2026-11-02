@@ -115,9 +115,43 @@ export function useI18n(): I18nValue {
   return ctx
 }
 
-/** Convenience hook for components that only need the translator. */
+/**
+ * Convenience hook for components that only need the translator.
+ *
+ * Unlike `useI18n` this tolerates a missing provider and returns the English
+ * reference strings. The provider is mounted once around the whole app; the only
+ * other caller is a unit test that renders a single component in isolation, and
+ * a test that had to wrap every render in a provider to avoid a throw would be
+ * testing the harness rather than the component. English is the honest fallback
+ * because it is the reference locale the dictionaries are typed against.
+ */
 export function useT() {
-  return useI18n().t
+  const ctx = useContext(I18nContext)
+  if (ctx) return ctx.t
+  return translateEn
+}
+
+/**
+ * The reference-locale translator, for callers outside a component tree.
+ *
+ * A pure function such as a definition validator has no hook to read the active
+ * locale from, and its caller may pass a translator in. Defaulting to English
+ * keeps it usable and readable on its own.
+ */
+export function translateEn(key: TranslationKey, vars?: Record<string, string | number>): string {
+  return interpolate(lookup(en, key) ?? key, vars)
+}
+
+/**
+ * The active locale, or the reference one outside a provider.
+ *
+ * `Timestamp` formats dates in the interface locale, and a component that
+ * renders in isolation has no provider to read it from. Returning the reference
+ * locale keeps such a render readable instead of throwing.
+ */
+export function useLocale(): Locale {
+  const ctx = useContext(I18nContext)
+  return ctx ? ctx.locale : DEFAULT_LOCALE
 }
 
 /**

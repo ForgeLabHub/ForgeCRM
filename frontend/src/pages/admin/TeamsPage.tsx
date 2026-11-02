@@ -6,10 +6,12 @@ import type { TeamRow } from '../../api/admin'
 import { usersApi } from '../../api/auth'
 import { errorMessage, fieldErrors } from '../../api/client'
 import { useAuth } from '../../hooks/useAuth'
+import { useT } from '../../i18n'
 import { Alert, Card, ErrorState, Field, PageHeader, TableSkeleton, Timestamp } from '../../components/ui'
 
 export function TeamsPage() {
   const { can } = useAuth()
+  const t = useT()
   const queryClient = useQueryClient()
   const [creating, setCreating] = useState(false)
   const [addingTo, setAddingTo] = useState<TeamRow | null>(null)
@@ -18,7 +20,7 @@ export function TeamsPage() {
 
   if (teams.isError) {
     return (
-      <Card title="Teams">
+      <Card title={t('teams.title')}>
         <ErrorState message={errorMessage(teams.error)} onRetry={() => void teams.refetch()} />
       </Card>
     )
@@ -26,18 +28,15 @@ export function TeamsPage() {
 
   return (
     <>
-      <PageHeader
-        title="Teams"
-        meta="Groups used to share record ownership and to scope access."
-      />
+      <PageHeader title={t('teams.title')} meta={t('teams.meta')} />
 
       <Card
-        title="All teams"
+        title={t('teams.allTeams')}
         flush
         actions={
           can('teams.manage') ? (
             <button type="button" className="btn btn--primary btn--sm" onClick={() => setCreating(true)}>
-              New team
+              {t('teams.newTeam')}
             </button>
           ) : null
         }
@@ -46,23 +45,29 @@ export function TeamsPage() {
           <TableSkeleton rows={4} columns={4} />
         ) : teams.data?.items.length ? (
           <div className="table-wrap">
-            <table>
+            <table className="table--stack">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Description</th>
-                  <th className="numeric">Members</th>
-                  <th>Created</th>
+                  <th>{t('teams.columnName')}</th>
+                  <th>{t('teams.columnDescription')}</th>
+                  <th className="numeric">{t('teams.columnMembers')}</th>
+                  <th>{t('teams.columnCreated')}</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
                 {teams.data.items.map((team) => (
                   <tr key={team.id}>
-                    <td className="table__primary">{team.name}</td>
-                    <td>{team.description ?? <span className="text-subtle">—</span>}</td>
-                    <td className="numeric">{team.member_count}</td>
-                    <td>
+                    <td className="table__primary" data-label={t('teams.columnName')}>
+                      {team.name}
+                    </td>
+                    <td data-label={t('teams.columnDescription')}>
+                      {team.description ?? <span className="text-subtle">—</span>}
+                    </td>
+                    <td className="numeric" data-label={t('teams.columnMembers')}>
+                      {team.member_count}
+                    </td>
+                    <td data-label={t('teams.columnCreated')}>
                       <Timestamp value={team.created_at} />
                     </td>
                     <td>
@@ -72,7 +77,7 @@ export function TeamsPage() {
                           className="btn btn--secondary btn--sm"
                           onClick={() => setAddingTo(team)}
                         >
-                          Add member
+                          {t('teams.addMember')}
                         </button>
                       ) : null}
                     </td>
@@ -83,7 +88,7 @@ export function TeamsPage() {
           </div>
         ) : (
           <div className="card__body">
-            <p className="text-muted">No teams yet.</p>
+            <p className="text-muted">{t('teams.empty')}</p>
           </div>
         )}
       </Card>
@@ -120,6 +125,7 @@ function NewTeamDialog({
   onClose: () => void
   onCreated: () => void
 }) {
+  const t = useT()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -161,12 +167,12 @@ function NewTeamDialog({
     >
       <div className="card" style={{ maxWidth: 460, width: '100%' }} onClick={(e) => e.stopPropagation()}>
         <div className="card__header">
-          <h2 id="new-team-title">New team</h2>
+          <h2 id="new-team-title">{t('teams.newTeamTitle')}</h2>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="card__body stack">
             {formError ? <Alert tone="error">{formError}</Alert> : null}
-            <Field label="Name" htmlFor="team-name" required error={errors.name}>
+            <Field label={t('teams.columnName')} htmlFor="team-name" required error={errors.name}>
               <input
                 id="team-name"
                 value={name}
@@ -174,7 +180,7 @@ function NewTeamDialog({
                 required
               />
             </Field>
-            <Field label="Description" htmlFor="team-description">
+            <Field label={t('teams.description')} htmlFor="team-description">
               <input
                 id="team-description"
                 value={description}
@@ -184,10 +190,10 @@ function NewTeamDialog({
           </div>
           <div className="form-actions">
             <button type="button" className="btn btn--secondary" onClick={onClose}>
-              Cancel
+              {t('common.cancel')}
             </button>
             <button type="submit" className="btn btn--primary" disabled={mutation.isPending}>
-              {mutation.isPending ? 'Creating…' : 'Create'}
+              {mutation.isPending ? t('teams.creating') : t('common.create')}
             </button>
           </div>
         </form>
@@ -205,6 +211,7 @@ function AddMemberDialog({
   onClose: () => void
   onAdded: () => void
 }) {
+  const t = useT()
   const [userId, setUserId] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -237,13 +244,13 @@ function AddMemberDialog({
     >
       <div className="card" style={{ maxWidth: 460, width: '100%' }} onClick={(e) => e.stopPropagation()}>
         <div className="card__header">
-          <h2 id="add-member-title">Add a member to {team.name}</h2>
+          <h2 id="add-member-title">{t('teams.addMemberTitle', { team: team.name })}</h2>
         </div>
         <div className="card__body stack">
           {error ? <Alert tone="error">{error}</Alert> : null}
-          <Field label="User" htmlFor="team-member" required>
+          <Field label={t('teams.user')} htmlFor="team-member" required>
             <select id="team-member" value={userId} onChange={(event) => setUserId(event.target.value)}>
-              <option value="">Select a user</option>
+              <option value="">{t('teams.selectUser')}</option>
               {(users.data?.items ?? []).map((user) => (
                 <option key={user.id} value={user.id}>
                   {user.display_name} ({user.email})
@@ -262,7 +269,7 @@ function AddMemberDialog({
             disabled={!userId || mutation.isPending}
             onClick={() => mutation.mutate()}
           >
-            {mutation.isPending ? 'Adding…' : 'Add member'}
+            {mutation.isPending ? t('teams.adding') : t('teams.addMember')}
           </button>
         </div>
       </div>
