@@ -39,7 +39,7 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 код изменился, а документ не перегенерировали.
 
 <!-- FACTS:AUTO BEGIN — генерируется backend/cmd/facts-gen, не редактировать вручную -->
-<!-- измерено на HEAD `3ec6459cb9fe6d25669a7a4f610692a88c6ade6c` -->
+<!-- измерено на HEAD `97c67a61e06f537f801541a38c5ab2ab59a90433` -->
 
 ## Backend / Architecture
 
@@ -92,7 +92,7 @@ openapi.json генерируется из живого роутера (`cmd/ope
 |---|---|---|
 | Файлы src (.ts/.tsx) | **116** | frontend/src/**, включая тестовые |
 | Тестовые файлы src | **33** | *.test.ts(x)/.spec.ts(x) в frontend/src |
-| Объявления it()/test() в src | **214** | запускаемые кейсы vitest; test.describe вычитается |
+| Объявления it()/test() в src | **216** | запускаемые кейсы vitest; test.describe вычитается |
 | Файлы страниц | **38** | компоненты в frontend/src/pages (без admin/, без тестов) |
 | Тесты страниц | **16** | *.test.tsx рядом со страницами |
 | Маршрутов <Route path> | **45** | объявления в frontend/src/App.tsx (регистр маршрутизации SPA) |
