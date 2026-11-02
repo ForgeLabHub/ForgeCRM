@@ -115,6 +115,6 @@ describe('ResourceList', () => {
     await user.type(await screen.findByPlaceholderText('Search rows…'), 'zzz')
 
     expect(await screen.findByText('No matches')).toBeInTheDocument()
-    expect(screen.getByText('Try a different search term.')).toBeInTheDocument()
+    expect(screen.getByText('Try a different search term or clear the filters.')).toBeInTheDocument()
   })
 })

@@ -1,19 +1,29 @@
 /**
  * Language and theme switches for the sign-in page.
  *
- * Both are plain, keyboard-reachable controls: a <select> for language (so the
- * native picker and its accessibility are reused) and a segmented radio group
- * for the three themes. Neither is a fake control — each writes through the
- * provider, which persists the choice and applies it without a reload.
+ * Both are real controls that write through their provider, so the choice is
+ * applied without a reload and persisted for the next visit. The theme control
+ * is a segmented radio group drawn with the same icon set as the rest of the
+ * product — an emoji here would be the one glyph on the page from a different
+ * family. The language control is a native <select>, which reuses the platform
+ * picker and its accessibility for free.
  */
 import { useId } from 'react'
+import type { JSX } from 'react'
 import { LOCALES, useI18n, type Locale } from '../i18n'
 import { THEME_MODES, useTheme, type ThemeMode } from '../theme'
+import { IconMonitor, IconMoon, IconSun, type IconProps } from './icons'
 
-const THEME_ICON: Record<ThemeMode, string> = {
-  light: '☀',
-  dark: '☾',
-  system: '◐',
+const THEME_ICON: Record<ThemeMode, (props: IconProps) => JSX.Element> = {
+  light: IconSun,
+  dark: IconMoon,
+  system: IconMonitor,
+}
+
+const THEME_LABEL: Record<ThemeMode, 'theme.light' | 'theme.dark' | 'theme.system'> = {
+  light: 'theme.light',
+  dark: 'theme.dark',
+  system: 'theme.system',
 }
 
 export function LoginControls() {
@@ -44,22 +54,24 @@ export function LoginControls() {
       <fieldset className="login-controls__group login-controls__group--theme">
         <legend className="login-controls__label">{t('theme.label')}</legend>
         <div className="segmented" role="radiogroup" aria-label={t('theme.label')}>
-          {THEME_MODES.map((option) => (
-            <button
-              key={option}
-              type="button"
-              role="radio"
-              aria-checked={mode === option}
-              className={`segmented__item${mode === option ? ' segmented__item--active' : ''}`}
-              onClick={() => setMode(option)}
-              title={t(`theme.${option}` as 'theme.light')}
-            >
-              <span aria-hidden="true" className="segmented__icon">
-                {THEME_ICON[option]}
-              </span>
-              <span className="segmented__text">{t(`theme.${option}` as 'theme.light')}</span>
-            </button>
-          ))}
+          {THEME_MODES.map((option) => {
+            const ThemeIcon = THEME_ICON[option]
+            const label = t(THEME_LABEL[option])
+            return (
+              <button
+                key={option}
+                type="button"
+                role="radio"
+                aria-checked={mode === option}
+                className={`segmented__item${mode === option ? ' segmented__item--active' : ''}`}
+                onClick={() => setMode(option)}
+                title={label}
+              >
+                <ThemeIcon size={14} />
+                <span className="segmented__text">{label}</span>
+              </button>
+            )
+          })}
         </div>
       </fieldset>
     </div>

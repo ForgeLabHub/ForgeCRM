@@ -1,141 +1,41 @@
-import { useEffect, useRef, useState, Suspense } from 'react'
+/**
+ * AppShell — the frame every authenticated page renders inside.
+ *
+ * It owns four things the pages should not each re-solve: the navigation model
+ * (shared with the command palette through `navigation.ts`), the account menu
+ * with the theme switch, the global search entry point, and a breadcrumb trail
+ * derived from the route so a deep page always shows where it sits.
+ *
+ * The sidebar collapses to an icon rail on a wide screen and slides over the
+ * content on a narrow one; the state is remembered, so a user who prefers the
+ * rail does not re-collapse it on every visit.
+ */
+import { useEffect, useMemo, useRef, useState, Suspense } from 'react'
 import type { JSX } from 'react'
-import { Link, NavLink, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { GlobalSearch } from './GlobalSearch'
 import { useGlobalSearchShortcut } from '../hooks/useGlobalSearch'
 import { useI18n, type TranslationKey } from '../i18n'
 import { useTheme, THEME_MODES, type ThemeMode } from '../theme'
+import { visibleNavGroups, type NavEntry } from '../navigation'
 import { Avatar, Skeleton } from './ui'
+import { CommandPalette } from './ds/CommandPalette'
+import { Tooltip } from './ds/overlays'
 import {
-  IconActivity,
-  IconBadgeCheck,
-  IconBell,
-  IconBuilding,
-  IconChart,
-  IconCheckSquare,
   IconChevronDown,
-  IconClipboardCheck,
-  IconClock,
+  IconChevronRight,
   IconClose,
-  IconDatabase,
-  IconFlask,
-  IconGlobe,
-  IconGrid,
-  IconInbox,
-  IconKanban,
-  IconKeyRound,
   IconLayers,
-  IconLifeBuoy,
-  IconLock,
   IconLogOut,
-  IconMail,
   IconMenu,
   IconMonitor,
   IconMoon,
-  IconPlug,
-  IconScroll,
+  IconPanelLeft,
   IconSearch,
-  IconSend,
-  IconShield,
-  IconShieldAlert,
-  IconSliders,
-  IconSparkles,
-  IconStethoscope,
   IconSun,
-  IconTarget,
-  IconTerminal,
-  IconTrendingUp,
   IconUser,
-  IconUserCog,
-  IconUsers,
-  IconUsersRound,
-  IconWebhook,
-  IconWorkflow,
   type IconProps,
 } from './icons'
-
-interface NavEntry {
-  to: string
-  /** Translation key for the label, resolved at render so a language change
-   *  relabels the whole sidebar without a reload. */
-  labelKey: TranslationKey
-  permission?: string
-  icon: (props: IconProps) => JSX.Element
-}
-
-interface NavGroup {
-  labelKey: TranslationKey
-  items: NavEntry[]
-}
-
-/**
- * Navigation is grouped by intent rather than by API prefix, so the sidebar
- * reads as a product rather than as a route table. Each entry declares the
- * permission it needs and is hidden without it, but the server enforces the
- * same permission independently: hiding a link is convenience, not security.
- *
- * Labels are translation keys, not literals, so switching language relabels the
- * navigation as one unit instead of leaving half the sidebar in the old tongue.
- * Every entry carries an icon so the eye can find a section by shape before it
- * reads the label.
- */
-const NAV_GROUPS: NavGroup[] = [
-  {
-    labelKey: 'nav.workspace',
-    items: [
-      { to: '/', labelKey: 'nav.overview', icon: IconGrid },
-      { to: '/accounts', labelKey: 'nav.accounts', permission: 'accounts.read', icon: IconBuilding },
-      { to: '/contacts', labelKey: 'nav.contacts', permission: 'contacts.read', icon: IconUsers },
-      { to: '/leads', labelKey: 'nav.leads', permission: 'leads.read', icon: IconTarget },
-      { to: '/deals', labelKey: 'nav.deals', permission: 'deals.read', icon: IconKanban },
-      { to: '/tasks', labelKey: 'nav.tasks', permission: 'tasks.read', icon: IconCheckSquare },
-      { to: '/tickets', labelKey: 'nav.support', permission: 'tickets.read', icon: IconLifeBuoy },
-      { to: '/reports', labelKey: 'nav.reports', permission: 'reports.read', icon: IconChart },
-      { to: '/simulation', labelKey: 'nav.simulation', permission: 'simulation.read', icon: IconFlask },
-      { to: '/forecast', labelKey: 'nav.forecasting', permission: 'forecast.read', icon: IconTrendingUp },
-      { to: '/risk', labelKey: 'nav.risk', permission: 'risk.read', icon: IconShieldAlert },
-    ],
-  },
-  {
-    labelKey: 'nav.data',
-    items: [
-      { to: '/imports', labelKey: 'nav.importCenter', permission: 'imports.read', icon: IconInbox },
-      { to: '/migrations', labelKey: 'nav.migrations', permission: 'migrations.read', icon: IconDatabase },
-      { to: '/integrations', labelKey: 'nav.integrations', permission: 'integrations.read', icon: IconPlug },
-    ],
-  },
-  {
-    labelKey: 'nav.platform',
-    items: [
-      { to: '/webhooks', labelKey: 'nav.webhooks', permission: 'webhooks.manage', icon: IconWebhook },
-      { to: '/events', labelKey: 'nav.events', permission: 'events.read', icon: IconActivity },
-      { to: '/workflows', labelKey: 'nav.workflows', permission: 'workflows.read', icon: IconWorkflow },
-      { to: '/jobs', labelKey: 'nav.jobs', permission: 'jobs.read', icon: IconClock },
-      { to: '/approvals', labelKey: 'nav.approvals', permission: 'approvals.read', icon: IconBadgeCheck },
-      { to: '/notifications', labelKey: 'nav.notifications', permission: 'notifications.read', icon: IconBell },
-      { to: '/ai', labelKey: 'nav.ai', permission: 'ai.read', icon: IconSparkles },
-    ],
-  },
-  {
-    labelKey: 'nav.administration',
-    items: [
-      { to: '/admin/users', labelKey: 'nav.users', permission: 'users.read', icon: IconUserCog },
-      { to: '/admin/roles', labelKey: 'nav.roles', permission: 'roles.read', icon: IconKeyRound },
-      { to: '/admin/organizations', labelKey: 'nav.organizations', permission: 'organizations.read', icon: IconGlobe },
-      { to: '/admin/teams', labelKey: 'nav.teams', permission: 'teams.manage', icon: IconUsersRound },
-      { to: '/admin/email', labelKey: 'nav.email', permission: 'email.manage', icon: IconMail },
-      { to: '/admin/telegram', labelKey: 'nav.telegram', permission: 'email.manage', icon: IconSend },
-      { to: '/admin/consent', labelKey: 'nav.consent', permission: 'consent.read', icon: IconScroll },
-      { to: '/admin/sso', labelKey: 'nav.sso', permission: 'sso.read', icon: IconLock },
-      { to: '/admin/mcp-credentials', labelKey: 'nav.mcpCredentials', permission: 'mcp.credentials.read', icon: IconTerminal },
-      { to: '/admin/configuration', labelKey: 'nav.configuration', permission: 'tenant.settings.read', icon: IconSliders },
-      { to: '/admin/audit', labelKey: 'nav.audit', permission: 'audit.read', icon: IconClipboardCheck },
-      { to: '/admin/security', labelKey: 'nav.security', permission: 'security.read', icon: IconShield },
-      { to: '/admin/diagnostics', labelKey: 'nav.diagnostics', permission: 'logs.read', icon: IconStethoscope },
-    ],
-  },
-]
 
 const THEME_ICON: Record<ThemeMode, (props: IconProps) => JSX.Element> = {
   light: IconSun,
@@ -149,14 +49,9 @@ const THEME_LABEL_KEY: Record<ThemeMode, TranslationKey> = {
   system: 'theme.system',
 }
 
-/**
- * The account control in the top bar: identity, theme, profile and sign-out.
- *
- * It is a menu rather than a row of buttons so the top bar stays quiet and the
- * theme choice becomes a visible three-way switch instead of a control that
- * cycles to a state the user cannot see. It closes on Escape, on a click
- * outside, and on choosing an item.
- */
+const COLLAPSE_KEY = 'forgecrm.sidebar.collapsed'
+
+/** The account control: identity, theme switch, profile and sign-out. */
 function AccountMenu() {
   const { session, signOut } = useAuth()
   const { t } = useI18n()
@@ -204,7 +99,7 @@ function AccountMenu() {
             <Avatar name={displayName} email={email} size="lg" />
             <div className="menu__identity-text">
               <div className="menu__identity-name truncate">{displayName || email}</div>
-              {displayName ? <div className="menu__identity-mail">{email}</div> : null}
+              {displayName ? <div className="menu__identity-mail truncate">{email}</div> : null}
             </div>
           </div>
 
@@ -258,10 +153,79 @@ function AccountMenu() {
 }
 
 /**
- * Fallback for a route whose code chunk is still loading. It mirrors the page
- * header and a content block so the shell does not collapse and then jump when
- * the real page arrives.
+ * A breadcrumb trail built from the current route, resolved against the
+ * navigation model so each segment reuses the same label as the sidebar. A
+ * record id at the end is shown as a generic "Details" crumb rather than a raw
+ * UUID, which would mean nothing to a reader.
  */
+function Breadcrumbs() {
+  const location = useLocation()
+  const { t } = useI18n()
+  const { can } = useAuth()
+
+  const crumbs = useMemo(() => {
+    const path = location.pathname
+    if (path === '/') return [{ to: '/', label: t('nav.overview'), current: true }]
+
+    const segments = path.split('/').filter(Boolean)
+    const trail: { to: string; label: string; current: boolean }[] = []
+    let accumulated = ''
+
+    for (const segment of segments) {
+      accumulated += `/${segment}`
+      const match = findEntry(accumulated, can)
+      if (match) {
+        trail.push({ to: accumulated, label: t(match.labelKey), current: false })
+      } else if (/^[0-9a-f-]{8,}$/i.test(segment)) {
+        trail.push({ to: accumulated, label: t('common.details'), current: false })
+      } else {
+        // An unmapped segment (e.g. "account") is title-cased so the trail still
+        // reads as words rather than as a path fragment.
+        trail.push({
+          to: accumulated,
+          label: segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, ' '),
+          current: false,
+        })
+      }
+    }
+    if (trail.length > 0) trail[trail.length - 1].current = true
+    return trail
+  }, [location.pathname, t, can])
+
+  if (crumbs.length === 0) return null
+
+  return (
+    <nav className="breadcrumbs" aria-label="Breadcrumb">
+      {crumbs.map((crumb, index) => (
+        <span key={crumb.to} style={{ display: 'contents' }}>
+          {index > 0 ? (
+            <span className="breadcrumbs__sep" aria-hidden="true">
+              <IconChevronRight size={13} />
+            </span>
+          ) : null}
+          {crumb.current ? (
+            <span className="breadcrumbs__item breadcrumbs__item--current" aria-current="page">
+              {crumb.label}
+            </span>
+          ) : (
+            <Link to={crumb.to} className="breadcrumbs__item">
+              {crumb.label}
+            </Link>
+          )}
+        </span>
+      ))}
+    </nav>
+  )
+}
+
+/** Finds the nav entry for a path, so a crumb reuses the sidebar's label. */
+function findEntry(path: string, can: (permission: string) => boolean): NavEntry | undefined {
+  return visibleNavGroups(can)
+    .flatMap((group) => group.items)
+    .find((entry) => entry.to === path)
+}
+
+/** The route-chunk loading fallback: a header and a block, to avoid a jump. */
 function RouteFallback() {
   return (
     <div aria-busy="true">
@@ -276,45 +240,97 @@ export function AppShell() {
   const { session, can } = useAuth()
   const { t } = useI18n()
   const [menuOpen, setMenuOpen] = useState(false)
-  const search = useGlobalSearchShortcut()
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return window.localStorage.getItem(COLLAPSE_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+  const palette = useGlobalSearchShortcut()
 
-  const groups = NAV_GROUPS.map((group) => ({
-    ...group,
-    items: group.items.filter((item) => !item.permission || can(item.permission)),
-  })).filter((group) => group.items.length > 0)
+  const groups = visibleNavGroups(can)
+
+  function toggleCollapsed() {
+    setCollapsed((value) => {
+      const next = !value
+      try {
+        window.localStorage.setItem(COLLAPSE_KEY, next ? '1' : '0')
+      } catch {
+        // Preference is not persisted when storage is unavailable; the rail
+        // still toggles for this session.
+      }
+      return next
+    })
+  }
+
+  const sidebarClass = [
+    'sidebar',
+    menuOpen ? 'sidebar--open' : '',
+    collapsed ? 'sidebar--collapsed' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   return (
-    <div className="app-shell">
-      <aside className={menuOpen ? 'sidebar sidebar--open' : 'sidebar'}>
+    <div className={collapsed ? 'app-shell app-shell--collapsed' : 'app-shell'}>
+      <aside className={sidebarClass}>
         <Link to="/" className="sidebar__brand" onClick={() => setMenuOpen(false)}>
-          <Avatar name="ForgeCRM" size="md" />
+          <span className="brand-tile" aria-hidden="true">
+            F
+          </span>
           <span className="sidebar__brand-text">
             <span>{t('brand.name')}</span>
             <span className="sidebar__brand-sub">{t('brand.shortTagline')}</span>
           </span>
         </Link>
+
         <nav className="sidebar__nav" aria-label={t('nav.mainNavigation')}>
           {groups.map((group) => (
             <div key={group.labelKey}>
               <div className="sidebar__group-label">{t(group.labelKey)}</div>
               {group.items.map((item) => {
                 const Icon = item.icon
+                const label = t(item.labelKey)
                 return (
                   <NavLink
                     key={item.to}
                     to={item.to}
                     end={item.to === '/'}
-                    className={({ isActive }) => (isActive ? 'nav-item nav-item--active' : 'nav-item')}
+                    title={collapsed ? label : undefined}
+                    className={({ isActive }) =>
+                      isActive ? 'nav-item nav-item--active' : 'nav-item'
+                    }
                     onClick={() => setMenuOpen(false)}
                   >
                     <Icon size={17} />
-                    <span className="truncate">{t(item.labelKey)}</span>
+                    <span className="truncate">{label}</span>
                   </NavLink>
                 )
               })}
             </div>
           ))}
         </nav>
+
+        <div className="sidebar__footer">
+          {session?.organization?.name ? (
+            <div className="sidebar__footer-org">
+              <IconLayers size={15} />
+              <span className="truncate sidebar__footer-text">{session.organization.name}</span>
+            </div>
+          ) : null}
+          <Tooltip label={collapsed ? t('nav.expand') : t('nav.collapse')}>
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm btn--icon sidebar-toggle sidebar-toggle--desktop"
+              aria-label={collapsed ? t('nav.expand') : t('nav.collapse')}
+              aria-pressed={collapsed}
+              onClick={toggleCollapsed}
+            >
+              <IconPanelLeft size={17} />
+            </button>
+          </Tooltip>
+        </div>
       </aside>
 
       {menuOpen ? (
@@ -328,35 +344,31 @@ export function AppShell() {
 
       <div className="main">
         <header className="topbar">
-          <div className="topbar__actions">
+          <div className="topbar__lead">
             <button
               type="button"
-              className="btn btn--ghost btn--sm sidebar-toggle"
+              className="btn btn--ghost btn--sm btn--icon sidebar-toggle sidebar-toggle--mobile"
               aria-label={t('nav.menu')}
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen((open) => !open)}
             >
               {menuOpen ? <IconClose size={18} /> : <IconMenu size={18} />}
             </button>
+            <Breadcrumbs />
+          </div>
+
+          <div className="topbar__actions">
             <button
               type="button"
               className="search-trigger"
-              onClick={() => search.setOpen(true)}
+              onClick={() => palette.setOpen(true)}
               aria-keyshortcuts="Control+K Meta+K"
+              aria-label={t('shell.openCommandPalette')}
             >
               <IconSearch size={15} />
               <span className="search-trigger__label">{t('nav.search')}</span>
               <kbd className="kbd">Ctrl K</kbd>
             </button>
-            {session?.organization?.name ? (
-              <span className="topbar__org">
-                <IconLayers size={14} />
-                <span className="topbar__org-name">{session.organization.name}</span>
-              </span>
-            ) : null}
-          </div>
-
-          <div className="topbar__user">
             <AccountMenu />
           </div>
         </header>
@@ -368,7 +380,7 @@ export function AppShell() {
         </main>
       </div>
 
-      {search.open ? <GlobalSearch onClose={() => search.setOpen(false)} /> : null}
+      {palette.open ? <CommandPalette onClose={() => palette.setOpen(false)} /> : null}
     </div>
   )
 }

@@ -8,6 +8,7 @@ import { I18nProvider } from './i18n'
 import { ThemeProvider } from './theme'
 import { ApiError } from './api/client'
 import './index.css'
+import './styles/design-system.css'
 
 const queryClient = new QueryClient({
   defaultOptions: {

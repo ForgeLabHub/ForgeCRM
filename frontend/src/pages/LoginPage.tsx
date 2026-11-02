@@ -235,7 +235,7 @@ export function LoginPage() {
                   <div className="login-field__control">
                     <input
                       id={passwordId}
-                      className={`login-field__input${errors.password ? ' login-field__input--invalid' : ''}`}
+                      className={`login-field__input login-field__input--reveal${errors.password ? ' login-field__input--invalid' : ''}`}
                       type={showPassword ? 'text' : 'password'}
                       name="password"
                       autoComplete="current-password"
