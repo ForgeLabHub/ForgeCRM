@@ -69,6 +69,11 @@ func (s *Server) mountAdmin(r chi.Router) {
 
 	// Audit, security and logs
 	r.With(s.perm(rbac.PermAuditRead)).Get("/audit", s.handleListAudit)
+	// Verifying the trail is a read of the same material, so it needs the same
+	// permission the list does. The response carries no entry contents, only the
+	// outcome and the id of the first break, so it cannot be used to read data a
+	// plain list would not already show.
+	r.With(s.perm(rbac.PermAuditRead)).Get("/audit/verify", s.handleVerifyAudit)
 	r.With(s.perm(rbac.PermSecurityRead)).Get("/security-events", s.handleListSecurityEvents)
 	r.With(s.perm(rbac.PermLogsRead)).Get("/admin/logs", s.handleListLogs)
 	r.With(s.perm(rbac.PermMetricsRead)).Get("/admin/diagnostics", s.handleDiagnostics)
@@ -1005,6 +1010,46 @@ func (s *Server) handleListAudit(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	httpx.WriteJSON(w, httpx.NewListResponse(out, total, pg))
+}
+
+// handleVerifyAudit walks the caller's audit chain and reports whether it is
+// intact.
+//
+// A non-platform-owner can only verify their own organization, the same scope
+// their list view is limited to. A platform owner may verify a named
+// organization with ?organization_id=, or the platform-level chain
+// (organization_id IS NULL) with ?scope=platform, because those entries belong to
+// no tenant and only the platform owner can see them.
+func (s *Server) handleVerifyAudit(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.mustPrincipal(w, r)
+	if !ok {
+		return
+	}
+
+	scope := (*uuid.UUID)(nil)
+	switch {
+	case p.IsPlatformOwner && r.URL.Query().Get("scope") == "platform":
+		scope = nil
+	case p.IsPlatformOwner && r.URL.Query().Get("organization_id") != "":
+		id, valid := parseUUID(r.URL.Query().Get("organization_id"))
+		if !valid {
+			httpx.WriteError(w, r, httpx.ValidationError(map[string]string{"organization_id": "must be a UUID"}))
+			return
+		}
+		scope = &id
+	case p.IsPlatformOwner:
+		scope = nil
+	default:
+		org := p.OrganizationID
+		scope = &org
+	}
+
+	res, err := s.deps.Audit.Verify(r.Context(), scope)
+	if err != nil {
+		s.respondDomainError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, res)
 }
 
 func (s *Server) handleListSecurityEvents(w http.ResponseWriter, r *http.Request) {

@@ -51,9 +51,19 @@ export const teamsApi = {
     api.post(`/api/v1/teams/${id}/members`, { user_id: userId }),
 }
 
+export interface AuditChainVerification {
+  intact: boolean
+  checked: number
+  unchained: number
+  first_break_id?: number
+  reason?: string
+}
+
 export const auditApi = {
   list: (params?: PaginationParams & { action?: string; actor_user_id?: string; from?: string; to?: string }) =>
     api.get<ListResponse<AuditEntry>>('/api/v1/audit', params),
+  verify: (params?: { organization_id?: string; scope?: 'platform' }) =>
+    api.get<AuditChainVerification>('/api/v1/audit/verify', params),
   securityEvents: (params?: PaginationParams & { type?: string; from?: string; to?: string }) =>
     api.get<ListResponse<SecurityEvent>>('/api/v1/security-events', params),
 }
