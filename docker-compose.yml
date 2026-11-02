@@ -100,8 +100,16 @@ services:
         COMMIT: ${FORGECRM_COMMIT:-unknown}
     restart: unless-stopped
     # The worker shares the API image and runs the other binary. The entrypoint
-    # dispatcher reads FORGECRM_ROLE and starts the worker.
+    # dispatcher reads FORGECRM_ROLE or its first argument and starts the worker.
+    #
+    # Both signals are set because platforms differ in what they carry over from
+    # this file. Compose honours `entrypoint` and `environment`; blitz.cloud
+    # ignores `entrypoint` and maps `command` to its per-part "start command"
+    # instead, which it appends to the image ENTRYPOINT. With the bare
+    # FORGECRM_ROLE alone, a platform that drops compose `environment` runs a
+    # second API on this part and no background job is processed.
     entrypoint: ["/usr/local/bin/forgecrm-entrypoint"]
+    command: ["worker"]
     environment:
       FORGECRM_ROLE: worker
     # On SIGTERM the worker stops claiming and waits up to FORGECRM_WORKER_SHUTDOWN_GRACE

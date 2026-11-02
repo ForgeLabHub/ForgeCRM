@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 # ---------------------------------------------------------------------------
 # Root build file for platforms that build from the repository root
 # (blitz.cloud, and any host that expects a top-level Dockerfile).
