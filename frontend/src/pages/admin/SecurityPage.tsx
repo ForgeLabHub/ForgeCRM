@@ -181,7 +181,7 @@ function MySessions() {
         <TableSkeleton rows={3} columns={6} />
       ) : sessions.data?.items.length ? (
         <div className="table-wrap">
-          <table>
+          <table className="table--stack">
             <thead>
               <tr>
                 {buildSessionColumns(t).map((column) => (
@@ -194,7 +194,11 @@ function MySessions() {
               {sessions.data.items.map((session) => (
                 <tr key={session.id}>
                   {buildSessionColumns(t).map((column) => (
-                    <td key={column.key}>{column.render(session)}</td>
+                    /* The header row is hidden once the rows stack into cards on
+                       a phone, so each cell carries the header it belongs to. */
+                    <td key={column.key} data-label={column.header || undefined}>
+                      {column.render(session)}
+                    </td>
                   ))}
                   <td>
                     {session.current ? (

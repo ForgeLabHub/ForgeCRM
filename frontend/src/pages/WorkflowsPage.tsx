@@ -621,40 +621,44 @@ function RunHistoryDrawer({ workflow, onClose }: { workflow: Workflow; onClose: 
 
           {runs.length > 0 ? (
             <div className="table-wrap">
-              <table className="table">
+              <table className="table table--stack">
                 <thead>
                   <tr>
-                                        <th>{t('workflows.columnStarted')}</th>
-                                        <th>{t('workflows.columnTrigger')}</th>
-                                        <th>{t('common.status')}</th>
-                                        <th>{t('workflows.columnSteps')}</th>
-                                        <th>{t('workflows.columnDepth')}</th>
+                    <th>{t('workflows.columnStarted')}</th>
+                    <th>{t('workflows.columnTrigger')}</th>
+                    <th>{t('common.status')}</th>
+                    <th>{t('workflows.columnSteps')}</th>
+                    <th>{t('workflows.columnDepth')}</th>
                     <th />
                   </tr>
                 </thead>
                 <tbody>
                   {runs.map((run) => (
                     <tr key={run.id}>
-                      <td>
+                      <td data-label={t('workflows.columnStarted')}>
                         <Timestamp value={run.started_at} />
                       </td>
-                      <td className="mono text-sm">{run.trigger_type}</td>
-                      <td>
+                      <td className="mono text-sm" data-label={t('workflows.columnTrigger')}>
+                        {run.trigger_type}
+                      </td>
+                      <td data-label={t('common.status')}>
                         <StatusBadge status={run.status} />
                       </td>
-                      <td className="numeric">
+                      <td className="numeric" data-label={t('workflows.columnSteps')}>
                         {run.steps_succeeded}/{run.steps_total}
                         {run.steps_failed > 0 ? (
-                                                  <span className="text-danger">
-                                                    {t('workflows.failedSuffix', { count: run.steps_failed })}
-                                                  </span>
-                                                ) : null}
+                          <span className="text-danger">
+                            {t('workflows.failedSuffix', { count: run.steps_failed })}
+                          </span>
+                        ) : null}
                       </td>
-                      <td className="numeric">{run.run_depth}</td>
+                      <td className="numeric" data-label={t('workflows.columnDepth')}>
+                        {run.run_depth}
+                      </td>
                       <td>
                         <button type="button" className="btn btn--ghost btn--sm" onClick={() => setSelected(run.id)}>
                           {t('workflows.stepsCount')}
-                                                  </button>
+                        </button>
                       </td>
                     </tr>
                   ))}

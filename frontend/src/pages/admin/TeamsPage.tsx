@@ -45,7 +45,7 @@ export function TeamsPage() {
           <TableSkeleton rows={4} columns={4} />
         ) : teams.data?.items.length ? (
           <div className="table-wrap">
-            <table>
+            <table className="table--stack">
               <thead>
                 <tr>
                   <th>{t('teams.columnName')}</th>
@@ -58,10 +58,16 @@ export function TeamsPage() {
               <tbody>
                 {teams.data.items.map((team) => (
                   <tr key={team.id}>
-                    <td className="table__primary">{team.name}</td>
-                    <td>{team.description ?? <span className="text-subtle">—</span>}</td>
-                    <td className="numeric">{team.member_count}</td>
-                    <td>
+                    <td className="table__primary" data-label={t('teams.columnName')}>
+                      {team.name}
+                    </td>
+                    <td data-label={t('teams.columnDescription')}>
+                      {team.description ?? <span className="text-subtle">—</span>}
+                    </td>
+                    <td className="numeric" data-label={t('teams.columnMembers')}>
+                      {team.member_count}
+                    </td>
+                    <td data-label={t('teams.columnCreated')}>
                       <Timestamp value={team.created_at} />
                     </td>
                     <td>

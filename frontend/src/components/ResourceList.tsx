@@ -41,6 +41,13 @@ interface ResourceListProps<T> {
    * Receives the selected row keys and a function to clear the selection.
    */
   bulkActions?: (selected: string[], clear: () => void) => ReactNode
+  /**
+   * Stacks each row into a labelled card on a phone instead of scrolling the
+   * table sideways. On by default: a list is the common case and a sideways
+   * table hides exactly the column a phone user came to read. Turn it off for a
+   * two-column key/value table where a card per row would be noise.
+   */
+  stackOnPhone?: boolean
 }
 
 /**
@@ -66,6 +73,7 @@ export function ResourceList<T>({
   title,
   pageSize = 25,
   bulkActions,
+  stackOnPhone = true,
 }: ResourceListProps<T>) {
   const t = useT()
   const placeholder = searchPlaceholder ?? t('common.search')
@@ -165,7 +173,7 @@ export function ResourceList<T>({
       ) : (
         <>
           <div className="table-wrap">
-            <table>
+            <table className={stackOnPhone ? 'table--stack' : undefined}>
               <thead>
                 <tr>
                   {selectable ? (
@@ -210,7 +218,14 @@ export function ResourceList<T>({
                       </td>
                     ) : null}
                     {columns.map((column) => (
-                      <td key={column.key} className={column.numeric ? 'numeric' : undefined}>
+                      <td
+                        key={column.key}
+                        className={column.numeric ? 'numeric' : undefined}
+                        /* Read by the stacked layout below the phone breakpoint,
+                           where a cell is labelled with the header it belongs to
+                           because the header row is no longer on screen. */
+                        data-label={stackOnPhone ? column.header : undefined}
+                      >
                         {column.render(row)}
                       </td>
                     ))}

@@ -368,7 +368,7 @@ function MigrationDetailDialog({
               <p className="text-muted text-sm">{t('common.loading')}</p>
             ) : reconciliations.data?.items.length ? (
               <div className="table-wrap">
-                <table>
+                <table className="table--stack">
                   <thead>
                     <tr>
                       <th>{t('common.status')}</th>
@@ -381,13 +381,19 @@ function MigrationDetailDialog({
                   <tbody>
                     {reconciliations.data.items.map((row) => (
                       <tr key={row.id}>
-                        <td>
+                        <td data-label={t('common.status')}>
                           <StatusBadge status={row.status} />
                         </td>
-                        <td className="numeric">{row.source_count ?? '—'}</td>
-                        <td className="numeric">{row.target_count ?? '—'}</td>
-                        <td className="numeric">{row.mismatches ?? '—'}</td>
-                        <td>
+                        <td className="numeric" data-label={t('migrations.columnSourceCount')}>
+                          {row.source_count ?? '—'}
+                        </td>
+                        <td className="numeric" data-label={t('migrations.columnTargetCount')}>
+                          {row.target_count ?? '—'}
+                        </td>
+                        <td className="numeric" data-label={t('migrations.columnMismatches')}>
+                          {row.mismatches ?? '—'}
+                        </td>
+                        <td data-label={t('migrations.columnWhen')}>
                           <Timestamp value={row.created_at} />
                         </td>
                       </tr>

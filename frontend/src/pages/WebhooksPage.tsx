@@ -444,7 +444,7 @@ function DeliveriesDialog({ webhook, onClose }: { webhook: Webhook; onClose: () 
             <p className="text-muted">{t('common.loading')}</p>
           ) : deliveries.data?.items.length ? (
             <div className="table-wrap">
-              <table>
+              <table className="table--stack">
                 <thead>
                   <tr>
                     <th>{t('webhooks.columnEvent')}</th>
@@ -459,20 +459,27 @@ function DeliveriesDialog({ webhook, onClose }: { webhook: Webhook; onClose: () 
                 <tbody>
                   {deliveries.data.items.map((delivery) => (
                     <tr key={delivery.id}>
-                      <td className="mono">{delivery.event_type}</td>
-                      <td>
+                      <td className="mono" data-label={t('webhooks.columnEvent')}>
+                        {delivery.event_type}
+                      </td>
+                      <td data-label={t('common.status')}>
                         <StatusBadge status={delivery.status} />
                       </td>
-                      <td className="numeric">{delivery.attempts}</td>
-                      <td className="numeric">{delivery.replay_count ?? 0}</td>
+                      <td className="numeric" data-label={t('webhooks.columnAttempts')}>
+                        {delivery.attempts}
+                      </td>
+                      <td className="numeric" data-label={t('webhooks.columnReplays')}>
+                        {delivery.replay_count ?? 0}
+                      </td>
                       <td
                         className="truncate"
                         style={{ maxWidth: '22rem' }}
                         title={delivery.last_error ?? undefined}
+                        data-label={t('webhooks.columnResult')}
                       >
                         {delivery.last_error ? delivery.last_error : (delivery.response_status ?? '—')}
                       </td>
-                      <td>
+                      <td data-label={t('webhooks.columnWhen')}>
                         <Timestamp value={delivery.created_at} />
                       </td>
                       <td>

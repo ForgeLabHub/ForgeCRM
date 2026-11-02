@@ -125,7 +125,7 @@ export function MCPCredentialsPage() {
           <TableSkeleton rows={3} columns={5} />
         ) : items.length ? (
           <div className="table-wrap">
-            <table>
+            <table className="table--stack">
               <thead>
                 <tr>
                   <th>{t('mcpCredentials.columnName')}</th>
@@ -139,19 +139,21 @@ export function MCPCredentialsPage() {
               <tbody>
                 {items.map((credential) => (
                   <tr key={credential.id}>
-                    <td className="table__primary">
+                    <td className="table__primary" data-label={t('mcpCredentials.columnName')}>
                       <div>{credential.name}</div>
                       <div className="table__secondary text-sm">
                         <Timestamp value={credential.created_at} />
                       </div>
                     </td>
-                    <td className="mono text-sm">{credential.token_prefix}…</td>
-                    <td>
+                    <td className="mono text-sm" data-label={t('mcpCredentials.columnToken')}>
+                      {credential.token_prefix}…
+                    </td>
+                    <td data-label={t('mcpCredentials.columnScope')}>
                       <Badge tone="accent">
                         {t('mcpCredentials.permissions', { count: credential.permissions.length })}
                       </Badge>
                     </td>
-                    <td>
+                    <td data-label={t('mcpCredentials.columnStatus')}>
                       <Badge tone={statusTone(credential.status)}>{credential.status}</Badge>
                       {credential.expires_at ? (
                         <div className="table__secondary text-sm">
@@ -159,7 +161,7 @@ export function MCPCredentialsPage() {
                         </div>
                       ) : null}
                     </td>
-                    <td className="text-sm">
+                    <td className="text-sm" data-label={t('mcpCredentials.columnLastUsed')}>
                       {credential.last_used_at ? (
                         <Timestamp value={credential.last_used_at} />
                       ) : (

@@ -128,7 +128,7 @@ function CurrentDecisions({
 
   return (
     <div className="table-wrap">
-      <table>
+      <table className="table--stack">
         <thead>
           <tr>
             <th>{t('consent.purpose')}</th>
@@ -141,15 +141,15 @@ function CurrentDecisions({
         <tbody>
           {items.map((record) => (
             <tr key={record.id}>
-              <td>{record.purpose.replace(/_/g, ' ')}</td>
-              <td>{record.channel}</td>
-              <td>
+              <td data-label={t('consent.purpose')}>{record.purpose.replace(/_/g, ' ')}</td>
+              <td data-label={t('consent.channel')}>{record.channel}</td>
+              <td data-label={t('consent.state')}>
                 <Badge tone={STATE_TONE[record.state]}>{stateLabel(t, record.state)}</Badge>
               </td>
-              <td>
+              <td data-label={t('consent.decided')}>
                 <Timestamp value={record.decided_at} />
               </td>
-              <td>
+              <td data-label={t('consent.expires')}>
                 {record.expires_at ? <Timestamp value={record.expires_at} /> : <span className="text-subtle">—</span>}
               </td>
             </tr>

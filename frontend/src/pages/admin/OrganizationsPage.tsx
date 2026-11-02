@@ -57,7 +57,7 @@ export function OrganizationsPage() {
           <TableSkeleton rows={4} columns={4} />
         ) : organizations.data?.items.length ? (
           <div className="table-wrap">
-            <table>
+            <table className="table--stack">
               <thead>
                 <tr>
                   <th>{t('organizations.columnName')}</th>
@@ -69,12 +69,16 @@ export function OrganizationsPage() {
               <tbody>
                 {organizations.data.items.map((organization) => (
                   <tr key={organization.id}>
-                    <td className="table__primary">{organization.name}</td>
-                    <td className="mono">{organization.slug}</td>
-                    <td>
+                    <td className="table__primary" data-label={t('organizations.columnName')}>
+                      {organization.name}
+                    </td>
+                    <td className="mono" data-label={t('organizations.columnSlug')}>
+                      {organization.slug}
+                    </td>
+                    <td data-label={t('organizations.columnStatus')}>
                       <StatusBadge status={organization.status} />
                     </td>
-                    <td>
+                    <td data-label={t('organizations.columnCreated')}>
                       <Timestamp value={organization.created_at} />
                     </td>
                   </tr>

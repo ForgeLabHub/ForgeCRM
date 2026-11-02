@@ -528,7 +528,7 @@ function ComparisonView({ comparison }: { comparison: Comparison }) {
 
       <div className="card">
         <div className="table-wrap">
-          <table className="table">
+          <table className="table table--stack">
             <caption className="sr-only">{t('simulation.columnMetric')}</caption>
             <thead>
               <tr>
@@ -541,10 +541,16 @@ function ComparisonView({ comparison }: { comparison: Comparison }) {
             <tbody>
               {[...moneyMetrics, ...otherMetrics].map((metric) => (
                 <tr key={metric.key}>
-                  <td>{metric.label}</td>
-                  <td>{formatMetricValue(metric, metric.baseline)}</td>
-                  <td>{formatMetricValue(metric, metric.variant)}</td>
-                  <td>{formatChange(metric)}</td>
+                  <td className="table__primary" data-label={t('simulation.columnMetric')}>
+                    {metric.label}
+                  </td>
+                  <td data-label={t('simulation.columnObserved')}>
+                    {formatMetricValue(metric, metric.baseline)}
+                  </td>
+                  <td data-label={t('simulation.columnModelled')}>
+                    {formatMetricValue(metric, metric.variant)}
+                  </td>
+                  <td data-label={t('simulation.columnChange')}>{formatChange(metric)}</td>
                 </tr>
               ))}
             </tbody>

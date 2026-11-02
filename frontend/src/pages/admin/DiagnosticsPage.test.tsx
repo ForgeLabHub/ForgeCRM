@@ -34,6 +34,11 @@ function stubFetch(permissions: string[] = ['system.settings']) {
         json({ items: { 'crm.default_currency': { value: 'USD', updated_at: '2026-01-01T00:00:00Z' } } }),
       )
     }
+    if (url.includes('/api/v1/system/capabilities')) {
+      return Promise.resolve(
+        json({ oidc_configured: false, import_formats: ['csv', 'xlsx', 'json'] }),
+      )
+    }
     if (url.includes('/api/v1/auth/me')) {
       return Promise.resolve(
         json({

@@ -123,7 +123,7 @@ export function ApprovalsPage() {
             </div>
           ) : (
             <div className="table-wrap">
-              <table>
+              <table className="table--stack">
                 <thead>
                   <tr>
                     <th>{t('approvals.columnAction')}</th>
@@ -136,17 +136,17 @@ export function ApprovalsPage() {
                 <tbody>
                   {items.map((action) => (
                     <tr key={action.id}>
-                      <td className="table__primary">
+                      <td className="table__primary" data-label={t('approvals.columnAction')}>
                         <div>{action.summary}</div>
                         <div className="table__secondary mono">{action.tool_name}</div>
                       </td>
-                      <td>
+                      <td data-label={t('approvals.columnRisk')}>
                         <Badge tone={TIER_TONE[action.risk_tier] ?? 'neutral'}>{action.risk_tier}</Badge>
                       </td>
-                      <td>
+                      <td data-label={t('approvals.columnStatus')}>
                         <StatusBadge status={action.status} />
                       </td>
-                      <td>
+                      <td data-label={t('approvals.columnProposed')}>
                         <Timestamp value={action.proposed_at} />
                       </td>
                       <td className="table__actions">

@@ -313,7 +313,7 @@ export function ImportDetailPage() {
                 <div>
                   <h3 style={{ marginBottom: 'var(--space-2)' }}>{t('imports.preview')}</h3>
                   <div className="table-wrap">
-                    <table>
+                    <table className="table--stack">
                       <thead>
                         <tr>
                           {columns.map((column) => (
@@ -325,7 +325,12 @@ export function ImportDetailPage() {
                         {data.preview.slice(0, 10).map((row, index) => (
                           <tr key={index}>
                             {columns.map((column) => (
-                              <td key={column} className="truncate" style={{ maxWidth: 220 }}>
+                              <td
+                                key={column}
+                                className="truncate"
+                                style={{ maxWidth: 220 }}
+                                data-label={column}
+                              >
                                 {formatCell(row[column])}
                               </td>
                             ))}
@@ -377,11 +382,11 @@ export function ImportDetailPage() {
                           {t('imports.mapFieldsHint')}
                         </p>
             <div className="table-wrap">
-              <table>
+              <table className="table--stack">
                 <thead>
                   <tr>
-                                        <th>{t('imports.targetField')}</th>
-                                        <th>{t('imports.sourceColumn')}</th>
+                    <th>{t('imports.targetField')}</th>
+                    <th>{t('imports.sourceColumn')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -389,8 +394,10 @@ export function ImportDetailPage() {
                     const selected = mapping.find((entry) => entry.target_field === field)
                     return (
                       <tr key={field}>
-                        <td className="table__primary">{field}</td>
-                        <td>
+                        <td className="table__primary" data-label={t('imports.targetField')}>
+                          {field}
+                        </td>
+                        <td data-label={t('imports.sourceColumn')}>
                           <select
                             aria-label={t('imports.sourceColumnFor', { field })}
                             value={selected?.source_column ?? ''}
@@ -527,22 +534,30 @@ export function ImportDetailPage() {
         {errors.data && errors.data.total > 0 ? (
           <Card title={t('imports.rejectedRows', { count: errors.data.total })} flush>
             <div className="table-wrap">
-              <table>
+              <table className="table--stack">
                 <thead>
                   <tr>
-                                        <th className="numeric">{t('imports.columnRow')}</th>
-                                        <th>{t('imports.columnField')}</th>
-                                        <th>{t('imports.columnProblem')}</th>
-                                        <th>{t('imports.columnValue')}</th>
+                    <th className="numeric">{t('imports.columnRow')}</th>
+                    <th>{t('imports.columnField')}</th>
+                    <th>{t('imports.columnProblem')}</th>
+                    <th>{t('imports.columnValue')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {errors.data.items.map((row, index) => (
                     <tr key={`${row.row_number}-${index}`}>
-                      <td className="numeric">{row.row_number}</td>
-                      <td>{row.field ?? <span className="text-subtle">—</span>}</td>
-                      <td>{row.message}</td>
-                      <td className="truncate" style={{ maxWidth: 260 }}>
+                      <td className="numeric" data-label={t('imports.columnRow')}>
+                        {row.row_number}
+                      </td>
+                      <td data-label={t('imports.columnField')}>
+                        {row.field ?? <span className="text-subtle">—</span>}
+                      </td>
+                      <td data-label={t('imports.columnProblem')}>{row.message}</td>
+                      <td
+                        className="truncate"
+                        style={{ maxWidth: 260 }}
+                        data-label={t('imports.columnValue')}
+                      >
                         {row.value ?? <span className="text-subtle">—</span>}
                       </td>
                     </tr>

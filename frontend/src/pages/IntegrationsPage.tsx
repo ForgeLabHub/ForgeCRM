@@ -439,7 +439,7 @@ function IntegrationDetailDialog({
                 <p className="text-muted text-sm">{t('common.loading')}</p>
               ) : runs.data?.items.length ? (
                 <div className="table-wrap">
-                  <table>
+                  <table className="table--stack">
                     <thead>
                       <tr>
                         <th>{t('common.status')}</th>
@@ -452,13 +452,19 @@ function IntegrationDetailDialog({
                     <tbody>
                       {runs.data.items.map((run) => (
                         <tr key={run.id}>
-                          <td>
+                          <td data-label={t('common.status')}>
                             <StatusBadge status={run.status} />
                           </td>
-                          <td>{run.operation ?? '—'}</td>
-                          <td className="numeric">{run.records_read ?? '—'}</td>
-                          <td className="numeric">{run.records_written ?? '—'}</td>
-                          <td>
+                          <td data-label={t('integrations.columnOperation')}>
+                            {run.operation ?? '—'}
+                          </td>
+                          <td className="numeric" data-label={t('integrations.columnRead')}>
+                            {run.records_read ?? '—'}
+                          </td>
+                          <td className="numeric" data-label={t('integrations.columnWritten')}>
+                            {run.records_written ?? '—'}
+                          </td>
+                          <td data-label={t('integrations.columnStarted')}>
                             <Timestamp value={run.started_at} />
                           </td>
                         </tr>

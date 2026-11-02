@@ -203,7 +203,7 @@ function ForecastDetail({ run }: { run: ForecastRun }) {
         </div>
 
         <div className="table-wrap" style={{ marginTop: 'var(--space-4)' }}>
-          <table className="table">
+          <table className="table table--stack">
             <thead>
               <tr>
                 <th scope="col">{t('forecast.period')}</th>
@@ -214,9 +214,13 @@ function ForecastDetail({ run }: { run: ForecastRun }) {
             <tbody>
               {result.points.map((point) => (
                 <tr key={point.period}>
-                  <td>{point.period}</td>
-                  <td>{formatMinorUnits(point.value.amount_minor, currency)}</td>
-                  <td className="text-subtle">
+                  <td className="table__primary" data-label={t('forecast.period')}>
+                    {point.period}
+                  </td>
+                  <td data-label={t('forecast.projected')}>
+                    {formatMinorUnits(point.value.amount_minor, currency)}
+                  </td>
+                  <td className="text-subtle" data-label={t('forecast.errorBand')}>
                     {formatMinorUnits(point.lower.amount_minor, currency)} –{' '}
                     {formatMinorUnits(point.upper.amount_minor, currency)}
                   </td>
@@ -259,7 +263,7 @@ function ForecastDetail({ run }: { run: ForecastRun }) {
 
       <Card title={t('forecast.observedSeries')}>
         <div className="table-wrap">
-          <table className="table">
+          <table className="table table--stack">
             <thead>
               <tr>
                 <th scope="col">{t('forecast.period')}</th>
@@ -269,8 +273,12 @@ function ForecastDetail({ run }: { run: ForecastRun }) {
             <tbody>
               {result.history.map((point) => (
                 <tr key={point.period}>
-                  <td>{point.period}</td>
-                  <td>{formatMinorUnits(point.value.amount_minor, currency)}</td>
+                  <td className="table__primary" data-label={t('forecast.period')}>
+                    {point.period}
+                  </td>
+                  <td data-label={t('forecast.revenueObserved')}>
+                    {formatMinorUnits(point.value.amount_minor, currency)}
+                  </td>
                 </tr>
               ))}
             </tbody>

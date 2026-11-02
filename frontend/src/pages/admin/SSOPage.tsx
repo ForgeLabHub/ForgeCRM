@@ -85,7 +85,7 @@ export function SSOPage() {
           <TableSkeleton rows={3} columns={4} />
         ) : items.length ? (
           <div className="table-wrap">
-            <table>
+            <table className="table--stack">
               <thead>
                 <tr>
                   <th>{t('sso.columnName')}</th>
@@ -98,19 +98,21 @@ export function SSOPage() {
               <tbody>
                 {items.map((provider) => (
                   <tr key={provider.id}>
-                    <td className="table__primary">
+                    <td className="table__primary" data-label={t('sso.columnName')}>
                       <div>{provider.display_name}</div>
                       <div className="table__secondary mono text-sm">{provider.key}</div>
                     </td>
-                    <td className="mono text-sm truncate">{provider.issuer}</td>
-                    <td>
+                    <td className="mono text-sm truncate" data-label={t('sso.columnIssuer')}>
+                      {provider.issuer}
+                    </td>
+                    <td data-label={t('sso.columnStatus')}>
                       {provider.enabled ? (
                         <Badge tone="success">{t('sso.enabled')}</Badge>
                       ) : (
                         <Badge tone="neutral">{t('sso.disabled')}</Badge>
                       )}
                     </td>
-                    <td>
+                    <td data-label={t('sso.columnSecret')}>
                       {provider.has_secret ? (
                         <Badge tone="success">{t('sso.stored')}</Badge>
                       ) : (

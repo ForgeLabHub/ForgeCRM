@@ -152,7 +152,7 @@ export function ReportsPage() {
               </div>
             ) : (
               <div className="table-wrap">
-                <table>
+                <table className="table--stack">
                   <thead>
                     <tr>
                       <th>{t('reports.stage')}</th>
@@ -164,10 +164,18 @@ export function ReportsPage() {
                   <tbody>
                     {pipelineReport.data.stages.map((stage) => (
                       <tr key={stage.stage_id}>
-                        <td className="table__primary">{stage.stage_name}</td>
-                        <td className="numeric">{stage.deal_count}</td>
-                        <td className="numeric">{formatMoney(stage.total_amount)}</td>
-                        <td className="numeric">{formatMoney(stage.weighted_amount)}</td>
+                        <td className="table__primary" data-label={t('reports.stage')}>
+                          {stage.stage_name}
+                        </td>
+                        <td className="numeric" data-label={t('reports.deals')}>
+                          {stage.deal_count}
+                        </td>
+                        <td className="numeric" data-label={t('reports.totalValue')}>
+                          {formatMoney(stage.total_amount)}
+                        </td>
+                        <td className="numeric" data-label={t('reports.weighted')}>
+                          {formatMoney(stage.weighted_amount)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

@@ -46,7 +46,7 @@ export function AiPage() {
               </div>
               {status.data.providers?.length ? (
                 <div className="table-wrap">
-                  <table>
+                  <table className="table--stack">
                     <thead>
                       <tr>
                         <th>{t('ai.columnProvider')}</th>
@@ -58,9 +58,13 @@ export function AiPage() {
                     <tbody>
                       {status.data.providers.map((provider) => (
                         <tr key={provider.key}>
-                          <td className="table__primary">{provider.name}</td>
-                          <td className="mono">{provider.model ?? '—'}</td>
-                          <td>
+                          <td className="table__primary" data-label={t('ai.columnProvider')}>
+                            {provider.name}
+                          </td>
+                          <td className="mono" data-label={t('ai.columnModel')}>
+                            {provider.model ?? '—'}
+                          </td>
+                          <td data-label={t('ai.columnHealth')}>
                             {provider.healthy === undefined ? (
                               <span className="text-subtle">{t('ai.unknown')}</span>
                             ) : provider.healthy ? (
@@ -69,7 +73,11 @@ export function AiPage() {
                               <Badge tone="danger">{t('ai.unhealthy')}</Badge>
                             )}
                           </td>
-                          <td className="truncate" style={{ maxWidth: 260 }}>
+                          <td
+                            className="truncate"
+                            style={{ maxWidth: 260 }}
+                            data-label={t('ai.columnLastError')}
+                          >
                             {provider.last_error ?? <span className="text-subtle">—</span>}
                           </td>
                         </tr>
@@ -129,7 +137,7 @@ export function AiPage() {
             <Alert tone="error">{errorMessage(tasks.error)}</Alert>
           ) : tasks.data?.items.length ? (
             <div className="table-wrap">
-              <table>
+              <table className="table--stack">
                 <thead>
                   <tr>
                     <th>{t('ai.columnKind')}</th>
@@ -142,17 +150,21 @@ export function AiPage() {
                 <tbody>
                   {tasks.data.items.map((task) => (
                     <tr key={task.id}>
-                      <td className="table__primary">{task.kind}</td>
-                      <td>
+                      <td className="table__primary" data-label={t('ai.columnKind')}>
+                        {task.kind}
+                      </td>
+                      <td data-label={t('common.status')}>
                         <StatusBadge status={task.status} />
                       </td>
-                      <td className="mono">{task.model ?? '—'}</td>
-                      <td className="numeric">
+                      <td className="mono" data-label={t('ai.columnModel')}>
+                        {task.model ?? '—'}
+                      </td>
+                      <td className="numeric" data-label={t('ai.columnTokens')}>
                         {task.tokens_in !== undefined || task.tokens_out !== undefined
                           ? `${task.tokens_in ?? 0} / ${task.tokens_out ?? 0}`
                           : '—'}
                       </td>
-                      <td>
+                      <td data-label={t('common.created')}>
                         <Timestamp value={task.created_at} />
                       </td>
                     </tr>

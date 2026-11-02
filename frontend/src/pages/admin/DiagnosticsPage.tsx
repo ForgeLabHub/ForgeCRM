@@ -95,7 +95,7 @@ export function DiagnosticsPage() {
             <TableSkeleton rows={4} columns={2} />
           ) : capabilities.data ? (
             <div className="table-wrap">
-              <table>
+              <table className="table--stack">
                 <thead>
                   <tr>
                     <th>{t('diagnostics.feature')}</th>
@@ -105,16 +105,28 @@ export function DiagnosticsPage() {
                 <tbody>
                   {Object.entries(capabilities.data).map(([key, value]) => (
                     <tr key={key}>
-                      <td className="table__primary mono">
+                      <td className="table__primary mono" data-label={t('diagnostics.feature')}>
                         {CAPABILITY_LABELS[key] ? t(CAPABILITY_LABELS[key]) : key}
                       </td>
-                      <td>
+                      <td data-label={t('diagnostics.state')}>
                         {typeof value === 'boolean' ? (
                           value ? (
                             <Badge tone="success">{t('diagnostics.enabled')}</Badge>
                           ) : (
                             <Badge tone="neutral">{t('diagnostics.disabled')}</Badge>
                           )
+                        ) : Array.isArray(value) ? (
+                          /* A list of formats or event types is a set, not a
+                             sentence. Rendering it as one comma-joined string
+                             makes an unbreakable word thousands of pixels wide,
+                             which is what pushed this page sideways on a phone. */
+                          <span className="chips">
+                            {value.map((entry) => (
+                              <Badge key={String(entry)} tone="neutral">
+                                {String(entry)}
+                              </Badge>
+                            ))}
+                          </span>
                         ) : (
                           <span className="mono">{String(value)}</span>
                         )}
@@ -172,6 +184,12 @@ function JsonCard({
               padding: 'var(--space-3)',
               borderRadius: 'var(--radius-sm)',
               overflowX: 'auto',
+              /* Wrap long values instead of letting one line set the column's
+                 width: a grid item is min-width:auto, so an unbroken JSON line
+                 would otherwise widen the card past the viewport. */
+              whiteSpace: 'pre-wrap',
+              overflowWrap: 'anywhere',
+              minWidth: 0,
               maxHeight: 360,
               margin: 0,
             }}
