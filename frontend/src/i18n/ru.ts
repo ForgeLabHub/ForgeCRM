@@ -72,6 +72,7 @@ export const ru: Dictionary = {
     yourOpenTasks: 'Ваши открытые задачи',
     openSupportTickets: 'Открытые обращения',
     viewAll: 'Все',
+    quickActions: 'Быстрые действия',
     noOpenTasks: 'Открытых задач нет.',
     noOpenTickets: 'Открытых обращений нет.',
     due: 'Срок',

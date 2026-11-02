@@ -78,6 +78,7 @@ export const en = {
     yourOpenTasks: 'Your open tasks',
     openSupportTickets: 'Open support tickets',
     viewAll: 'View all',
+    quickActions: 'Quick actions',
     noOpenTasks: 'No open tasks.',
     noOpenTickets: 'No open tickets.',
     due: 'Due',
