@@ -1,3 +1,5 @@
+//go:build integration
+
 // The audit hash chain is checked against the real schema and the real
 // append-only trigger. Whether a chain is intact is a property of the rows and
 // their order in PostgreSQL, not of Go code a mock could stand in for: the
