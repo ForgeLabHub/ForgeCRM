@@ -17,6 +17,23 @@ export const en = {
     loading: 'Loading…',
     back: 'Back',
   },
+  // Server error codes, keyed by the machine-readable `error.code` the API
+  // returns. The human-readable `message` is only a fallback: a Russian user
+  // must not be shown an English sentence just because the server produced one.
+  errors: {
+    unauthorized: 'Invalid email or password.',
+    forbidden: 'You do not have permission to do that.',
+    not_found: 'The requested item no longer exists.',
+    conflict: 'That conflicts with an existing record.',
+    rate_limited: 'Too many attempts. Wait a moment and try again.',
+    validation_failed: 'Check the highlighted fields and try again.',
+    bad_request: 'That request could not be processed.',
+    disabled: 'This feature is turned off for this deployment.',
+    unavailable: 'The service is temporarily unavailable. Try again shortly.',
+    internal_error: 'Something went wrong on our side. Try again.',
+    network: 'Cannot reach the server. Check your connection and try again.',
+    unknown: 'Something went wrong.',
+  },
   brand: {
     name: 'ForgeCRM',
     tagline: 'The CRM platform for teams that ship.',

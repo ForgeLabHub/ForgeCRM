@@ -133,6 +133,16 @@ export function useT() {
   return useI18n().t
 }
 
+/**
+ * True when the given locale (or the English fallback) has a string for the key.
+ * Used for keys assembled at runtime — an SSO error code, a server error code —
+ * where the key is not known to the type checker and a miss must fall back to a
+ * real message rather than rendering the raw key.
+ */
+export function translationExists(locale: Locale, key: string): boolean {
+  return lookup(DICTIONARIES[locale], key) !== undefined || lookup(en, key) !== undefined
+}
+
 export type { Dictionary }
 
 /** The translator signature, for helpers that build content outside a component. */
