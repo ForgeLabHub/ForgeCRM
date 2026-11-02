@@ -199,6 +199,34 @@ describe('LoginPage form', () => {
     expect(await screen.findByText(/short and stout/i)).toBeTruthy()
   })
 
+  it('names the account state when a blocked account signs in', async () => {
+    // The API reports a blocked account as 403 `forbidden`, the same code as a
+    // permissions refusal. The sign-in page must not answer a locked-out person
+    // with "you do not have permission".
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url.includes('/api/v1/auth/oidc/providers')) {
+          return Promise.resolve(json({ enabled: false, providers: [] }))
+        }
+        if (url.includes('/api/v1/auth/login')) {
+          return Promise.resolve(
+            json({ error: { code: 'forbidden', message: 'this account is not active' } }, 403),
+          )
+        }
+        return Promise.resolve(json({}))
+      }),
+    )
+
+    renderLogin()
+    await userEvent.type(await screen.findByLabelText(en.common.email), 'blocked@example.com')
+    await userEvent.type(screen.getByLabelText(en.common.password), 'correct-password')
+    await userEvent.click(screen.getByRole('button', { name: en.login.submit }))
+    expect(await screen.findByText(en.login.errors.account_inactive)).toBeTruthy()
+    expect(screen.queryByText(en.errors.forbidden)).toBeNull()
+  })
+
   it('toggles password visibility', async () => {
     renderLogin()
     const field = await screen.findByLabelText(en.common.password)

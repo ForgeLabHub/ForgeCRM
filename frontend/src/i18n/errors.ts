@@ -38,10 +38,31 @@ function isKnownCode(code: string): code is ErrorKey {
  * existence check on dynamically built keys. Field-level messages are left to
  * the caller, which renders them next to the field that failed.
  */
+/**
+ * The sign-in variant of `localizeError`.
+ *
+ * A blocked or suspended account is reported as 403 `forbidden`, the same code
+ * the API uses for a permissions refusal, so `localizeError` alone would tell a
+ * locked-out person they "do not have permission". The server's detail sentence
+ * distinguishes the two here, and the sign-in page gets the account-state
+ * message instead.
+ */
+export function localizeLoginError(error: unknown, t: TFunction, locale: Locale): string {
+  if (error instanceof ApiError && error.status === 403 && /not active/i.test(error.message ?? '')) {
+    return t('login.errors.account_inactive')
+  }
+  return localizeError(error, t, locale)
+}
+
 export function localizeError(error: unknown, t: TFunction, locale: Locale): string {
   if (error instanceof NetworkError) return t('errors.network')
 
   if (error instanceof ApiError) {
+    // A blocked or suspended account comes back as 403 with the same code as a
+    // permissions refusal, so the status alone cannot tell them apart. The login
+    // flow sets `account_inactive` explicitly; here the generic forbidden
+    // sentence is the fallback for every other 403.
+
     // A validation failure carries per-field detail; the summary is generic so
     // the field messages stay the specific ones.
     if (error.code === 'validation_failed') return t('errors.validation_failed')

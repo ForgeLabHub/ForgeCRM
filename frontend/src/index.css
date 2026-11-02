@@ -1417,8 +1417,12 @@ input.login-field__input--invalid:focus {
 }
 
 /* The submit matches the input height so the form reads as one column of
-   equally-weighted controls rather than a text field with a smaller button. */
-.login__submit {
+   equally-weighted controls rather than a text field with a smaller button.
+   Written as `button.login__submit` so it outranks the later-imported `.btn`
+   rule (design-system.css sets the generic 34px control height); at equal
+   specificity the last stylesheet would win and the button would be shorter
+   than the fields above it. */
+button.login__submit {
   margin-top: var(--space-2);
   height: 42px;
   padding: 0 14px;

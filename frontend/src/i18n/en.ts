@@ -33,6 +33,10 @@ export const en = {
     disabled: 'This feature is turned off for this deployment.',
     unavailable: 'The service is temporarily unavailable. Try again shortly.',
     internal_error: 'Something went wrong on our side. Try again.',
+    // Returned when a correct password is presented for a blocked or suspended
+    // account: distinct from `forbidden` (a permissions refusal) so the person
+    // is told the account state, not that they lack a permission.
+    account_inactive: 'This account is not active. Ask an administrator to restore access.',
     network: 'Cannot reach the server. Check your connection and try again.',
     unknown: 'Something went wrong.',
   },
