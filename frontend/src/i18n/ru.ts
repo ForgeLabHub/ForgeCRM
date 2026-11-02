@@ -113,7 +113,7 @@ export const ru: Dictionary = {
     phone: 'телефон',
     web: 'веб',
     chat: 'чат',
-    telegram: 'telegram',
+    telegram: 'Telegram',
   },
   brand: {
     name: 'ForgeCRM',
