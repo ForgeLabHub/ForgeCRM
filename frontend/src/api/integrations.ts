@@ -47,26 +47,63 @@ export const integrationsApi = {
     api.get<ListResponse<IntegrationRun>>(`/api/v1/integrations/${id}/runs`, params),
 }
 
+/**
+ * The source kind lives inside `config.kind`, not a top-level field. The handler
+ * decodes the body with DisallowUnknownFields, so a body carrying `source_type`
+ * was rejected before the service ever saw it — the field is named `kind` on
+ * `migratex.ConnectionConfig` and echoed back as `source_kind`.
+ */
+export interface MigrationConnectionConfig {
+  kind: string
+  host?: string
+  port?: number
+  database?: string
+  username?: string
+  path?: string
+  base_url?: string
+  read_path?: string
+  ssl_mode?: string
+}
+
 export interface MigrationJob {
   id: string
   organization_id: string
-  name?: string
-  source_type: string
+  name: string
+  source_kind: string
+  strategy: string
   status: string
-  strategy?: string
+  // jsonb columns arrive as parsed JSON, not as JSON text: config is an object and
+  // source_tables an array. Typing them as strings made the detail dialog render
+  // "[object Object]" for a populated config.
   config?: Record<string, unknown>
-  last_error?: string
+  mapping?: Record<string, unknown>
+  watermark?: Record<string, unknown>
+  report?: Record<string, unknown>
+  source_tables?: string[]
   created_at: string
-  updated_at: string
+  last_run_at?: string | null
+  error?: string | null
+}
+
+/** Shape of the source schema `discover` reads back: `{tables, read_only}`. */
+export interface MigrationDiscovery {
+  tables: {
+    name: string
+    rows: number
+    columns: { name: string; type: string; nullable: boolean; primary_key: boolean }[]
+  }[]
+  read_only: boolean
 }
 
 export interface MigrationReconciliation {
   id: string
-  migration_id: string
+  source_table: string
+  target_entity: string
+  source_count: number
+  target_count: number
+  matched_count: number
+  mismatched_count: number
   status: string
-  source_count?: number
-  target_count?: number
-  mismatches?: number
   details?: Record<string, unknown>
   created_at: string
 }
@@ -79,16 +116,23 @@ export const migrationsApi = {
 
   create: (body: {
     name: string
-    source_type: string
-    config: Record<string, unknown>
+    config: MigrationConnectionConfig
     strategy?: string
+    password?: string
+    source_tables?: string[]
   }) => api.post<MigrationJob>('/api/v1/migrations', body),
 
   /** Reads the source schema. Requires read-only credentials. */
-  discover: (id: string) => api.post<Record<string, unknown>>(`/api/v1/migrations/${id}/discover`),
+  discover: (id: string) =>
+    api.post<MigrationDiscovery>(`/api/v1/migrations/${id}/discover`),
 
-  reconcile: (id: string) =>
-    api.post<MigrationReconciliation>(`/api/v1/migrations/${id}/reconciliation`),
+  /**
+   * The handler decodes `{source_table, target_entity}` from the body and rejects
+   * anything else, so a request without them answers 400 — the bare call this
+   * replaced never reconciled anything.
+   */
+  reconcile: (id: string, body: { source_table: string; target_entity: string }) =>
+    api.post<MigrationReconciliation>(`/api/v1/migrations/${id}/reconciliation`, body),
 
   reconciliations: (id: string, params?: PaginationParams) =>
     api.get<ListResponse<MigrationReconciliation>>(`/api/v1/migrations/${id}/reconciliation`, params),

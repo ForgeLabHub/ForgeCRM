@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { migrationsApi } from '../api/integrations'
 import { systemApi } from '../api/admin'
 import { errorMessage, fieldErrors } from '../api/client'
-import type { MigrationJob } from '../api/integrations'
+import type { MigrationDiscovery, MigrationJob, MigrationReconciliation } from '../api/integrations'
 import { useAuth } from '../hooks/useAuth'
 import { ResourceList, type Column } from '../components/ResourceList'
 import { Alert, Field, PageHeader, StatusBadge, Timestamp } from '../components/ui'
@@ -36,8 +36,8 @@ const columns: Column<MigrationJob>[] = [
     header: 'Migration',
     render: (row) => (
       <div>
-        <div className="table__primary">{row.name || row.source_type}</div>
-        <div className="table__secondary">{row.source_type}</div>
+        <div className="table__primary">{row.name || row.source_kind}</div>
+        <div className="table__secondary">{row.source_kind}</div>
       </div>
     ),
   },
@@ -48,9 +48,9 @@ const columns: Column<MigrationJob>[] = [
     render: (row) => row.strategy?.replace('_', ' ') ?? <span className="text-subtle">—</span>,
   },
   {
-    key: 'updated',
-    header: 'Updated',
-    render: (row) => <Timestamp value={row.updated_at} />,
+    key: 'created',
+    header: 'Created',
+    render: (row) => <Timestamp value={row.created_at} />,
   },
 ]
 
@@ -58,21 +58,18 @@ export function MigrationsPage() {
   const { can } = useAuth()
   const queryClient = useQueryClient()
   const [creating, setCreating] = useState(false)
-  const [discovering, setDiscovering] = useState<MigrationJob | null>(null)
+  const [details, setDetails] = useState<MigrationJob | null>(null)
+  const [schema, setSchema] = useState<{ job: MigrationJob; result: MigrationDiscovery } | null>(null)
+  const [reconciling, setReconciling] = useState<MigrationJob | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
   const discover = useMutation({
-    mutationFn: (id: string) => migrationsApi.discover(id),
-    onSuccess: () => {
+    mutationFn: (job: MigrationJob) => migrationsApi.discover(job.id),
+    onSuccess: (result, job) => {
       void queryClient.invalidateQueries({ queryKey: ['migrations'] })
       setActionError(null)
+      setSchema({ job, result })
     },
-    onError: (error) => setActionError(errorMessage(error)),
-  })
-
-  const reconcile = useMutation({
-    mutationFn: (id: string) => migrationsApi.reconcile(id),
-    onSuccess: () => setActionError(null),
     onError: (error) => setActionError(errorMessage(error)),
   })
 
@@ -89,7 +86,7 @@ export function MigrationsPage() {
             className="btn btn--secondary btn--sm"
             onClick={(event) => {
               event.stopPropagation()
-              discover.mutate(row.id)
+              discover.mutate(row)
             }}
             disabled={discover.isPending}
           >
@@ -100,9 +97,8 @@ export function MigrationsPage() {
             className="btn btn--ghost btn--sm"
             onClick={(event) => {
               event.stopPropagation()
-              reconcile.mutate(row.id)
+              setReconciling(row)
             }}
-            disabled={reconcile.isPending}
           >
             Reconcile
           </button>
@@ -111,7 +107,7 @@ export function MigrationsPage() {
             className="btn btn--ghost btn--sm"
             onClick={(event) => {
               event.stopPropagation()
-              setDiscovering(row)
+              setDetails(row)
             }}
           >
             Details
@@ -169,10 +165,192 @@ export function MigrationsPage() {
         }}
       />
 
-      {discovering ? (
-        <MigrationDetailDialog migration={discovering} onClose={() => setDiscovering(null)} />
+      {details ? (
+        <MigrationDetailDialog migration={details} onClose={() => setDetails(null)} />
+      ) : null}
+
+      {schema ? (
+        <SchemaDialog job={schema.job} result={schema.result} onClose={() => setSchema(null)} />
+      ) : null}
+
+      {reconciling ? (
+        <ReconcileDialog job={reconciling} onClose={() => setReconciling(null)} />
       ) : null}
     </>
+  )
+}
+
+/**
+ * Renders what `discover` read from the source. The list comes from the server, so
+ * an empty result means the account can see no tables — not that the feature is
+ * missing.
+ */
+function SchemaDialog({
+  job,
+  result,
+  onClose,
+}: {
+  job: MigrationJob
+  result: MigrationDiscovery
+  onClose: () => void
+}) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="schema-title"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'var(--color-overlay)',
+        zIndex: 60,
+        overflowY: 'auto',
+        padding: 'var(--space-5)',
+      }}
+      onClick={onClose}
+    >
+      <div className="card" style={{ maxWidth: 760, margin: '0 auto' }} onClick={(e) => e.stopPropagation()}>
+        <div className="card__header">
+          <h2 id="schema-title">Source schema — {job.name || job.source_kind}</h2>
+          <span className="badge">{result.read_only ? 'read-only' : 'read-write'}</span>
+        </div>
+        <div className="card__body stack">
+          {result.tables.length === 0 ? (
+            <p className="text-muted text-sm">
+              The account returned no tables. Check that it can read the source schema.
+            </p>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Table</th>
+                    <th className="numeric">Rows</th>
+                    <th className="numeric">Columns</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.tables.map((table) => (
+                    <tr key={table.name}>
+                      <td className="mono">{table.name}</td>
+                      <td className="numeric">{table.rows}</td>
+                      <td className="numeric">{table.columns.length}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        <div className="form-actions">
+          <button type="button" className="btn btn--secondary" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Reconcile compares a source table with the target entity and records the counts.
+ * Both fields are required by the handler; leaving them empty is what made the old
+ * one-click button fail with a 400.
+ */
+function ReconcileDialog({
+  job,
+  onClose,
+}: {
+  job: MigrationJob
+  onClose: () => void
+}) {
+  const [sourceTable, setSourceTable] = useState(job.source_tables?.[0] ?? '')
+  const [targetEntity, setTargetEntity] = useState('')
+  const [result, setResult] = useState<MigrationReconciliation | null>(null)
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      migrationsApi.reconcile(job.id, { source_table: sourceTable, target_entity: targetEntity }),
+    onSuccess: (rec) => setResult(rec),
+  })
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault()
+    mutation.mutate()
+  }
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="reconcile-title"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'var(--color-overlay)',
+        zIndex: 60,
+        overflowY: 'auto',
+        padding: 'var(--space-5)',
+      }}
+      onClick={onClose}
+    >
+      <div className="card" style={{ maxWidth: 560, margin: '0 auto' }} onClick={(e) => e.stopPropagation()}>
+        <div className="card__header">
+          <h2 id="reconcile-title">Reconcile {job.name || job.source_kind}</h2>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="card__body stack">
+            {mutation.error ? <Alert tone="error">{errorMessage(mutation.error)}</Alert> : null}
+
+            <Field label="Source table" htmlFor="reconcile-source" required>
+              <input
+                id="reconcile-source"
+                value={sourceTable}
+                onChange={(event) => setSourceTable(event.target.value)}
+                placeholder="customers"
+              />
+            </Field>
+            <Field label="Target entity" htmlFor="reconcile-target" required>
+              <input
+                id="reconcile-target"
+                value={targetEntity}
+                onChange={(event) => setTargetEntity(event.target.value)}
+                placeholder="customers"
+              />
+            </Field>
+
+            {result ? (
+              <dl className="dl">
+                <dt>Status</dt>
+                <dd>
+                  <StatusBadge status={result.status} />
+                </dd>
+                <dt>Source rows</dt>
+                <dd>{result.source_count}</dd>
+                <dt>Target rows</dt>
+                <dd>{result.target_count}</dd>
+                <dt>Matched</dt>
+                <dd>{result.matched_count}</dd>
+                <dt>Mismatched</dt>
+                <dd>{result.mismatched_count}</dd>
+              </dl>
+            ) : null}
+          </div>
+          <div className="form-actions">
+            <button type="button" className="btn btn--secondary" onClick={onClose}>
+              Close
+            </button>
+            <button
+              type="submit"
+              className="btn btn--primary"
+              disabled={mutation.isPending || !sourceTable || !targetEntity}
+            >
+              {mutation.isPending ? 'Reconciling…' : 'Reconcile'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   )
 }
 
@@ -189,7 +367,8 @@ function NewMigrationDialog({
   const { sourceTypes, isLoading: sourcesLoading } = useMigrationSources()
   const [sourceType, setSourceType] = useState('')
   const [strategy, setStrategy] = useState('one_time')
-  const [configText, setConfigText] = useState('{\n  "host": "",\n  "port": 5432,\n  "database": "",\n  "user": "",\n  "password": ""\n}')
+  const [password, setPassword] = useState('')
+  const [configText, setConfigText] = useState('{\n  "host": "",\n  "port": 5432,\n  "database": "",\n  "username": ""\n}')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [formError, setFormError] = useState<string | null>(null)
 
@@ -201,8 +380,16 @@ function NewMigrationDialog({
       } catch {
         throw new Error('Connection configuration must be valid JSON.')
       }
+      // The picker is the single source of truth for the source kind: the server
+      // reads it from `config.kind`, so injecting it here keeps the two from
+      // disagreeing if the connection text omits or contradicts it.
       const kind = sourceType || sourceTypes[0] || ''
-      return migrationsApi.create({ name, source_type: kind, config, strategy })
+      return migrationsApi.create({
+        name,
+        config: { ...config, kind },
+        strategy,
+        password: password || undefined,
+      })
     },
     onSuccess: onCreated,
     onError: (error) => {
@@ -285,14 +472,28 @@ function NewMigrationDialog({
             <Field
               label="Connection (JSON)"
               htmlFor="migration-config"
-              hint="The password is encrypted at rest and never returned to the browser."
+              hint="Host, port, database and username. The source kind comes from the picker above."
             >
               <textarea
                 id="migration-config"
                 className="mono"
-                rows={9}
+                rows={8}
                 value={configText}
                 onChange={(event) => setConfigText(event.target.value)}
+              />
+            </Field>
+
+            <Field
+              label="Password"
+              htmlFor="migration-password"
+              hint="Encrypted at rest and never returned to the browser."
+            >
+              <input
+                id="migration-password"
+                type="password"
+                autoComplete="new-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
               />
             </Field>
 
@@ -343,23 +544,23 @@ function MigrationDetailDialog({
     >
       <div className="card" style={{ maxWidth: 760, margin: '0 auto' }} onClick={(e) => e.stopPropagation()}>
         <div className="card__header">
-          <h2 id="migration-detail-title">{migration.name || migration.source_type}</h2>
+          <h2 id="migration-detail-title">{migration.name || migration.source_kind}</h2>
           <StatusBadge status={migration.status} />
         </div>
         <div className="card__body stack">
           <dl className="dl">
             <dt>Source</dt>
-            <dd>{migration.source_type}</dd>
+            <dd>{migration.source_kind}</dd>
             <dt>Strategy</dt>
             <dd>{migration.strategy?.replace('_', ' ') ?? '—'}</dd>
             <dt>Created</dt>
             <dd>
               <Timestamp value={migration.created_at} />
             </dd>
-            {migration.last_error ? (
+            {migration.error ? (
               <>
                 <dt>Last error</dt>
-                <dd className="text-danger">{migration.last_error}</dd>
+                <dd className="text-danger">{migration.error}</dd>
               </>
             ) : null}
           </dl>
@@ -374,6 +575,7 @@ function MigrationDetailDialog({
                   <thead>
                     <tr>
                       <th>Status</th>
+                      <th>Table</th>
                       <th className="numeric">Source</th>
                       <th className="numeric">Target</th>
                       <th className="numeric">Mismatches</th>
@@ -386,9 +588,10 @@ function MigrationDetailDialog({
                         <td>
                           <StatusBadge status={row.status} />
                         </td>
-                        <td className="numeric">{row.source_count ?? '—'}</td>
-                        <td className="numeric">{row.target_count ?? '—'}</td>
-                        <td className="numeric">{row.mismatches ?? '—'}</td>
+                        <td>{row.source_table}</td>
+                        <td className="numeric">{row.source_count}</td>
+                        <td className="numeric">{row.target_count}</td>
+                        <td className="numeric">{row.mismatched_count}</td>
                         <td>
                           <Timestamp value={row.created_at} />
                         </td>
