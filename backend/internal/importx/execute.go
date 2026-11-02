@@ -840,6 +840,13 @@ func normaliseForExport(v any) any {
 	switch t := v.(type) {
 	case []byte:
 		return string(t)
+	case [16]byte:
+		// pgx decodes a PostgreSQL uuid column into [16]byte. Without this case
+		// fmt.Sprint writes the raw byte array (e.g. "[66 26 130 ...]") into the
+		// export, which is neither a UUID nor usable by an importer.
+		return uuid.UUID(t).String()
+	case uuid.UUID:
+		return t.String()
 	case time.Time:
 		return t.Format(time.RFC3339)
 	default:
