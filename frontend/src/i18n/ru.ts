@@ -14,12 +14,12 @@ export const ru: Dictionary = {
   brand: {
     name: 'ForgeCRM',
     tagline: 'CRM-платформа для команд, которые выпускают продукт.',
-    shortTagline: 'Self-hosted пространство',
+    shortTagline: 'Собственный хостинг',
     description:
-      'Клиенты, воронка, импорт и автоматизация в одном self-hosted рабочем пространстве. Данные остаются на вашей инфраструктуре.',
+      'Клиенты, воронка, импорт и автоматизация в одном рабочем пространстве на вашей инфраструктуре. Данные остаются под вашим контролем.',
     feature1: 'Рабочее пространство клиентов',
     feature2: 'Воронка и прогнозирование',
-    feature3: 'Центр импорта и workflow',
+    feature3: 'Центр импорта и автоматизация',
   },
   login: {
     title: 'Вход в рабочее пространство',
@@ -48,7 +48,7 @@ export const ru: Dictionary = {
       sign_in_failed: 'Не удалось выполнить единый вход. Попробуйте снова или войдите по паролю.',
     },
     trust: {
-      selfHosted: 'Self-hosted',
+      selfHosted: 'Собственный хостинг',
       encrypted: 'Шифрование данных',
       audit: 'Полный журнал аудита',
     },
@@ -176,7 +176,7 @@ export const ru: Dictionary = {
     integrations: 'Интеграции',
     webhooks: 'Вебхуки',
     events: 'События',
-    workflows: 'Workflow',
+    workflows: 'Рабочие процессы',
     jobs: 'Фоновые задания',
     approvals: 'Согласования агентов',
     notifications: 'Уведомления',

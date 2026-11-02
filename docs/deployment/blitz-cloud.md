@@ -45,6 +45,18 @@ ForgeCRM — это одна сборка контейнера, которая �
 | `PORT` | *внедряется* | Его задаёт blitz.cloud; API слушает `0.0.0.0:$PORT`. |
 | `FORGECRM_DATABASE_MAX_CONNS` | `6` (api), `4` (worker) | Память на бесплатном тарифе — 512 МБ; держите пулы небольшими. |
 | `FORGECRM_RATE_LIMIT_STORE` | `memory` | Одна реплика, поэтому лимитер в процессе корректен. |
+| `FORGECRM_VERSION` | `main` (или тег) | Необязательна. Запасной источник версии, когда платформа не передаёт build args. Показывается в `/ready` и в строке запуска. |
+| `FORGECRM_COMMIT` | `${{ github.sha }}` | Необязательна. Запасной источник SHA коммита, если linker flag не передан. Без неё в логе остаётся `commit=unknown`. |
+
+### Метаданные сборки
+
+`/ready` и строка запуска показывают версию и коммит. Их источник — linker
+flags (`-X main.version` / `-X main.commit`), которые передаёт `docker build
+--build-arg`. blitz.cloud собирает корневой `Dockerfile` сам и build args не
+передаёт, поэтому в логах раньше было `version=dev commit=unknown`. Задайте
+`FORGECRM_VERSION` и `FORGECRM_COMMIT` на вкладке **Environment** — бинарник
+читает их как запасной источник, когда flag пуст, — и в логе появится реальная
+версия и SHA. Секретов эти переменные не содержат.
 
 API слушает `PORT`, когда его задаёт blitz.cloud, иначе — `FORGECRM_HTTP_ADDR`
 (по умолчанию `:8080`). Воркер ждёт схему, которую применяет API, прежде чем
