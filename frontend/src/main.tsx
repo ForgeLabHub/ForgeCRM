@@ -7,6 +7,9 @@ import { AuthProvider } from './hooks/useAuth'
 import { I18nProvider } from './i18n'
 import { ThemeProvider } from './theme'
 import { ApiError } from './api/client'
+// Self-hosted so the app keeps working offline and in air-gapped installs; the
+// variable axis also gives the fractional weights the tokens ask for (550, 650).
+import '@fontsource-variable/inter'
 import './index.css'
 
 const queryClient = new QueryClient({

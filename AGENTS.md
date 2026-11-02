@@ -118,6 +118,22 @@ FORGECRM_ENV=development FORGECRM_HTTP_PORT=8080 \
   `TestSeedDataMatchesThePermissionCatalog` теперь это ловит.
 - **API и воркер — отдельные процессы.** Импорт, остающийся `queued`, означает, что воркер
   не запущен.
+- **Не добавляйте `# syntax=docker/dockerfile:1` в корневой `Dockerfile`.** blitz.cloud
+  скачивает frontend BuildKit до чтения файла; когда это не удаётся, сборка падает на
+  первой строке, и платформа молча переходит на собственный («managed») `Dockerfile`.
+  У него нет `deploy/entrypoint.sh`, поэтому `imageEntrypoint` становится
+  `/usr/local/bin/forgecrm-api`, а часть **worker** поднимает второй API и не обрабатывает
+  ни одного фонового задания. Проверка: `apps_get` показывает `dockerfile: "managed"` и
+  `imageEntrypoint: ["/usr/local/bin/forgecrm-api"]`, а `apps_run` в части worker —
+  `uid=1000` и `cat /proc/1/cmdline` = `forgecrm-api`. Ни один Dockerfile проекта не
+  использует BuildKit-фичи, директива не нужна; `TestDockerfilesOmitTheSyntaxDirective`
+  это охраняет.
+- **Часть worker должна выбирать бинарник двумя сигналами.** blitz.cloud игнорирует
+  compose-`entrypoint` и `environment`, а `command` переносит в «start command»,
+  добавляемый к ENTRYPOINT образа. Поэтому в `docker-compose.yml` у сервиса `worker` есть
+  и `command: ["worker"]`, и `FORGECRM_ROLE: worker`, и
+  `entrypoint: ["/usr/local/bin/forgecrm-entrypoint"]`;
+  `TestComposeWorkerSelectsTheWorkerBinary` требует минимум двух сигналов.
 - **Интеграционные тесты гейтятся и тегом сборки, и переменной окружения.**
 - **`.env` держит `FORGECRM_SECRET_KEY`** и в gitignore. Никогда его не коммитьте.
 - **`.env` в этом рабочем пространстве уже имеет сгенерированный ключ**, и

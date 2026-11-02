@@ -211,25 +211,90 @@ func Check(ctx context.Context, db Queryer) error {
 	if len(missing) > 0 {
 		return &SchemaNotReadyError{Missing: missing}
 	}
-	return checkVersionDrift(ctx, db)
+	return checkVersion(ctx, db)
 }
 
-// checkVersionDrift refuses a database older than the binary. A database ahead
-// of the binary is allowed: applying migrations before rolling out the new code
-// is the normal, zero-downtime order, and an older process reading a slightly
-// newer schema is the safe direction.
+// WaitForSchema polls Check until it passes or ctx is done, and returns the last
+// failure so a caller can log why it gave up.
+//
+// It exists for a process that must not run migrations itself — the worker — but
+// must not serve before the schema is ready either. The API applies migrations;
+// the worker waits for them. The loop is deliberately identical to the API's own
+// startup guard, so both binaries agree on what "ready" means: the required
+// tables present, the recorded version not behind, and not dirty.
+//
+// A caller bounds the wait with ctx: a schema that never arrives is a failed
+// deploy, and the process should exit with the reason rather than hang. The
+// interval is fixed rather than exponential because the wait is normally a few
+// seconds while the API finishes migrating, and a slow ramp would add latency to
+// every clean start to save queries on a start that is already failing.
+func WaitForSchema(ctx context.Context, db Queryer, interval time.Duration, log *slog.Logger) error {
+	if interval <= 0 {
+		interval = 2 * time.Second
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	// Keep the last schema-readiness diagnosis separate from the last raw error.
+	// The final Check can race the deadline and fail with "context deadline
+	// exceeded" instead of the schema state, and reporting that would hide the
+	// reason the wait gave up — which is the one thing this error is for.
+	var lastErr error
+	for {
+		err := Check(ctx, db)
+		if err == nil {
+			return nil
+		}
+		if IsSchemaNotReady(err) || lastErr == nil {
+			lastErr = err
+		}
+
+		if log != nil {
+			log.Info("waiting for the database schema to be ready", "reason", err.Error())
+		}
+
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("schema not ready after waiting: %w", lastErr)
+		case <-ticker.C:
+		}
+	}
+}
+
+// checkVersion reads the recorded migration version once and refuses the two
+// states the table check above cannot see: a schema a failed migration left
+// half-applied (dirty), and a schema older than this binary.
+//
+// The dirty flag matters for the same reason the table list does. When a
+// migration fails partway, golang-migrate records the version and sets dirty,
+// but the tables already created by earlier steps exist, so the table check
+// passes. Serving from that schema means the first query touching a column the
+// failed migration was adding dies with `column ... does not exist` — an absent
+// table one step later, and the failure this whole guard exists to prevent.
+//
+// A database ahead of the binary is allowed: applying migrations before rolling
+// out the new code is the normal, zero-downtime order, and an older process
+// reading a slightly newer schema is the safe direction.
 //
 // When no version is recorded — a schema assembled by another tool — the check
 // stands down rather than guess, because the table check above is then the only
-// reliable signal.
-func checkVersionDrift(ctx context.Context, db Queryer) error {
-	var applied uint
-	err := db.QueryRow(ctx, `SELECT version FROM schema_migrations LIMIT 1`).Scan(&applied)
+// reliable signal. The version table is read directly rather than through the
+// migrate library so the readiness probe keeps to one catalog query and one
+// cheap row read.
+func checkVersion(ctx context.Context, db Queryer) error {
+	var (
+		applied uint
+		dirty   bool
+	)
+	err := db.QueryRow(ctx, `SELECT version, dirty FROM schema_migrations LIMIT 1`).Scan(&applied, &dirty)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
 	if err != nil {
 		return nil
+	}
+	if dirty {
+		return &SchemaDirtyError{Version: applied}
 	}
 	expected, err := ExpectedVersion()
 	if err != nil {
@@ -262,15 +327,32 @@ func (e *SchemaBehindError) Error() string {
 		"run migrations first (FORGECRM_MIGRATE_ON_START=true or `forgecrm-api -migrate`)", e.Applied, e.Expected)
 }
 
+// SchemaDirtyError reports a schema a migration left half-applied. It is
+// deliberately not recoverable by re-running migrations: golang-migrate refuses
+// to continue from a dirty version, and no migration deletes data, so an
+// operator has to inspect the failed step and repair it.
+type SchemaDirtyError struct {
+	Version uint
+}
+
+func (e *SchemaDirtyError) Error() string {
+	return fmt.Sprintf("database schema is dirty at migration %d: a migration failed partway and must be "+
+		"repaired before this process can serve (migrations never delete data)", e.Version)
+}
+
 // IsSchemaNotReady reports whether err is a schema-readiness failure, whether the
-// schema is absent or merely behind.
+// schema is absent, dirty, or merely behind.
 func IsSchemaNotReady(err error) bool {
 	var notReady *SchemaNotReadyError
 	if errors.As(err, &notReady) {
 		return true
 	}
 	var behind *SchemaBehindError
-	return errors.As(err, &behind)
+	if errors.As(err, &behind) {
+		return true
+	}
+	var dirty *SchemaDirtyError
+	return errors.As(err, &dirty)
 }
 
 func open(databaseURL string) (*migrate.Migrate, error) {

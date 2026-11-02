@@ -3,7 +3,7 @@ import { useEffect, useId, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useLocale, useT, type TranslationKey } from '../i18n'
-import { IconClose } from './icons'
+import { IconClose, IconInbox } from './icons'
 
 export function Badge({
   children,
@@ -168,13 +168,18 @@ export function EmptyState({
   title,
   text,
   action,
+  icon,
 }: {
   title: string
   text?: string
   action?: ReactNode
+  icon?: ReactNode
 }) {
   return (
     <div className="empty-state">
+      <span className="empty-state__icon" aria-hidden="true">
+        {icon ?? <IconInbox width={22} height={22} />}
+      </span>
       <div className="empty-state__title">{title}</div>
       {text ? <p className="empty-state__text">{text}</p> : null}
       {action}

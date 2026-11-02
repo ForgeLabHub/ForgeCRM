@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/geff1778/forgecrm/internal/ai"
+	"github.com/geff1778/forgecrm/internal/audit"
 	"github.com/geff1778/forgecrm/internal/consent"
 	"github.com/geff1778/forgecrm/internal/crm"
 	"github.com/geff1778/forgecrm/internal/events"
@@ -147,6 +148,27 @@ func APIContract() openapi.Contract {
 		Schema:      map[string]any{"type": "string"},
 		Description: "The setting to write. Required; a request without it is rejected.",
 	}}
+
+	// Audit integrity. The response reports the outcome of walking the caller's
+	// hash chain, not the entries themselves, so it carries counts and the id of
+	// the first break rather than any record contents.
+	c.Responses["GET /api/v1/audit/verify"] = reflect.TypeOf(audit.VerificationResult{})
+	c.QueryParams["GET /api/v1/audit/verify"] = []openapi.QueryParam{
+		{
+			Name: "organization_id", Required: false,
+			Schema:      map[string]any{"type": "string", "format": "uuid"},
+			Description: "Platform owner only: verify a specific organization. Ignored for other callers, who always verify their own organization.",
+		},
+		{
+			Name: "scope", Required: false,
+			Schema:      map[string]any{"type": "string", "enum": []string{"platform"}},
+			Description: "Platform owner only: verify the platform-level chain (entries with no organization).",
+		},
+	}
+	c.BodyDescriptions["GET /api/v1/audit/verify"] = "Walks the append-only audit trail as a SHA-256 hash chain and " +
+		"reports whether it is intact. `intact` is false when an entry was removed or altered, and `first_break_id` " +
+		"names the first entry whose link does not match. `unchained` counts rows written before the chain existed. " +
+		"Entries are chained per organization, so a tenant verifies its own trail without reading another's."
 
 	// --- CRM: accounts ------------------------------------------------------
 	c.RequestBodies["POST /api/v1/accounts"] = reflect.TypeOf(crm.AccountInput{})

@@ -226,3 +226,98 @@ func TestEnvironmentDocumentationCoversConfigVariables(t *testing.T) {
 		"docs/deployment/environment-variables.md: %v\nAdd a row for each, or the operator guide "+
 		"silently drifts behind the code.", missing)
 }
+
+// composeService is the subset of one docker-compose.yml service these checks
+// read.
+type composeService struct {
+	Name        string            `yaml:"name"`
+	Image       string            `yaml:"image"`
+	Entrypoint  []string          `yaml:"entrypoint"`
+	Command     []string          `yaml:"command"`
+	Environment map[string]string `yaml:"environment"`
+}
+
+// composeFile is the subset of docker-compose.yml this package reads.
+type composeFile struct {
+	Services map[string]composeService `yaml:"services"`
+}
+
+// TestDockerfilesOmitTheSyntaxDirective guards a deploy-only failure.
+//
+// `# syntax=docker/dockerfile:1` asks the builder to pull the BuildKit frontend
+// image before it reads the rest of the file. A builder that cannot reach that
+// image fails on the very first line, and the host then falls back to a
+// Dockerfile it writes itself. Neither Dockerfile here uses a BuildKit-only
+// feature (no --mount, --platform or heredoc), so the directive buys nothing and
+// risks the whole build.
+func TestDockerfilesOmitTheSyntaxDirective(t *testing.T) {
+	root := repoRoot(t)
+
+	for _, rel := range []string{"Dockerfile", filepath.Join("backend", "Dockerfile")} {
+		path := filepath.Join(root, rel)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", rel, err)
+		}
+		for i, line := range strings.Split(string(data), "\n") {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "# syntax=") {
+				t.Errorf("%s:%d sets %q; the directive makes the builder fetch the BuildKit frontend "+
+					"before it reads the file, which fails on hosts that cannot reach it and makes them "+
+					"fall back to a Dockerfile of their own. No BuildKit-only feature is used here, so "+
+					"remove the line.", rel, i+1, trimmed)
+			}
+			// The directive is only meaningful at the top of the file; a later
+			// one is dead text, but still worth flagging as a stray copy.
+			if i > 5 && strings.HasPrefix(trimmed, "# syntax=") {
+				t.Errorf("%s:%d has a stray %q far from the top of the file", rel, i+1, trimmed)
+			}
+		}
+	}
+}
+
+// TestComposeWorkerSelectsTheWorkerBinary guards the second defect on the
+// compose path: the image ENTRYPOINT defaults to the API, so the worker service
+// must select the other binary. It must do so by more than one signal, because
+// platforms differ in what they carry over: Compose honours `entrypoint` and
+// `environment`, while blitz.cloud ignores `entrypoint` and maps `command` to
+// its per-part start command. A service that relies on FORGECRM_ROLE alone runs
+// a second API wherever the platform drops compose `environment`.
+func TestComposeWorkerSelectsTheWorkerBinary(t *testing.T) {
+	root := repoRoot(t)
+
+	data, err := os.ReadFile(filepath.Join(root, "docker-compose.yml"))
+	if err != nil {
+		t.Fatalf("read docker-compose.yml: %v", err)
+	}
+	var cf composeFile
+	if err := yaml.Unmarshal(data, &cf); err != nil {
+		t.Fatalf("parse docker-compose.yml: %v", err)
+	}
+
+	worker, ok := cf.Services["worker"]
+	if !ok {
+		t.Fatal("docker-compose.yml declares no worker service")
+	}
+
+	role := worker.Environment["FORGECRM_ROLE"]
+	roleWorker := role == "worker"
+	commandWorker := len(worker.Command) > 0 && (worker.Command[0] == "worker" ||
+		strings.HasSuffix(worker.Command[0], "forgecrm-worker"))
+	entrypointWorker := len(worker.Entrypoint) > 0 &&
+		strings.Contains(strings.Join(worker.Entrypoint, " "), "forgecrm-entrypoint")
+
+	signals := 0
+	for _, set := range []bool{roleWorker, commandWorker, entrypointWorker} {
+		if set {
+			signals++
+		}
+	}
+	if signals < 2 {
+		t.Errorf("docker-compose.yml worker selects the worker binary by %d signal(s) "+
+			"(FORGECRM_ROLE=worker: %v, command names the worker: %v, entrypoint is the dispatcher: %v); "+
+			"at least two are needed, because a platform that ignores `entrypoint` and `environment` "+
+			"would start a second API on this part and process no background job",
+			signals, roleWorker, commandWorker, entrypointWorker)
+	}
+}

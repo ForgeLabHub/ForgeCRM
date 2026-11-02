@@ -106,7 +106,97 @@ describe('LoginPage form', () => {
     await userEvent.type(await screen.findByLabelText(en.common.email), 'owner@example.com')
     await userEvent.type(screen.getByLabelText(en.common.password), 'wrong-password')
     await userEvent.click(screen.getByRole('button', { name: en.login.submit }))
-    expect(await screen.findByText(/invalid email or password/i)).toBeTruthy()
+    // The code is translated, not the server's English sentence: an English UI
+    // must still read as English, and the same failure in Russian as Russian.
+    expect(await screen.findByText(en.errors.unauthorized)).toBeTruthy()
+  })
+
+  it('translates the rejection into the active language', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url.includes('/api/v1/auth/oidc/providers')) {
+          return Promise.resolve(json({ enabled: false, providers: [] }))
+        }
+        if (url.includes('/api/v1/auth/login')) {
+          return Promise.resolve(
+            json(
+              { error: { code: 'unauthorized', message: 'invalid email or password' } },
+              401,
+            ),
+          )
+        }
+        return Promise.resolve(json({}))
+      }),
+    )
+
+    renderLogin()
+    await screen.findByLabelText(en.common.email)
+    await userEvent.selectOptions(screen.getByLabelText(en.language.label), 'ru')
+    await userEvent.type(screen.getByLabelText(ru.common.email), 'owner@example.com')
+    await userEvent.type(screen.getByLabelText(ru.common.password), 'wrong-password')
+    await userEvent.click(screen.getByRole('button', { name: ru.login.submit }))
+    // The Russian page shows the Russian sentence, not the server's English one.
+    expect(await screen.findByText(ru.errors.unauthorized)).toBeTruthy()
+    expect(screen.queryByText(/invalid email or password/i)).toBeNull()
+  })
+
+  it('re-localises an existing error when the language changes', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url.includes('/api/v1/auth/oidc/providers')) {
+          return Promise.resolve(json({ enabled: false, providers: [] }))
+        }
+        if (url.includes('/api/v1/auth/login')) {
+          return Promise.resolve(
+            json(
+              { error: { code: 'unauthorized', message: 'invalid email or password' } },
+              401,
+            ),
+          )
+        }
+        return Promise.resolve(json({}))
+      }),
+    )
+
+    renderLogin()
+    await userEvent.type(await screen.findByLabelText(en.common.email), 'owner@example.com')
+    await userEvent.type(screen.getByLabelText(en.common.password), 'wrong-password')
+    await userEvent.click(screen.getByRole('button', { name: en.login.submit }))
+    expect(await screen.findByText(en.errors.unauthorized)).toBeTruthy()
+
+    // Switching language after the failure must not leave a mixed page: the
+    // message is stored as the failure itself and translated at render time.
+    await userEvent.selectOptions(screen.getByLabelText(en.language.label), 'ru')
+    expect(await screen.findByText(ru.errors.unauthorized)).toBeTruthy()
+    expect(screen.queryByText(en.errors.unauthorized)).toBeNull()
+  })
+
+  it('falls back to the server message for a code it does not translate', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url.includes('/api/v1/auth/oidc/providers')) {
+          return Promise.resolve(json({ enabled: false, providers: [] }))
+        }
+        if (url.includes('/api/v1/auth/login')) {
+          return Promise.resolve(
+            json({ error: { code: 'teapot', message: 'short and stout' } }, 418),
+          )
+        }
+        return Promise.resolve(json({}))
+      }),
+    )
+
+    renderLogin()
+    await userEvent.type(await screen.findByLabelText(en.common.email), 'owner@example.com')
+    await userEvent.type(screen.getByLabelText(en.common.password), 'wrong-password')
+    await userEvent.click(screen.getByRole('button', { name: en.login.submit }))
+    expect(await screen.findByText(/short and stout/i)).toBeTruthy()
   })
 
   it('toggles password visibility', async () => {

@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/geff1778/forgecrm/internal/bootstrap"
 	"github.com/geff1778/forgecrm/internal/database"
@@ -252,6 +253,88 @@ func TestBootstrapRequiresAMigratedSchema(t *testing.T) {
 
 	if err := migrate.Check(ctx, db.Pool()); err == nil {
 		t.Fatal("the schema check passed on an empty database")
+	}
+}
+
+// TestSchemaCheckFailsOnADirtySchema is the regression test for a half-applied
+// migration. Every required table exists, so the table check passes, and the
+// process would serve a schema that is missing whatever the failed migration was
+// adding — a `column ... does not exist` on the first query that touches it. The
+// dirty flag is what makes Check refuse it.
+func TestSchemaCheckFailsOnADirtySchema(t *testing.T) {
+	db := connectOrSkip(t)
+	freshSchema(t, db)
+	ctx := context.Background()
+
+	// Mark the schema dirty exactly as golang-migrate does when a migration fails
+	// partway, without touching the tables, so only the dirty flag changes.
+	if _, err := db.Pool().Exec(ctx, `UPDATE schema_migrations SET dirty = true`); err != nil {
+		t.Fatalf("mark the schema dirty: %v", err)
+	}
+
+	err := migrate.Check(ctx, db.Pool())
+	if err == nil {
+		t.Fatal("the schema check passed on a dirty schema; readiness would report healthy")
+	}
+	if !migrate.IsSchemaNotReady(err) {
+		t.Fatalf("the error is not a schema-readiness failure: %v", err)
+	}
+	if !strings.Contains(err.Error(), "dirty") {
+		t.Fatalf("the error does not say the schema is dirty: %v", err)
+	}
+}
+
+// TestWaitForSchemaReturnsWhenTheSchemaArrives covers the worker's startup gate:
+// it must block on an empty database and return as soon as the schema is ready,
+// rather than the old behaviour of proceeding once any migration row existed.
+func TestWaitForSchemaReturnsWhenTheSchemaArrives(t *testing.T) {
+	db := connectOrSkip(t)
+	ctx := context.Background()
+
+	if _, err := db.Pool().Exec(ctx, `DROP SCHEMA public CASCADE; CREATE SCHEMA public;`); err != nil {
+		t.Fatalf("reset the schema: %v", err)
+	}
+
+	waitCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+
+	// Apply migrations from another goroutine while the wait polls, so the wait is
+	// exercised against a schema that becomes ready rather than one that already is.
+	done := make(chan error, 1)
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		_, err := migrate.Up(os.Getenv("FORGECRM_TEST_DATABASE_URL"), slog.Default())
+		done <- err
+	}()
+
+	if err := migrate.WaitForSchema(waitCtx, db.Pool(), 100*time.Millisecond, nil); err != nil {
+		t.Fatalf("WaitForSchema did not return once the schema was ready: %v", err)
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("apply migrations: %v", err)
+	}
+}
+
+// TestWaitForSchemaGivesUpOnAnEmptyDatabase pins the bound: a schema that never
+// arrives must end the wait with a diagnosable error, not hang, so a failed
+// deploy exits instead of looking like a slow start.
+func TestWaitForSchemaGivesUpOnAnEmptyDatabase(t *testing.T) {
+	db := connectOrSkip(t)
+	ctx := context.Background()
+
+	if _, err := db.Pool().Exec(ctx, `DROP SCHEMA public CASCADE; CREATE SCHEMA public;`); err != nil {
+		t.Fatalf("reset the schema: %v", err)
+	}
+
+	waitCtx, cancel := context.WithTimeout(ctx, 700*time.Millisecond)
+	defer cancel()
+
+	err := migrate.WaitForSchema(waitCtx, db.Pool(), 100*time.Millisecond, nil)
+	if err == nil {
+		t.Fatal("WaitForSchema returned nil on an empty database")
+	}
+	if !migrate.IsSchemaNotReady(err) {
+		t.Fatalf("the wait error is not a schema-readiness failure: %v", err)
 	}
 }
 

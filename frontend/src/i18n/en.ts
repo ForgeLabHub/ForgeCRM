@@ -122,6 +122,30 @@ export const en = {
     chat: 'chat',
     telegram: 'telegram',
   },
+  // Server error codes, keyed by the machine-readable `error.code` the API
+  // returns. The human-readable `message` is only a fallback: a Russian user
+  // must not be shown an English sentence just because the server produced one.
+  errors: {
+    unauthorized: 'Invalid email or password.',
+    forbidden: 'You do not have permission to do that.',
+    not_found: 'The requested item no longer exists.',
+    conflict: 'That conflicts with an existing record.',
+    rate_limited: 'Too many attempts. Wait a moment and try again.',
+    validation_failed: 'Check the highlighted fields and try again.',
+    bad_request: 'That request could not be processed.',
+    disabled: 'This feature is turned off for this deployment.',
+    unavailable: 'The service is temporarily unavailable. Try again shortly.',
+    internal_error: 'Something went wrong on our side. Try again.',
+    network: 'Cannot reach the server. Check your connection and try again.',
+    unknown: 'Something went wrong.',
+    forbiddenTitle: 'You do not have access to this area',
+    forbiddenWithPermission:
+      'This page requires the "{permission}" permission. Ask an administrator if you need it.',
+    forbiddenNoPermission: 'Ask an administrator if you need access.',
+    notFoundTitle: 'Page not found',
+    notFoundText: 'The page you asked for does not exist.',
+    backToOverview: 'Back to overview',
+  },
   brand: {
     name: 'ForgeCRM',
     tagline: 'The CRM platform for teams that ship.',
@@ -994,7 +1018,7 @@ export const en = {
     columnMigration: 'Migration',
     columnStatus: 'Status',
     columnStrategy: 'Strategy',
-    columnUpdated: 'Updated',
+    columnCreated: 'Created',
     discoverSchema: 'Discover schema',
     reconcile: 'Reconcile',
     details: 'Details',
@@ -1009,7 +1033,9 @@ export const en = {
     sourceType: 'Source type',
     strategy: 'Strategy',
     connectionJson: 'Connection (JSON)',
-    connectionHint: 'The password is encrypted at rest and never returned to the browser.',
+    connectionHint: 'Host, port, database and username. The source kind comes from the picker above.',
+    password: 'Password',
+    passwordHint: 'Encrypted at rest and never returned to the browser.',
     readOnlyWarning:
       'Grant the account read-only access. ForgeCRM will not modify the source database.',
     invalidJson: 'Connection configuration must be valid JSON.',
@@ -1017,6 +1043,7 @@ export const en = {
     created: 'Created',
     lastError: 'Last error',
     reconciliations: 'Reconciliations',
+    columnTable: 'Table',
     columnSourceCount: 'Source',
     columnTargetCount: 'Target',
     columnMismatches: 'Mismatches',
@@ -1135,6 +1162,15 @@ export const en = {
     columnCorrelation: 'Correlation',
     columnWhen: 'When',
     system: 'system',
+    integrityTitle: 'Integrity',
+    verifyIntegrity: 'Verify integrity',
+    verifying: 'Verifying…',
+    integrityIntro:
+      'Every entry is chained to the one before it with a SHA-256 hash. If a row was removed or altered outside the API, the chain breaks and the first affected entry is reported.',
+    integrityIntact: 'The trail is intact. {count} chained entries verified',
+    integrityUnchained: ', {count} written before the chain existed and skipped',
+    integrityBroken:
+      'The trail is broken at entry #{id}: {reason}. This means a row was removed or changed outside the API.',
     emptyAuditTitle: 'No audit entries',
     emptyAuditText: 'Changes to records, roles and configuration are recorded here.',
     searchAudit: 'Search by action…',
@@ -1656,15 +1692,6 @@ export const en = {
       ticket: 'Ticket',
       task: 'Task',
     },
-  },
-  errors: {
-    forbiddenTitle: 'You do not have access to this area',
-    forbiddenWithPermission:
-      'This page requires the "{permission}" permission. Ask an administrator if you need it.',
-    forbiddenNoPermission: 'Ask an administrator if you need access.',
-    notFoundTitle: 'Page not found',
-    notFoundText: 'The page you asked for does not exist.',
-    backToOverview: 'Back to overview',
   },
 }
 

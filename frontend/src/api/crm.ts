@@ -11,6 +11,7 @@ import type {
   Deal,
   DealInput,
   Lead,
+  LeadConversionResult,
   Notification,
   Pipeline,
   PipelineReport,
@@ -70,7 +71,7 @@ export const leadsApi = {
   create: (body: Partial<Lead>) => api.post<Lead>('/api/v1/leads', body),
   update: (id: string, body: Partial<Lead>) => api.put<Lead>(`/api/v1/leads/${id}`, body),
   convert: (id: string, body: { create_deal?: boolean; pipeline_id?: string; stage_id?: string }) =>
-    api.post<Lead>(`/api/v1/leads/${id}/convert`, body),
+    api.post<LeadConversionResult>(`/api/v1/leads/${id}/convert`, body),
 }
 
 export const pipelinesApi = {

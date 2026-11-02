@@ -1,4 +1,4 @@
-import type { JSX } from 'react'
+import type { ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { accountsApi, dealsApi, leadsApi, tasksApi, ticketsApi } from '../api/crm'
@@ -18,31 +18,48 @@ import {
   IconBuilding,
   IconChart,
   IconCheckSquare,
+  IconInbox,
   IconKanban,
   IconLifeBuoy,
   IconTarget,
+  IconUsers,
   IconWorkflow,
-  type IconProps,
 } from '../components/icons'
 import { useI18n, type TranslationKey } from '../i18n'
+
+type Tone = 'neutral' | 'success' | 'danger' | 'warning' | 'accent'
+
+/** Priority is a small fixed vocabulary, so its colour is stated once here. */
+function priorityTone(priority: string | undefined): Tone {
+  switch (priority) {
+    case 'urgent':
+      return 'danger'
+    case 'high':
+      return 'warning'
+    case 'low':
+      return 'neutral'
+    default:
+      return 'neutral'
+  }
+}
 
 /** A count tile. Each owns its query so one failing endpoint does not blank the
  *  page, and the whole tile is the link so the number and the label are one
  *  target rather than a link buried inside a card. */
-function Metric({
+function MetricTile({
   label,
   queryKey,
   fetchCount,
   hint,
   link,
-  icon: Icon,
+  icon,
 }: {
   label: string
   queryKey: string
   fetchCount: () => Promise<number>
   hint?: string
   link: string
-  icon: (props: IconProps) => JSX.Element
+  icon: ReactNode
 }) {
   const { t } = useI18n()
   const query = useQuery({
@@ -55,8 +72,8 @@ function Metric({
     <Link to={link} className="metric">
       <div className="metric__top">
         <span className="metric__label">{label}</span>
-        <span className="metric__icon">
-          <Icon size={16} />
+        <span className="metric__icon" aria-hidden="true">
+          {icon}
         </span>
       </div>
       {query.isLoading ? (
@@ -80,22 +97,41 @@ function Metric({
 function QuickAction({
   to,
   labelKey,
-  icon: Icon,
+  icon,
 }: {
   to: string
   labelKey: TranslationKey
-  icon: (props: IconProps) => JSX.Element
+  icon: ReactNode
 }) {
   const { t } = useI18n()
   return (
     <Link to={to} className="quick-action">
-      <span className="quick-action__icon">
-        <Icon size={16} />
+      <span className="quick-action__icon" aria-hidden="true">
+        {icon}
       </span>
       {t(labelKey)}
     </Link>
   )
 }
+
+interface QuickAction {
+  to: string
+  labelKey: TranslationKey
+  permission: string
+  icon: ReactNode
+}
+
+const QUICK_ACTIONS: QuickAction[] = [
+  { to: '/accounts', labelKey: 'nav.accounts', permission: 'accounts.read', icon: <IconBuilding size={16} /> },
+  { to: '/contacts', labelKey: 'nav.contacts', permission: 'contacts.read', icon: <IconUsers size={16} /> },
+  { to: '/leads', labelKey: 'nav.leads', permission: 'leads.read', icon: <IconTarget size={16} /> },
+  { to: '/deals', labelKey: 'nav.deals', permission: 'deals.read', icon: <IconKanban size={16} /> },
+  { to: '/tasks', labelKey: 'nav.tasks', permission: 'tasks.read', icon: <IconCheckSquare size={16} /> },
+  { to: '/tickets', labelKey: 'nav.support', permission: 'tickets.read', icon: <IconLifeBuoy size={16} /> },
+  { to: '/reports', labelKey: 'nav.reports', permission: 'reports.read', icon: <IconChart size={16} /> },
+  { to: '/workflows', labelKey: 'nav.workflows', permission: 'workflows.read', icon: <IconWorkflow size={16} /> },
+  { to: '/imports', labelKey: 'nav.importCenter', permission: 'imports.read', icon: <IconInbox size={16} /> },
+]
 
 export function OverviewPage() {
   const { session, can } = useAuth()
@@ -113,16 +149,21 @@ export function OverviewPage() {
     enabled: can('tickets.read'),
   })
 
-  const quickActions = (
+  // Create affordances are gated on the matching `.create` permission: a
+  // read-only user must not be offered a form the server will reject. Pages the
+  // user may only read are listed separately so the two are never confused.
+  const createActions = (
     [
-      { to: '/accounts?new=1', labelKey: 'overview.actionNewAccount', icon: IconBuilding, permission: 'accounts.create' },
-      { to: '/deals?new=1', labelKey: 'overview.actionNewDeal', icon: IconKanban, permission: 'deals.create' },
-      { to: '/tasks?new=1', labelKey: 'overview.actionNewTask', icon: IconCheckSquare, permission: 'tasks.create' },
-      { to: '/tickets?new=1', labelKey: 'overview.actionNewTicket', icon: IconLifeBuoy, permission: 'tickets.create' },
-      { to: '/reports', labelKey: 'overview.actionReports', icon: IconChart, permission: 'reports.read' },
-      { to: '/workflows', labelKey: 'overview.actionWorkflows', icon: IconWorkflow, permission: 'workflows.read' },
-    ] as { to: string; labelKey: TranslationKey; icon: (p: IconProps) => JSX.Element; permission: string }[]
+      { to: '/accounts?new=1', labelKey: 'overview.actionNewAccount', icon: <IconBuilding size={16} />, permission: 'accounts.create' },
+      { to: '/deals?new=1', labelKey: 'overview.actionNewDeal', icon: <IconKanban size={16} />, permission: 'deals.create' },
+      { to: '/tasks?new=1', labelKey: 'overview.actionNewTask', icon: <IconCheckSquare size={16} />, permission: 'tasks.create' },
+      { to: '/tickets?new=1', labelKey: 'overview.actionNewTicket', icon: <IconLifeBuoy size={16} />, permission: 'tickets.create' },
+      { to: '/reports', labelKey: 'overview.actionReports', icon: <IconChart size={16} />, permission: 'reports.read' },
+      { to: '/workflows', labelKey: 'overview.actionWorkflows', icon: <IconWorkflow size={16} />, permission: 'workflows.read' },
+    ] as QuickAction[]
   ).filter((action) => can(action.permission))
+
+  const quickActions = createActions.length > 0 ? createActions : QUICK_ACTIONS.filter((action) => can(action.permission))
 
   return (
     <>
@@ -138,13 +179,14 @@ export function OverviewPage() {
         </div>
         {info.data ? (
           <div className="hero__chips">
+            <Badge tone="neutral">{info.data.service}</Badge>
             <Badge tone={info.data.environment === 'production' ? 'accent' : 'neutral'}>
               {info.data.environment}
             </Badge>
-            <Badge>
+            <Badge tone="neutral">
               {t('overview.version')} {info.data.version}
             </Badge>
-            {info.data.commit ? <Badge>{info.data.commit.slice(0, 12)}</Badge> : null}
+            {info.data.commit ? <Badge tone="neutral">{info.data.commit.slice(0, 12)}</Badge> : null}
           </div>
         ) : null}
       </header>
@@ -159,48 +201,48 @@ export function OverviewPage() {
 
       <div className="grid grid--stats" style={{ marginBottom: 'var(--space-5)' }}>
         {can('accounts.read') ? (
-          <Metric
+          <MetricTile
             label={t('overview.statAccounts')}
             queryKey="accounts"
             link="/accounts"
-            icon={IconBuilding}
+            icon={<IconBuilding size={16} />}
             fetchCount={async () => (await accountsApi.list({ limit: 1 })).total}
           />
         ) : null}
         {can('deals.read') ? (
-          <Metric
+          <MetricTile
             label={t('overview.statOpenDeals')}
             queryKey="deals-open"
             link="/deals"
-            icon={IconKanban}
+            icon={<IconKanban size={16} />}
             hint={t('overview.statOpenDealsHint')}
             fetchCount={async () => (await dealsApi.list({ limit: 1, status: 'open' })).total}
           />
         ) : null}
         {can('leads.read') ? (
-          <Metric
+          <MetricTile
             label={t('overview.statLeads')}
             queryKey="leads"
             link="/leads"
-            icon={IconTarget}
+            icon={<IconTarget size={16} />}
             fetchCount={async () => (await leadsApi.list({ limit: 1 })).total}
           />
         ) : null}
         {can('tasks.read') ? (
-          <Metric
+          <MetricTile
             label={t('overview.statOpenTasks')}
             queryKey="tasks-open"
             link="/tasks"
-            icon={IconCheckSquare}
+            icon={<IconCheckSquare size={16} />}
             fetchCount={async () => (await tasksApi.list({ limit: 1, status: 'open' })).total}
           />
         ) : null}
         {can('tickets.read') ? (
-          <Metric
+          <MetricTile
             label={t('overview.statOpenTickets')}
             queryKey="tickets-open"
             link="/tickets"
-            icon={IconLifeBuoy}
+            icon={<IconLifeBuoy size={16} />}
             fetchCount={async () => (await ticketsApi.list({ limit: 1, status: 'open' })).total}
           />
         ) : null}
@@ -236,7 +278,7 @@ export function OverviewPage() {
             {recentTasks.isError ? (
               <ErrorState message={errorMessage(recentTasks.error)} />
             ) : recentTasks.data?.items.length ? (
-              <div className="stack stack--sm">
+              <div>
                 {recentTasks.data.items.map((task) => (
                   <Link key={task.id} to={`/tasks/${task.id}`} className="attention-item">
                     <div style={{ minWidth: 0 }}>
@@ -245,9 +287,7 @@ export function OverviewPage() {
                         {t('overview.due')} <Timestamp value={task.due_at} withTime={false} />
                       </div>
                     </div>
-                    <Badge tone={task.priority === 'urgent' ? 'danger' : 'neutral'}>
-                      {task.priority}
-                    </Badge>
+                    <Badge tone={priorityTone(task.priority)}>{task.priority}</Badge>
                   </Link>
                 ))}
               </div>
@@ -269,7 +309,7 @@ export function OverviewPage() {
             {openTickets.isError ? (
               <ErrorState message={errorMessage(openTickets.error)} />
             ) : openTickets.data?.items.length ? (
-              <div className="stack stack--sm">
+              <div>
                 {openTickets.data.items.map((ticket) => (
                   <Link key={ticket.id} to={`/tickets/${ticket.id}`} className="attention-item">
                     <div style={{ minWidth: 0 }}>
@@ -293,8 +333,6 @@ export function OverviewPage() {
         <Card title={t('overview.platform')}>
           {info.data ? (
             <dl className="dl">
-              <dt>{t('overview.version')}</dt>
-              <dd>{info.data.version}</dd>
               <dt>{t('overview.environment')}</dt>
               <dd>
                 <Badge tone={info.data.environment === 'production' ? 'accent' : 'neutral'}>

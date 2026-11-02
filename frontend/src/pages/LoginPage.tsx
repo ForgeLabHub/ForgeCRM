@@ -5,9 +5,10 @@ import { Alert } from '../components/ui'
 import { BrandMark } from '../components/BrandMark'
 import { LoginControls } from '../components/LoginControls'
 import { useAuth } from '../hooks/useAuth'
-import { errorMessage, fieldErrors } from '../api/client'
+import { fieldErrors } from '../api/client'
 import { ssoApi, type SSOProvider } from '../api/auth'
-import { useI18n } from '../i18n'
+import { useI18n, translationExists } from '../i18n'
+import { localizeError } from '../i18n/errors'
 
 /**
  * Sign-in page.
@@ -24,7 +25,7 @@ import { useI18n } from '../i18n'
  */
 export function LoginPage() {
   const { signIn, completeMFA } = useAuth()
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [ssoProviders, setSsoProviders] = useState<SSOProvider[]>([])
@@ -36,7 +37,10 @@ export function LoginPage() {
   const [mfaTicket, setMfaTicket] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [formError, setFormError] = useState<string | null>(null)
+  // The raw failure is kept, not a rendered sentence, so switching language
+  // after a failed attempt re-localises the message instead of leaving the
+  // page in two languages at once.
+  const [formError, setFormError] = useState<unknown>(null)
   const [busy, setBusy] = useState(false)
 
   const emailId = useId()
@@ -108,15 +112,24 @@ export function LoginPage() {
       navigate('/', { replace: true })
     } catch (error) {
       setErrors(fieldErrors(error))
-      setFormError(errorMessage(error))
+      setFormError(error)
     } finally {
       setBusy(false)
     }
   }
 
-  const ssoMessage = ssoError
-    ? t(`login.errors.${ssoError}` as 'login.errors.sign_in_failed') || t('login.errors.sign_in_failed')
-    : null
+  // Localise at render time so the message follows the active language.
+  const errorText = formError ? localizeError(formError, t, locale) : null
+
+  // The provider redirects back with a code in the URL. An unrecognised code
+  // must fall back to a real sentence, not render the raw key.
+  const ssoKey = ssoError ? `login.errors.${ssoError}` : null
+  const ssoMessage =
+    ssoKey && translationExists(locale, ssoKey)
+      ? t(ssoKey as 'login.errors.sign_in_failed')
+      : ssoError
+        ? t('login.errors.sign_in_failed')
+        : null
 
   return (
     <div className="login">
@@ -160,7 +173,7 @@ export function LoginPage() {
           </header>
 
           <div ref={formErrorRef} tabIndex={-1} className="login__error-slot">
-            {formError ? <Alert tone="error">{formError}</Alert> : null}
+            {errorText ? <Alert tone="error">{errorText}</Alert> : null}
             {!mfaTicket && ssoMessage ? <Alert tone="error">{ssoMessage}</Alert> : null}
           </div>
 

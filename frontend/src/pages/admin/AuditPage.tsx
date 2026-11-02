@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { auditApi, diagnosticsApi } from '../../api/admin'
-import type { LogLine } from '../../api/admin'
+import type { AuditChainVerification, LogLine } from '../../api/admin'
 import { errorMessage } from '../../api/client'
 import { ResourceList, type Column } from '../../components/ResourceList'
 import { Alert, Badge, Card, PageHeader, Timestamp } from '../../components/ui'
@@ -85,21 +85,75 @@ export function AuditPage() {
       </div>
 
       {tab === 'audit' ? (
-        <ResourceList
-          title={t('auditLog.auditTitle')}
-          queryKey={['audit']}
-          fetchPage={(params) => auditApi.list(params)}
-          columns={buildAuditColumns(t)}
-          rowKey={(row) => row.id}
-          emptyTitle={t('auditLog.emptyAuditTitle')}
-          emptyText={t('auditLog.emptyAuditText')}
-          searchable
-          searchPlaceholder={t('auditLog.searchAudit')}
-        />
+        <>
+          <IntegrityCheck />
+          <ResourceList
+            title={t('auditLog.auditTitle')}
+            queryKey={['audit']}
+            fetchPage={(params) => auditApi.list(params)}
+            columns={buildAuditColumns(t)}
+            rowKey={(row) => row.id}
+            emptyTitle={t('auditLog.emptyAuditTitle')}
+            emptyText={t('auditLog.emptyAuditText')}
+            searchable
+            searchPlaceholder={t('auditLog.searchAudit')}
+          />
+        </>
       ) : (
         <ApplicationLog />
       )}
     </>
+  )
+}
+
+/**
+ * The tamper-evidence surface for the audit trail.
+ *
+ * The trail is a hash chain: each entry carries the hash of the one before it, so
+ * removing or editing an entry breaks every link that follows. Verification is on
+ * demand rather than on load, because it walks the whole chain and an operator
+ * runs it when they want to make a claim about integrity, not on every visit.
+ */
+function IntegrityCheck() {
+  const t = useT()
+  const [result, setResult] = useState<AuditChainVerification | null>(null)
+  const check = useMutation({
+    mutationFn: () => auditApi.verify(),
+    onSuccess: (data) => setResult(data),
+  })
+
+  return (
+    <Card
+      title={t('auditLog.integrityTitle')}
+      actions={
+        <button
+          type="button"
+          className="btn btn--secondary btn--sm"
+          onClick={() => check.mutate()}
+          disabled={check.isPending}
+        >
+          {check.isPending ? t('auditLog.verifying') : t('auditLog.verifyIntegrity')}
+        </button>
+      }
+    >
+      <p className="text-sm text-subtle" style={{ marginTop: 0 }}>
+        {t('auditLog.integrityIntro')}
+      </p>
+
+      {check.isError ? <Alert tone="error">{errorMessage(check.error)}</Alert> : null}
+
+      {result ? (
+        <Alert tone={result.intact ? 'success' : 'error'}>
+          {result.intact
+            ? t('auditLog.integrityIntact', { count: result.checked }) +
+              (result.unchained > 0 ? t('auditLog.integrityUnchained', { count: result.unchained }) : '')
+            : t('auditLog.integrityBroken', {
+                id: result.first_break_id ?? 0,
+                reason: result.reason ?? '',
+              })}
+        </Alert>
+      ) : null}
+    </Card>
   )
 }
 

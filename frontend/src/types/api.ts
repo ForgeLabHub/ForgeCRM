@@ -151,6 +151,13 @@ export interface Lead {
   archived_at?: string
 }
 
+/** The records converting a lead produces. The server returns all three in one response. */
+export interface LeadConversionResult {
+  lead: Lead
+  account: Account
+  contact: Contact
+}
+
 export interface Pipeline {
   id: string
   organization_id: string

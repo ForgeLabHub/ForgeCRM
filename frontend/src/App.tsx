@@ -9,6 +9,7 @@ const AccountsPage = lazy(() => import('./pages/AccountsPage').then((m) => ({ de
 const ContactDetailPage = lazy(() => import('./pages/ContactsPage').then((m) => ({ default: m.ContactDetailPage })))
 const ContactsPage = lazy(() => import('./pages/ContactsPage').then((m) => ({ default: m.ContactsPage })))
 const LeadsPage = lazy(() => import('./pages/LeadsPage').then((m) => ({ default: m.LeadsPage })))
+const LeadDetailPage = lazy(() => import('./pages/LeadsPage').then((m) => ({ default: m.LeadDetailPage })))
 const DealDetailPage = lazy(() => import('./pages/DealsPage').then((m) => ({ default: m.DealDetailPage })))
 const DealsPage = lazy(() => import('./pages/DealsPage').then((m) => ({ default: m.DealsPage })))
 const TasksPage = lazy(() => import('./pages/TasksPage').then((m) => ({ default: m.TasksPage })))
@@ -117,6 +118,14 @@ export function App() {
           element={
             <RequirePermission permission="leads.read">
               <LeadsPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="leads/:id"
+          element={
+            <RequirePermission permission="leads.read">
+              <LeadDetailPage />
             </RequirePermission>
           }
         />

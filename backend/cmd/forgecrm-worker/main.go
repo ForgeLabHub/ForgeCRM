@@ -32,6 +32,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/integrations"
 	"github.com/geff1778/forgecrm/internal/jobs"
 	"github.com/geff1778/forgecrm/internal/logging"
+	"github.com/geff1778/forgecrm/internal/migrate"
 	"github.com/geff1778/forgecrm/internal/notify"
 	"github.com/geff1778/forgecrm/internal/outbox"
 	"github.com/geff1778/forgecrm/internal/rbac"
@@ -115,9 +116,15 @@ func run() error {
 	}
 	defer db.Close()
 
-	if err := waitForSchema(ctx, db, log); err != nil {
+	// The worker does not run migrations; the API owns them. It must not start
+	// consuming jobs before the schema they write to is ready, and it must not wait
+	// forever either, so the wait is bounded and the reason is logged on exit.
+	schemaCtx, cancelSchema := context.WithTimeout(ctx, cfg.WorkerSchemaWait)
+	defer cancelSchema()
+	if err := migrate.WaitForSchema(schemaCtx, db.Pool(), cfg.WorkerPollEvery, log); err != nil {
 		return fmt.Errorf("schema readiness check: %w", err)
 	}
+	log.Info("database schema readiness check passed")
 
 	keyring, err := secrets.NewKeyring(cfg.SecretKey)
 	if err != nil {
@@ -916,29 +923,5 @@ func min(a, b int) int {
 var _ = ai.ErrDisabled
 var _ = strings.TrimSpace
 
-// waitForSchema verifies that PostgreSQL is reachable and that migrations have been applied.
-// Worker processes do not run migrations themselves; they wait for the API process to do so.
-func waitForSchema(ctx context.Context, db *database.DB, log *slog.Logger) error {
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		var count int
-		err := db.Pool().QueryRow(ctx, "SELECT count(*) FROM schema_migrations WHERE dirty = false").Scan(&count)
-		if err == nil && count > 0 {
-			log.Info("database schema readiness check passed", "migrations_count", count)
-			return nil
-		}
-		if err != nil {
-			log.Info("waiting for database schema to be ready", "error", err)
-		} else {
-			log.Info("waiting for migrations to be applied by API service")
-		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-		}
-	}
-}
+// waitForSchema was replaced by migrate.WaitForSchema so the worker and the API
+// share one definition of a ready schema; see that function for the contract.
