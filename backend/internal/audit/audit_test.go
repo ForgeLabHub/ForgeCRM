@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"strings"
@@ -144,5 +145,52 @@ func TestUUIDPtrAndStrPtr(t *testing.T) {
 	}
 	if p := StrPtr("x"); p == nil || *p != "x" {
 		t.Error("StrPtr did not round-trip")
+	}
+}
+
+// The hash is the whole tamper-evidence property, so its shape is pinned here.
+func TestHashEntryIsDeterministicAndFieldSensitive(t *testing.T) {
+	base := Entry{ActorType: "user", Action: "contacts.created", EntityType: "contact", EntityID: "abc"}
+
+	if !bytes.Equal(hashEntry(nil, base, nil, nil, []byte("{}")), hashEntry(nil, base, nil, nil, []byte("{}"))) {
+		t.Fatal("hashEntry is not deterministic for identical input")
+	}
+
+	// A different previous hash must change the link, which is what makes removing
+	// an entry detectable.
+	if bytes.Equal(hashEntry(nil, base, nil, nil, []byte("{}")), hashEntry([]byte("prev"), base, nil, nil, []byte("{}"))) {
+		t.Error("changing prev_hash did not change the entry hash")
+	}
+
+	// Moving a value from one field to another must not preserve the hash. Without
+	// the length prefix, Action="ab"+EntityType="c" would collide with
+	// Action="a"+EntityType="bc".
+	a := Entry{ActorType: "user", Action: "ab", EntityType: "c"}
+	b := Entry{ActorType: "user", Action: "a", EntityType: "bc"}
+	if bytes.Equal(hashEntry(nil, a, nil, nil, nil), hashEntry(nil, b, nil, nil, nil)) {
+		t.Error("field boundaries are not hashed: two different entries collided")
+	}
+
+	// The actor id is covered, so editing who acted is detected.
+	u1, u2 := uuid.New(), uuid.New()
+	e1 := Entry{ActorType: "user", Action: "x", EntityType: "y", ActorUserID: &u1}
+	e2 := Entry{ActorType: "user", Action: "x", EntityType: "y", ActorUserID: &u2}
+	if bytes.Equal(hashEntry(nil, e1, nil, nil, nil), hashEntry(nil, e2, nil, nil, nil)) {
+		t.Error("the actor id is not part of the hash")
+	}
+}
+
+// orgLockKey must be stable for one organization, so two processes serialize on
+// the same key, and must differ across organizations.
+func TestOrgLockKeyIsStable(t *testing.T) {
+	id := uuid.New()
+	if orgLockKey(id) != orgLockKey(id) {
+		t.Fatal("orgLockKey is not stable for one organization")
+	}
+	other := uuid.New()
+	if orgLockKey(id) == orgLockKey(other) {
+		// Not a hard failure: collisions only serialize. But for two random UUIDs it
+		// is a 1-in-2^32 event, so a repeat here means the derivation is wrong.
+		t.Errorf("orgLockKey collided for two random organizations")
 	}
 }
