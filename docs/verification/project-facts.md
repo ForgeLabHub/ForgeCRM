@@ -39,7 +39,7 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 код изменился, а документ не перегенерировали.
 
 <!-- FACTS:AUTO BEGIN — генерируется backend/cmd/facts-gen, не редактировать вручную -->
-<!-- измерено на HEAD `3ec6459cb9fe6d25669a7a4f610692a88c6ade6c` -->
+<!-- измерено на HEAD `(SHA недоступен)` -->
 
 ## Backend / Architecture
 
@@ -48,8 +48,8 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 | Пакеты Go (весь backend) | **53** | каталоги с хотя бы одним .go-файлом под backend/ |
 | Пакеты Go (backend/internal) | **48** | то же, ограничено backend/internal/** |
 | Go-файлы без тестов | **144** | *.go, кроме *_test.go |
-| Go тестовых файлов | **127** | *_test.go |
-| Тестовые функции Go | **837** | верхнеуровневые func TestXxx(*testing.T), TestMain исключён |
+| Go тестовых файлов | **128** | *_test.go |
+| Тестовые функции Go | **846** | верхнеуровневые func TestXxx(*testing.T), TestMain исключён |
 | Бенчмарки Go | **0** | func BenchmarkXxx |
 | Fuzz-тесты Go | **0** | func FuzzXxx |
 | Example-тесты Go | **0** | func ExampleXxx |
@@ -58,8 +58,8 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 
 | Метрика | Значение | Определение |
 |---|---|---|
-| Миграций up | **28** | *.up.sql в backend/internal/migrations |
-| Миграций down | **28** | *.down.sql там же |
+| Миграций up | **29** | *.up.sql в backend/internal/migrations |
+| Миграций down | **29** | *.down.sql там же |
 | Таблиц БД | **76** | уникальные имена CREATE TABLE во всех up-миграциях |
 
 ## Security (RBAC)
@@ -80,8 +80,8 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 
 | Метрика | Значение | Определение |
 |---|---|---|
-| OpenAPI paths | **179** | ключи objects.paths в docs/api/openapi.json |
-| OpenAPI operations | **233** | методы get/post/put/patch/delete внутри paths |
+| OpenAPI paths | **180** | ключи objects.paths в docs/api/openapi.json |
+| OpenAPI operations | **234** | методы get/post/put/patch/delete внутри paths |
 
 openapi.json генерируется из живого роутера (`cmd/openapi-gen`), поэтому
 счётчик отражает код, а CI-гейт `openapi-check` не даёт документу устареть.
@@ -90,11 +90,11 @@ openapi.json генерируется из живого роутера (`cmd/ope
 
 | Метрика | Значение | Определение |
 |---|---|---|
-| Файлы src (.ts/.tsx) | **116** | frontend/src/**, включая тестовые |
-| Тестовые файлы src | **33** | *.test.ts(x)/.spec.ts(x) в frontend/src |
-| Объявления it()/test() в src | **214** | запускаемые кейсы vitest; test.describe вычитается |
+| Файлы src (.ts/.tsx) | **117** | frontend/src/**, включая тестовые |
+| Тестовые файлы src | **34** | *.test.ts(x)/.spec.ts(x) в frontend/src |
+| Объявления it()/test() в src | **217** | запускаемые кейсы vitest; test.describe вычитается |
 | Файлы страниц | **38** | компоненты в frontend/src/pages (без admin/, без тестов) |
-| Тесты страниц | **16** | *.test.tsx рядом со страницами |
+| Тесты страниц | **17** | *.test.tsx рядом со страницами |
 | Маршрутов <Route path> | **45** | объявления в frontend/src/App.tsx (регистр маршрутизации SPA) |
 | Уникальных путей маршрутов | **43** | различающиеся path по всем <Routes>-деревьям App.tsx; повторения внутри одного дерева запрещены (гейт route_paths_unique) |
 | E2E спецификации | **2** | *.spec.ts в frontend/e2e |
