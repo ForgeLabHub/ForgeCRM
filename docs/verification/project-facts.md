@@ -39,7 +39,7 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 код изменился, а документ не перегенерировали.
 
 <!-- FACTS:AUTO BEGIN — генерируется backend/cmd/facts-gen, не редактировать вручную -->
-<!-- измерено на HEAD `a7688eed5051297c35b2efadf5b8e7f3c894cdf0` -->
+<!-- измерено на HEAD `d86e1a85d51d177e8c09ce7760b01f2ea7124732` -->
 
 ## Backend / Architecture
 
@@ -90,11 +90,11 @@ openapi.json генерируется из живого роутера (`cmd/ope
 
 | Метрика | Значение | Определение |
 |---|---|---|
-| Файлы src (.ts/.tsx) | **118** | frontend/src/**, включая тестовые |
-| Тестовые файлы src | **34** | *.test.ts(x)/.spec.ts(x) в frontend/src |
-| Объявления it()/test() в src | **216** | запускаемые кейсы vitest; test.describe вычитается |
+| Файлы src (.ts/.tsx) | **120** | frontend/src/**, включая тестовые |
+| Тестовые файлы src | **36** | *.test.ts(x)/.spec.ts(x) в frontend/src |
+| Объявления it()/test() в src | **226** | запускаемые кейсы vitest; test.describe вычитается |
 | Файлы страниц | **38** | компоненты в frontend/src/pages (без admin/, без тестов) |
-| Тесты страниц | **16** | *.test.tsx рядом со страницами |
+| Тесты страниц | **17** | *.test.tsx рядом со страницами |
 | Маршрутов <Route path> | **45** | объявления в frontend/src/App.tsx (регистр маршрутизации SPA) |
 | Уникальных путей маршрутов | **43** | различающиеся path по всем <Routes>-деревьям App.tsx; повторения внутри одного дерева запрещены (гейт route_paths_unique) |
 | E2E спецификации | **3** | *.spec.ts в frontend/e2e |
