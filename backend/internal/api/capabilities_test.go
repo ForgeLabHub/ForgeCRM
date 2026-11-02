@@ -19,9 +19,10 @@ import (
 // TestCapabilitiesDoesNotOverstateOIDC pins the honesty of the capability report.
 //
 // The field was once called "oidc" and reported the presence of OIDC settings.
-// A client reading `oidc: true` concludes SSO is available; the authorisation-code
-// flow is not implemented, so it is not. The field is now "oidc_configured", and
-// this test fails if it is renamed back or if the misleading name reappears.
+// A client reading `oidc: true` concludes SSO is available; it is not, because a
+// provider must also be configured and enabled. The field is now
+// "oidc_configured", and this test fails if it is renamed back or if the
+// misleading name reappears.
 func TestCapabilitiesDoesNotOverstateOIDC(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.OIDC.Enabled = true
@@ -48,7 +49,7 @@ func TestCapabilitiesDoesNotOverstateOIDC(t *testing.T) {
 
 	if _, ok := body["oidc"]; ok {
 		t.Error(`the response contains "oidc", which reads as "SSO is available"; ` +
-			`the sign-in flow is not implemented, so the field must be named "oidc_configured"`)
+			`settings alone do not make sign-in possible, so the field must be named "oidc_configured"`)
 	}
 	got, ok := body["oidc_configured"]
 	if !ok {
