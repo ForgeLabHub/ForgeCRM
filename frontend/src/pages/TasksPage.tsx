@@ -507,6 +507,7 @@ export function TaskDetailPage() {
     <>
       <PageHeader
         title={data.title}
+        breadcrumb={[{ label: t('nav.tasks'), to: '/tasks' }]}
         meta={
           <>
             <StatusBadge status={data.status} /> · {t('common.updated')}{' '}
@@ -515,9 +516,6 @@ export function TaskDetailPage() {
         }
         actions={
           <>
-            <Link to="/tasks" className="btn btn--ghost btn--sm">
-              {t('common.back')}
-            </Link>
             {can('tasks.update') && data.status !== 'completed' ? (
               <button
                 type="button"

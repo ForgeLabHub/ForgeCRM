@@ -1,6 +1,7 @@
 /** Small presentational primitives shared by every page. */
 import { useEffect, useId, useRef } from 'react'
 import type { ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { useLocale, useT, type TranslationKey } from '../i18n'
 import { IconClose } from './icons'
 
@@ -75,14 +76,18 @@ export function PageHeader({
   title,
   meta,
   actions,
+  breadcrumb,
 }: {
   title: string
   meta?: ReactNode
   actions?: ReactNode
+  /** A trail back to the list this record was opened from. */
+  breadcrumb?: { label: string; to?: string }[]
 }) {
   return (
     <header className="page-header">
-      <div>
+      <div className="page-header__lead">
+        {breadcrumb && breadcrumb.length > 0 ? <Breadcrumb items={breadcrumb} /> : null}
         <h1>{title}</h1>
         {meta ? <div className="page-header__meta">{meta}</div> : null}
       </div>
@@ -130,6 +135,32 @@ export function Stat({
       <div className="stat__value">{value}</div>
       {hint ? <div className="stat__hint">{hint}</div> : null}
     </div>
+  )
+}
+
+/** A trail back to the list a detail view was opened from. */
+export function Breadcrumb({ items }: { items: { label: string; to?: string }[] }) {
+  return (
+    <nav className="breadcrumb" aria-label="Breadcrumb">
+      {items.map((item, index) => (
+        <span key={`${item.label}-${index}`} style={{ display: 'contents' }}>
+          {index > 0 ? (
+            <span className="breadcrumb__sep" aria-hidden="true">
+              /
+            </span>
+          ) : null}
+          {item.to ? (
+            <Link to={item.to} className="breadcrumb__link">
+              {item.label}
+            </Link>
+          ) : (
+            <span className="breadcrumb__current" aria-current="page">
+              {item.label}
+            </span>
+          )}
+        </span>
+      ))}
+    </nav>
   )
 }
 

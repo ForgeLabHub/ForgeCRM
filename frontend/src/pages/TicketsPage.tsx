@@ -391,6 +391,7 @@ export function TicketDetailPage() {
     <>
       <PageHeader
         title={data.subject}
+        breadcrumb={[{ label: t('nav.support'), to: '/tickets' }]}
         meta={
           <>
             <StatusBadge status={data.status} /> · {t('common.updated')}{' '}
@@ -399,9 +400,6 @@ export function TicketDetailPage() {
         }
         actions={
           <>
-            <Link to="/tickets" className="btn btn--ghost btn--sm">
-              {t('common.back')}
-            </Link>
             {can('tickets.update') && !closed ? (
               <button
                 type="button"

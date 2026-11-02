@@ -661,6 +661,7 @@ export function DealDetailPage() {
     <>
       <PageHeader
         title={data.title}
+        breadcrumb={[{ label: t('nav.deals'), to: '/deals' }]}
         meta={
           <>
             {formatMoney(data.amount, data.currency)} · {t('common.updated')}{' '}
@@ -669,9 +670,6 @@ export function DealDetailPage() {
         }
         actions={
           <>
-            <Link to="/deals" className="btn btn--ghost btn--sm">
-              {t('common.back')}
-            </Link>
             {can('deals.update') ? (
               <button type="button" className="btn btn--secondary btn--sm" onClick={() => setEditing(true)}>
                 {t('common.edit')}

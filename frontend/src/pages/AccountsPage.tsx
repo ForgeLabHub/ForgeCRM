@@ -436,6 +436,7 @@ export function AccountDetailPage() {
     <>
       <PageHeader
         title={data.name}
+        breadcrumb={[{ label: t('nav.accounts'), to: '/accounts' }]}
         meta={
           <>
             {data.industry ? <>{data.industry} · </> : null}
@@ -444,9 +445,6 @@ export function AccountDetailPage() {
         }
         actions={
           <>
-            <Link to="/accounts" className="btn btn--ghost btn--sm">
-              {t('common.back')}
-            </Link>
             {can('accounts.update') ? (
               <button type="button" className="btn btn--secondary btn--sm" onClick={() => setEditing(true)}>
                 {t('accounts.edit')}

@@ -381,6 +381,7 @@ export function ContactDetailPage() {
     <>
       <PageHeader
         title={fullName(data, t('contacts.unnamed'))}
+        breadcrumb={[{ label: t('nav.contacts'), to: '/contacts' }]}
         meta={
           <>
             {data.job_title ? <>{data.job_title} · </> : null}
@@ -389,9 +390,6 @@ export function ContactDetailPage() {
         }
         actions={
           <>
-            <Link to="/contacts" className="btn btn--ghost btn--sm">
-              {t('common.back')}
-            </Link>
             {can('contacts.update') ? (
               <button type="button" className="btn btn--secondary btn--sm" onClick={() => setEditing(true)}>
                 {t('common.edit')}
