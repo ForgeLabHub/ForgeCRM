@@ -1,0 +1,83 @@
+{
+  "//": "Accepted gosec findings. Each was read and judged not exploitable in this codebase; scripts/gosec-gate.py fails the security job on any finding NOT listed here. Drop an entry when the finding stops being reported.",
+  "accepted": [
+    {
+      "fingerprint": "G115|internal/audit/audit.go|return int32(binary.BigEndian.Uint32(sum[:4]))",
+      "rule_id": "G115",
+      "file": "internal/audit/audit.go",
+      "reason": "int32(binary.BigEndian.Uint32(sum[:4])) folds a SHA-256 digest into a 32-bit key; the digest is fixed-width, so the conversion is lossy by design and cannot overflow a bound that matters."
+    },
+    {
+      "fingerprint": "G115|internal/config/config.go|DatabaseMaxConns: int32(envIntOr(\"FORGECRM_DATABASE_MAX_CONNS\", int(database.DefaultMaxConns))),",
+      "rule_id": "G115",
+      "file": "internal/config/config.go",
+      "reason": "int32(envIntOr(...)) for FORGECRM_DATABASE_MAX_CONNS. A value beyond int32 is a misconfiguration, and the pool fails to open rather than silently truncating."
+    },
+    {
+      "fingerprint": "G115|internal/importx/safe/safe.go|if int64(f.UncompressedSize64) > e.limits.MaxEntryBytes {",
+      "rule_id": "G115",
+      "file": "internal/importx/safe/safe.go",
+      "reason": "int64(f.UncompressedSize64) of a zip entry header is compared against a configured byte limit; a header claiming more than int64 max is rejected by that comparison, not truncated into an acceptance."
+    },
+    {
+      "fingerprint": "G115|internal/secrets/secrets.go|p.SaltLength = uint32(len(salt))",
+      "rule_id": "G115",
+      "file": "internal/secrets/secrets.go",
+      "reason": "uint32(len(...)) of in-process byte slices bounded by the KDF parameters this code builds itself; they cannot approach 2^32."
+    },
+    {
+      "fingerprint": "G115|internal/secrets/secrets.go|p.KeyLength = uint32(len(key))",
+      "rule_id": "G115",
+      "file": "internal/secrets/secrets.go",
+      "reason": "uint32(len(...)) of in-process byte slices bounded by the KDF parameters this code builds itself; they cannot approach 2^32."
+    },
+    {
+      "fingerprint": "G118|internal/api/admin_handlers.go|go s.sendResetEmail(userID, link)",
+      "rule_id": "G118",
+      "file": "internal/api/admin_handlers.go",
+      "reason": "Same intentional detach as auth_handlers.go: the invite response returns immediately and the email send carries its own timeout."
+    },
+    {
+      "fingerprint": "G118|internal/api/auth_handlers.go|go s.sendResetEmail(*userID, link)",
+      "rule_id": "G118",
+      "file": "internal/api/auth_handlers.go",
+      "reason": "The reset email is sent on a detached goroutine on purpose: the HTTP response must return once the token is minted, and the send must not be cancelled when the request context is. It carries its own timeout."
+    },
+    {
+      "fingerprint": "G122|internal/constructor/generate.go|raw, err := os.ReadFile(p)",
+      "rule_id": "G122",
+      "file": "internal/constructor/generate.go",
+      "reason": "Same tool: the walk reads files in the operator's own tree to check they no longer import the monolith. A symlink swap would have to be performed by the operator against themselves."
+    },
+    {
+      "fingerprint": "G703|cmd/facts-gen/main.go|if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {",
+      "rule_id": "G703",
+      "file": "cmd/facts-gen/main.go",
+      "reason": "facts-gen is a developer CLI run by hand with a path from its own flags; there is no untrusted caller."
+    },
+    {
+      "fingerprint": "G703|internal/api/server.go|if info, err := os.Stat(staticDir); err == nil && info.IsDir() {",
+      "rule_id": "G703",
+      "file": "internal/api/server.go",
+      "reason": "staticDir is a deployment constant (FORGECRM_STATIC_DIR or public/), not request input; the joined path is filepath.Clean-ed and checked to be a non-directory regular file before serving. The taint gosec follows reaches os.Stat/ServeFile, never an attacker-controlled write."
+    },
+    {
+      "fingerprint": "G703|internal/api/server.go|if finfo, err := os.Stat(fpath); err == nil && !finfo.IsDir() {",
+      "rule_id": "G703",
+      "file": "internal/api/server.go",
+      "reason": "staticDir is a deployment constant (FORGECRM_STATIC_DIR or public/), not request input; the joined path is filepath.Clean-ed and checked to be a non-directory regular file before serving. The taint gosec follows reaches os.Stat/ServeFile, never an attacker-controlled write."
+    },
+    {
+      "fingerprint": "G703|internal/api/server.go|http.ServeFile(w, req, indexPath)",
+      "rule_id": "G703",
+      "file": "internal/api/server.go",
+      "reason": "staticDir is a deployment constant (FORGECRM_STATIC_DIR or public/), not request input; the joined path is filepath.Clean-ed and checked to be a non-directory regular file before serving. The taint gosec follows reaches os.Stat/ServeFile, never an attacker-controlled write."
+    },
+    {
+      "fingerprint": "G703|internal/constructor/generate.go|if err := os.WriteFile(dst, body, 0o644); err != nil {",
+      "rule_id": "G703",
+      "file": "internal/constructor/generate.go",
+      "reason": "The constructor writes generated files under a destination root the operator passes on the command line; it is a scaffolding tool, not a request path."
+    }
+  ]
+}

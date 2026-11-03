@@ -1,0 +1,10 @@
+{
+  "//": "gosec configuration for the ForgeCRM backend. Consumed by the 'Static analysis (gosec)' step in .github/workflows/ci.yml, which runs: gosec -quiet -conf .gosec.json -severity high -confidence medium ./...",
+  "//exclusions": [
+    "G104 (unchecked errors) is excluded globally, and only G104. Its 32 sites are all best-effort cleanup on a path that is already returning an error: os.Remove / os.RemoveAll of a rejected temp file, Close() of a connection or result set that already failed, in-memory bufio.Writer.Flush over a strings.Builder (cannot fail), or best-effort audit records that must not fail the user's action. None can change a security outcome, and go vet / errcheck cover the meaningful ones. No other rule is excluded; every other finding is reported."
+  ],
+  "global": {
+    "exclude": "G104",
+    "nosec-require-justification": "enabled"
+  }
+}

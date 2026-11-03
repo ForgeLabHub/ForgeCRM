@@ -327,10 +327,30 @@ jobs:
       - name: Static analysis (gosec)
         working-directory: backend
         run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@latest
-          # G104 is unchecked errors, which go vet partly covers; the noise is
-          # not worth failing the build on.
-          gosec -exclude=G104 -fmt=text ./... || true
+          # Pinned, not @latest: the rule set and its severities move between
+          # releases, so @latest can pass today and fail tomorrow on unchanged code.
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.30.0
+          # Report HIGH severity, MEDIUM confidence. The raw exit code is ignored
+          # on purpose: this repository already carries findings, so a plain gate
+          # would either fail every build or have to hide behind `|| true`. The
+          # report is instead checked against the accepted baseline, so the step
+          # fails on a NEW finding — a gate that is red on a real regression and
+          # green on the tree it was written for.
+          #
+          # Exclusions live in .gosec.json, each with a written reason. Nothing is
+          # suppressed on the command line.
+          gosec -quiet -conf .gosec.json -severity high -confidence medium -fmt=json -out gosec-report.json ./... || true
+          python3 ../scripts/gosec-gate.py gosec-report.json .
+
+      # Keep the raw report when the gate fails, so the finding is readable from
+      # the run without re-running gosec locally.
+      - name: Upload the gosec report when the gate fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gosec-report
+          path: backend/gosec-report.json
+          if-no-files-found: ignore
 
   docker:
     name: Docker image builds
