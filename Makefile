@@ -26,6 +26,8 @@ BIN_DIR         := bin
 API_BIN         := $(BIN_DIR)/forgecrm-api
 WORKER_BIN      := $(BIN_DIR)/forgecrm-worker
 TEST_DATABASE_URL ?= postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_test?sslmode=disable
+# Бенчмарки засевают базу и сбрасывают схему, поэтому идут в отдельную БД.
+BENCH_DATABASE_URL ?= postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_bench?sslmode=disable
 BLITZ_VERIFY_IMAGE ?= forgecrm-blitz-verify:latest
 
 # Команды различаются для локальной машины и контейнера: docker compose run
@@ -34,7 +36,7 @@ COMPOSE_UP_ARGS ?=
 
 .PHONY: help doctor setup build build-api build-worker build-frontend \
         fmt fmt-check vet lint openapi openapi-check facts facts-check \
-        test test-unit test-frontend test-integration test-e2e test-visual \
+        test test-unit test-frontend test-integration test-bench test-e2e test-visual \
         migrate migrate-status compose-up compose-down compose-logs smoke-test \
         blitz-verify \
         backup restore docs-check docs-claims verify clean package
@@ -124,6 +126,14 @@ test-integration: ## Тесты против реального PostgreSQL (ну
 	# поэтому параллельный запуск пакетов ломает друг другу базу.
 	cd $(BACKEND_DIR) && FORGECRM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' \
 	  go test -tags=integration -count=1 -p 1 ./...
+
+test-bench: ## Перф-базовая линия (нужна отдельная черновая БД; см. docs/performance/baseline.md)
+	# Бенчмарки сбрасывают схему и засевают десятки тысяч строк, поэтому идут
+	# только против базы, чьё имя помечено как черновое (bench/test/scratch/ci).
+	# BENCH_DATABASE_URL по умолчанию указывает на forgecrm_bench, а не на
+	# forgecrm_test: тестовая база нужна другим целям, и засевать её не следует.
+	cd $(BACKEND_DIR) && FORGECRM_TEST_DATABASE_URL='$(BENCH_DATABASE_URL)' \
+	  go test -tags=integration -run '^$$' -bench . -benchmem ./internal/api/
 
 test-e2e: ## Playwright E2E (Chromium, реальный API и база)
 	cd $(FRONTEND_DIR) && npm run e2e

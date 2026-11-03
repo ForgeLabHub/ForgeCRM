@@ -28,6 +28,7 @@
 | Модель угроз, права, tenant isolation | `security/` |
 | Чем доказано, что это работает | `verification/matrix.md`, CI |
 | Сколько в проекте чего (проверяемые числа) | [verification/project-facts.md](verification/project-facts.md) |
+| Как быстро работает и как перемерить | [performance/baseline.md](performance/baseline.md) |
 | Что запланировано и что принято | `ROADMAP.md`, `ACCEPTANCE_CRITERIA.md`, `MASTER_PLAN.md` |
 | Какие модули извлекаемы и на каком основании | [MODULES.md](MODULES.md), [EXTRACT_READY.md](EXTRACT_READY.md), [EXTRACTION_TESTING.md](EXTRACTION_TESTING.md) |
 | Как собрать отдельный проект из выбранных модулей | [CONSTRUCTOR.md](CONSTRUCTOR.md) |

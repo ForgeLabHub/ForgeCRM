@@ -9,6 +9,7 @@
 | Architecture | `go test ./internal/archtest/` | Go | правила зависимостей не нарушены |
 | Contract/OpenAPI | `make openapi-check` | Go | спецификация не разошлась с роутером |
 | Integration | `make test-integration` | PostgreSQL | транзакции, RBAC, изоляция арендаторов |
+| Benchmarks (baseline) | `make test-bench` | PostgreSQL (черновая БД) | записанное измерение, не гейт; см. [performance/baseline.md](../performance/baseline.md) |
 | E2E | `make test-e2e` | PostgreSQL + Chromium | пользовательские сценарии в браузере |
 | Визуальная регрессия | `make test-visual` | PostgreSQL + Chromium (образ Playwright) | макет и токены не смещаются |
 | Документация | `make docs-check` | — | документы существуют, ссылки живые, спецификации модулей полные |
@@ -69,7 +70,8 @@ docker run --rm --network host -e FORGECRM_API_URL=http://127.0.0.1:8080 \
 
 ## Чего в наборе нет
 
-- Нагрузочных тестов (есть `scripts/multi-replica-verify.sh` для проверки
-  корректности нескольких реплик, но не производительности).
+- Нагрузочных тестов под конкуренцией (есть `scripts/multi-replica-verify.sh` для
+  проверки корректности нескольких реплик, но не производительности, и
+  `make test-bench` — однопоточная базовая линия, а не нагрузка).
 - Property-based тестов домена, кроме точечных случаев.
 - Мутационного тестирования.

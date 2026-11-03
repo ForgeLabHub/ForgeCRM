@@ -41,16 +41,27 @@ import (
 )
 
 // harness is a fully assembled API server backed by a migrated database.
+//
+// It is bound to testing.TB rather than *testing.T so the performance benchmarks
+// in bench_test.go can reuse this same assembly — the same router, middleware,
+// service graph and, above all, the same api.Deps literal that
+// TestTestHarnessWiresTheSameServicesAsProduction checks against production.
+// A second assembly written for the benchmarks would be a second hand-kept list,
+// which is exactly the drift that guard exists to prevent.
 type harness struct {
-	t      *testing.T
+	t      testing.TB
 	db     *database.DB
 	server http.Handler
 	cfg    *config.Config
+	// svcs is the service graph the server was built from. The HTTP surface is what
+	// most tests exercise, but a benchmark also times the work behind a route — the
+	// queue, the outbox, the import executor — and reaches those through this.
+	svcs *wiring.Services
 }
 
 // newHarness resets the test database, applies every migration, builds the real
 // service graph and returns a server ready to receive requests.
-func newHarness(t *testing.T) *harness {
+func newHarness(t testing.TB) *harness {
 	t.Helper()
 
 	url := os.Getenv("FORGECRM_TEST_DATABASE_URL")
@@ -67,7 +78,7 @@ func newHarness(t *testing.T) *harness {
 // It exists for tests that exercise a setting the default test config does not
 // carry — a metrics token, a trusted proxy list, a tighter rate limit — without
 // rebuilding the whole service graph by hand.
-func newHarnessWithConfig(t *testing.T, cfg *config.Config) *harness {
+func newHarnessWithConfig(t testing.TB, cfg *config.Config) *harness {
 	t.Helper()
 
 	url := os.Getenv("FORGECRM_TEST_DATABASE_URL")
@@ -83,7 +94,7 @@ func newHarnessWithConfig(t *testing.T, cfg *config.Config) *harness {
 // It is separate from newHarness because a test that builds more than one server
 // over one database — the cross-replica tests — must reset exactly once, before
 // the first server is built.
-func resetSchema(t *testing.T, url string) {
+func resetSchema(t testing.TB, url string) {
 	t.Helper()
 
 	ctx := context.Background()
@@ -108,7 +119,7 @@ func resetSchema(t *testing.T, url string) {
 // Each call opens its own connection pool, which is what lets the cross-replica
 // tests model two processes: nothing but PostgreSQL and the injected store is
 // shared between them.
-func newHarnessWithStore(t *testing.T, cfg *config.Config, store ratelimit.Store, url string) *harness {
+func newHarnessWithStore(t testing.TB, cfg *config.Config, store ratelimit.Store, url string) *harness {
 	t.Helper()
 
 	ctx := context.Background()
@@ -166,10 +177,10 @@ func newHarnessWithStore(t *testing.T, cfg *config.Config, store ratelimit.Store
 		t.Fatalf("build server: %v", err)
 	}
 
-	return &harness{t: t, db: db, server: srv.Handler(), cfg: cfg}
+	return &harness{t: t, db: db, server: srv.Handler(), cfg: cfg, svcs: svcs}
 }
 
-func testConfig(t *testing.T) *config.Config {
+func testConfig(t testing.TB) *config.Config {
 	t.Helper()
 	dir := t.TempDir()
 	return &config.Config{

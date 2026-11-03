@@ -39,7 +39,7 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 код изменился, а документ не перегенерировали.
 
 <!-- FACTS:AUTO BEGIN — генерируется backend/cmd/facts-gen, не редактировать вручную -->
-<!-- измерено на HEAD `ed0b5d606020a487acf158b24818b1c67d2f0cfa` -->
+<!-- измерено на HEAD `abc57d2daf37cf439f4e7f411d76310d4eca6173` -->
 
 ## Backend / Architecture
 
@@ -48,9 +48,9 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 | Пакеты Go (весь backend) | **53** | каталоги с хотя бы одним .go-файлом под backend/ |
 | Пакеты Go (backend/internal) | **48** | то же, ограничено backend/internal/** |
 | Go-файлы без тестов | **145** | *.go, кроме *_test.go |
-| Go тестовых файлов | **132** | *_test.go |
+| Go тестовых файлов | **133** | *_test.go |
 | Тестовые функции Go | **864** | верхнеуровневые func TestXxx(*testing.T), TestMain исключён |
-| Бенчмарки Go | **0** | func BenchmarkXxx |
+| Бенчмарки Go | **3** | func BenchmarkXxx |
 | Fuzz-тесты Go | **0** | func FuzzXxx |
 | Example-тесты Go | **0** | func ExampleXxx |
 
