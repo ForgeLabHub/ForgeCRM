@@ -39,7 +39,7 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 код изменился, а документ не перегенерировали.
 
 <!-- FACTS:AUTO BEGIN — генерируется backend/cmd/facts-gen, не редактировать вручную -->
-<!-- измерено на HEAD `e49eee0886c9b2221b8988b41708f34cf6f94c2d` -->
+<!-- измерено на HEAD `84912bd655caebfe2bd987fbfb59af23779caa22` -->
 
 ## Backend / Architecture
 
@@ -97,17 +97,17 @@ openapi.json генерируется из живого роутера (`cmd/ope
 | Тесты страниц | **19** | *.test.tsx рядом со страницами |
 | Маршрутов <Route path> | **46** | объявления в frontend/src/App.tsx (регистр маршрутизации SPA) |
 | Уникальных путей маршрутов | **44** | различающиеся path по всем <Routes>-деревьям App.tsx; повторения внутри одного дерева запрещены (гейт route_paths_unique) |
-| E2E спецификации | **3** | *.spec.ts в frontend/e2e |
-| E2E тесты | **59** | объявления test() Playwright; test.describe вычитается |
+| E2E спецификации | **4** | *.spec.ts в frontend/e2e |
+| E2E тесты | **67** | объявления test() Playwright; test.describe вычитается |
 
 ## CI/CD
 
 | Метрика | Значение | Определение |
 |---|---|---|
 | Workflow-файлов | **2** | *.yml/*.yaml в .github/workflows |
-| Jobs суммарно | **14** | ключи двухпробельного отступа внутри секции jobs: |
+| Jobs суммарно | **15** | ключи двухпробельного отступа внутри секции jobs: |
 
-Список заданий: ci.yml/backend, ci.yml/blitz-cloud, ci.yml/constructor, ci.yml/docker, ci.yml/docs, ci.yml/e2e, ci.yml/extraction, ci.yml/frontend, ci.yml/security, portability.yml/backup-restore, portability.yml/compose-smoke, portability.yml/config-without-secrets, portability.yml/docs, portability.yml/upgrade-path.
+Список заданий: ci.yml/backend, ci.yml/blitz-cloud, ci.yml/constructor, ci.yml/docker, ci.yml/docs, ci.yml/e2e, ci.yml/extraction, ci.yml/frontend, ci.yml/security, ci.yml/visual, portability.yml/backup-restore, portability.yml/compose-smoke, portability.yml/config-without-secrets, portability.yml/docs, portability.yml/upgrade-path.
 
 ## Consistency flags
 
