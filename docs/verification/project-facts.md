@@ -39,7 +39,7 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 код изменился, а документ не перегенерировали.
 
 <!-- FACTS:AUTO BEGIN — генерируется backend/cmd/facts-gen, не редактировать вручную -->
-<!-- измерено на HEAD `4178cacc8ae7a9549e171f4dd93acd242ec52e32` -->
+<!-- измерено на HEAD `ed0b5d606020a487acf158b24818b1c67d2f0cfa` -->
 
 ## Backend / Architecture
 
@@ -47,9 +47,9 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 |---|---|---|
 | Пакеты Go (весь backend) | **53** | каталоги с хотя бы одним .go-файлом под backend/ |
 | Пакеты Go (backend/internal) | **48** | то же, ограничено backend/internal/** |
-| Go-файлы без тестов | **144** | *.go, кроме *_test.go |
-| Go тестовых файлов | **131** | *_test.go |
-| Тестовые функции Go | **861** | верхнеуровневые func TestXxx(*testing.T), TestMain исключён |
+| Go-файлы без тестов | **145** | *.go, кроме *_test.go |
+| Go тестовых файлов | **132** | *_test.go |
+| Тестовые функции Go | **864** | верхнеуровневые func TestXxx(*testing.T), TestMain исключён |
 | Бенчмарки Go | **0** | func BenchmarkXxx |
 | Fuzz-тесты Go | **0** | func FuzzXxx |
 | Example-тесты Go | **0** | func ExampleXxx |
@@ -58,9 +58,9 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 
 | Метрика | Значение | Определение |
 |---|---|---|
-| Миграций up | **30** | *.up.sql в backend/internal/migrations |
-| Миграций down | **30** | *.down.sql там же |
-| Таблиц БД | **76** | уникальные имена CREATE TABLE во всех up-миграциях |
+| Миграций up | **31** | *.up.sql в backend/internal/migrations |
+| Миграций down | **31** | *.down.sql там же |
+| Таблиц БД | **77** | уникальные имена CREATE TABLE во всех up-миграциях |
 
 ## Security (RBAC)
 

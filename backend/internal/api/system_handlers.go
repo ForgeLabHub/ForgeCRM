@@ -8,6 +8,7 @@ import (
 
 	"github.com/geff1778/forgecrm/internal/audit"
 	"github.com/geff1778/forgecrm/internal/httpx"
+	"github.com/geff1778/forgecrm/internal/jobs"
 	"github.com/geff1778/forgecrm/internal/metrics"
 	"github.com/geff1778/forgecrm/internal/migratex"
 	"github.com/geff1778/forgecrm/internal/notify"
@@ -189,6 +190,12 @@ type metricsSnapshot struct {
 	// trail, so they survive a restart and are shared by every replica.
 	RetentionRunsTotal    int64
 	RetentionDeletedTotal int64
+	// WorkersAlive is a gauge read from the worker_heartbeats table: the number of
+	// worker processes that have beaten within the staleness window. It answers the
+	// question the API's readiness probe cannot — the worker is a separate service,
+	// so "is the worker up" has no other signal. Zero is a page: with no worker,
+	// nothing drains the queue.
+	WorkersAlive int64
 }
 
 // collectMetrics reads the snapshot.
@@ -236,6 +243,14 @@ func (s *Server) collectMetrics(ctx context.Context) (metricsSnapshot, error) {
 	_ = q.QueryRow(ctx,
 		`SELECT COALESCE(sum((metadata->>'deleted')::bigint), 0) FROM audit_log WHERE action = $1`,
 		string(audit.ActionRetentionSweep)).Scan(&snap.RetentionDeletedTotal)
+
+	// Best-effort like the counts above, and for the same reason: a metrics read
+	// must not fail because one of its optional sources is momentarily unavailable.
+	// A read error leaves the gauge at zero, which reads as "no worker" — the safe
+	// direction for an alert, because it errs toward paging rather than silence.
+	if n, err := jobs.AliveWorkers(ctx, q, jobs.HeartbeatWindow); err == nil {
+		snap.WorkersAlive = n
+	}
 
 	return snap, nil
 }
@@ -300,6 +315,7 @@ func (m metricsSnapshot) asJSON() map[string]any {
 		"webhook_deliveries_pending":             m.WebhookDeliveriesPending,
 		"retention_runs_total":                   m.RetentionRunsTotal,
 		"retention_deleted_total":                m.RetentionDeletedTotal,
+		"workers_alive":                          m.WorkersAlive,
 		"subsystems":                             m.Subsystems,
 	}
 }
@@ -326,6 +342,7 @@ func (m metricsSnapshot) asSamples() []metrics.Sample {
 		{Name: "webhook_deliveries_pending", Help: "Webhook deliveries still eligible for an attempt.", Kind: metrics.Gauge, Value: float64(m.WebhookDeliveriesPending)},
 		{Name: "retention_runs_total", Help: "Retention sweeps that removed rows, read from the audit trail.", Kind: metrics.Counter, Value: float64(m.RetentionRunsTotal)},
 		{Name: "retention_deleted_total", Help: "Rows removed by retention, read from the audit trail.", Kind: metrics.Counter, Value: float64(m.RetentionDeletedTotal)},
+		{Name: "workers_alive", Help: "Worker processes that have sent a heartbeat within the staleness window.", Kind: metrics.Gauge, Value: float64(m.WorkersAlive)},
 	}
 	for _, status := range sortedStatuses(m.JobsByStatus) {
 		samples = append(samples, metrics.Sample{

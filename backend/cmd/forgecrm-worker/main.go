@@ -284,6 +284,21 @@ func run() error {
 		runWorkflowSchedulerLoop(loopCtx, log, wfEngine, cfg.WorkerPollEvery)
 	}()
 
+	// Liveness heartbeat: the worker is a separate service with no health
+	// check of its own, so a worker that exited or deadlocked was invisible —
+	// the API's readiness probe does not cover it, and the only symptom was a
+	// queue that grew. This loop writes the timestamp the /metrics gauge counts.
+	loops.Add(1)
+	go func() {
+		defer loops.Done()
+		queue.RunBeats(loopCtx, jobs.Heartbeat{
+			WorkerID: workerID,
+			Role:     "worker",
+			Version:  buildVersion(),
+			Commit:   buildCommit(),
+		}, jobs.HeartbeatInterval)
+	}()
+
 	concurrency := cfg.WorkerConcurrency
 	if concurrency <= 0 {
 		concurrency = 1

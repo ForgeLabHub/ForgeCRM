@@ -50,6 +50,13 @@
 | 0022 | `sso_oidc` | SSO через OpenID Connect |
 | 0023 | `saved_views` | сохранённые представления |
 | 0024 | `transient_retention_indexes` | индексы ротации для временных строк |
+| 0025 | `mcp_credentials` | учётные данные MCP |
+| 0026 | `migration_reconciliation_retention_index` | индекс ротации для сверки переноса |
+| 0027 | `consent` | согласия на контакт |
+| 0028 | `tenant_configuration` | настройки организации и их ревизии |
+| 0029 | `audit_hash_chain` | цепочка хешей аудита |
+| 0030 | `perf_trgm_indexes` | триграммные индексы для поиска `ILIKE` |
+| 0031 | `worker_heartbeats` | живость воркера для метрики `workers_alive` |
 
 ## Осознанные ограничения
 
