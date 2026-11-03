@@ -121,7 +121,7 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 	where := `WHERE m.organization_id = $1`
 	if search != "" {
 		args = append(args, "%"+search+"%")
-		where += fmt.Sprintf(" AND (u.email ILIKE $%d OR u.display_name ILIKE $%d)", len(args), len(args))
+		where += fmt.Sprintf(" AND (u.email::text ILIKE $%d OR u.display_name ILIKE $%d)", len(args), len(args))
 	}
 	if status != "" {
 		args = append(args, status)

@@ -240,7 +240,7 @@ func (s *Service) ListAccounts(ctx context.Context, p *rbac.Principal, q ListQue
 	}
 	if q.Search != "" {
 		args = append(args, "%"+q.Search+"%")
-		where = append(where, fmt.Sprintf("(name ILIKE $%d OR COALESCE(email,'') ILIKE $%d)", len(args), len(args)))
+		where = append(where, fmt.Sprintf("(name ILIKE $%d OR COALESCE(email::text,'') ILIKE $%d)", len(args), len(args)))
 	}
 	if q.OwnerID != nil {
 		args = append(args, *q.OwnerID)

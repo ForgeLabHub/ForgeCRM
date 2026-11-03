@@ -105,7 +105,7 @@ func (s *Service) ListContacts(ctx context.Context, p *rbac.Principal, q ListQue
 	if q.Search != "" {
 		args = append(args, "%"+q.Search+"%")
 		where = append(where, fmt.Sprintf(
-			"(COALESCE(first_name,'') ILIKE $%d OR COALESCE(last_name,'') ILIKE $%d OR COALESCE(email,'') ILIKE $%d)",
+			"(COALESCE(first_name,'') ILIKE $%d OR COALESCE(last_name,'') ILIKE $%d OR COALESCE(email::text,'') ILIKE $%d)",
 			len(args), len(args), len(args)))
 	}
 	if q.AccountID != nil {
@@ -400,7 +400,7 @@ func (s *Service) ListLeads(ctx context.Context, p *rbac.Principal, q ListQuery)
 	if q.Search != "" {
 		args = append(args, "%"+q.Search+"%")
 		where = append(where, fmt.Sprintf(
-			"(title ILIKE $%d OR COALESCE(company,'') ILIKE $%d OR COALESCE(email,'') ILIKE $%d)",
+			"(title ILIKE $%d OR COALESCE(company,'') ILIKE $%d OR COALESCE(email::text,'') ILIKE $%d)",
 			len(args), len(args), len(args)))
 	}
 	if q.OwnerID != nil {
