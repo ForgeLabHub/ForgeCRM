@@ -35,9 +35,11 @@ test.describe('authentication', () => {
     const before = await page.request.get('/api/v1/accounts/')
     expect(before.status()).toBe(200)
 
-    // Sign out lives in the account menu, which opens from its trigger.
+    // Sign out lives in the account popover, which opens from its trigger. The
+    // popover is a group of controls, not an ARIA menu (it holds an identity
+    // block and a theme switch), so the action is an ordinary button.
     await page.getByRole('button', { name: 'My account' }).click()
-    await page.getByRole('menuitem', { name: 'Sign out' }).click()
+    await page.getByRole('button', { name: 'Sign out' }).click()
     await expect(page).toHaveURL(/\/login/)
 
     const after = await page.request.get('/api/v1/accounts/')
