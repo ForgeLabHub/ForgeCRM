@@ -408,17 +408,76 @@ func RecoverMiddleware(log *slog.Logger) func(http.Handler) http.Handler {
 // Security headers
 // ---------------------------------------------------------------------------
 
+// CSPReportOnly is the Content Security Policy, delivered in Report-Only mode.
+//
+// It is Report-Only, not enforcing, because the SPA has not yet been exercised in
+// a real browser against it: an enforcing policy that blocks the module bundle
+// turns the application into a blank page, and a violation report is recoverable
+// where a blank page is an outage. The policy is derived from the built bundle:
+// every asset is same-origin, there is no eval and no inline event handler, and
+// the only inline script is the pre-paint theme bootstrap in index.html, which is
+// pinned by hash (the hash must be recomputed if that script ever changes).
+//
+// style-src carries 'unsafe-inline' provisionally. The app sets 270 React
+// style={{...}} props; React writes those through CSSOM, which CSP does not
+// govern, so they may not require it at all — but that is a claim about browser
+// behaviour, and Report-Only is exactly where such a claim is tested. The
+// directive can be tightened once the reports show no style-src violation.
+//
+// report-uri and report-to both point at a sink that does not exist yet. A
+// browser that has nowhere to send a report still sends nothing harmful: the
+// report-only header cannot block a resource either way. Adding the endpoint is a
+// separate change; the policy is useful the moment the endpoint lands.
+const CSPReportOnly = "default-src 'self'; " +
+	"script-src 'self' 'sha256-vnv5pucUkxrn/0vQPxiGLGnKRB8NToF/9rfKNCzOx8E='; " +
+	"style-src 'self' 'unsafe-inline'; " +
+	"img-src 'self' data: blob:; " +
+	"font-src 'self'; " +
+	"connect-src 'self'; " +
+	"frame-src 'none'; " +
+	"frame-ancestors 'none'; " +
+	"base-uri 'none'; " +
+	"form-action 'self'; " +
+	"object-src 'none'; " +
+	"worker-src 'none'; " +
+	"manifest-src 'none'; " +
+	"report-uri /csp-report; " +
+	"report-to csp-endpoint"
+
+// CSPReportEndpoint is the Reporting API group named by CSPReportOnly.
+const CSPReportEndpoint = "csp-endpoint"
+
 // SecurityHeadersMiddleware sets conservative browser hardening headers.
-func SecurityHeadersMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		h := w.Header()
-		h.Set("X-Content-Type-Options", "nosniff")
-		h.Set("X-Frame-Options", "DENY")
-		h.Set("Referrer-Policy", "no-referrer")
-		h.Set("Cross-Origin-Opener-Policy", "same-origin")
-		h.Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
-		next.ServeHTTP(w, r)
-	})
+//
+// hstsMaxAge is the Strict-Transport-Security max-age. A value of zero means HSTS
+// is off and no header is emitted, which is the default: HSTS is only honoured
+// over HTTPS and is cached by the browser for its lifetime, so it is a deliberate
+// opt-in rather than something switched on for every deployment. The middleware
+// does not inspect the request scheme — behind a TLS-terminating proxy the
+// process sees plain HTTP and cannot tell — so the operator enables it once the
+// deployment is known to be HTTPS-only.
+func SecurityHeadersMiddleware(hstsMaxAge time.Duration) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			h := w.Header()
+			h.Set("X-Content-Type-Options", "nosniff")
+			h.Set("X-Frame-Options", "DENY")
+			// no-referrer is the strict choice: it sends no Referer at all, rather than
+			// trimming it to the origin. The app never relies on a Referer (the API uses
+			// an explicit Origin/CSRF check, not the Referer header), so the stricter
+			// value costs nothing and avoids leaking path and query in the header.
+			h.Set("Referrer-Policy", "no-referrer")
+			h.Set("Cross-Origin-Opener-Policy", "same-origin")
+			h.Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+			h.Set("Content-Security-Policy-Report-Only", CSPReportOnly)
+			h.Set("Reporting-Endpoints", CSPReportEndpoint+"=\"/csp-report\"")
+			if hstsMaxAge > 0 {
+				seconds := int64(hstsMaxAge / time.Second)
+				h.Set("Strict-Transport-Security", fmt.Sprintf("max-age=%d", seconds))
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // ---------------------------------------------------------------------------

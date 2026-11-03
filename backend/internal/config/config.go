@@ -37,6 +37,14 @@ type Config struct {
 	LockoutThreshold  int
 	LockoutWindow     time.Duration
 
+	// HSTSMaxAge is the Strict-Transport-Security max-age sent on responses. Zero
+	// (the default) means HSTS is off and no header is emitted. It is not turned on
+	// with the environment: HSTS is honoured only over HTTPS and is cached by the
+	// browser for the whole max-age, so a deployment that is not yet HTTPS-only
+	// would lock users out of a plain-HTTP endpoint with no way to undo it quickly.
+	// The operator opts in once the host is known to serve HTTPS on every path.
+	HSTSMaxAge time.Duration
+
 	// DatabaseMaxConns bounds one process's database connection pool.
 	//
 	// It is configurable because the number that matters is replicas x pool, and
@@ -410,6 +418,10 @@ func Load() (*Config, error) {
 	if c.WorkerSchemaWait, err = envDuration("FORGECRM_WORKER_SCHEMA_WAIT", 5*time.Minute); err != nil {
 		return nil, err
 	}
+	// HSTS is opt-in and off by default; a zero value means the header is not sent.
+	if c.HSTSMaxAge, err = envDuration("FORGECRM_HSTS_MAX_AGE", 0); err != nil {
+		return nil, err
+	}
 
 	c.Email = EmailConfig{
 		Enabled:   envBool("FORGECRM_SMTP_ENABLED", false),
@@ -620,6 +632,12 @@ func (c *Config) Validate() error {
 	if c.SessionTTL <= 0 {
 		return fmt.Errorf("FORGECRM_SESSION_TTL must be positive")
 	}
+	// A negative max-age is a typo, not a way to spell "off" — zero already means
+	// off. Rejecting it here makes the mistake a startup failure rather than an
+	// HSTS header with a nonsensical value.
+	if c.HSTSMaxAge < 0 {
+		return fmt.Errorf("FORGECRM_HSTS_MAX_AGE must not be negative, got %s", c.HSTSMaxAge)
+	}
 	if c.WorkerSchemaWait <= 0 {
 		return fmt.Errorf("FORGECRM_WORKER_SCHEMA_WAIT must be positive, got %s", c.WorkerSchemaWait)
 	}
@@ -799,6 +817,7 @@ func (c *Config) Redacted() []any {
 		"migrate_on_start", c.RunMigrationsOnStart,
 		"rate_limit_store", c.RateLimitStore,
 		"trusted_proxies", c.TrustedProxies,
+		"hsts_max_age", c.HSTSMaxAge.String(),
 		"signing_material_configured", state(c.SecretKey),
 		"metrics_access_configured", state(c.MetricsToken),
 		"smtp_enabled", c.Email.Enabled,

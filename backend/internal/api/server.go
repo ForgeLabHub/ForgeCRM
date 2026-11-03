@@ -296,7 +296,10 @@ func (s *Server) buildRouter() chi.Router {
 	r.Use(httpx.RequestIDMiddleware)
 	r.Use(httpx.TraceMiddleware)
 	r.Use(httpx.RecoverMiddleware(s.deps.Log))
-	r.Use(httpx.SecurityHeadersMiddleware)
+	// HSTS is passed in rather than decided here: it is off unless the operator has
+	// configured FORGECRM_HSTS_MAX_AGE, because it is only honoured over HTTPS and is
+	// cached by the browser for its whole max-age. See httpx.SecurityHeadersMiddleware.
+	r.Use(httpx.SecurityHeadersMiddleware(s.deps.Config.HSTSMaxAge))
 	// The client address is resolved once, here, against the configured proxy trust
 	// list, and carried in the request context. The rate limiter and the audit trail
 	// then read the same value instead of each deriving its own from headers the
