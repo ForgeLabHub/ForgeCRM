@@ -115,8 +115,13 @@ test.describe('visual: workspace', () => {
     await ready(page, page.getByRole('table'))
     await expect(page.getByRole('cell', { name })).toBeVisible()
     await expect(page).toHaveScreenshot('accounts-table-desktop-light-en.png', {
-      // Mask the run-specific name and the row's timestamp, not the table.
-      mask: [...dynamic(page), page.getByRole('cell', { name })],
+      // Mask the run-specific name in the row and in the search box, not the
+      // table chrome.
+      mask: [
+        ...dynamic(page),
+        page.getByPlaceholder(/search/i),
+        page.getByRole('cell', { name }),
+      ],
     })
   })
 
@@ -131,17 +136,27 @@ test.describe('visual: workspace', () => {
     // The responsive spec proves no horizontal overflow numerically; this
     // proves the labelled-card layout renders in the right shape.
     await expect(page).toHaveScreenshot('accounts-cards-mobile-light-en.png', {
-      mask: [...dynamic(page), page.getByRole('cell', { name })],
+      mask: [
+        ...dynamic(page),
+        page.getByPlaceholder(/search/i),
+        page.getByRole('cell', { name }),
+      ],
     })
   })
 
   test('the create-account dialog', async ({ page }) => {
     await signIn(page)
     await page.goto('/accounts')
+    // The scrim is translucent, so whatever sits behind it is part of the
+    // image. Filter to a fixed term that matches nothing first, so the
+    // background is the deterministic empty state (and the search box shows a
+    // constant string) rather than the rows and run id earlier steps left
+    // behind; the dialog itself is the primitive under test.
+    await page.getByPlaceholder(/search/i).fill('zzz-no-such-account')
+    await ready(page, page.getByText('No matches'))
     await page.getByRole('button', { name: 'New account' }).click()
     const dialog = page.getByRole('dialog')
     await ready(page, dialog)
-    // Covers the Modal primitive: scrim, panel, header/footer and focus ring.
     await expect(page).toHaveScreenshot('account-dialog-light-en.png', {
       mask: dynamic(page),
     })
