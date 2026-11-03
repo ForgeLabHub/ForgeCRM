@@ -91,6 +91,18 @@ is idempotent and refuses to overwrite an existing owner.
 | `FORGECRM_REDIS_URL` | API | only with the redis store | none | Redis connection string for the shared limiter. | `redis://:pass@redis:6379/0` | yes | no |
 | `FORGECRM_TRUSTED_PROXIES` | API | no | none | Comma-separated CIDRs of proxies whose forwarding headers may be believed. Empty means every request is attributed to its connection address. Do not use `*`. | `10.0.0.0/8,172.16.0.0/12` | no | recommended |
 
+## Security headers
+
+| Name | Component | Required | Default | Description | Example | Secret | Production |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `FORGECRM_HSTS_MAX_AGE` | API | no | `0s` (HSTS off) | `Strict-Transport-Security` `max-age`. A zero value sends no header. HSTS is opt-in on purpose: it is honoured only over HTTPS and the browser caches it for the whole max-age, so enabling it before every path serves HTTPS locks users out of a plain-HTTP endpoint with no quick undo. Set it once the host is HTTPS-only. | `31536000s` (one year) | no | recommended |
+
+`Content-Security-Policy-Report-Only`, `Reporting-Endpoints` and
+`Referrer-Policy` are emitted unconditionally and are not configurable. The CSP is
+built from the served bundle at startup (same-origin assets, no `eval`, no inline
+handlers, the pre-paint theme script pinned by hash) and is Report-Only so a policy
+mistake produces reports rather than a blank page.
+
 ## Import Center
 
 | Name | Component | Required | Default | Description | Example | Secret | Production |
