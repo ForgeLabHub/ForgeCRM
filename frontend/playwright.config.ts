@@ -32,7 +32,53 @@ export default defineConfig({
   },
 
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+      // The visual suite has its own project (below) with a pinned context and
+      // committed baselines; keep it out of the behavioural run.
+      testIgnore: /visual\.spec\.ts/,
+    },
+    {
+      // Opt-in: this is the only project that writes and compares PNG baselines.
+      // It pins its own deterministic context — fixed viewport, DPR 1, one
+      // locale, one timezone, reduced motion — because a screenshot is only
+      // meaningful when everything except the thing under test is held still.
+      // Baselines are Linux-only and are generated inside the same pinned
+      // Playwright image CI uses (see .github/workflows/ci.yml); a snapshot
+      // taken on another platform would diff on font rasterisation alone.
+      name: 'visual',
+      testMatch: /visual\.spec\.ts/,
+      // A retry would paper over a real pixel regression. The suite is
+      // already serial through the global `workers: 1` / `fullyParallel: false`.
+      retries: 0,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1280, height: 800 },
+        deviceScaleFactor: 1,
+        locale: 'en-US',
+        timezoneId: 'UTC',
+        colorScheme: 'light',
+        // Not a top-level `use` option in this Playwright version; it is a
+        // browser-context option. The stylesheet already honours
+        // `prefers-reduced-motion: reduce`, so this freezes the skeleton
+        // shimmer and modal transitions before a screenshot is taken.
+        contextOptions: { reducedMotion: 'reduce' },
+        trace: 'off',
+        screenshot: 'off',
+      },
+      expect: {
+        timeout: 10_000,
+        toHaveScreenshot: {
+          // Absorbs sub-pixel antialiasing noise without hiding a real layout or
+          // colour change.
+          maxDiffPixelRatio: 0.01,
+          threshold: 0.2,
+          animations: 'disabled',
+          caret: 'hide',
+        },
+      },
+    },
   ],
 
   webServer: {

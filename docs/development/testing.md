@@ -10,6 +10,7 @@
 | Contract/OpenAPI | `make openapi-check` | Go | спецификация не разошлась с роутером |
 | Integration | `make test-integration` | PostgreSQL | транзакции, RBAC, изоляция арендаторов |
 | E2E | `make test-e2e` | PostgreSQL + Chromium | пользовательские сценарии в браузере |
+| Визуальная регрессия | `make test-visual` | PostgreSQL + Chromium (образ Playwright) | макет и токены не смещаются |
 | Документация | `make docs-check` | — | документы существуют, ссылки живые, спецификации модулей полные |
 
 ## Правила
@@ -40,6 +41,30 @@ make test-integration TEST_DATABASE_URL='postgres://forgecrm:forgecrm@127.0.0.1:
 ```bash
 ./scripts/e2e-bootstrap.sh     # подготовка владельца платформы
 make test-e2e                  # Playwright, Chromium
+```
+
+## Визуальная регрессия
+
+```bash
+./scripts/e2e-bootstrap.sh     # тот же стек, что и для E2E
+make test-visual               # сравнение с эталонами в frontend/e2e/visual.spec.ts-snapshots
+```
+
+Набор намеренно узкий: по одному экрану на каждый визуальный примитив (оболочка, тёмная
+тема, таблица, карточки на телефоне, диалог, плитки отчёта, страница входа и её
+русский вариант), а не по одному на маршрут. Динамические значения — числа, даты, id,
+инициалы — маскируются точечно, чтобы в сравнении оставался макет, а не данные прогона.
+
+Эталоны — **только для Linux**. Они сгенерированы и сравниваются внутри закреплённого
+образа `mcr.microsoft.com/playwright:v1.49.1-jammy` — того же, что использует джоба
+`visual` в CI, — поэтому шрифт и растеризация совпадают с обеих сторон. Прогон на другой
+платформе разойдётся только из-за сглаживания шрифтов и ему доверять нельзя. Обновлять
+эталоны нужно в этом образе:
+
+```bash
+docker run --rm --network host -e FORGECRM_API_URL=http://127.0.0.1:8080 \
+  -v "$PWD/frontend":/work -w /work mcr.microsoft.com/playwright:v1.49.1-jammy \
+  npx playwright test --project=visual --update-snapshots
 ```
 
 ## Чего в наборе нет

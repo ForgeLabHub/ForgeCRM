@@ -34,7 +34,7 @@ COMPOSE_UP_ARGS ?=
 
 .PHONY: help doctor setup build build-api build-worker build-frontend \
         fmt fmt-check vet lint openapi openapi-check facts facts-check \
-        test test-unit test-frontend test-integration test-e2e \
+        test test-unit test-frontend test-integration test-e2e test-visual \
         migrate migrate-status compose-up compose-down compose-logs smoke-test \
         blitz-verify \
         backup restore docs-check docs-claims verify clean package
@@ -127,6 +127,9 @@ test-integration: ## Тесты против реального PostgreSQL (ну
 
 test-e2e: ## Playwright E2E (Chromium, реальный API и база)
 	cd $(FRONTEND_DIR) && npm run e2e
+
+test-visual: ## Визуальная регрессия (baselines, Linux; образ Playwright)
+	cd $(FRONTEND_DIR) && npm run test:visual
 
 test-extract: ## Каждый модуль собирается вне монолита
 	./scripts/extract-test/run.sh

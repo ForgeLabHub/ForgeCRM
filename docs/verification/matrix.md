@@ -24,6 +24,7 @@
 | Backup → restore → smoke | данные восстанавливаются, а не только копируются | `make backup` → `make restore` → `make smoke-test` | `portability.yml` → `backup-restore` |
 | E2E в Chromium | основные сценарии работают в браузере | `make test-e2e` | `ci.yml` → `e2e` |
 | Адаптивность на телефоне и планшете | ни один маршрут не уезжает вбок на 320–1920px, таблицы складываются в карточки с подписями, боковая панель — выдвижной ящик | `make test-e2e` (`frontend/e2e/responsive.spec.ts`) | `ci.yml` → `e2e` |
+| Визуальная регрессия | макет и токены не смещаются: оболочка, тёмная тема, таблица, карточки на телефоне, диалог и плитки отчёта совпадают с эталонами Linux | `make test-visual` (`frontend/e2e/visual.spec.ts`) | `ci.yml` → `visual` |
 | Конфигурация без секретов | проект не зависит от случайных локальных ключей | `./scripts/check-env.sh` | `portability.yml` → `config-without-secrets` |
 | Документация полна и связана | документы существуют, ссылки живые, спецификации модулей заполнены | `make docs-check` | `portability.yml` → `docs`, `ci.yml` → `docs` |
 | Утверждения документации совпадают с кодом | число разрешений RBAC, счётчики OpenAPI и наличие/вид `LICENSE` в живой документации равны измеренным из кода | `make docs-claims` | `portability.yml` → `docs`, `ci.yml` → `docs` |
