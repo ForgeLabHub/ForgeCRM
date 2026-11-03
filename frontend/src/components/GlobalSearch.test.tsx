@@ -137,4 +137,27 @@ describe('GlobalSearch', () => {
 
     await waitFor(() => expect(screen.getByText('Account detail page')).toBeDefined())
   })
+
+  // A listbox may only contain options. In the hint / loading / error / empty states
+  // the container holds plain <p> text, so it must not carry role="listbox" — an
+  // empty or text-only listbox is an invalid ARIA tree that axe reports.
+  it('does not expose a listbox role until there are options to hold', async () => {
+    renderSearch(() => json({ items: [] }))
+    const user = userEvent.setup()
+
+    await user.type(screen.getByRole('combobox'), 'zz')
+    await screen.findByText(/none of the matches is available to you/i)
+    expect(screen.queryByRole('listbox')).toBeNull()
+  })
+
+  it('exposes a listbox role once the server returns options', async () => {
+    renderSearch(() =>
+      json({ items: [{ entity_type: 'account', id: 'acc-1', title: 'Acme Ltd' }] }),
+    )
+    const user = userEvent.setup()
+
+    await user.type(screen.getByRole('combobox'), 'ac')
+    await screen.findByText('Acme Ltd')
+    expect(screen.getByRole('listbox')).toBeDefined()
+  })
 })

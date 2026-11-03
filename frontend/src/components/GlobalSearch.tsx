@@ -69,6 +69,11 @@ export function GlobalSearch({ onClose }: { onClose?: () => void }) {
 
   const items = useMemo(() => results.data?.items ?? [], [results.data])
 
+  // A listbox may contain only options. The hint, loading, error and empty states
+  // are plain text, so the listbox role is attached only when there are options to
+  // hold; otherwise the container is an ordinary div and the text is just text.
+  const hasOptions = enabled && !results.isLoading && !results.isError && items.length > 0
+
   useEffect(() => {
     setActive(0)
   }, [debounced])
@@ -119,7 +124,11 @@ export function GlobalSearch({ onClose }: { onClose?: () => void }) {
           </label>
         </div>
 
-        <div id="global-search-results" role="listbox" className="search-palette__results">
+        <div
+          id="global-search-results"
+          role={hasOptions ? 'listbox' : undefined}
+          className="search-palette__results"
+        >
           {!enabled ? (
             <p className="text-muted text-sm" style={{ padding: 'var(--space-4)' }}>
               {t('search.typeHint')} {t('search.permissionHint')}

@@ -47,6 +47,7 @@ const LIGHT = {
   muted: token('color-text-muted', 0),
   subtle: token('color-text-subtle', 0),
   accent: token('color-accent', 0),
+  accentSoft: token('color-accent-soft', 0),
   onAccent: token('color-on-accent', 0),
 }
 
@@ -57,6 +58,7 @@ const DARK = {
   muted: token('color-text-muted', 1),
   subtle: token('color-text-subtle', 1),
   accent: token('color-accent', 1),
+  accentSoft: token('color-accent-soft', 1),
   onAccent: token('color-on-accent', 1),
 }
 
@@ -91,5 +93,19 @@ describe.each([
   it('keeps accent text readable when used as a link or icon colour', () => {
     expect(contrast(palette.accent, palette.surface)).toBeGreaterThanOrEqual(AA_LARGE)
     expect(contrast(palette.accent, palette.bg)).toBeGreaterThanOrEqual(AA_LARGE)
+  })
+
+  // The active nav row and the info alert render accent-coloured text on the
+  // accent-soft fill. That pair is normal-sized text, so it must clear AA_NORMAL,
+  // not AA_LARGE — the gap the earlier light-theme value (#2563eb) slipped through
+  // at 4.485:1.
+  it('keeps accent text readable on the accent-soft fill', () => {
+    expect(contrast(palette.accent, palette.accentSoft)).toBeGreaterThanOrEqual(AA_NORMAL)
+  })
+
+  // The search palette renders a subtle type label on an active row, whose
+  // background is accent-soft. Same threshold as any other small hint text.
+  it('keeps subtle hint text readable on the accent-soft fill', () => {
+    expect(contrast(palette.subtle, palette.accentSoft)).toBeGreaterThanOrEqual(AA_NORMAL)
   })
 })

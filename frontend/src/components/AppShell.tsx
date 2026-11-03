@@ -188,7 +188,7 @@ function AccountMenu() {
       <button
         type="button"
         className="menu__trigger"
-        aria-haspopup="menu"
+        aria-haspopup="true"
         aria-expanded={open}
         aria-label={t('nav.account')}
         onClick={() => setOpen((value) => !value)}
@@ -199,7 +199,12 @@ function AccountMenu() {
       </button>
 
       {open ? (
-        <div className="menu__popover" role="menu">
+        // A popover of controls, not an ARIA menu: it holds an identity block, a
+        // theme-switch group and action items, which is not the menuitem-only
+        // structure role="menu" requires. The trigger's aria-haspopup/aria-expanded
+        // and the Escape handling remain; dropping the role removes an invalid tree
+        // rather than promising a menu contract the popover does not meet.
+        <div className="menu__popover">
           <div className="menu__identity">
             <Avatar name={displayName} email={email} size="lg" />
             <div className="menu__identity-text">
@@ -234,7 +239,7 @@ function AccountMenu() {
 
           <div className="menu__separator" />
 
-          <Link to="/account" className="menu__item" role="menuitem" onClick={() => setOpen(false)}>
+          <Link to="/account" className="menu__item" onClick={() => setOpen(false)}>
             <IconUser size={16} />
             {t('nav.account')}
           </Link>
@@ -242,7 +247,6 @@ function AccountMenu() {
           <button
             type="button"
             className="menu__item menu__item--danger"
-            role="menuitem"
             onClick={() => {
               setOpen(false)
               void signOut()
@@ -349,6 +353,7 @@ export function AppShell() {
               type="button"
               className="search-trigger"
               onClick={() => search.setOpen(true)}
+              aria-label={t('nav.search')}
               aria-keyshortcuts="Control+K Meta+K"
             >
               <IconSearch size={15} />

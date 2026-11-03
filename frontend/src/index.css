@@ -21,11 +21,18 @@
   --color-border-strong: #cdd3de;
   --color-text: #101828;
   --color-text-muted: #4a5568;
-  /* AA-contrast on the page background and on a surface: 4.66:1 / 5.10:1. Hint
-     text is small, so it must clear the normal-text threshold, not the large one. */
-  --color-text-subtle: #667085;
+  /* AA-contrast on the page background and on a surface: 4.94:1 / 5.21:1, and
+     4.74:1 on --color-accent-soft (the active nav row and the info alert), where
+     the previous #667085 measured 4.32:1. Hint text is small, so it must clear the
+     normal-text threshold on every surface it can land on, not just the two base
+     ones. */
+  --color-text-subtle: #5f6a7d;
 
-  --color-accent: #2563eb;
+  /* AA-contrast on --color-accent-soft: 5.27:1, where the previous #2563eb measured
+     4.485:1 — just under the 4.5 normal-text threshold, which is what the active
+     nav row uses it for. Still 6.08:1 on a surface and 5.77:1 on the page
+     background, and white on it is 6.08:1, so the button label stays readable. */
+  --color-accent: #2258d8;
   --color-accent-hover: #1d4ed8;
   --color-accent-soft: #e8efff;
   /* Foreground for text sitting on --color-accent. It is a token because the
