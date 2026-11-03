@@ -156,8 +156,14 @@ test.describe('responsive layout', () => {
     // a drawer that widens the document is the same defect as a wide table.
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1)
 
-    // The scrim is a real control, so a tap on it closes the drawer.
-    await page.locator('.sidebar-scrim').click()
+    // The scrim is a real control, so a tap on it closes the drawer. Click the
+    // part of the scrim the drawer does not cover: the drawer is pinned to the
+    // left and is taller than it is wide, so a tap at its centre would land on
+    // the open sidebar (which sits above the scrim) and never reach the scrim.
+    // A tap on the visible strip beside the drawer is what a user actually does.
+    const scrim = page.locator('.sidebar-scrim')
+    const box = (await scrim.boundingBox())!
+    await page.mouse.click(box.x + box.width - 12, box.y + box.height / 2)
     await expect(sidebar).not.toBeInViewport()
   })
 
