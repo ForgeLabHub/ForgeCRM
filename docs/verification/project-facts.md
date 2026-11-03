@@ -39,7 +39,7 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 код изменился, а документ не перегенерировали.
 
 <!-- FACTS:AUTO BEGIN — генерируется backend/cmd/facts-gen, не редактировать вручную -->
-<!-- измерено на HEAD `5a8336e00731933203a28209dc43ffec57616fcd` -->
+<!-- измерено на HEAD `e49eee0886c9b2221b8988b41708f34cf6f94c2d` -->
 
 ## Backend / Architecture
 
@@ -48,8 +48,8 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 | Пакеты Go (весь backend) | **53** | каталоги с хотя бы одним .go-файлом под backend/ |
 | Пакеты Go (backend/internal) | **48** | то же, ограничено backend/internal/** |
 | Go-файлы без тестов | **144** | *.go, кроме *_test.go |
-| Go тестовых файлов | **129** | *_test.go |
-| Тестовые функции Go | **857** | верхнеуровневые func TestXxx(*testing.T), TestMain исключён |
+| Go тестовых файлов | **130** | *_test.go |
+| Тестовые функции Go | **860** | верхнеуровневые func TestXxx(*testing.T), TestMain исключён |
 | Бенчмарки Go | **0** | func BenchmarkXxx |
 | Fuzz-тесты Go | **0** | func FuzzXxx |
 | Example-тесты Go | **0** | func ExampleXxx |
@@ -58,8 +58,8 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 
 | Метрика | Значение | Определение |
 |---|---|---|
-| Миграций up | **29** | *.up.sql в backend/internal/migrations |
-| Миграций down | **29** | *.down.sql там же |
+| Миграций up | **30** | *.up.sql в backend/internal/migrations |
+| Миграций down | **30** | *.down.sql там же |
 | Таблиц БД | **76** | уникальные имена CREATE TABLE во всех up-миграциях |
 
 ## Security (RBAC)
@@ -90,9 +90,9 @@ openapi.json генерируется из живого роутера (`cmd/ope
 
 | Метрика | Значение | Определение |
 |---|---|---|
-| Файлы src (.ts/.tsx) | **123** | frontend/src/**, включая тестовые |
-| Тестовые файлы src | **38** | *.test.ts(x)/.spec.ts(x) в frontend/src |
-| Объявления it()/test() в src | **248** | запускаемые кейсы vitest; test.describe вычитается |
+| Файлы src (.ts/.tsx) | **124** | frontend/src/**, включая тестовые |
+| Тестовые файлы src | **39** | *.test.ts(x)/.spec.ts(x) в frontend/src |
+| Объявления it()/test() в src | **255** | запускаемые кейсы vitest; test.describe вычитается |
 | Файлы страниц | **38** | компоненты в frontend/src/pages (без admin/, без тестов) |
 | Тесты страниц | **19** | *.test.tsx рядом со страницами |
 | Маршрутов <Route path> | **46** | объявления в frontend/src/App.tsx (регистр маршрутизации SPA) |
