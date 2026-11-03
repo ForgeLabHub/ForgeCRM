@@ -93,4 +93,17 @@ describe('AppShell accessibility', () => {
     renderShell()
     await screen.findByRole('button', { name: /^search$/i })
   })
+
+  // Dropping role="menu" must not lose the keyboard behaviour the popover did
+  // have: Escape still closes it.
+  it('closes the account popover on Escape', async () => {
+    renderShell()
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: /my account/i }))
+    await screen.findByText(/sign out/i)
+
+    await user.keyboard('{Escape}')
+    expect(screen.queryByText(/sign out/i)).toBeNull()
+  })
 })
