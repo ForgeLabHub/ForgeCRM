@@ -36,18 +36,34 @@ func TestSanitizeReturnToRejectsOpenRedirects(t *testing.T) {
 		in   string
 		want string
 	}{
+		// Legitimate in-app relative paths must survive untouched.
 		{"", "/"},
+		{"/", "/"},
 		{"/deals", "/deals"},
 		{"/deals?x=1", "/deals?x=1"},
+		{"/a/b#c", "/a/b#c"},
+		// Protocol-relative and absolute forms are off-origin.
 		{"//evil.example.com", "/"},
 		{"https://evil.example.com", "/"},
 		{"http://evil.example.com", "/"},
-		{"/path\r\nSet-Cookie: x=1", "/"},
 		{"javascript:alert(1)", "/"},
+		// A backslash is normalised to "/" by browsers, so "/\host" resolves to
+		// "//host" — the same open redirect wearing a single leading slash.
+		{`/\evil.example.com`, "/"},
+		{`\/evil.example.com`, "/"},
+		{`/\/evil.example.com`, "/"},
+		{`/foo\bar`, "/"},
+		{`/foo/\bar`, "/"},
+		// Header/request smuggling and other control characters.
+		{"/path\r\nSet-Cookie: x=1", "/"},
+		{"/path\nLocation: https://evil.example.com", "/"},
+		{"/path\x00", "/"},
+		{"/path\x1f", "/"},
+		{"  /deals  ", "/deals"},
 	}
 	for _, tc := range cases {
-		if got := sanitizeReturnTo(tc.in); got != tc.want {
-			t.Errorf("sanitizeReturnTo(%q) = %q, want %q", tc.in, got, tc.want)
+		if got := SafeReturnTo(tc.in); got != tc.want {
+			t.Errorf("SafeReturnTo(%q) = %q, want %q", tc.in, got, tc.want)
 		}
 	}
 }

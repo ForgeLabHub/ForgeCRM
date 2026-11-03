@@ -110,7 +110,7 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		IP: httpx.ClientIP(r), UserAgent: r.UserAgent(),
 	})
 
-	// A relative path only; sanitizeReturnTo guarantees this at Begin time and the
+	// A relative path only; SafeReturnTo guarantees this at Begin time and the
 	// value is re-validated here.
 	http.Redirect(w, r, safeSSOReturn(q.Get("return_to")), http.StatusFound)
 }
@@ -122,14 +122,11 @@ func (s *Server) redirectSSOFailure(w http.ResponseWriter, r *http.Request, code
 }
 
 // safeSSOReturn validates the return target again on the way out, so a value that
-// somehow bypassed Begin cannot become an open redirect.
+// somehow bypassed Begin cannot become an open redirect. It delegates to the one
+// implementation in internal/oidc: a second copy of this check is free to drift,
+// and the drift is the open redirect.
 func safeSSOReturn(raw string) string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" || !strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, "//") ||
-		strings.ContainsAny(raw, "\r\n") {
-		return "/"
-	}
-	return raw
+	return oidc.SafeReturnTo(raw)
 }
 
 // ssoErrorCode maps an SSO error to a stable code for the interface.

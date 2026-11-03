@@ -510,7 +510,7 @@ func (s *Service) Begin(ctx context.Context, providerKey, returnTo string) (stri
 
 	// A return target is a path inside this application, never an absolute URL, so
 	// the callback cannot be turned into an open redirect.
-	safeReturn := sanitizeReturnTo(returnTo)
+	safeReturn := SafeReturnTo(returnTo)
 
 	const q = `
 		INSERT INTO oidc_login_states (state, provider_id, nonce, code_verifier, return_to, expires_at)
@@ -777,17 +777,95 @@ func (s *Service) LoginURL(providerKey, returnTo string) string {
 	return "/api/v1/auth/oidc/start?" + v.Encode()
 }
 
-// sanitizeReturnTo keeps a relative in-app path and discards anything that could
-// become an open redirect.
-func sanitizeReturnTo(raw string) string {
+// SafeReturnTo keeps a relative in-app path and discards anything a browser could
+// resolve off-origin. It is exported because the callback handler re-validates the
+// value on the way out with the same rule: two copies of this check are free to
+// drift, and the drift would be an open redirect.
+//
+// It is a conservative allow-list rather than a list of known-bad shapes, because
+// the set of strings a browser treats as off-origin is larger than it looks. The
+// leading "/" is necessary but not sufficient: a browser normalises "\" to "/", so
+// "/\evil.example.com" resolves to "//evil.example.com" — a protocol-relative URL
+// on another host. Control bytes and spaces are refused for the same reason a
+// header injection is refused: the value ends up in a Location header.
+//
+// Only a rooted path of unreserved characters, sub-delimiters and ":/@", with
+// percent-encoded octets for anything else, is kept. An optional query and
+// fragment may follow the path. Everything else becomes "/".
+func SafeReturnTo(raw string) string {
+	const fallback = "/"
 	raw = strings.TrimSpace(raw)
-	if raw == "" || !strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, "//") {
-		return "/"
+	if raw == "" || raw[0] != '/' {
+		return fallback
 	}
-	if strings.ContainsAny(raw, "\r\n") {
-		return "/"
+	// Split the path from an optional query and/or fragment at the first marker.
+	path, suffix := raw, ""
+	if i := strings.IndexAny(raw, "?#"); i >= 0 {
+		path, suffix = raw[:i], raw[i:]
+	}
+	if path != "/" && !isSafeReturnPath(path) {
+		return fallback
+	}
+	if !isSafeReturnSuffix(suffix) {
+		return fallback
 	}
 	return raw
+}
+
+// isSafeReturnPath reports whether p is a rooted path that a browser cannot
+// reinterpret as an authority. A second leading "/" or "\" is refused because
+// either makes the reference protocol-relative.
+func isSafeReturnPath(p string) bool {
+	if len(p) < 2 || p[0] != '/' {
+		return false
+	}
+	if p[1] == '/' || p[1] == '\\' {
+		return false
+	}
+	for i := 0; i < len(p); i++ {
+		if !isSafeReturnByte(p[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// isSafeReturnSuffix reports whether the query or fragment part (including its
+// leading "?" or "#") is safe to place in a Location header. It is a path-safe
+// byte set plus the two markers, which also covers a "#" inside a query.
+func isSafeReturnSuffix(s string) bool {
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '?', '#':
+			continue
+		}
+		if !isSafeReturnByte(s[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// isSafeReturnByte reports whether b may appear literally in a return path.
+// Unreserved characters (RFC 3986 §2.3), sub-delimiters (§2.2) plus ":", "@" and
+// "/", and percent-encoded octets are allowed. Every other byte — notably "\",
+// space, DEL, control bytes and raw non-ASCII — is refused, so a percent-encoded
+// value is the only way to express anything unusual.
+func isSafeReturnByte(b byte) bool {
+	switch {
+	case b >= 'a' && b <= 'z', b >= 'A' && b <= 'Z', b >= '0' && b <= '9':
+		return true
+	case b == '-' || b == '.' || b == '_' || b == '~': // unreserved
+		return true
+	case b == '!' || b == '$' || b == '&' || b == '\'' || b == '(' || b == ')' ||
+		b == '*' || b == '+' || b == ',' || b == ';' || b == '=': // sub-delims
+		return true
+	case b == ':' || b == '@' || b == '/':
+		return true
+	case b == '%': // percent-encoded octet
+		return true
+	}
+	return false
 }
 
 func domainAllowed(email string, domains []string) bool {
