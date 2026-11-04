@@ -35,6 +35,7 @@
   --color-accent: #2258d8;
   --color-accent-hover: #1d4ed8;
   --color-accent-soft: #e8efff;
+  --color-accent-ring: rgba(34, 88, 216, 0.32);
   /* Foreground for text sitting on --color-accent. It is a token because the
      accent lightens in dark mode, where white would fall below 4.5:1. */
   --color-on-accent: #ffffff;
@@ -75,7 +76,44 @@
   --color-overlay: rgba(16, 24, 40, 0.45);
 
   --sidebar-width: 248px;
+  --sidebar-width-collapsed: 60px;
   --header-height: 56px;
+
+  /* Typographic scale. Sizes step by a consistent ratio so headings, body and
+     labels read as one family rather than as ad-hoc pixel values. */
+  --text-2xs: 10.5px;
+  --text-xs: 11.5px;
+  --text-sm: 12.5px;
+  --text-md: 13.5px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 26px;
+  --weight-normal: 450;
+  --weight-medium: 520;
+  --weight-semibold: 600;
+  --weight-bold: 680;
+  --tracking-tight: -0.022em;
+  --tracking-wide: 0.06em;
+
+  /* A denser spacing step below the existing 4px grid, for control internals
+     (input padding, badge gaps) where 4px is too coarse. */
+  --space-0-5: 2px;
+  --space-1-5: 6px;
+  --space-2-5: 10px;
+  --space-3-5: 14px;
+  --space-8: 64px;
+
+  --radius-xs: 3px;
+  --radius-pill: 999px;
+  --control-height-sm: 28px;
+  --control-height: 34px;
+  --control-height-lg: 40px;
+
+  --transition-fast: 0.12s ease;
+  --transition: 0.16s cubic-bezier(0.2, 0, 0, 1);
+
+  --ring: 0 0 0 3px var(--color-accent-ring);
 }
 
 /* Dark palette. It is selected in two ways so the login page and the CRM share
@@ -99,6 +137,7 @@
   --color-accent: #5b83ff;
   --color-accent-hover: #7d9cff;
   --color-accent-soft: #1a2340;
+  --color-accent-ring: rgba(91, 131, 255, 0.38);
   --color-on-accent: #0d1017;
   --color-danger: #f08b81;
   --color-danger-soft: #3a1f1c;
@@ -133,6 +172,7 @@
     --color-accent: #5b83ff;
     --color-accent-hover: #7d9cff;
     --color-accent-soft: #1a2340;
+    --color-accent-ring: rgba(91, 131, 255, 0.38);
     --color-on-accent: #0d1017;
     --color-danger: #f08b81;
     --color-danger-soft: #3a1f1c;
@@ -164,13 +204,13 @@ body,
 body {
   margin: 0;
   font-family: var(--font-sans);
-  font-size: 14px;
-  line-height: 1.55;
+  font-size: var(--text-base);
+  line-height: 1.5;
   color: var(--color-text);
   background: var(--color-bg);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  font-feature-settings: "cv11", "ss01";
+  font-feature-settings: 'cv05' 1, 'ss01' 1;
   font-variant-numeric: tabular-nums;
   /* Stops iOS Safari from inflating text in landscape, which silently breaks
      any layout tuned to a fixed line height. */
@@ -187,17 +227,17 @@ h2,
 h3,
 h4 {
   margin: 0;
-  font-weight: 640;
+  font-weight: var(--weight-semibold);
   line-height: 1.25;
-  letter-spacing: -0.015em;
+  letter-spacing: var(--tracking-tight);
   /* Headings are short and stand alone, so balancing the lines stops a single
      trailing word from sitting on its own line. */
   text-wrap: balance;
 }
 
-h1 { font-size: 23px; letter-spacing: -0.025em; }
-h2 { font-size: 16.5px; }
-h3 { font-size: 15px; }
+h1 { font-size: var(--text-xl); }
+h2 { font-size: var(--text-lg); }
+h3 { font-size: var(--text-md); }
 
 p { margin: 0; text-wrap: pretty; }
 
@@ -1603,9 +1643,13 @@ tbody tr:last-child td { border-bottom: none; }
 
 .login-field__control { position: relative; }
 
-.login-field__input {
+/* `input.login-field__input` rather than a bare class: the element rule at the
+   top of this file matches `input[type='email']`, which outranks a single class
+   and would otherwise win the padding, font size and radius back. */
+input.login-field__input {
   width: 100%;
-  padding: 11px 12px;
+  height: 42px;
+  padding: 0 12px;
   font-size: 14px;
   font-family: inherit;
   color: var(--color-text);
@@ -1615,19 +1659,21 @@ tbody tr:last-child td { border-bottom: none; }
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
-.login-field__control .login-field__input { padding-right: 40px; }
+input.login-field__input.login-field__input--reveal { padding-right: 42px; }
 
-.login-field__input::placeholder { color: var(--color-text-subtle); }
+input.login-field__input::placeholder { color: var(--color-text-subtle); }
 
-.login-field__input:focus {
+input.login-field__input:focus {
   outline: none;
   border-color: var(--color-accent);
   box-shadow: 0 0 0 3px var(--color-accent-soft);
 }
 
-.login-field__input--invalid { border-color: var(--color-danger); }
+/* Same reason as the base rule: the invalid border must outrank
+   `input[type='email']`, which is otherwise the winning declaration. */
+input.login-field__input--invalid { border-color: var(--color-danger); }
 
-.login-field__input--invalid:focus {
+input.login-field__input--invalid:focus {
   border-color: var(--color-danger);
   box-shadow: 0 0 0 3px var(--color-danger-soft);
 }
@@ -1666,10 +1712,18 @@ tbody tr:last-child td { border-bottom: none; }
   color: var(--color-text-subtle);
 }
 
-.login__submit {
+/* The submit matches the input height so the form reads as one column of
+   equally-weighted controls rather than a text field with a smaller button.
+   Written as `button.login__submit` so it outranks the later-imported `.btn`
+   rule (design-system.css sets the generic 34px control height); at equal
+   specificity the last stylesheet would win and the button would be shorter
+   than the fields above it. */
+button.login__submit {
   margin-top: var(--space-2);
-  padding: 11px 14px;
+  height: 42px;
+  padding: 0 14px;
   font-size: 14px;
+  font-weight: var(--weight-semibold);
   border-radius: var(--radius);
 }
 
@@ -1793,6 +1847,10 @@ tbody tr:last-child td { border-bottom: none; }
   }
 
   .login__title { font-size: 23px; }
+
+  /* Comfortable touch targets on a phone; the desktop height is fine but the
+     thumb benefits from the extra two pixels. */
+  input.login-field__input { height: 46px; }
 }
 
 @media (max-width: 460px) {

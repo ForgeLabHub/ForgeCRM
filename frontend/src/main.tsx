@@ -11,6 +11,7 @@ import { ApiError } from './api/client'
 // variable axis also gives the fractional weights the tokens ask for (550, 650).
 import '@fontsource-variable/inter'
 import './index.css'
+import './styles/design-system.css'
 
 const queryClient = new QueryClient({
   defaultOptions: {
