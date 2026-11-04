@@ -111,3 +111,35 @@ func TestTelegramNotifySendsWhenConsentAllows(t *testing.T) {
 		t.Fatalf("an allowed notification was blocked on consent: %v", err)
 	}
 }
+
+// A user's Telegram link belongs to one organization; a message for another
+// tenant must not use it, even when the same user belongs to both organizations.
+func TestTelegramNotifyDoesNotUseAnotherTenantLink(t *testing.T) {
+	db := connectOrSkip(t)
+	freshSchema(t, db)
+	ctx := context.Background()
+	_, user := seedTelegramLink(t, db, "telegram-cross-org")
+	otherOrg := insertOrganization(t, db, "telegram-other-org")
+	if _, err := db.Pool().Exec(ctx, `INSERT INTO memberships (user_id, organization_id, status) VALUES ($1, $2, 'active')`, user, otherOrg); err != nil {
+		t.Fatalf("insert second membership: %v", err)
+	}
+	recordDecision(t, db, otherOrg, "telegram-cross-org@notify.test", "transactional", "telegram", "denied")
+	gate := wiring.NewConsentGate(consent.NewService(db, audit.New(db)))
+	svc := notify.NewTelegramService(&config.TelegramConfig{Enabled: true, BotToken: "test-token"}, db, slog.Default(), audit.New(db), nil, gate)
+	if err := svc.NotifyUser(ctx, otherOrg, user, "not for this tenant"); err != nil {
+		t.Fatalf("a link from another tenant must not be used: %v", err)
+	}
+}
+
+// Database failures must reach the caller so queued work can be retried rather
+// than silently treated as a user with no linked account.
+func TestTelegramNotifyReturnsDatabaseFailure(t *testing.T) {
+	db := connectOrSkip(t)
+	freshSchema(t, db)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	svc := notify.NewTelegramService(&config.TelegramConfig{Enabled: true, BotToken: "test-token"}, db, slog.Default(), audit.New(db), nil, nil)
+	if err := svc.NotifyUser(ctx, uuid.New(), uuid.New(), "test"); err == nil {
+		t.Fatal("expected a database failure")
+	}
+}

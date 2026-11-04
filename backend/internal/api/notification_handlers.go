@@ -176,9 +176,11 @@ func (s *Server) handleEmailLog(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleTelegramStatus(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, map[string]any{
-		"enabled":  s.deps.Telegram.Enabled(),
-		"reason":   reasonIfDisabled(s.deps.Telegram.Enabled(), "no Telegram bot token is configured; the platform works normally without it"),
-		"commands": []string{"/start", "/link", "/tasks", "/unlink", "/help"},
+		"enabled": s.deps.Telegram.Enabled(),
+		"reason":  reasonIfDisabled(s.deps.Telegram.Enabled(), "Telegram is disabled or no bot token is configured; the platform works normally without it"),
+		// Inbound updates are not connected to a webhook yet, so the command
+		// handlers cannot be used through Telegram.
+		"commands": []string{},
 	})
 }
 

@@ -347,12 +347,15 @@ func (s *TelegramService) sendMessage(ctx context.Context, chatID int64, text st
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", s.cfg.BotToken)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(string(payload)))
 	if err != nil {
-		return err
+		// URL parsing errors can contain the bot token as well.
+		return errors.New("send telegram message: invalid request")
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("send telegram message: %w", err)
+		// net/http errors may contain the URL, including the bot token. Never return
+		// or log that error; the caller can safely report this generic failure.
+		return errors.New("send telegram message: request failed")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
@@ -380,11 +383,15 @@ func (s *TelegramService) NotifyUser(ctx context.Context, orgID uuid.UUID, userI
 		SELECT l.telegram_user_id, u.email
 		FROM telegram_links l
 		JOIN users u ON u.id = l.user_id
-		WHERE l.user_id = $1 AND l.linked_at IS NOT NULL AND l.revoked_at IS NULL LIMIT 1`
+		WHERE l.user_id = $1 AND l.organization_id = $2
+		  AND l.linked_at IS NOT NULL AND l.revoked_at IS NULL LIMIT 1`
 	var chatID int64
 	var email string
-	if err := s.db.Q(ctx).QueryRow(ctx, q, userID).Scan(&chatID, &email); err != nil {
-		return nil
+	if err := s.db.Q(ctx).QueryRow(ctx, q, userID, orgID).Scan(&chatID, &email); err != nil {
+		if database.IsNoRows(err) {
+			return nil
+		}
+		return fmt.Errorf("resolve telegram recipient: %w", err)
 	}
 	// The gate is asked before the bot is contacted, so a message consent forbids is
 	// never sent, rather than being sent and then explained away.

@@ -1061,7 +1061,7 @@ export const en = {
   },
   telegram: {
     title: 'Telegram',
-    meta: 'Optional bot that can send you notifications and let you look at your own tasks.',
+    meta: 'Telegram integration setup and account management.',
     botStatus: 'Bot status',
     enabled: 'enabled',
     disabled: 'disabled',
@@ -1069,17 +1069,18 @@ export const en = {
     noToken: 'no token',
     webhookRegistered: 'webhook registered',
     noTokenInfo:
-      'No bot token is configured. ForgeCRM runs normally without Telegram; set a token in the server configuration to enable the bot.',
+      'Telegram is disabled or not configured. ForgeCRM runs normally without it.',
     bot: 'Bot',
     lastError: 'Last error',
+    linkingUnavailable: 'The bot is configured, but incoming Telegram messages and account linking are not available yet.',
     linkAccount: 'Link your account',
     linkIntro:
-      'Generate a code, then send it to the bot in Telegram. The code expires shortly and can only be used once. Linking is per user, so the bot always acts as you and is bound by your permissions.',
+      'Generate a code, then send /link followed by the code to the bot in Telegram. The code expires shortly and can only be used once. Linking is per user, so the bot always acts as you and is bound by your permissions.',
     generating: 'Generating…',
     generateCode: 'Generate link code',
     unlinkAccount: 'Unlink my account',
-    codeMessage: 'Send this code to the bot: ',
-    codeExpires: 'It expires at {time}.',
+    codeMessage: 'Send /link followed by this code to the bot: ',
+    codeExpires: 'It expires within {seconds} seconds of being issued.',
     unlinkTitle: 'Unlink your Telegram account?',
     unlinkText:
       'The bot stops recognising you immediately and cannot read your tasks until you link again.',

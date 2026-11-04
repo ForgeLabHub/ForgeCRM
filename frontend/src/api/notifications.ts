@@ -39,7 +39,8 @@ export const emailApi = {
 
 export interface TelegramStatus {
   enabled: boolean
-  configured: boolean
+  /** Future server versions may explicitly advertise a working inbound transport. */
+  linking_available?: boolean
   bot_username?: string
   webhook_set?: boolean
   last_error?: string
@@ -49,7 +50,7 @@ export const telegramApi = {
   status: () => api.get<TelegramStatus>('/api/v1/admin/telegram/status'),
 
   /** Issues a short-lived code the user sends to the bot to link their account. */
-  linkCode: () => api.post<{ code: string; expires_at: string }>('/api/v1/admin/telegram/link-code'),
+  linkCode: () => api.post<{ code: string; expires_in_seconds: number }>('/api/v1/admin/telegram/link-code'),
 
   unlink: () => api.delete('/api/v1/admin/telegram/link'),
 }
