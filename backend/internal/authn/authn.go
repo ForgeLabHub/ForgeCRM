@@ -599,30 +599,43 @@ func (s *Service) VerifyCSRF(sess *Session, provided string) error {
 // SetSessionCookie writes the session cookie with hardened attributes.
 func (s *Service) SetSessionCookie(w http.ResponseWriter, token string, expires time.Time) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     s.cfg.SessionCookieName,
-		Value:    token,
-		Path:     "/",
-		Domain:   s.cfg.CookieDomain,
-		Expires:  expires,
-		MaxAge:   int(time.Until(expires).Seconds()),
-		HttpOnly: true,
-		Secure:   s.cfg.CookieSecure,
-		SameSite: http.SameSiteLaxMode,
+		Name:        s.cfg.SessionCookieName,
+		Value:       token,
+		Path:        "/",
+		Domain:      s.cfg.CookieDomain,
+		Expires:     expires,
+		MaxAge:      int(time.Until(expires).Seconds()),
+		HttpOnly:    true,
+		Secure:      s.cfg.CookieSecure,
+		SameSite:    s.cookieSameSite(),
+		Partitioned: s.cfg.CookiePartitioned,
 	})
 }
 
 // ClearSessionCookie removes the session cookie.
 func (s *Service) ClearSessionCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     s.cfg.SessionCookieName,
-		Value:    "",
-		Path:     "/",
-		Domain:   s.cfg.CookieDomain,
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   s.cfg.CookieSecure,
-		SameSite: http.SameSiteLaxMode,
+		Name:        s.cfg.SessionCookieName,
+		Value:       "",
+		Path:        "/",
+		Domain:      s.cfg.CookieDomain,
+		MaxAge:      -1,
+		HttpOnly:    true,
+		Secure:      s.cfg.CookieSecure,
+		SameSite:    s.cookieSameSite(),
+		Partitioned: s.cfg.CookiePartitioned,
 	})
+}
+
+func (s *Service) cookieSameSite() http.SameSite {
+	switch s.cfg.CookieSameSite {
+	case "strict":
+		return http.SameSiteStrictMode
+	case "none":
+		return http.SameSiteNoneMode
+	default:
+		return http.SameSiteLaxMode
+	}
 }
 
 // SessionCookieName exposes the configured cookie name.

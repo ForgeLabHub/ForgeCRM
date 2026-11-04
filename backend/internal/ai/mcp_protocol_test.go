@@ -374,3 +374,41 @@ func TestDescriptorJSONIsStable(t *testing.T) {
 		t.Fatalf("the response does not serialise: %v", err)
 	}
 }
+
+func TestHandleMessageBatch(t *testing.T) {
+	s := newTestMCP()
+	p := testPrincipal()
+	t.Run("mixed requests and notifications", func(t *testing.T) {
+		result, reply := s.HandleMessage(context.Background(), p, []byte(`[{"jsonrpc":"2.0","id":1,"method":"ping"},{"jsonrpc":"2.0","method":"notifications/initialized"},{"jsonrpc":"2.0","method":"unknown"},42,{"jsonrpc":"2.0","id":"x","method":"unknown"}]`))
+		if !reply {
+			t.Fatal("expected response")
+		}
+		responses, ok := result.([]Response)
+		if !ok || len(responses) != 3 {
+			t.Fatalf("unexpected response: %#v", result)
+		}
+		if string(responses[0].ID) != "1" || responses[1].Error == nil || responses[1].Error.Code != CodeInvalidRequest || string(responses[2].ID) != `"x"` || responses[2].Error.Code != CodeMethodNotFound {
+			t.Fatalf("unexpected responses: %#v", responses)
+		}
+	})
+	t.Run("notifications only", func(t *testing.T) {
+		_, reply := s.HandleMessage(context.Background(), p, []byte(`[{"jsonrpc":"2.0","method":"ping"},{"jsonrpc":"2.0","method":"unknown"}]`))
+		if reply {
+			t.Fatal("notifications must not receive a response")
+		}
+	})
+	t.Run("empty batch", func(t *testing.T) {
+		result, reply := s.HandleMessage(context.Background(), p, []byte(`[]`))
+		resp, ok := result.(Response)
+		if !reply || !ok || resp.Error == nil || resp.Error.Code != CodeInvalidRequest {
+			t.Fatalf("unexpected response: %#v", result)
+		}
+	})
+	t.Run("malformed JSON", func(t *testing.T) {
+		result, reply := s.HandleMessage(context.Background(), p, []byte(`[{`))
+		resp, ok := result.(Response)
+		if !reply || !ok || resp.Error == nil || resp.Error.Code != CodeParseError {
+			t.Fatalf("unexpected response: %#v", result)
+		}
+	})
+}

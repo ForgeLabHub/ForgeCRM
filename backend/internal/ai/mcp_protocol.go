@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -30,6 +31,9 @@ func NewMCPServer(tools *ToolRegistry) *MCPServer { return &MCPServer{tools: too
 // that frame strictly.
 func (s *MCPServer) Handle(ctx context.Context, p *rbac.Principal, body []byte) (Response, bool) {
 	var req Request
+	if json.Valid(body) && (len(bytes.TrimSpace(body)) == 0 || bytes.TrimSpace(body)[0] != '{') {
+		return errorResponse(nil, CodeInvalidRequest, "request must be an object", nil), true
+	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		return errorResponse(nil, CodeParseError, "the request body is not valid JSON", nil), true
 	}
@@ -39,6 +43,15 @@ func (s *MCPServer) Handle(ctx context.Context, p *rbac.Principal, body []byte) 
 	}
 	if req.Method == "" {
 		return errorResponse(req.ID, CodeInvalidRequest, "method is required", nil), true
+	}
+
+	// Do not send responses to valid notifications, even for unknown methods or
+	// failed tool calls. Execute them through the same authorization path.
+	if req.IsNotification() {
+		if req.Method == "tools/call" {
+			_, _ = s.callTool(ctx, p, req.Params)
+		}
+		return Response{}, false
 	}
 
 	switch req.Method {
@@ -63,6 +76,34 @@ func (s *MCPServer) Handle(ctx context.Context, p *rbac.Principal, body []byte) 
 		return errorResponse(req.ID, CodeMethodNotFound,
 			fmt.Sprintf("method %q is not implemented", req.Method), nil), true
 	}
+}
+
+// HandleMessage processes a single request or a JSON-RPC batch. Notifications
+// are omitted from the response, including when mixed with requests in a batch.
+// Batch size is bounded independently of the HTTP body size to limit work per call.
+func (s *MCPServer) HandleMessage(ctx context.Context, p *rbac.Principal, body []byte) (any, bool) {
+	body = bytes.TrimSpace(body)
+	if !json.Valid(body) {
+		return errorResponse(nil, CodeParseError, "the request body is not valid JSON", nil), true
+	}
+	if len(body) == 0 || body[0] != '[' {
+		return s.Handle(ctx, p, body)
+	}
+	var messages []json.RawMessage
+	if err := json.Unmarshal(body, &messages); err != nil || len(messages) == 0 || len(messages) > 100 {
+		return errorResponse(nil, CodeInvalidRequest, "batch must contain between 1 and 100 messages", nil), true
+	}
+	responses := make([]Response, 0, len(messages))
+	for _, message := range messages {
+		resp, reply := s.Handle(ctx, p, message)
+		if reply {
+			responses = append(responses, resp)
+		}
+	}
+	if len(responses) == 0 {
+		return nil, false
+	}
+	return responses, true
 }
 
 // initialize answers the handshake.

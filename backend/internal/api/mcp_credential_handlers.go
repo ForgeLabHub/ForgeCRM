@@ -130,7 +130,7 @@ func (s *Server) requireMCPAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		token := bearerToken(r)
+		token := mcpToken(r)
 		if token == "" {
 			httpx.WriteError(w, r, httpx.ErrUnauth)
 			return
@@ -220,6 +220,16 @@ func (s *Server) authenticateMCPWithSession(ctx context.Context, w http.Response
 		}
 	}
 	next.ServeHTTP(w, r)
+}
+
+// mcpToken accepts a bearer token or an API key. An explicitly supplied
+// Authorization header takes precedence, even when malformed, so credentials
+// cannot silently change identities through fallback.
+func mcpToken(r *http.Request) string {
+	if r.Header.Get("Authorization") != "" {
+		return bearerToken(r)
+	}
+	return strings.TrimSpace(r.Header.Get("X-API-Key"))
 }
 
 // bearerToken extracts a credential from the Authorization header, if present.
