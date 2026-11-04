@@ -688,7 +688,7 @@ scripts/extract-test/tenantconfig/setup.sh
 | `simulate` | **READY** | Выделен с `analytics`, `audit`, `crm`, `database` и `rbac`; smoke проверил каталог сценариев. |
 | `forecast` | **READY** | Выделен с `analytics`, `audit`, `crm`, `database` и `rbac`; smoke проверил каталог методов. |
 | `risk` | **READY** | Выделен с `analytics`, `audit`, `crm`, `database` и `rbac`; smoke проверил контракт порогов и сигналов. |
-| `notify` | **READY** | Выделен с `audit`, `config`, `database`, `httpx`, `rbac` и `secrets`; smoke доказал, что выключенный транспорт сообщает off. |
+| `notify` | **READY** | Выделен с `audit`, `config`, `database`, `httpx`, `rbac`, `secrets` и `telegramtext`; smoke доказал, что выключенный транспорт сообщает off. |
 | `ai` | **READY** | Выделен с `agent`, `audit`, `config`, `crm`, `database`, `httpx`, `logging`, `ratelimit`, `rbac` и `retention`; smoke доказал, что ограждение контекста нейтрализует подделанную запись. |
 | `importx` | **READY** | Выделен с `audit`, `config`, `crm`, `database`, `httpx`, `importx/parsers`, `importx/safe`, `jobs`, `outbox` и `rbac`; smoke проверил каталог полей. |
 | `migrations` | **READY** | Лист, несущий SQL наравне с кодом; smoke обошёл встроенную ФС и нашёл 21 сбалансированную пару up/down. |

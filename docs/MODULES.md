@@ -373,11 +373,15 @@
 - **Public API:** `EmailService`, `TelegramService`, `Message`, `LinkRequest`,
   `Update`; функции `NewEmailService`, `NewTelegramService`; переменные `ErrDisabled`,
   `ErrTelegramDisabled`, `AllowedCommands`; константа `LinkCodeTTL`.
-- **Internal deps:** `audit, config, database, httpx, rbac, secrets`.
+- **Internal deps:** `audit, config, database, httpx, rbac, secrets, telegramtext`.
+  `telegramtext` — листовой словарь локализованных строк (RU/EN), поэтому он не
+  добавляет связи сверх самих строк.
 - **External deps:** `github.com/google/uuid`, stdlib `net/smtp`.
 - **Fake:** `Enabled()` терпит nil; когда выключено, это no-op. **Реалистичного
   фейкового транспорта нет.**
-- **Tests:** нет в пакете (нет `_test.go`). Это пробел.
+- **Tests:** `telegram_test.go`, `telegram_card_test.go`, `consent_test.go` в
+  пакете, плюс `internal/testsupport/telegram_own_tasks_integration_test.go` на
+  реальной PostgreSQL.
 - **Extract:** **`yes`** — выделен и доказан `scripts/extract-test/notify`, с
   `audit`, `config`, `database`, `httpx`, `rbac` и `secrets` как зависимостями, все
   доказаны. Smoke доказывает, что выключенный транспорт сообщает off и отказывается

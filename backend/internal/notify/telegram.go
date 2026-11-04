@@ -372,13 +372,23 @@ func (s *TelegramService) VerifyWebhookSecret(headerValue string) bool {
 	return secrets.ConstantTimeEqual([]byte(s.cfg.WebhookSecret), []byte(headerValue))
 }
 
-// AllowedCommands is the closed set of bot commands.
+// AllowedCommands is the closed set of bot commands advertised in the help text.
+// The webhook dispatcher in internal/api handles these and their argument forms;
+// this list is the reference the smoke test and the documentation read.
 var AllowedCommands = map[string]string{
-	"/start":  "link your ForgeCRM account",
-	"/link":   "link your ForgeCRM account with a code",
-	"/tasks":  "list your open tasks",
-	"/unlink": "remove the link between Telegram and ForgeCRM",
-	"/help":   "show this help",
+	"/start":         "open the menu or begin onboarding",
+	"/help":          "show what the bot can do",
+	"/menu":          "open the main menu",
+	"/language":      "change the bot language",
+	"/link":          "link your ForgeCRM account with a one-time code",
+	"/tasks":         "list your open tasks",
+	"/today":         "list tasks due today",
+	"/overdue":       "list your overdue tasks",
+	"/task":          "show one task by id",
+	"/done":          "mark a task complete",
+	"/due":           "reschedule a task",
+	"/profile":       "show your linked account",
+	"/notifications": "show your recent notifications",
 }
 
 // HandleCommand processes a bot command for a linked user and returns the reply.
