@@ -82,6 +82,8 @@ is idempotent and refuses to overwrite an existing owner.
 | `FORGECRM_SESSION_COOKIE` | API | no | `forgecrm_session` | Session cookie name. | `forgecrm_session` | no | no |
 | `FORGECRM_COOKIE_DOMAIN` | API | no | none | Cookie domain, for sharing a session across subdomains. Empty means host-only. | `.example.com` | no | no |
 | `FORGECRM_COOKIE_SECURE` | API | yes in production | `true` in production | Marks the session cookie `Secure`. Must be `true` in production. | `true` | no | yes |
+| `FORGECRM_COOKIE_SAME_SITE` | API | no | `lax` | Session cookie SameSite mode: `lax`, `strict`, or `none`. `none` requires Secure. | `lax` | no | no |
+| `FORGECRM_COOKIE_PARTITIONED` | API | no | `false` | Mark session cookies Partitioned (CHIPS); requires Secure. | `false` | no | no |
 | `FORGECRM_CSRF_HEADER` | API | no | `X-CSRF-Token` | Header carrying the CSRF double-submit token. | `X-CSRF-Token` | no | no |
 | `FORGECRM_RATE_LIMIT_PER_MIN` | API | no | `300` | General requests allowed per client per minute. | `300` | no | no |
 | `FORGECRM_LOGIN_RATE_LIMIT_PER_MIN` | API | no | `60` | Sign-in attempts allowed per client IP per minute. Raise it when many users share one address. | `60` | no | no |

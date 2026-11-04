@@ -164,7 +164,7 @@ func (s *Server) handleMCPProtocol(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, reply := s.deps.MCP.Handle(r.Context(), p, body)
+	resp, reply := s.deps.MCP.HandleMessage(r.Context(), p, body)
 	if !reply {
 		// A notification is acknowledged by an empty 202; replying with a result
 		// would be a protocol error.
