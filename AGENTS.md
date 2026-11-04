@@ -135,6 +135,12 @@ FORGECRM_ENV=development FORGECRM_HTTP_PORT=8080 \
   `entrypoint: ["/usr/local/bin/forgecrm-entrypoint"]`;
   `TestComposeWorkerSelectsTheWorkerBinary` требует минимум двух сигналов.
 - **Интеграционные тесты гейтятся и тегом сборки, и переменной окружения.**
+- **Бенчмарки — это интеграционные тесты.** Они читают ту же переменную
+  `FORGECRM_TEST_DATABASE_URL`, но засевают десятки тысяч строк и сбрасывают схему,
+  поэтому стенд отказывается работать, если имя базы не помечено как черновое
+  (`bench`/`test`/`scratch`/`ci`). Не направляйте `make test-bench` на базу, которую
+  не готовы потерять; `BENCH_DATABASE_URL` по умолчанию указывает на `forgecrm_bench`.
+  Числа и стенд записаны в `docs/performance/baseline.md`; это измерение, а не гейт.
 - **`.env` держит `FORGECRM_SECRET_KEY`** и в gitignore. Никогда его не коммитьте.
 - **`.env` в этом рабочем пространстве уже имеет сгенерированный ключ**, и
   `FORGECRM_HTTP_PORT` может быть переопределён; проверьте перед тем, как предполагать

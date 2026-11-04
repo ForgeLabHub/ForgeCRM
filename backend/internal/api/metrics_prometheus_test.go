@@ -178,3 +178,66 @@ func TestMetricsSurfacesAgree(t *testing.T) {
 		t.Errorf("the two surfaces disagree; Prometheus body:\n%s", rec.Body.String())
 	}
 }
+
+// TestMetricsReportWorkerLiveness checks the signal this change adds: the number
+// of workers that have beaten recently, on both surfaces.
+//
+// The worker is a separate service with no health check of its own, so this gauge
+// is the only thing that answers "is the worker up" — the readiness probe covers
+// the API only. The test seeds the heartbeat table directly (the worker's own path
+// is covered in internal/testsupport) and asserts the value reaches both bodies.
+func TestMetricsReportWorkerLiveness(t *testing.T) {
+	h := metricsHarness(t, "token")
+	ctx := context.Background()
+
+	// With no worker beating, the gauge is zero. Zero is the value an alert pages
+	// on, so its presence matters as much as a non-zero one.
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req.Header.Set("X-Metrics-Token", "token")
+	h.server.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d, want 200 (body %s)", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "# TYPE workers_alive gauge") {
+		t.Fatalf("the worker-liveness gauge is missing or not typed as a gauge:\n%s", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "workers_alive 0") {
+		t.Errorf("workers_alive is not 0 with no heartbeat:\n%s", rec.Body.String())
+	}
+
+	// Two workers beat; both count.
+	if _, err := h.db.Pool().Exec(ctx, `
+INSERT INTO worker_heartbeats (worker_id, role) VALUES ('w1', 'worker'), ('w2', 'worker')`); err != nil {
+		t.Fatalf("seed heartbeats: %v", err)
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req.Header.Set("X-Metrics-Token", "token")
+	h.server.ServeHTTP(rec, req)
+	if !strings.Contains(rec.Body.String(), "workers_alive 2") {
+		t.Errorf("workers_alive does not report 2 live workers:\n%s", rec.Body.String())
+	}
+
+	// The JSON surface reports the same value under the same name.
+	org := h.seedOrganization("liveness-" + uuid.NewString()[:8])
+	admin := h.seedUser("liveness-admin@example.test", "correct-horse-battery", "Liveness Admin")
+	h.joinOrganization(admin, org, "security_auditor")
+	actor := h.login("liveness-admin@example.test", "correct-horse-battery")
+
+	jsonRec := h.doWithHeaders(actor, http.MethodGet, "/api/v1/admin/metrics", "",
+		map[string]string{"X-Metrics-Token": "token"})
+	if jsonRec.Code != http.StatusOK {
+		t.Fatalf("JSON metrics: status %d, body %s", jsonRec.Code, jsonRec.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(jsonRec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode JSON metrics: %v", err)
+	}
+	if got, ok := body["workers_alive"]; !ok {
+		t.Fatalf("the JSON surface does not report workers_alive: %s", jsonRec.Body.String())
+	} else if got.(float64) != 2 {
+		t.Errorf("JSON surface reports workers_alive = %v, want 2", got)
+	}
+}
