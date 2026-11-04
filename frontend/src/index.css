@@ -2798,3 +2798,143 @@ a.metric:hover {
 .swatch__dot--amber { background: #b45309; }
 .swatch__dot--rose { background: #be123c; }
 .swatch__dot--cyan { background: #0e7490; }
+
+/* ---------------------------------------------------------------------------
+ * Workspaces
+ *
+ * The switcher sits in the top bar and names the current workspace; the menu it
+ * opens lists the others with a one-line description. Inside the sidebar a
+ * workspace is one flat, reorderable list, so each row can carry its own
+ * move controls without disturbing the grouped view.
+ * ------------------------------------------------------------------------- */
+
+.workspace-switcher {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 4px var(--space-2);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  cursor: pointer;
+  max-width: 230px;
+}
+
+.workspace-switcher:hover { background: var(--color-surface-sunken); }
+
+.workspace-switcher__glyph {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-size: 14px;
+  line-height: 1;
+  flex: none;
+}
+
+.workspace-switcher__text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.workspace-switcher__sub {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-subtle);
+}
+
+.workspace-switcher__name { font-size: 13px; font-weight: 600; max-width: 150px; }
+
+.workspace-menu { min-width: 320px; max-height: 70vh; overflow-y: auto; }
+
+.workspace-menu__hint {
+  margin: 0 0 var(--space-2);
+  padding: 0 var(--space-2);
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.workspace-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.workspace-option:hover { background: var(--color-surface-sunken); }
+
+.workspace-option--active { background: var(--color-accent-soft); }
+
+.workspace-option__glyph {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+  font-size: 13px;
+  flex: none;
+}
+
+.workspace-option--active .workspace-option__glyph {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.workspace-option__text { display: flex; flex-direction: column; min-width: 0; }
+.workspace-option__name { font-size: 13px; font-weight: 600; }
+.workspace-option__desc { font-size: 12px; color: var(--color-text-muted); }
+
+.nav-row { display: flex; align-items: center; }
+.nav-row > .nav-item { flex: 1 1 auto; min-width: 0; }
+
+.nav-row__controls {
+  display: none;
+  align-items: center;
+  gap: 1px;
+  padding-right: 2px;
+}
+
+/* The move controls appear on hover or keyboard focus, so the rail stays quiet
+   but the affordance is still reachable without a pointer. */
+.nav-row:hover .nav-row__controls,
+.nav-row:focus-within .nav-row__controls { display: flex; }
+
+.nav-row__move {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-subtle);
+  font-size: 9px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.nav-row__move:hover:not(:disabled) { background: var(--color-surface-sunken); color: var(--color-text); }
+.nav-row__move:disabled { opacity: 0.3; cursor: default; }
+
+@media (max-width: 720px) {
+  .workspace-switcher__text { display: none; }
+  .workspace-menu { min-width: 260px; }
+}

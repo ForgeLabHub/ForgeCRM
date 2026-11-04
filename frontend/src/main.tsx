@@ -6,6 +6,7 @@ import { App } from './App'
 import { AuthProvider } from './hooks/useAuth'
 import { I18nProvider } from './i18n'
 import { ThemeProvider } from './theme'
+import { WorkspaceProvider } from './workspace/WorkspaceProvider'
 import { ApiError } from './api/client'
 // Self-hosted so the app keeps working offline and in air-gapped installs; the
 // variable axis also gives the fractional weights the tokens ask for (550, 650).
@@ -37,7 +38,9 @@ createRoot(rootElement).render(
         <ThemeProvider>
           <BrowserRouter>
             <AuthProvider>
-              <App />
+              <WorkspaceProvider>
+                <App />
+              </WorkspaceProvider>
             </AuthProvider>
           </BrowserRouter>
         </ThemeProvider>

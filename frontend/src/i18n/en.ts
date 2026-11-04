@@ -386,6 +386,45 @@ export const en = {
     closeMenu: 'Close menu',
     mainNavigation: 'Main navigation',
   },
+  workspace: {
+    label: 'Workspace',
+    switchLabel: 'Switch workspace',
+    hint: 'A workspace arranges the same application around your work. It never grants access you do not already have.',
+    moveUp: 'Move {name} up',
+    moveDown: 'Move {name} down',
+    all: {
+      name: 'Everything',
+      description: 'The full product, grouped as it always was.',
+    },
+    sales: {
+      name: 'Sales',
+      description: 'Deals, leads and the funnel first, then contacts and follow-ups.',
+    },
+    executive: {
+      name: 'Executive',
+      description: 'KPIs, revenue and forecasts, with risk and approvals to hand.',
+    },
+    support: {
+      name: 'Support',
+      description: 'Tickets, the queue and the customer history around them.',
+    },
+    marketing: {
+      name: 'Marketing',
+      description: 'Leads, their sources and campaign performance.',
+    },
+    operations: {
+      name: 'Operations',
+      description: 'Tasks, imports, background jobs and integrations.',
+    },
+    analyst: {
+      name: 'Analyst',
+      description: 'Reports, forecasting and risk for comparing periods.',
+    },
+    admin: {
+      name: 'Admin',
+      description: 'Users, roles, security, audit and system configuration.',
+    },
+  },
   deals: {
     title: 'Deals',
     meta: 'Every opportunity in the pipeline, with its stage and value.',
