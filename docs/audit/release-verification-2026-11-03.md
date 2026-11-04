@@ -240,3 +240,45 @@ cd frontend && FORGECRM_API_URL=http://127.0.0.1:8080 npx playwright test --proj
 `forgecrm_phaseh`, `forgecrm_phaseh_live`, `forgecrm_phaseh_e2e`,
 `forgecrm_perf`; временный помощник миграций; собранный бинарник API.
 Рабочее дерево чистое. Коммитов в ходе Phase H не делалось.
+
+## 15. Дополнение: публикация и подтверждение remote CI (2026-11-04)
+
+Закрывает P1 из §11.
+
+| Параметр | Значение |
+| --- | --- |
+| Исходный SHA | `6484a50` (`origin/main` до публикации) |
+| Опубликованный SHA | `0c748e2` |
+| Тип отправки | обычный push, fast-forward `6484a50..0c748e2`, без force |
+| Отправленные коммиты | `4178cac`, `ed0b5d6`, `abc57d2`, `91ee991`, `07d5dcf`, `0c748e2` |
+| Секрет-аудит | `gitleaks 8.28.0` по диапазону `origin/main..HEAD`: утечек нет |
+| Remote CI | CI run `41747583263` + Portability run `41747583255`, оба на `0c748e2` |
+
+**Результат каждого обязательного job:**
+
+| Workflow | Задание | Итог |
+| --- | --- | --- |
+| CI | Backend (format, vet, test, build) | success |
+| CI | Frontend (lint, typecheck, test, build) | success |
+| CI | End-to-end (real API, real database, real browser) | success |
+| CI | Visual regression (baselines on Linux) | success |
+| CI | Security (dependencies, secrets, static analysis) | success |
+| CI | Docker image builds | success |
+| CI | Constructor (each recipe builds a working project) | success |
+| CI | Extraction (each module builds without the monolith) | success |
+| CI | Blitz Cloud deployment (root image, clean database) | success |
+| CI | Required documentation is present | success |
+| Portability | Upgrade an existing database | success |
+| Portability | Backup, restore and smoke test | success |
+| Portability | Runs with no optional configuration | success |
+| Portability | Documentation is present and linked | success |
+| Portability | Full stack (Compose) smoke test | success |
+
+**15/15 success.** Visual regression на опубликованном SHA подтверждена
+заданием CI (закрывает P2). Ветка `main` защищена не была — API с admin-токеном
+вернул `Branch not protected` (остаётся P3, действие владельца).
+
+**Статус P1: ЗАКРЫТ.** Phase E/G/H подтверждены remote CI на опубликованном SHA.
+
+Итоговый статус релиза — в
+[FINAL_RELEASE_CERTIFICATION.md](FINAL_RELEASE_CERTIFICATION.md).
