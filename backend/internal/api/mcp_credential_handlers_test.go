@@ -36,3 +36,19 @@ func TestBearerTokenParsing(t *testing.T) {
 		})
 	}
 }
+
+func TestMCPTokenHeaderPrecedence(t *testing.T) {
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/mcp", nil)
+	r.Header.Set("X-API-Key", " fcmcp_key ")
+	if got := mcpToken(r); got != "fcmcp_key" {
+		t.Fatalf("API key = %q", got)
+	}
+	r.Header.Set("Authorization", "Bearer fcmcp_bearer")
+	if got := mcpToken(r); got != "fcmcp_bearer" {
+		t.Fatalf("bearer = %q", got)
+	}
+	r.Header.Set("Authorization", "Basic invalid")
+	if got := mcpToken(r); got != "" {
+		t.Fatalf("malformed Authorization must not fall back: %q", got)
+	}
+}

@@ -242,3 +242,31 @@ func TestDatabaseURLFallbackAndPort(t *testing.T) {
 		t.Errorf("expected HTTPAddr to be 0.0.0.0:9090, got %q", cfg.HTTPAddr)
 	}
 }
+
+func TestCookieConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		name, sameSite, secure, partitioned string
+		wantErr                             bool
+	}{
+		{"default", "lax", "false", "false", false},
+		{"strict", "strict", "false", "false", false},
+		{"none requires secure", "none", "false", "false", true},
+		{"partitioned requires secure", "lax", "false", "true", true},
+		{"secure partitioned", "none", "true", "true", false},
+		{"unknown mode", "maybe", "true", "false", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			baseEnv(t)
+			t.Setenv("FORGECRM_COOKIE_SAME_SITE", tc.sameSite)
+			t.Setenv("FORGECRM_COOKIE_SECURE", tc.secure)
+			t.Setenv("FORGECRM_COOKIE_PARTITIONED", tc.partitioned)
+			cfg, err := Load()
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("Load error = %v, wantErr %v", err, tc.wantErr)
+			}
+			if err == nil && (cfg.CookieSameSite != tc.sameSite || cfg.CookiePartitioned != (tc.partitioned == "true")) {
+				t.Fatalf("unexpected cookie settings: %+v", cfg)
+			}
+		})
+	}
+}

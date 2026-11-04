@@ -453,13 +453,10 @@ func (r *ToolRegistry) buildTools() []*Tool {
 					}
 					in.AccountID = &id
 				}
-				// The assignee defaults to the caller: an agent creating a task on
-				// someone else's behalf would need tasks.assign.
-				if p.Has(rbac.PermTasksAssign) {
-					in.AssigneeUserID = &p.UserID
-				} else {
-					in.AssigneeUserID = &p.UserID
-				}
+				// The assignee is always the caller: a task created through the
+				// agent interface is never assigned to someone else, so an
+				// approved tool call cannot move work onto another person.
+				in.AssigneeUserID = &p.UserID
 				return r.crm.CreateTask(ctx, p, in)
 			},
 		},

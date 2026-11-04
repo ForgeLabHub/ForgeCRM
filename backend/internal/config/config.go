@@ -33,6 +33,8 @@ type Config struct {
 	SessionCookieName string
 	CookieSecure      bool
 	CookieDomain      string
+	CookieSameSite    string
+	CookiePartitioned bool
 	CSRFHeader        string
 	LockoutThreshold  int
 	LockoutWindow     time.Duration
@@ -379,6 +381,8 @@ func Load() (*Config, error) {
 		SessionCookieName: env("FORGECRM_SESSION_COOKIE", "forgecrm_session"),
 		CookieSecure:      envBool("FORGECRM_COOKIE_SECURE", prod),
 		CookieDomain:      env("FORGECRM_COOKIE_DOMAIN", ""),
+		CookieSameSite:    strings.ToLower(env("FORGECRM_COOKIE_SAME_SITE", "lax")),
+		CookiePartitioned: envBool("FORGECRM_COOKIE_PARTITIONED", false),
 		CSRFHeader:        env("FORGECRM_CSRF_HEADER", "X-CSRF-Token"),
 		SecretKey:         env("FORGECRM_SECRET_KEY", ""),
 
@@ -644,6 +648,14 @@ func (c *Config) Validate() error {
 	case "json", "text":
 	default:
 		return fmt.Errorf("FORGECRM_LOG_FORMAT must be json or text, got %q", c.LogFormat)
+	}
+	switch c.CookieSameSite {
+	case "", "lax", "strict", "none":
+	default:
+		return fmt.Errorf("FORGECRM_COOKIE_SAME_SITE must be lax, strict or none")
+	}
+	if (c.CookieSameSite == "none" || c.CookiePartitioned) && !c.CookieSecure {
+		return fmt.Errorf("SameSite=None and partitioned cookies require FORGECRM_COOKIE_SECURE=true")
 	}
 	if c.SessionTTL <= 0 {
 		return fmt.Errorf("FORGECRM_SESSION_TTL must be positive")
