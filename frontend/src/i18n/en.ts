@@ -1073,9 +1073,10 @@ export const en = {
     bot: 'Bot',
     lastError: 'Last error',
     linkingUnavailable: 'The bot is configured, but incoming Telegram messages and account linking are not available yet.',
+    linkingConfiguredNotice: 'Incoming messages are enabled in configuration. This does not confirm webhook registration with Telegram or reachability.',
     linkAccount: 'Link your account',
     linkIntro:
-      'Generate a code, then send /link followed by the code to the bot in Telegram. The code expires shortly and can only be used once. Linking is per user, so the bot always acts as you and is bound by your permissions.',
+      'Generate a code, then send /link followed by the code only to the bot in a private Telegram chat. Do not share the code. The code expires shortly and can only be used once. Linking is per user, so the bot always acts as you and is bound by your permissions.',
     generating: 'Generating…',
     generateCode: 'Generate link code',
     unlinkAccount: 'Unlink my account',

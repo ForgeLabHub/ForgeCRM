@@ -58,8 +58,8 @@ if [ -s "$openapi_file" ]; then
   if [ "$json_paths" -gt 0 ] && [ "$json_ops" -ge "$json_paths" ]; then
     ok "openapi.json: $json_paths путей, $json_ops операций"
     # README объявляет оба числа в строке статуса API.
-    readme_paths=$(grep -oE '[0-9]+ путей' "$readme" | grep -oE '[0-9]+' | head -1)
-    readme_ops=$(grep -oE '[0-9]+ операции' "$readme" | grep -oE '[0-9]+' | head -1)
+    readme_paths=$(grep -oE '[0-9]+ (путь|пути|путей)' "$readme" | grep -oE '[0-9]+' | head -1)
+    readme_ops=$(grep -oE '[0-9]+ (операция|операции|операций)' "$readme" | grep -oE '[0-9]+' | head -1)
     if [ -z "$readme_paths" ] || [ -z "$readme_ops" ]; then
       bad "$readme: не найдено утверждение «N путей, M операции»"
     elif [ "$readme_paths" = "$json_paths" ] && [ "$readme_ops" = "$json_ops" ]; then

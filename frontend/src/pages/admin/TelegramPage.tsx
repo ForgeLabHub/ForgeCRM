@@ -58,25 +58,13 @@ export function TelegramPage() {
                 {status.data.enabled ? (
                   <Badge tone="success">{t('telegram.tokenSet')}</Badge>
                 ) : null}
-                {status.data.webhook_set ? (
-                  <Badge tone="accent">{t('telegram.webhookRegistered')}</Badge>
-                ) : null}
               </div>
 
               {!status.data.enabled ? (
                 <Alert tone="info">{t('telegram.noTokenInfo')}</Alert>
-              ) : (
-                <dl className="dl">
-                  <dt>{t('telegram.bot')}</dt>
-                  <dd className="mono">{status.data.bot_username ?? '—'}</dd>
-                  {status.data.last_error ? (
-                    <>
-                      <dt>{t('telegram.lastError')}</dt>
-                      <dd className="text-danger">{status.data.last_error}</dd>
-                    </>
-                  ) : null}
-                </dl>
-              )}
+              ) : status.data.linking_available ? (
+                <Alert tone="info">{t('telegram.linkingConfiguredNotice')}</Alert>
+              ) : null}
             </div>
           ) : null}
         </Card>

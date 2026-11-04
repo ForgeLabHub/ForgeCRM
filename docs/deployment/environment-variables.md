@@ -160,7 +160,8 @@ the sweep reports the rows a real run would remove and deletes nothing until
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `FORGECRM_TELEGRAM_ENABLED` | API, Worker | no | `false` | Enables the Telegram bot. With no token it disables itself rather than breaking startup. | `false` | no | no |
 | `FORGECRM_TELEGRAM_BOT_TOKEN` | API, Worker | yes when enabled | none | Bot token from BotFather. | `123456:ABC-...` | yes | no |
-| `FORGECRM_TELEGRAM_WEBHOOK_SECRET` | API | no | none | Secret Telegram sends in the webhook header, verified on each delivery. | a random string | yes | no |
+| `FORGECRM_TELEGRAM_WEBHOOK_ENABLED` | API | no | `false` | Opt-in for the incoming webhook; configuration does not register it with Telegram or prove reachability. | `false` | no | no |
+| `FORGECRM_TELEGRAM_WEBHOOK_SECRET` | API | yes when webhook enabled | none | Independent secret, 32–256 characters using letters, digits, `_` or `-`; verified against the Telegram header. | `<independent secret>` | yes | no |
 
 ## AI provider (optional)
 
@@ -249,7 +250,6 @@ an operator does not set them expecting an effect. Removing them is safe.
 | --- | --- | --- |
 | `FORGECRM_SMTP_PUBLIC_URL` | `internal/config/config.go` | Stored on the email config; no code reads `Email.PublicURL`. |
 | `FORGECRM_JOB_MAX_ATTEMPTS` | `internal/config/config.go` | Stored as `JobMaxAttempts`; the job queue uses a per-job attempt count instead. |
-| `FORGECRM_TELEGRAM_WEBHOOK_SECRET` | `internal/notify/telegram.go` | Verified by `VerifyWebhookSecret`, which no route currently calls. |
 
 ## Production checklist
 

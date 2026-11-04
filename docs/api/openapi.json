@@ -4201,8 +4201,8 @@
         "tags": [
           "audit-and-diagnostics"
         ],
-        "summary": "Archive or delete a link",
-        "description": "Requires the `email.manage` permission.",
+        "summary": "Revoke the signed-in user's Telegram link.",
+        "description": "Revoke the signed-in user's Telegram link.",
         "parameters": [
           {
             "name": "Idempotency-Key",
@@ -4347,8 +4347,8 @@
         "tags": [
           "audit-and-diagnostics"
         ],
-        "summary": "Create a link-code",
-        "description": "Requires the `email.manage` permission.",
+        "summary": "Create a single-use link challenge for the signed-in user.",
+        "description": "Create a single-use link challenge for the signed-in user.",
         "parameters": [
           {
             "name": "Idempotency-Key",
@@ -4500,8 +4500,8 @@
         "tags": [
           "audit-and-diagnostics"
         ],
-        "summary": "List status",
-        "description": "Requires the `email.manage` permission.",
+        "summary": "Telegram configuration state, without token or webhook secret.",
+        "description": "Telegram configuration state, without token or webhook secret.",
         "parameters": [
           {
             "name": "limit",
@@ -32910,6 +32910,119 @@
             }
           }
         }
+      }
+    },
+    "/api/v1/telegram/webhook": {
+      "post": {
+        "operationId": "postTelegramWebhook",
+        "tags": [
+          "crm"
+        ],
+        "summary": "Inbound Telegram updates require the X-Telegram-Bot-Api-Secret-Token header and an explicitly enabled webhook. HTTPS must terminate at a trusted proxy.",
+        "description": "Inbound Telegram updates require the X-Telegram-Bot-Api-Secret-Token header and an explicitly enabled webhook. HTTPS must terminate at a trusted proxy.",
+        "responses": {
+          "201": {
+            "description": "Success. This operation's response body is not yet described by a schema; the shape is whatever the handler returns.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed: bad JSON, an unknown field, or a missing required parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such resource, or none visible to the caller's organization.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request conflicts with current state, such as a duplicate external identifier.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A field failed validation. `error.details` names each field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests. Retry after the interval in `Retry-After`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected failure. The detail is deliberately generic; the cause is in the server log.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": []
       }
     },
     "/api/v1/tickets": {

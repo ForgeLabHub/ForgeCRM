@@ -26,9 +26,9 @@ func (s *Server) mountNotifications(r chi.Router) {
 		r.With(s.perm(rbac.PermNotificationsRead)).Get("/log", s.handleEmailLog)
 	})
 	r.Route("/admin/telegram", func(r chi.Router) {
-		r.With(s.perm(rbac.PermEmailManage)).Get("/status", s.handleTelegramStatus)
-		r.With(s.perm(rbac.PermEmailManage)).Post("/link-code", s.handleTelegramLinkCode)
-		r.With(s.perm(rbac.PermEmailManage)).Delete("/link", s.handleTelegramUnlink)
+		r.Get("/status", s.handleTelegramStatus)
+		r.Post("/link-code", s.handleTelegramLinkCode)
+		r.Delete("/link", s.handleTelegramUnlink)
 	})
 }
 
@@ -174,12 +174,16 @@ func (s *Server) handleEmailLog(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleTelegramStatus(w http.ResponseWriter, r *http.Request) {
+	commands := []string{}
+	if s.deps.Telegram.WebhookEnabled() {
+		commands = []string{"/start", "/help", "/link", "/tasks", "/today", "/task", "/done", "/due"}
+	}
 	httpx.WriteJSON(w, map[string]any{
 		"enabled": s.deps.Telegram.Enabled(),
 		"reason":  reasonIfDisabled(s.deps.Telegram.Enabled(), "Telegram is disabled or no bot token is configured; the platform works normally without it"),
-		// Inbound updates are not connected to a webhook yet, so the command
-		// handlers cannot be used through Telegram.
-		"commands": []string{},
+		// Configuration does not prove Telegram registered or can reach the URL.
+		"linking_available": s.deps.Telegram.WebhookEnabled(),
+		"commands":          commands,
 	})
 }
 
@@ -193,6 +197,10 @@ func reasonIfDisabled(enabled bool, reason string) string {
 func (s *Server) handleTelegramLinkCode(w http.ResponseWriter, r *http.Request) {
 	p, ok := s.mustPrincipal(w, r)
 	if !ok {
+		return
+	}
+	if !s.deps.Telegram.WebhookEnabled() {
+		httpx.WriteError(w, r, httpx.NewError(http.StatusServiceUnavailable, httpx.CodeDisabled, "Telegram webhook is not configured"))
 		return
 	}
 	code, err := s.deps.Telegram.CreateLinkCode(r.Context(), p)

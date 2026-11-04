@@ -136,9 +136,10 @@ type EmailConfig struct {
 
 // TelegramConfig configures the optional Telegram bot.
 type TelegramConfig struct {
-	Enabled       bool
-	BotToken      string
-	WebhookSecret string
+	Enabled        bool
+	BotToken       string
+	WebhookSecret  string
+	WebhookEnabled bool
 }
 
 // AIConfig configures the optional AI layer.
@@ -440,9 +441,10 @@ func Load() (*Config, error) {
 	}
 
 	c.Telegram = TelegramConfig{
-		Enabled:       envBool("FORGECRM_TELEGRAM_ENABLED", false),
-		BotToken:      env("FORGECRM_TELEGRAM_BOT_TOKEN", ""),
-		WebhookSecret: env("FORGECRM_TELEGRAM_WEBHOOK_SECRET", ""),
+		Enabled:        envBool("FORGECRM_TELEGRAM_ENABLED", false),
+		BotToken:       env("FORGECRM_TELEGRAM_BOT_TOKEN", ""),
+		WebhookSecret:  env("FORGECRM_TELEGRAM_WEBHOOK_SECRET", ""),
+		WebhookEnabled: envBool("FORGECRM_TELEGRAM_WEBHOOK_ENABLED", false),
 	}
 	if c.Telegram.Enabled && c.Telegram.BotToken == "" {
 		// A token-less bot disables itself rather than breaking startup.

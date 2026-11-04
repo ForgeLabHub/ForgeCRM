@@ -1,12 +1,14 @@
 package notify
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"strings"
 	"time"
@@ -56,6 +58,20 @@ func NewTelegramService(cfg *config.TelegramConfig, db *database.DB, log *slog.L
 // rest of the system working.
 func (s *TelegramService) Enabled() bool {
 	return s != nil && s.cfg != nil && s.cfg.Enabled && s.cfg.BotToken != ""
+}
+
+// WebhookEnabled is deliberately opt-in and refuses a weak or malformed secret.
+// TLS is terminated by the deployment proxy; this does not establish HTTPS.
+func (s *TelegramService) WebhookEnabled() bool {
+	if !s.Enabled() || !s.cfg.WebhookEnabled || len(s.cfg.WebhookSecret) < 32 || len(s.cfg.WebhookSecret) > 256 {
+		return false
+	}
+	for _, c := range s.cfg.WebhookSecret {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '-') {
+			return false
+		}
+	}
+	return true
 }
 
 // ErrTelegramDisabled is returned when the bot is not configured.
@@ -212,13 +228,16 @@ func (s *TelegramService) ResolveUser(ctx context.Context, telegramUserID int64)
 		email  string
 		name   string
 	)
-	const q = `
+	q := `
 		SELECT l.user_id, l.organization_id, u.status, u.email, u.display_name
 		FROM telegram_links l
 		JOIN users u ON u.id = l.user_id
 		JOIN memberships m ON m.user_id = l.user_id AND m.organization_id = l.organization_id AND m.status = 'active'
 		JOIN organizations o ON o.id = l.organization_id AND o.status = 'active'
 		WHERE l.telegram_user_id = $1 AND l.linked_at IS NOT NULL AND l.revoked_at IS NULL`
+	if _, ok := database.TxFromContext(ctx); ok {
+		q += " FOR SHARE OF l, m, u, o"
+	}
 	if err := s.db.Q(ctx).QueryRow(ctx, q, telegramUserID).Scan(&userID, &orgID, &status, &email, &name); err != nil {
 		if database.IsNoRows(err) {
 			return nil, httpx.NewError(403, httpx.CodeForbidden, "this Telegram account is not linked to a ForgeCRM user")
@@ -493,4 +512,183 @@ func (s *TelegramService) NotifyUser(ctx context.Context, orgID uuid.UUID, userI
 		return err
 	}
 	return s.sendMessage(ctx, chatID, text)
+}
+
+// ErrTelegramRecipientUnavailable indicates a pending response must be discarded:
+// the original account was unlinked, disabled, or moved to another chat.
+var ErrTelegramRecipientUnavailable = errors.New("telegram recipient is no longer available")
+
+// ReplyLinked sends a response only if the exact original link is still active.
+// It must run in the receipt transaction so the share lock lasts through the
+// send and cannot race a revoke or reassignment. The regular consent gate applies.
+func (s *TelegramService) ReplyLinked(ctx context.Context, chatID int64, orgID, userID uuid.UUID, text string) error {
+	if !s.Enabled() {
+		return ErrTelegramDisabled
+	}
+	if _, ok := database.TxFromContext(ctx); !ok {
+		return errors.New("telegram reply requires a transaction")
+	}
+	var email string
+	err := s.db.Q(ctx).QueryRow(ctx, `SELECT u.email FROM telegram_links l
+		JOIN users u ON u.id=l.user_id AND u.status='active'
+		JOIN memberships m ON m.user_id=l.user_id AND m.organization_id=l.organization_id AND m.status='active'
+		JOIN organizations o ON o.id=l.organization_id AND o.status='active'
+		WHERE l.telegram_user_id=$1 AND l.organization_id=$2 AND l.user_id=$3
+		AND l.linked_at IS NOT NULL AND l.revoked_at IS NULL FOR SHARE OF l,u,m,o`, chatID, orgID, userID).Scan(&email)
+	if database.IsNoRows(err) {
+		return ErrTelegramRecipientUnavailable
+	}
+	if err != nil {
+		return fmt.Errorf("resolve telegram reply recipient: %w", err)
+	}
+	if err := enforce(ctx, s.gate, &orgID, &userID, email, string(PurposeTransactional), ChannelTelegram); err != nil {
+		return err
+	}
+	return s.sendMessage(ctx, chatID, text)
+}
+
+// ReplySystem is limited to pre-defined, non-sensitive responses to a private
+// user-initiated interaction. An existing (even revoked) link is checked against
+// that person's consent; an unknown chat uses the account-level policy.
+func (s *TelegramService) ReplySystem(ctx context.Context, chatID int64, kind string) error {
+	if !s.Enabled() {
+		return ErrTelegramDisabled
+	}
+	if _, ok := database.TxFromContext(ctx); !ok {
+		return errors.New("telegram reply requires a transaction")
+	}
+	var text string
+	switch kind {
+	case "help":
+		text = "ForgeCRM bot\n/link <code> — link an account\n/tasks — open tasks\n/today — tasks due today (UTC)\n/task <id> — task details\n/done <id> — complete\n/due <id> <RFC3339> — reschedule"
+	case "link_usage":
+		text = "Generate a code in ForgeCRM and send /link <code> here."
+	case "link_failed":
+		text = "Could not link this account. Check the code or unlink the existing account first."
+	case "not_linked":
+		text = "This account is not linked. Send /link <code> first."
+	case "unknown":
+		text = "Unknown command. Send /help for available commands."
+	default:
+		return errors.New("unknown telegram system reply")
+	}
+	var org, user uuid.UUID
+	var email string
+	err := s.db.Q(ctx).QueryRow(ctx, `SELECT l.organization_id,l.user_id,u.email FROM telegram_links l
+		JOIN users u ON u.id=l.user_id WHERE l.telegram_user_id=$1 FOR SHARE OF l,u`, chatID).Scan(&org, &user, &email)
+	if err != nil && !database.IsNoRows(err) {
+		return fmt.Errorf("resolve telegram system reply: %w", err)
+	}
+	if err == nil {
+		if err := enforce(ctx, s.gate, &org, &user, email, string(PurposeTransactional), ChannelTelegram); err != nil {
+			return err
+		}
+	} else if err := enforce(ctx, s.gate, nil, nil, "", string(PurposeTransactional), ChannelTelegram); err != nil {
+		return err
+	}
+	return s.sendMessage(ctx, chatID, text)
+}
+
+// TaskDeliveryResult distinguishes API acceptance from proof of delivery. An
+// image error is sanitized and retained even when text fallback succeeds.
+type TaskDeliveryResult struct {
+	Status     string
+	ImageError string
+}
+
+// NotifyTask sends a CRM-backed card using the same recipient and consent policy
+// as other notifications. The caller must hold any domain locks needed to ensure
+// the task is still assigned to the recipient while this method executes.
+func (s *TelegramService) NotifyTask(ctx context.Context, orgID, userID uuid.UUID, card TaskCard) (TaskDeliveryResult, error) {
+	var result TaskDeliveryResult
+	if !s.Enabled() {
+		return result, ErrTelegramDisabled
+	}
+	var chatID int64
+	var email string
+	const q = `SELECT l.telegram_user_id,u.email FROM telegram_links l
+		JOIN users u ON u.id=l.user_id AND u.status='active'
+		JOIN memberships m ON m.user_id=l.user_id AND m.organization_id=l.organization_id AND m.status='active'
+		JOIN organizations o ON o.id=l.organization_id AND o.status='active'
+		WHERE l.organization_id=$1 AND l.user_id=$2 AND l.linked_at IS NOT NULL AND l.revoked_at IS NULL`
+	query := q
+	if _, ok := database.TxFromContext(ctx); ok {
+		query += " FOR SHARE OF l,u,m,o"
+	}
+	err := s.db.Q(ctx).QueryRow(ctx, query, orgID, userID).Scan(&chatID, &email)
+	if database.IsNoRows(err) {
+		result.Status = "no_recipient"
+		return result, nil
+	}
+	if err != nil {
+		return result, fmt.Errorf("resolve telegram recipient: %w", err)
+	}
+	if err := enforce(ctx, s.gate, &orgID, &userID, email, string(PurposeTransactional), ChannelTelegram); err != nil {
+		if errors.Is(err, ErrConsentBlocked) {
+			result.Status = "blocked"
+			return result, nil
+		}
+		return result, err
+	}
+	image, text, err := RenderTaskCard(card)
+	if err != nil && text == "" {
+		return result, err
+	}
+	if err == nil {
+		err = s.sendPhoto(ctx, chatID, text, image)
+	}
+	if err == nil {
+		result.Status = "photo_accepted"
+		return result, nil
+	}
+	// Error messages from both the renderer and transport are bounded and never
+	// include the API URL, response body, message text or token.
+	result.ImageError = err.Error()
+	if err := s.sendMessage(ctx, chatID, text); err != nil {
+		return result, err
+	}
+	result.Status = "text_accepted"
+	return result, nil
+}
+
+func (s *TelegramService) sendPhoto(ctx context.Context, chatID int64, caption string, photo []byte) error {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	if err := writer.WriteField("chat_id", fmt.Sprint(chatID)); err != nil {
+		return errors.New("telegram photo request failed")
+	}
+	if err := writer.WriteField("caption", caption); err != nil {
+		return errors.New("telegram photo request failed")
+	}
+	part, err := writer.CreateFormFile("photo", "task.png")
+	if err != nil {
+		return errors.New("telegram photo request failed")
+	}
+	if _, err := part.Write(photo); err != nil {
+		return errors.New("telegram photo request failed")
+	}
+	if err := writer.Close(); err != nil {
+		return errors.New("telegram photo request failed")
+	}
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendPhoto", s.cfg.BotToken)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, &body)
+	if err != nil {
+		return errors.New("telegram photo request invalid")
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return errors.New("telegram photo request failed")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("telegram photo API returned HTTP %d", resp.StatusCode)
+	}
+	var result struct {
+		OK bool `json:"ok"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&result); err != nil || !result.OK {
+		return errors.New("telegram photo API did not confirm acceptance")
+	}
+	return nil
 }

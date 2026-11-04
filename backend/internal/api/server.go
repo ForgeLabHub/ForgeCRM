@@ -128,10 +128,11 @@ type Deps struct {
 
 // Server holds the router and its dependencies.
 type Server struct {
-	deps         *Deps
-	router       chi.Router
-	limiter      *ratelimit.Limiter
-	loginLimiter *ratelimit.Limiter
+	deps            *Deps
+	router          chi.Router
+	limiter         *ratelimit.Limiter
+	loginLimiter    *ratelimit.Limiter
+	telegramLimiter *ratelimit.Limiter
 	// mcpLimiter bounds tool calls made with one MCP credential. It is keyed by
 	// credential id, so one client cannot spend another's budget.
 	mcpLimiter *ratelimit.Limiter
@@ -193,13 +194,24 @@ func New(deps *Deps, store ratelimit.Store, trusted httpx.TrustedProxies) (*Serv
 		return nil, err
 	}
 
+	// A fail-closed budget limits unauthenticated webhook traffic. In a
+	// multi-replica deployment the configured limiter store must be shared.
+	telegramLimiter, err := ratelimit.New(store, ratelimit.Policy{
+		Name: "telegram_webhook", Limit: 1200, Window: time.Minute,
+		FailMode: ratelimit.FailClosed, KeyPrefix: "rl:telegram:webhook",
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	s := &Server{
-		deps:         deps,
-		limiter:      apiLimiter,
-		loginLimiter: loginLimiter,
-		mcpLimiter:   mcpLimiter,
-		limiterStore: store,
-		trusted:      trusted,
+		telegramLimiter: telegramLimiter,
+		deps:            deps,
+		limiter:         apiLimiter,
+		loginLimiter:    loginLimiter,
+		mcpLimiter:      mcpLimiter,
+		limiterStore:    store,
+		trusted:         trusted,
 	}
 	s.router = s.buildRouter()
 	return s, nil
@@ -337,6 +349,11 @@ func (s *Server) buildRouter() chi.Router {
 			Subject: httpx.ClientIP,
 			Log:     s.deps.Log,
 		}))
+
+		// Telegram authenticates via its own secret header, not a browser session.
+		r.With(httpx.RateLimitMiddleware(httpx.RateLimitOptions{
+			Limiter: s.telegramLimiter, Subject: httpx.ClientIP, Log: s.deps.Log,
+		})).Post("/telegram/webhook", s.handleTelegramWebhook)
 
 		r.Route("/auth", func(r chi.Router) {
 			r.Group(func(r chi.Router) {

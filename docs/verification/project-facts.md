@@ -39,7 +39,7 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 код изменился, а документ не перегенерировали.
 
 <!-- FACTS:AUTO BEGIN — генерируется backend/cmd/facts-gen, не редактировать вручную -->
-<!-- измерено на HEAD `820ff614a977d1b3404c2838e9ae4411f82ac236` -->
+<!-- измерено на HEAD `ca132746f3c2e0775e710203566bafc19f4f8485` -->
 
 ## Backend / Architecture
 
@@ -47,9 +47,9 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 |---|---|---|
 | Пакеты Go (весь backend) | **53** | каталоги с хотя бы одним .go-файлом под backend/ |
 | Пакеты Go (backend/internal) | **48** | то же, ограничено backend/internal/** |
-| Go-файлы без тестов | **147** | *.go, кроме *_test.go |
-| Go тестовых файлов | **137** | *_test.go |
-| Тестовые функции Go | **874** | верхнеуровневые func TestXxx(*testing.T), TestMain исключён |
+| Go-файлы без тестов | **150** | *.go, кроме *_test.go |
+| Go тестовых файлов | **140** | *_test.go |
+| Тестовые функции Go | **878** | верхнеуровневые func TestXxx(*testing.T), TestMain исключён |
 | Бенчмарки Go | **3** | func BenchmarkXxx |
 | Fuzz-тесты Go | **0** | func FuzzXxx |
 | Example-тесты Go | **0** | func ExampleXxx |
@@ -58,9 +58,9 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 
 | Метрика | Значение | Определение |
 |---|---|---|
-| Миграций up | **32** | *.up.sql в backend/internal/migrations |
-| Миграций down | **32** | *.down.sql там же |
-| Таблиц БД | **78** | уникальные имена CREATE TABLE во всех up-миграциях |
+| Миграций up | **33** | *.up.sql в backend/internal/migrations |
+| Миграций down | **33** | *.down.sql там же |
+| Таблиц БД | **80** | уникальные имена CREATE TABLE во всех up-миграциях |
 
 ## Security (RBAC)
 
@@ -80,8 +80,8 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 
 | Метрика | Значение | Определение |
 |---|---|---|
-| OpenAPI paths | **180** | ключи objects.paths в docs/api/openapi.json |
-| OpenAPI operations | **234** | методы get/post/put/patch/delete внутри paths |
+| OpenAPI paths | **181** | ключи objects.paths в docs/api/openapi.json |
+| OpenAPI operations | **235** | методы get/post/put/patch/delete внутри paths |
 
 openapi.json генерируется из живого роутера (`cmd/openapi-gen`), поэтому
 счётчик отражает код, а CI-гейт `openapi-check` не даёт документу устареть.

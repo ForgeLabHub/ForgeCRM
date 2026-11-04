@@ -34,15 +34,16 @@ const (
 
 // Job kinds registered in the worker.
 const (
-	KindImportExecute  = "import.execute"
-	KindImportDryRun   = "import.dry_run"
-	KindExportExecute  = "export.execute"
-	KindMigrationRun   = "migration.run"
-	KindWebhookDeliver = "webhook.deliver"
-	KindEmailSend      = "email.send"
-	KindOutboxDrain    = "outbox.drain"
-	KindReconcile      = "migration.reconcile"
-	KindRetentionSweep = "maintenance.retention"
+	KindImportExecute            = "import.execute"
+	KindImportDryRun             = "import.dry_run"
+	KindExportExecute            = "export.execute"
+	KindMigrationRun             = "migration.run"
+	KindWebhookDeliver           = "webhook.deliver"
+	KindEmailSend                = "email.send"
+	KindTelegramTaskNotification = "telegram.task_notification"
+	KindOutboxDrain              = "outbox.drain"
+	KindReconcile                = "migration.reconcile"
+	KindRetentionSweep           = "maintenance.retention"
 	// KindImportTempSweep removes extraction directories an import left behind
 	// when its worker died before the deferred cleanup ran. Without it those
 	// directories accumulate without bound, because the in-process cleanup only
