@@ -1,16 +1,16 @@
 # Финальная сертификация релиза ForgeCRM
 
 - **Дата:** 2026-11-04
-- **Проверенный SHA:** `0c748e2` (`docs(audit): Phase H final release re-verification`)
+- **Проверенный SHA:** `2d87ee1` (`docs(audit): mark both dependency advisories fixed`)
 - **Ветка:** `main` (единственная)
 - **Лицензия:** MIT
 - **Версия:** `0.1.0-dev`
 
 Это итоговый документ финализации: он объединяет доказательства, собранные при
-публикации пяти ранее непроверенных коммитов (Phase E/G/H), прогоне remote CI на
-опубликованном SHA и повторной проверке продукта. Каждое утверждение ниже
-проверено командой или job'ом CI; то, что проверить не удалось, помечено
-`NOT VERIFIED`, а не выдано за успех.
+публикации пяти ранее непроверенных коммитов (Phase E/G/H), обновлении двух
+зависимостей с известными уязвимостями и прогоне remote CI на опубликованном
+SHA. Каждое утверждение ниже проверено командой или job'ом CI; то, что проверить
+не удалось, помечено `NOT VERIFIED`, а не выдано за успех.
 
 ## A. Состояние проекта
 
@@ -38,6 +38,19 @@
 
 API и воркер — общий образ, разные бинарники; запускаются независимо.
 
+### Коммиты финализации (поверх `0c748e2`)
+
+| SHA | Коммит |
+| --- | --- |
+| `0c748e2` | `docs(audit): Phase H final release re-verification` |
+| `4bae6b1` | `docs(ops): propose SLI/SLO targets and incident runbooks` |
+| `026fd17` | `docs(audit): final release certification and push/CI addendum` |
+| `41f78b5` | `fix(deps): update two modules with known vulnerabilities` |
+| `2d87ee1` | `docs(audit): mark both dependency advisories fixed in certification` |
+
+Ранее опубликованные в этой миссии коммиты Phase E/G/H: `4178cac`, `ed0b5d6`,
+`abc57d2`, `91ee991`, `07d5dcf`.
+
 ## B. Верификация
 
 | Область | Результат | Доказательство |
@@ -53,13 +66,15 @@ API и воркер — общий образ, разные бинарники; 
 | Worker liveness | heartbeat, устаревание, `workers_alive` 1→2→0, graceful shutdown | `internal/jobs/heartbeat.go`, интеграционные тесты |
 | Backup/restore | dump → restore → совпадение | временные БД `bk_src`/`bk_dst` (см. §F) |
 | Производительность | базовая линия воспроизведена | `docs/performance/baseline.md`, бенчмарк |
-| Remote CI | **15/15 success** на `0c748e2` | см. §CI |
+| Remote CI | **15/15 success** на `2d87ee1` | см. §CI |
 
 ### CI на опубликованном SHA
 
+Опубликованный финальный SHA — `2d87ee1`; он включает обновление зависимостей.
+
 | Workflow | Задание | Итог |
 | --- | --- | --- |
-| CI (run 41747583263) | Backend (format, vet, test, build) | success |
+| CI (run 41751742607) | Backend (format, vet, test, build) | success |
 | CI | Frontend (lint, typecheck, test, build) | success |
 | CI | End-to-end (real API, real database, real browser) | success |
 | CI | Visual regression (baselines on Linux) | success |
@@ -69,13 +84,15 @@ API и воркер — общий образ, разные бинарники; 
 | CI | Extraction (each module builds without the monolith) | success |
 | CI | Blitz Cloud deployment (root image, clean database) | success |
 | CI | Required documentation is present | success |
-| Portability (run 41747583255) | Upgrade an existing database | success |
+| Portability (run 41751742611) | Upgrade an existing database | success |
 | Portability | Backup, restore and smoke test | success |
 | Portability | Runs with no optional configuration | success |
 | Portability | Documentation is present and linked | success |
 | Portability | Full stack (Compose) smoke test | success |
 
-Итого **15/15 success**. Это первый CI-прогон, покрывающий Phase E/G/H.
+Итого **15/15 success** на `2d87ee1`. Промежуточные SHA `0c748e2` (Phase E/G/H)
+и `026fd17` (SLI/SLO + сертификат) также прошли 15/15, что подтверждает и
+исходную публикацию, и добавленные документы.
 
 ## C. Полнота продукта
 
