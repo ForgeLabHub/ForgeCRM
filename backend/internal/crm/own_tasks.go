@@ -57,6 +57,33 @@ func (s *Service) ListMyOpenTasks(ctx context.Context, p *rbac.Principal, from, 
 	return tasks, err
 }
 
+// ListMyOverdueTasks returns the caller's own tasks whose deadline has passed and
+// which are still open. It is the same ownership-narrowed list path as
+// ListMyOpenTasks, with the due bound pinned to "before now" rather than supplied
+// by the caller, so the bot cannot be talked into another window.
+func (s *Service) ListMyOverdueTasks(ctx context.Context, p *rbac.Principal, now time.Time, limit int) ([]Task, error) {
+	if p == nil || !p.Has(rbac.PermTasksRead) {
+		return nil, rbac.ErrForbidden
+	}
+	if limit <= 0 || limit > httpx.MaxPageSize {
+		return nil, httpx.ErrBadRequest
+	}
+	cutoff := now.UTC()
+	var tasks []Task
+	err := s.db.WithTx(ctx, func(ctx context.Context, _ database.Tx) error {
+		if err := s.lockActiveMember(ctx, p); err != nil {
+			return err
+		}
+		var err error
+		tasks, _, err = s.ListTasks(ctx, p, ListQuery{
+			Pagination: httpx.Pagination{Limit: limit}, AssigneeID: &p.UserID,
+			OpenTasksOnly: true, TaskDueBefore: &cutoff,
+		})
+		return err
+	})
+	return tasks, err
+}
+
 // GetMyTask does not reveal whether another user's or another tenant's task exists.
 func (s *Service) GetMyTask(ctx context.Context, p *rbac.Principal, id uuid.UUID) (*Task, error) {
 	if p == nil || !p.Has(rbac.PermTasksRead) {

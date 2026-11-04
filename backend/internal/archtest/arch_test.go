@@ -412,7 +412,10 @@ func TestExtractionBoundaryHolds(t *testing.T) {
 		"risk":     {"analytics": true, "audit": true, "crm": true, "database": true, "rbac": true},
 		// notify is the outbound transports (email, Telegram), configured by the
 		// environment loader and logging every send.
-		"notify": {"audit": true, "config": true, "database": true, "httpx": true, "rbac": true, "secrets": true},
+		// notify reaches a person by email or Telegram and must render the message in
+		// their language. telegramtext is a leaf dictionary of localized copy with no
+		// in-module dependency, so it adds no coupling beyond the strings themselves.
+		"notify": {"audit": true, "config": true, "database": true, "httpx": true, "rbac": true, "secrets": true, "telegramtext": true},
 		// ai is the contextual AI layer: prompt assembly, the tool risk tiers and the
 		// MCP protocol. It acts through the human-in-the-loop agent layer and reads the
 		// CRM domain, so both are declared.

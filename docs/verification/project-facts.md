@@ -39,17 +39,17 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 код изменился, а документ не перегенерировали.
 
 <!-- FACTS:AUTO BEGIN — генерируется backend/cmd/facts-gen, не редактировать вручную -->
-<!-- измерено на HEAD `cc65d3fe63a8b7fb5bb0730467ef0574445ef32f` -->
+<!-- измерено на HEAD `2c397a010017ef60bbdcebb35116e5a9239a3480` -->
 
 ## Backend / Architecture
 
 | Метрика | Значение | Определение |
 |---|---|---|
-| Пакеты Go (весь backend) | **53** | каталоги с хотя бы одним .go-файлом под backend/ |
-| Пакеты Go (backend/internal) | **48** | то же, ограничено backend/internal/** |
-| Go-файлы без тестов | **151** | *.go, кроме *_test.go |
-| Go тестовых файлов | **144** | *_test.go |
-| Тестовые функции Go | **893** | верхнеуровневые func TestXxx(*testing.T), TestMain исключён |
+| Пакеты Go (весь backend) | **54** | каталоги с хотя бы одним .go-файлом под backend/ |
+| Пакеты Go (backend/internal) | **49** | то же, ограничено backend/internal/** |
+| Go-файлы без тестов | **155** | *.go, кроме *_test.go |
+| Go тестовых файлов | **145** | *_test.go |
+| Тестовые функции Go | **902** | верхнеуровневые func TestXxx(*testing.T), TestMain исключён |
 | Бенчмарки Go | **3** | func BenchmarkXxx |
 | Fuzz-тесты Go | **0** | func FuzzXxx |
 | Example-тесты Go | **0** | func ExampleXxx |
@@ -58,9 +58,9 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 
 | Метрика | Значение | Определение |
 |---|---|---|
-| Миграций up | **33** | *.up.sql в backend/internal/migrations |
-| Миграций down | **33** | *.down.sql там же |
-| Таблиц БД | **80** | уникальные имена CREATE TABLE во всех up-миграциях |
+| Миграций up | **34** | *.up.sql в backend/internal/migrations |
+| Миграций down | **34** | *.down.sql там же |
+| Таблиц БД | **81** | уникальные имена CREATE TABLE во всех up-миграциях |
 
 ## Security (RBAC)
 
@@ -90,13 +90,13 @@ openapi.json генерируется из живого роутера (`cmd/ope
 
 | Метрика | Значение | Определение |
 |---|---|---|
-| Файлы src (.ts/.tsx) | **125** | frontend/src/**, включая тестовые |
-| Тестовые файлы src | **40** | *.test.ts(x)/.spec.ts(x) в frontend/src |
-| Объявления it()/test() в src | **261** | запускаемые кейсы vitest; test.describe вычитается |
-| Файлы страниц | **38** | компоненты в frontend/src/pages (без admin/, без тестов) |
-| Тесты страниц | **20** | *.test.tsx рядом со страницами |
-| Маршрутов <Route path> | **46** | объявления в frontend/src/App.tsx (регистр маршрутизации SPA) |
-| Уникальных путей маршрутов | **44** | различающиеся path по всем <Routes>-деревьям App.tsx; повторения внутри одного дерева запрещены (гейт route_paths_unique) |
+| Файлы src (.ts/.tsx) | **133** | frontend/src/**, включая тестовые |
+| Тестовые файлы src | **43** | *.test.ts(x)/.spec.ts(x) в frontend/src |
+| Объявления it()/test() в src | **278** | запускаемые кейсы vitest; test.describe вычитается |
+| Файлы страниц | **39** | компоненты в frontend/src/pages (без admin/, без тестов) |
+| Тесты страниц | **21** | *.test.tsx рядом со страницами |
+| Маршрутов <Route path> | **47** | объявления в frontend/src/App.tsx (регистр маршрутизации SPA) |
+| Уникальных путей маршрутов | **45** | различающиеся path по всем <Routes>-деревьям App.tsx; повторения внутри одного дерева запрещены (гейт route_paths_unique) |
 | E2E спецификации | **4** | *.spec.ts в frontend/e2e |
 | E2E тесты | **67** | объявления test() Playwright; test.describe вычитается |
 

@@ -22,26 +22,45 @@ import (
 )
 
 type telegramMockTransport struct {
-	fail     atomic.Bool
-	calls    atomic.Int32
-	mu       sync.Mutex
-	messages []string
+	fail      atomic.Bool
+	calls     atomic.Int32
+	answers   atomic.Int32
+	mu        sync.Mutex
+	messages  []string
+	callbacks []string
 }
 
 func (m *telegramMockTransport) RoundTrip(r *http.Request) (*http.Response, error) {
-	if r.URL.Host != "api.telegram.org" || !strings.HasSuffix(r.URL.Path, "/sendMessage") {
+	if r.URL.Host != "api.telegram.org" {
+		return nil, fmt.Errorf("unexpected test host")
+	}
+	switch {
+	case strings.HasSuffix(r.URL.Path, "/sendMessage"):
+		m.calls.Add(1)
+		var payload struct {
+			Text      string `json:"text"`
+			ReplyMark struct {
+				InlineKeyboard [][]struct {
+					Data string `json:"callback_data"`
+				} `json:"inline_keyboard"`
+			} `json:"reply_markup"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			return nil, err
+		}
+		m.mu.Lock()
+		m.messages = append(m.messages, payload.Text)
+		for _, row := range payload.ReplyMark.InlineKeyboard {
+			for _, cell := range row {
+				m.callbacks = append(m.callbacks, cell.Data)
+			}
+		}
+		m.mu.Unlock()
+	case strings.HasSuffix(r.URL.Path, "/answerCallbackQuery"):
+		m.answers.Add(1)
+	default:
 		return nil, fmt.Errorf("unexpected test endpoint")
 	}
-	m.calls.Add(1)
-	var payload struct {
-		Text string `json:"text"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		return nil, err
-	}
-	m.mu.Lock()
-	m.messages = append(m.messages, payload.Text)
-	m.mu.Unlock()
 	body := `{"ok":true}`
 	if m.fail.Load() {
 		body = `{"ok":false,"description":"sensitive test response"}`
@@ -254,5 +273,162 @@ func TestTelegramSelfServicePostgres(t *testing.T) {
 	var count int
 	if err := h.db.Pool().QueryRow(context.Background(), `SELECT count(*) FROM telegram_link_codes WHERE organization_id=$1 AND user_id=$2`, org, user).Scan(&count); err != nil || count != 0 {
 		t.Fatalf("unlink did not revoke own pending code %d: %v", count, err)
+	}
+}
+
+// TestTelegramLocalizationAndCallbacksPostgres exercises the language picker,
+// onboarding and inline-button flows end to end against a real database and a
+// fake Telegram endpoint. It proves the persisted language survives a restart of
+// the process (a second harness reads it), a repeated update is not delivered
+// twice, and a callback in a group chat is acknowledged but never acted on.
+func TestTelegramLocalizationAndCallbacksPostgres(t *testing.T) {
+	mock := &telegramMockTransport{}
+	previous := http.DefaultTransport
+	http.DefaultTransport = mock
+	t.Cleanup(func() { http.DefaultTransport = previous })
+	cfg := testConfig(t)
+	cfg.Telegram = config.TelegramConfig{Enabled: true, BotToken: "test-only-token", WebhookSecret: strings.Repeat("s", 32), WebhookEnabled: true}
+	h := newHarnessWithConfig(t, cfg)
+	secret := cfg.Telegram.WebhookSecret
+
+	postMessage := func(id int, chat int64, chatType, text string) int {
+		t.Helper()
+		payload, err := json.Marshal(map[string]any{"update_id": id, "message": map[string]any{"message_id": id + 1, "date": 1730000000, "from": map[string]any{"id": chat, "is_bot": false}, "chat": map[string]any{"id": chat, "type": chatType}, "text": text}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/telegram/webhook", bytes.NewReader(payload))
+		req.Header.Set("X-Telegram-Bot-Api-Secret-Token", secret)
+		rec := httptest.NewRecorder()
+		h.server.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	postCallback := func(id int, chat int64, chatType, data string) int {
+		t.Helper()
+		payload, err := json.Marshal(map[string]any{
+			"update_id": id,
+			"callback_query": map[string]any{
+				"id":   fmt.Sprintf("cb-%d", id),
+				"from": map[string]any{"id": chat, "is_bot": false},
+				"message": map[string]any{
+					"message_id": id + 1,
+					"chat":       map[string]any{"id": chat, "type": chatType},
+				},
+				"data": data,
+			},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/telegram/webhook", bytes.NewReader(payload))
+		req.Header.Set("X-Telegram-Bot-Api-Secret-Token", secret)
+		rec := httptest.NewRecorder()
+		h.server.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	lastMessage := func() string {
+		mock.mu.Lock()
+		defer mock.mu.Unlock()
+		if len(mock.messages) == 0 {
+			return ""
+		}
+		return mock.messages[len(mock.messages)-1]
+	}
+	hasCallback := func(data string) bool {
+		mock.mu.Lock()
+		defer mock.mu.Unlock()
+		for _, c := range mock.callbacks {
+			if c == data {
+				return true
+			}
+		}
+		return false
+	}
+
+	// A brand-new account is onboarded in English with the language picker.
+	if got := postMessage(100, 500, "private", "/start"); got != 200 {
+		t.Fatalf("start: %d", got)
+	}
+	if msg := lastMessage(); !strings.Contains(msg, "ForgeCRM Assistant") || !hasCallback("lang:ru") {
+		t.Fatalf("welcome: %q", msg)
+	}
+	// Onboarding is recorded, so a second /start shows the menu, not the intro.
+	if got := postMessage(101, 500, "private", "/start"); got != 200 {
+		t.Fatalf("second start: %d", got)
+	}
+	if msg := lastMessage(); strings.Contains(msg, "First, choose a language") {
+		t.Fatalf("onboarding repeated: %q", msg)
+	}
+	// Choosing Russian persists and answers in Russian with the menu.
+	if got := postCallback(102, 500, "private", "lang:ru"); got != 200 {
+		t.Fatalf("lang callback: %d", got)
+	}
+	if msg := lastMessage(); !strings.Contains(msg, "Готово") {
+		t.Fatalf("language not applied: %q", msg)
+	}
+	var locale string
+	if err := h.db.Pool().QueryRow(context.Background(), `SELECT locale FROM telegram_user_settings WHERE telegram_user_id=500`).Scan(&locale); err != nil || locale != "ru" {
+		t.Fatalf("stored locale: %q %v", locale, err)
+	}
+	// /help is answered in the stored language.
+	if got := postMessage(103, 500, "private", "/help"); got != 200 {
+		t.Fatalf("help: %d", got)
+	}
+	if msg := lastMessage(); !strings.Contains(msg, "Что я умею") {
+		t.Fatalf("help not localized: %q", msg)
+	}
+	// A repeated update is acknowledged but not delivered again.
+	before := mock.calls.Load()
+	if got := postMessage(103, 500, "private", "/help"); got != 200 {
+		t.Fatalf("duplicate help: %d", got)
+	}
+	if mock.calls.Load() != before {
+		t.Fatalf("duplicate update delivered again: %d -> %d", before, mock.calls.Load())
+	}
+	// An unlinked account asking for tasks gets instructions, not data.
+	if got := postMessage(104, 500, "private", "/tasks"); got != 200 {
+		t.Fatalf("unlinked tasks: %d", got)
+	}
+	if msg := lastMessage(); !strings.Contains(msg, "не привязан") {
+		t.Fatalf("unlinked message not localized: %q", msg)
+	}
+	// A tap in a group chat is acknowledged but never acted on.
+	if got := postCallback(105, 500, "supergroup", "menu:tasks"); got != 200 {
+		t.Fatalf("group callback: %d", got)
+	}
+	if mock.answers.Load() == 0 {
+		t.Fatal("group callback was not acknowledged")
+	}
+	// Link the account, then a task button opens the task through the callback path.
+	org := h.seedOrganization("Telegram Localization")
+	user := h.seedUser("telegram-locale@example.test", "Test-Passw0rd-2026!!", "Locale")
+	h.joinOrganization(user, org, "tenant_admin")
+	p := rbac.NewPrincipal(user, "telegram-locale@example.test", "Locale", org, nil)
+	code, err := h.svcs.Telegram.CreateLinkCode(context.Background(), p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := postMessage(106, 501, "private", "/link "+code); got != 200 {
+		t.Fatalf("link: %d", got)
+	}
+	var task uuid.UUID
+	if err := h.db.Pool().QueryRow(context.Background(), `INSERT INTO tasks(organization_id,title,status,priority,assignee_user_id,created_by) VALUES($1,'Localized task','open','normal',$2,$2) RETURNING id`, org, user).Scan(&task); err != nil {
+		t.Fatal(err)
+	}
+	if got := postCallback(107, 501, "private", "task:"+task.String()); got != 200 {
+		t.Fatalf("task callback: %d", got)
+	}
+	if msg := lastMessage(); !strings.Contains(msg, "Localized task") {
+		t.Fatalf("task callback body: %q", msg)
+	}
+	// /overdue is answered and lists the overdue task when its deadline has passed.
+	if _, err := h.db.Pool().Exec(context.Background(), `UPDATE tasks SET due_at=now()-interval '1 day' WHERE id=$1`, task); err != nil {
+		t.Fatal(err)
+	}
+	if got := postMessage(108, 501, "private", "/overdue"); got != 200 {
+		t.Fatalf("overdue: %d", got)
+	}
+	if msg := lastMessage(); !strings.Contains(msg, "Localized task") {
+		t.Fatalf("overdue body: %q", msg)
 	}
 }

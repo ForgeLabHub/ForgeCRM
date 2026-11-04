@@ -107,6 +107,38 @@ export function TelegramPage() {
             {t('telegram.unlinkAccount')}
           </button>
         ) : null}
+
+        <Card title={t('telegram.commandsTitle')}>
+          <div className="stack">
+            <p className="text-muted text-sm">{t('telegram.commandsIntro')}</p>
+            <ul className="stack">
+              <li>
+                <span className="mono">/start</span> — {t('telegram.commandStart')}
+              </li>
+              <li>
+                <span className="mono">/help</span> — {t('telegram.commandHelp')}
+              </li>
+              <li>
+                <span className="mono">/language</span> — {t('telegram.commandLanguage')}
+              </li>
+              <li>
+                <span className="mono">/tasks</span> — {t('telegram.commandTasks')}
+              </li>
+              <li>
+                <span className="mono">/overdue</span> — {t('telegram.commandOverdue')}
+              </li>
+              <li>
+                <span className="mono">/profile</span> — {t('telegram.commandProfile')}
+              </li>
+              <li>
+                <span className="mono">/notifications</span> — {t('telegram.commandNotifications')}
+              </li>
+              <li>
+                <span className="mono">/link &lt;code&gt;</span> — {t('telegram.commandLink')}
+              </li>
+            </ul>
+          </div>
+        </Card>
       </div>
 
       <ConfirmDialog

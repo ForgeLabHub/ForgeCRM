@@ -21,6 +21,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/httpx"
 	"github.com/geff1778/forgecrm/internal/rbac"
 	"github.com/geff1778/forgecrm/internal/secrets"
+	"github.com/geff1778/forgecrm/internal/telegramtext"
 )
 
 // TelegramService implements the optional Telegram bot.
@@ -301,6 +302,62 @@ type Update struct {
 	} `json:"message"`
 }
 
+// UserSettings is the assistant's per-Telegram-account preferences.
+type UserSettings struct {
+	Locale      telegramtext.Locale
+	OnboardedAt *time.Time
+}
+
+// GetUserSettings loads the stored preferences for a Telegram account, creating
+// nothing. An unknown account reports the English default and "not onboarded", so
+// a first contact is answered without a write.
+func (s *TelegramService) GetUserSettings(ctx context.Context, telegramUserID int64) (UserSettings, error) {
+	settings := UserSettings{Locale: telegramtext.LocaleEnglish}
+	if !s.Enabled() || telegramUserID <= 0 {
+		return settings, nil
+	}
+	var locale string
+	var onboarded *time.Time
+	err := s.db.Q(ctx).QueryRow(ctx, `SELECT locale, onboarded_at FROM telegram_user_settings WHERE telegram_user_id=$1`, telegramUserID).Scan(&locale, &onboarded)
+	if database.IsNoRows(err) {
+		return settings, nil
+	}
+	if err != nil {
+		return settings, fmt.Errorf("load telegram settings: %w", err)
+	}
+	settings.Locale = telegramtext.Normalize(locale)
+	settings.OnboardedAt = onboarded
+	return settings, nil
+}
+
+// SetUserLocale persists the chosen language for a Telegram account. It is
+// idempotent and safe to call before the account is linked.
+func (s *TelegramService) SetUserLocale(ctx context.Context, telegramUserID int64, locale telegramtext.Locale) error {
+	if !s.Enabled() || telegramUserID <= 0 {
+		return ErrTelegramDisabled
+	}
+	const q = `INSERT INTO telegram_user_settings (telegram_user_id, locale) VALUES ($1, $2)
+		ON CONFLICT (telegram_user_id) DO UPDATE SET locale=EXCLUDED.locale, updated_at=now()`
+	if _, err := s.db.Q(ctx).Exec(ctx, q, telegramUserID, string(locale)); err != nil {
+		return fmt.Errorf("store telegram locale: %w", err)
+	}
+	return nil
+}
+
+// MarkOnboarded records that the introduction has been shown, so /start does not
+// repeat it. It does not overwrite a chosen locale.
+func (s *TelegramService) MarkOnboarded(ctx context.Context, telegramUserID int64) error {
+	if !s.Enabled() || telegramUserID <= 0 {
+		return ErrTelegramDisabled
+	}
+	const q = `INSERT INTO telegram_user_settings (telegram_user_id, onboarded_at) VALUES ($1, now())
+		ON CONFLICT (telegram_user_id) DO UPDATE SET onboarded_at=COALESCE(telegram_user_settings.onboarded_at, now()), updated_at=now()`
+	if _, err := s.db.Q(ctx).Exec(ctx, q, telegramUserID); err != nil {
+		return fmt.Errorf("store telegram onboarding: %w", err)
+	}
+	return nil
+}
+
 // VerifyWebhookSecret checks the secret token Telegram sends in the header.
 //
 // Telegram supports a secret token on webhook registration; comparing it with a
@@ -432,33 +489,78 @@ func (s *TelegramService) listOwnTasks(ctx context.Context, p *rbac.Principal) (
 	return b.String(), rows.Err()
 }
 
+// InlineButton is one button of an inline keyboard. Data is the callback payload
+// Telegram echoes back; it must stay small and carry no secret.
+type InlineButton struct {
+	Text string
+	Data string
+}
+
 // sendMessage posts a message to a chat. It is unexported on purpose: every
 // message this transport sends to a person must pass the consent gate, and the only
 // gated path is NotifyUser. Leaving a public SendMessage would be an ungated door
 // beside a gated one, which is exactly the shape of bypass the gate exists to end.
 func (s *TelegramService) sendMessage(ctx context.Context, chatID int64, text string) error {
+	return s.sendMessageWithButtons(ctx, chatID, text, nil)
+}
+
+// sendMessageWithButtons posts a message with an optional inline keyboard. The
+// keyboard rows are built by the caller from localized labels; the payloads are
+// short opaque tokens the bot itself defined, so a tap cannot smuggle data.
+func (s *TelegramService) sendMessageWithButtons(ctx context.Context, chatID int64, text string, rows [][]InlineButton) error {
 	if !s.Enabled() {
 		return ErrTelegramDisabled
 	}
-	payload, err := json.Marshal(map[string]any{
+	payload := map[string]any{
 		"chat_id": chatID,
 		"text":    text,
-	})
+	}
+	if len(rows) > 0 {
+		keyboard := make([][]map[string]string, 0, len(rows))
+		for _, row := range rows {
+			cells := make([]map[string]string, 0, len(row))
+			for _, b := range row {
+				cells = append(cells, map[string]string{"text": b.Text, "callback_data": b.Data})
+			}
+			keyboard = append(keyboard, cells)
+		}
+		payload["reply_markup"] = map[string]any{"inline_keyboard": keyboard}
+	}
+	encoded, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", s.cfg.BotToken)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(string(payload)))
+	return s.post(ctx, "sendMessage", encoded)
+}
+
+// answerCallbackQuery acknowledges a button tap so the client stops showing a
+// spinner. It is best effort: a failure here must not fail the update.
+func (s *TelegramService) answerCallbackQuery(ctx context.Context, callbackID string) error {
+	if !s.Enabled() || callbackID == "" {
+		return nil
+	}
+	encoded, err := json.Marshal(map[string]any{"callback_query_id": callbackID})
+	if err != nil {
+		return err
+	}
+	return s.post(ctx, "answerCallbackQuery", encoded)
+}
+
+// post sends one JSON body to a Telegram Bot API method and confirms acceptance.
+// It never returns or logs the URL (which carries the token) or the response body.
+func (s *TelegramService) post(ctx context.Context, method string, body []byte) error {
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/%s", s.cfg.BotToken, method)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		// URL parsing errors can contain the bot token as well.
-		return errors.New("send telegram message: invalid request")
+		return errors.New("telegram request: invalid request")
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := s.client.Do(req)
 	if err != nil {
 		// net/http errors may contain the URL, including the bot token. Never return
 		// or log that error; the caller can safely report this generic failure.
-		return errors.New("send telegram message: request failed")
+		return errors.New("telegram request failed")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -521,7 +623,7 @@ var ErrTelegramRecipientUnavailable = errors.New("telegram recipient is no longe
 // ReplyLinked sends a response only if the exact original link is still active.
 // It must run in the receipt transaction so the share lock lasts through the
 // send and cannot race a revoke or reassignment. The regular consent gate applies.
-func (s *TelegramService) ReplyLinked(ctx context.Context, chatID int64, orgID, userID uuid.UUID, text string) error {
+func (s *TelegramService) ReplyLinked(ctx context.Context, chatID int64, orgID, userID uuid.UUID, text string, rows [][]InlineButton) error {
 	if !s.Enabled() {
 		return ErrTelegramDisabled
 	}
@@ -544,33 +646,19 @@ func (s *TelegramService) ReplyLinked(ctx context.Context, chatID int64, orgID, 
 	if err := enforce(ctx, s.gate, &orgID, &userID, email, string(PurposeTransactional), ChannelTelegram); err != nil {
 		return err
 	}
-	return s.sendMessage(ctx, chatID, text)
+	return s.sendMessageWithButtons(ctx, chatID, text, rows)
 }
 
-// ReplySystem is limited to pre-defined, non-sensitive responses to a private
-// user-initiated interaction. An existing (even revoked) link is checked against
-// that person's consent; an unknown chat uses the account-level policy.
-func (s *TelegramService) ReplySystem(ctx context.Context, chatID int64, kind string) error {
+// ReplySystem answers a private, user-initiated interaction that may not belong to
+// a linked account: onboarding, the language picker, /help and error notices. The
+// text is localized by the caller. An existing (even revoked) link is checked
+// against that person's consent; an unknown chat uses the account-level policy.
+func (s *TelegramService) ReplySystem(ctx context.Context, chatID int64, text string, rows [][]InlineButton) error {
 	if !s.Enabled() {
 		return ErrTelegramDisabled
 	}
 	if _, ok := database.TxFromContext(ctx); !ok {
 		return errors.New("telegram reply requires a transaction")
-	}
-	var text string
-	switch kind {
-	case "help":
-		text = "ForgeCRM bot\n/link <code> — link an account\n/tasks — open tasks\n/today — tasks due today (UTC)\n/task <id> — task details\n/done <id> — complete\n/due <id> <RFC3339> — reschedule"
-	case "link_usage":
-		text = "Generate a code in ForgeCRM and send /link <code> here."
-	case "link_failed":
-		text = "Could not link this account. Check the code or unlink the existing account first."
-	case "not_linked":
-		text = "This account is not linked. Send /link <code> first."
-	case "unknown":
-		text = "Unknown command. Send /help for available commands."
-	default:
-		return errors.New("unknown telegram system reply")
 	}
 	var org, user uuid.UUID
 	var email string
@@ -586,7 +674,13 @@ func (s *TelegramService) ReplySystem(ctx context.Context, chatID int64, kind st
 	} else if err := enforce(ctx, s.gate, nil, nil, "", string(PurposeTransactional), ChannelTelegram); err != nil {
 		return err
 	}
-	return s.sendMessage(ctx, chatID, text)
+	return s.sendMessageWithButtons(ctx, chatID, text, rows)
+}
+
+// AnswerCallback acknowledges a button tap so the client stops showing a spinner.
+// It is best effort and never fails the update.
+func (s *TelegramService) AnswerCallback(ctx context.Context, callbackID string) error {
+	return s.answerCallbackQuery(ctx, callbackID)
 }
 
 // TaskDeliveryResult distinguishes API acceptance from proof of delivery. An

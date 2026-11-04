@@ -1159,6 +1159,17 @@ export const en = {
     linkAccount: 'Link your account',
     linkIntro:
       'Generate a code, then send /link followed by the code only to the bot in a private Telegram chat. Do not share the code. The code expires shortly and can only be used once. Linking is per user, so the bot always acts as you and is bound by your permissions.',
+    commandsTitle: 'What the bot can do',
+    commandsIntro:
+      'Send these commands in a private chat with the bot. Every command is also available from the menu buttons, and the bot answers in the language you chose.',
+    commandStart: 'Choose a language and open the main menu',
+    commandHelp: 'Show what the bot can do and how to link your account',
+    commandLanguage: 'Change the bot language (Russian or English)',
+    commandTasks: 'List your open tasks',
+    commandOverdue: 'List your overdue tasks',
+    commandProfile: 'Show your linked account',
+    commandNotifications: 'Show your recent notifications',
+    commandLink: 'Link this chat to your ForgeCRM account with a one-time code',
     generating: 'Generating…',
     generateCode: 'Generate link code',
     unlinkAccount: 'Unlink my account',

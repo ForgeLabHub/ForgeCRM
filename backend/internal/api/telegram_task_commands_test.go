@@ -11,11 +11,14 @@ import (
 
 	"github.com/geff1778/forgecrm/internal/crm"
 	"github.com/geff1778/forgecrm/internal/rbac"
+	"github.com/geff1778/forgecrm/internal/telegramtext"
 )
 
 type taskFake struct {
 	items        []crm.Task
+	overdue      []crm.Task
 	from, before *time.Time
+	overdueNow   time.Time
 	id           uuid.UUID
 	due          time.Time
 	called       string
@@ -30,6 +33,14 @@ func (f *taskFake) ListMyOpenTasks(_ context.Context, _ *rbac.Principal, from, b
 		panic("unexpected limit")
 	}
 	return f.items, f.err
+}
+func (f *taskFake) ListMyOverdueTasks(_ context.Context, _ *rbac.Principal, now time.Time, limit int) ([]crm.Task, error) {
+	f.called = "overdue"
+	f.overdueNow = now
+	if limit != 10 {
+		panic("unexpected limit")
+	}
+	return f.overdue, f.err
 }
 func (f *taskFake) GetMyTask(_ context.Context, _ *rbac.Principal, id uuid.UUID) (*crm.Task, error) {
 	f.called = "get"
@@ -57,41 +68,64 @@ func TestTaskCommands(t *testing.T) {
 	p := rbac.NewPrincipal(uuid.New(), "", "", uuid.New(), nil)
 	ctx := context.Background()
 	now := time.Date(2026, 11, 4, 3, 0, 0, 0, time.FixedZone("+3", 3*60*60))
-	text, err := handleTelegramTaskCommand(ctx, f, p, "/today@bot", now)
+	text, rows, err := handleTelegramTaskCommand(ctx, f, p, "/today@bot", now, telegramtext.LocaleEnglish)
 	if err != nil || f.called != "list" || f.from == nil || !f.from.Equal(time.Date(2026, 11, 4, 0, 0, 0, 0, time.UTC)) || f.before.Sub(*f.from) != 24*time.Hour {
 		t.Fatalf("today: %q %v %+v", text, err, f)
 	}
 	if strings.Contains(text, "\n/fake") || !strings.Contains(text, "Пример /fake") {
 		t.Fatalf("unsafe title: %q", text)
 	}
-	text, err = handleTelegramTaskCommand(ctx, f, p, "/tasks", now)
+	if len(rows) != 1 || len(rows[0]) != 2 || rows[0][0].Data != "task:"+id.String() || rows[0][1].Data != "done:"+id.String() {
+		t.Fatalf("buttons: %+v", rows)
+	}
+	text, _, err = handleTelegramTaskCommand(ctx, f, p, "/tasks", now, telegramtext.LocaleEnglish)
 	if err != nil || f.from != nil || f.before != nil || !strings.Contains(text, id.String()) {
 		t.Fatalf("list: %q %v", text, err)
 	}
-	text, err = handleTelegramTaskCommand(ctx, f, p, "/task "+id.String(), now)
+	text, _, err = handleTelegramTaskCommand(ctx, f, p, "/task "+id.String(), now, telegramtext.LocaleEnglish)
 	if err != nil || f.called != "get" || f.id != id || !strings.Contains(text, "Status: open") {
 		t.Fatalf("task: %q %v", text, err)
 	}
-	_, err = handleTelegramTaskCommand(ctx, f, p, "/done "+id.String(), now)
+	_, _, err = handleTelegramTaskCommand(ctx, f, p, "/done "+id.String(), now, telegramtext.LocaleEnglish)
 	if err != nil || f.called != "complete" || f.id != id {
 		t.Fatalf("done: %v", err)
 	}
-	_, err = handleTelegramTaskCommand(ctx, f, p, "/due "+id.String()+" 2026-11-04T12:00:00+03:00", now)
+	_, _, err = handleTelegramTaskCommand(ctx, f, p, "/due "+id.String()+" 2026-11-04T12:00:00+03:00", now, telegramtext.LocaleEnglish)
 	if err != nil || f.called != "due" || !f.due.Equal(time.Date(2026, 11, 4, 9, 0, 0, 0, time.UTC)) {
 		t.Fatalf("due: %v", err)
+	}
+}
+
+func TestTaskCommandsOverdue(t *testing.T) {
+	id := uuid.New()
+	f := &taskFake{overdue: []crm.Task{{ID: id, Title: "Late", Status: "open"}}}
+	p := rbac.NewPrincipal(uuid.New(), "", "", uuid.New(), nil)
+	now := time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC)
+	text, rows, err := handleTelegramTaskCommand(context.Background(), f, p, "/overdue", now, telegramtext.LocaleRussian)
+	if err != nil || f.called != "overdue" || !f.overdueNow.Equal(now) {
+		t.Fatalf("overdue: %q %v %+v", text, err, f)
+	}
+	if !strings.Contains(text, telegramtext.T(telegramtext.LocaleRussian, telegramtext.KeyOverdueHeader)) || len(rows) != 1 {
+		t.Fatalf("localized overdue: %q %+v", text, rows)
+	}
+	// An empty overdue list is answered in the chosen language, not English.
+	f.overdue = nil
+	text, _, err = handleTelegramTaskCommand(context.Background(), f, p, "/overdue", now, telegramtext.LocaleRussian)
+	if err != nil || text != telegramtext.T(telegramtext.LocaleRussian, telegramtext.KeyNoOverdueTasks) {
+		t.Fatalf("empty overdue: %q %v", text, err)
 	}
 }
 
 func TestTaskCommandsRejectMalformedAndDoNotEchoErrors(t *testing.T) {
 	f := &taskFake{}
 	for _, input := range []string{"/done no", "/due invalid secret", "/due " + uuid.NewString() + " tomorrow", "/tasks extra", "/unknown"} {
-		out, err := handleTelegramTaskCommand(context.Background(), f, nil, input, time.Now())
+		out, _, err := handleTelegramTaskCommand(context.Background(), f, nil, input, time.Now(), telegramtext.LocaleEnglish)
 		if err != nil || out == "" || f.called != "" || strings.Contains(out, "secret") {
 			t.Fatalf("%s: %q %v %s", input, out, err, f.called)
 		}
 	}
 	f.err = errors.New("sensitive database error")
-	out, err := handleTelegramTaskCommand(context.Background(), f, nil, "/tasks", time.Now())
+	out, _, err := handleTelegramTaskCommand(context.Background(), f, nil, "/tasks", time.Now(), telegramtext.LocaleEnglish)
 	if err == nil || out != "" {
 		t.Fatalf("error exposed: %q %v", out, err)
 	}
