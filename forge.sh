@@ -70,7 +70,7 @@ port_busy() {
 doctor_port() {
   [ -z "${PORT:-}" ] && return 0
   if port_busy "$PORT"; then
-    if alive app; then ok "порт $PORT слушает наш процесс (pid $(pid_of app))"
+    if alive api; then ok "порт $PORT слушает наш процесс (pid $(pid_of api))"
     else warn "порт $PORT занят другим процессом"; fi
   else ok "порт $PORT свободен"; fi
 }
@@ -147,8 +147,6 @@ open_url() {
   elif has start;    then start "" "$1" >/dev/null 2>&1
   else warn "откройте вручную: $1"; fi
 }
-
-require_tools() { return 0; }
 
 run_make() { # использует Makefile, если он есть
   has make || die "make не найден"
@@ -329,9 +327,9 @@ _env_check() {
     if [ -z "$missing" ]; then
       ok "все переменные из $example на месте"
     else
-      warn "нет в .env (возьмутся значения по умолчанию): $(printf '%s ' $missing)"
+      warn "нет в .env (возьмутся значения по умолчанию): $(tr '\n' ' ' <<< "$missing")"
     fi
-    [ -n "$extra" ] && note "только в .env: $(printf '%s ' $extra)"
+    [ -n "$extra" ] && note "только в .env: $(tr '\n' ' ' <<< "$extra")"
   fi
   local entry key state value rest placeholders=""
   for entry in ${ENV_LIST[@]+"${ENV_LIST[@]}"}; do
@@ -496,14 +494,14 @@ ${C_B}${NAME}${C_0} — управление проектом
   doctor              проверить окружение (ничего не меняет)
 
 Разработка
-  install             установить зависимости (venv/pip, npm)
+  install             установить зависимости Go и npm
   test                тесты
   lint                статический анализ
   build               собрать артефакты
   verify              lint + test + проверка документации
 
   api / web           запустить только бэкенд или только фронтенд
-  dev                 поднять полный стек разработки (db + API + web) и проверить
+  dev                 запустить API, worker и web с доступной с хоста PostgreSQL
   migrate             применить миграции
   backup / restore    резервная копия и восстановление БД
   admin <email>       создать первого администратора (пароль из FORGECRM_BOOTSTRAP_PASSWORD)
@@ -554,7 +552,11 @@ cmd_doctor() {
   if has node; then ok "node: $(node -v 2>/dev/null)"; else warn "node не найден (нужен для frontend)"; fi
   if has docker && docker compose version >/dev/null 2>&1; then ok "docker compose доступен"; else warn "docker compose недоступен (БД в контейнере)"; fi
   doctor_port
-  [ -f frontend/node_modules/.package-lock.json ] && ok "frontend: зависимости установлены" || warn "frontend: npm ci не выполнялся"
+  if [ -f frontend/node_modules/.package-lock.json ]; then
+    ok "frontend: зависимости установлены"
+  else
+    warn "frontend: npm ci не выполнялся"
+  fi
   # Проекты без конфигурации (репозиторий артефактов) не должны получать
   # предупреждение о .env: ориентир — наличие .env.example в репозитории.
   if [ -f .env.example ]; then
@@ -588,8 +590,11 @@ cmd_status() {
   if [ "$JSON" -eq 1 ]; then _status_json; return 0; fi
   say "$NAME"
   local running=0
-  if port_busy "$PORT"; then ok "API: порт $PORT слушается"; running=1
-    http_ok "http://localhost:$PORT$HEALTH_PATH" && ok "API: $HEALTH_PATH 200" || warn "API: $HEALTH_PATH не отвечает"; fi
+  if port_busy "$PORT"; then
+    ok "API: порт $PORT слушается"; running=1
+    if http_ok "http://localhost:$PORT$HEALTH_PATH"; then ok "API: $HEALTH_PATH 200"
+    else warn "API: $HEALTH_PATH не отвечает"; fi
+  fi
   if port_busy "$FRONTEND_PORT"; then ok "web: порт $FRONTEND_PORT слушается"; running=1; fi
   if has docker && docker compose ps --status running 2>/dev/null | grep -q .; then
     ok "docker: контейнеры запущены"; running=1; else warn "docker: контейнеры не запущены"; fi
@@ -710,33 +715,44 @@ require_tools() {
 
 cmd_install() {
   say "Зависимости"
-  ( cd backend && go mod download ) && ok "go модули" || bad "go mod download"
-  if has npm; then ( cd frontend && npm ci --no-audit --no-fund ) && ok "npm" || bad "npm ci"; fi
-  if has docker; then docker compose up -d db && ok "PostgreSQL запущен" || warn "docker compose поднять БД не удался"; fi
+  ( cd backend && go mod download ) || { bad "go mod download"; return 1; }
+  ok "go модули"
+  has npm || { bad "npm не найден"; return 1; }
+  ( cd frontend && npm ci --no-audit --no-fund ) || { bad "npm ci"; return 1; }
+  ok "npm"
   run_make doctor || warn "doctor нашёл замечания (см. выше) — установка завершена"
 }
 
 start_services() {
-  start_db
+  start_db || return 1
   _spawn api "cd backend && FORGECRM_LOG_LEVEL=debug go run ./cmd/forgecrm-api"
   wait_http "http://localhost:$PORT$HEALTH_PATH" 120 api || return 1
+  _spawn worker "cd backend && FORGECRM_LOG_LEVEL=debug go run ./cmd/forgecrm-worker"
   if [ -d frontend/node_modules ]; then _spawn web "cd frontend && npm run dev"; fi
 }
 
-# start_db brings the database container up and waits for it to accept
-# connections. It is shared by `start`, `dev` and `api` so the readiness wait is
-# not duplicated with a different timeout in each.
+# Native Go processes run on the host, where Compose's internal `postgres`
+# hostname is not resolvable. Do not silently start an unreachable container or
+# touch another Compose project. For a full Docker stack use ./start.sh; native
+# development needs a deliberately configured, host-reachable PostgreSQL.
 start_db() {
-  if has docker && ! docker compose ps --status running 2>/dev/null | grep -q .; then
-    say "База данных"; docker compose up -d db && ok "db запущена"
-    for _ in $(seq 1 30); do docker compose exec -T db pg_isready -U forgecrm >/dev/null 2>&1 && break; sleep 1; done
+  local dsn="${FORGECRM_DATABASE_URL:-${DATABASE_URL:-}}"
+  if [ -z "$dsn" ]; then
+    bad "FORGECRM_DATABASE_URL не задан. Для локального полного стека: ./start.sh"
+    return 1
   fi
+  case "$dsn" in
+    *'@postgres:'*|*'@postgres/'*)
+      bad "адрес postgres доступен только внутри Compose. Для полного стека: ./start.sh; для native-разработки укажите доступный с хоста PostgreSQL."
+      return 1 ;;
+  esac
 }
 
 stop_services() {
   _stop web
+  _stop worker
   _stop api
-  if has docker; then docker compose stop >/dev/null 2>&1 && ok "контейнеры остановлены (данные сохранены)"; fi
+  note "контейнеры не менялись; для локального Compose: ./start.sh stop"
 }
 
 run_foreground() {
@@ -746,14 +762,14 @@ run_foreground() {
 
 cmd_test() {
   say "Тесты"
-  run_make test-unit
-  if [ -d frontend/node_modules ]; then run_make test-frontend; fi
+  run_make test-unit || return $?
+  if [ -d frontend/node_modules ]; then run_make test-frontend || return $?; fi
 }
 
 cmd_lint() {
   say "Линт"
-  run_make fmt-check vet lint
-  if [ -d frontend/node_modules ]; then run_make test-frontend; fi
+  run_make fmt-check vet lint || return $?
+  if [ -d frontend/node_modules ]; then run_make test-frontend || return $?; fi
 }
 
 cmd_build() {
@@ -763,8 +779,8 @@ cmd_build() {
 
 cmd_verify() {
   say "Проверки"
-  cmd_lint
-  run_make test-unit docs-check
+  cmd_lint || return $?
+  run_make test-unit docs-check || return $?
   ok "локальная матрица пройдена (интеграционные и E2E — в CI)"
 }
 
@@ -838,7 +854,7 @@ cmd_admin() {
   fi
   say "Администратор"
   has docker || die "docker не найден (создание администратора идёт через контейнер api)"
-  docker compose run --rm --no-deps api -bootstrap-admin -bootstrap-email "$email"
+  docker compose run --rm --no-deps -e FORGECRM_BOOTSTRAP_PASSWORD api -bootstrap-admin -bootstrap-email "$email"
 }
 
 # cmd_api / cmd_web run one side of the stack on its own. They exist because the
@@ -846,7 +862,7 @@ cmd_admin() {
 # starting both to then stop one is wasted work.
 cmd_api() {
   require_tools || die "не хватает инструментов"
-  start_db
+  start_db || return 1
   say "API"
   _spawn api "cd backend && FORGECRM_LOG_LEVEL=debug go run ./cmd/forgecrm-api"
   wait_http "http://localhost:$PORT$HEALTH_PATH" 120 api || return 1
@@ -874,10 +890,9 @@ cmd_smoke() {
   return $okall
 }
 
-# cmd_dev brings up the full development stack (database + API + frontend).
+# Native development uses a PostgreSQL already reachable from the host.
 cmd_dev() {
   require_tools || die "не хватает инструментов"
-  start_db
   start_services "$@" || die "запуск не удался (смотрите .run/*.log)"
   cmd_status
   cmd_smoke || warn "smoke нашёл замечания"
@@ -890,7 +905,7 @@ cmd_prod() {
   has docker || die "docker не найден"
   if [ ! -f .env ]; then die ".env не найден — ./forge.sh env init"; fi
   say "Production"
-  docker compose -f docker-compose.yml up -d --build
+  docker compose -f docker-compose.yml up -d --build || return $?
   ok "стек поднят; проверьте ./forge.sh status"
 }
 

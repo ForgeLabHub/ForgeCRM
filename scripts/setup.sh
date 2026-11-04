@@ -10,6 +10,7 @@
 # Safe to re-run: it never overwrites an existing .env or an existing admin.
 
 set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 admin_email="${1:-}"
 
@@ -34,14 +35,22 @@ else
   echo ".env already exists; leaving it untouched."
 fi
 
+echo "Checking the host and configuration ..."
+./scripts/check-env.sh
+
 echo "Starting PostgreSQL ..."
 docker compose up -d postgres
 
 echo "Waiting for PostgreSQL to accept connections ..."
+ready=0
 for _ in $(seq 1 30); do
-  if docker compose exec -T postgres pg_isready -q; then break; fi
+  if docker compose exec -T postgres pg_isready -q; then ready=1; break; fi
   sleep 1
 done
+if [[ "$ready" != 1 ]]; then
+  echo "error: PostgreSQL did not become ready" >&2
+  exit 1
+fi
 
 echo "Applying migrations ..."
 docker compose run --rm --no-deps api -migrate
@@ -61,7 +70,7 @@ if [[ -n "${admin_email}" ]]; then
   else
     echo "Creating the platform administrator for ${admin_email} ..."
     docker compose run --rm --no-deps \
-      -e FORGECRM_BOOTSTRAP_PASSWORD="${FORGECRM_BOOTSTRAP_PASSWORD}" \
+      -e FORGECRM_BOOTSTRAP_PASSWORD \
       api -bootstrap-admin -bootstrap-email "${admin_email}"
   fi
 else

@@ -4,6 +4,7 @@ import { AppShell } from './components/AppShell'
 import { useAuth } from './hooks/useAuth'
 import { LoginPage } from './pages/LoginPage'
 import { OverviewPage } from './pages/OverviewPage'
+import { ForbiddenPage, NotFoundPage } from './pages/ErrorPages'
 const AccountDetailPage = lazy(() => import('./pages/AccountsPage').then((m) => ({ default: m.AccountDetailPage })))
 const AccountsPage = lazy(() => import('./pages/AccountsPage').then((m) => ({ default: m.AccountsPage })))
 const ContactDetailPage = lazy(() => import('./pages/ContactsPage').then((m) => ({ default: m.ContactDetailPage })))
@@ -46,8 +47,6 @@ const MCPCredentialsPage = lazy(() => import('./pages/admin/MCPCredentialsPage')
 const TenantSettingsPage = lazy(() => import('./pages/admin/TenantSettingsPage').then((m) => ({ default: m.TenantSettingsPage })))
 const AccountPage = lazy(() => import('./pages/AccountPage').then((m) => ({ default: m.AccountPage })))
 const AppearancePage = lazy(() => import('./pages/AppearancePage').then((m) => ({ default: m.AppearancePage })))
-const ForbiddenPage = lazy(() => import('./pages/ErrorPages').then((m) => ({ default: m.ForbiddenPage })))
-const NotFoundPage = lazy(() => import('./pages/ErrorPages').then((m) => ({ default: m.NotFoundPage })))
 import { RequirePermission } from './components/RequirePermission'
 
 function FullPageSkeleton() {

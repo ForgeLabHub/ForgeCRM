@@ -187,6 +187,28 @@ jobs:
         if: failure()
         run: docker compose logs --tail=300
 
+  local-start-smoke:
+    name: Isolated one-script local start
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start and create the first administrator
+        env:
+          FORGECRM_LOCAL_ADMIN_EMAIL: local-ci@example.com
+          FORGECRM_LOCAL_ADMIN_PASSWORD: Local-CI-Password-2026!
+        run: ./start.sh
+      - name: Check login and repeat the start
+        env:
+          FORGECRM_SMOKE_EMAIL: local-ci@example.com
+          FORGECRM_SMOKE_PASSWORD: Local-CI-Password-2026!
+        run: |
+          ./scripts/smoke-test.sh http://127.0.0.1:8080
+          ./start.sh
+          ./scripts/smoke-test.sh http://127.0.0.1:8080
+      - name: Logs on failure
+        if: failure()
+        run: ./start.sh logs
+
   config-without-secrets:
     name: Runs with no optional configuration
     runs-on: ubuntu-latest
@@ -250,3 +272,8 @@ jobs:
       # подразумевается.
       - name: Check forge.sh commands
         run: ./scripts/forge-check.sh
+
+      - name: Check startup contracts without Docker
+        run: |
+          ./scripts/start-test.sh
+          ./scripts/forge-runtime-test.sh

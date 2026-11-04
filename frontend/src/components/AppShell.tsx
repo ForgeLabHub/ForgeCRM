@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, Suspense } from 'react'
 import type { JSX } from 'react'
-import { Link, NavLink, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { GlobalSearch } from './GlobalSearch'
 import { useGlobalSearchShortcut } from '../hooks/useGlobalSearch'
@@ -262,7 +262,66 @@ export function AppShell() {
   const { t } = useI18n()
   const { workspace } = useWorkspace()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [drawerLayout, setDrawerLayout] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia?.('(max-width: 860px)').matches === true,
+  )
+  const sidebarRef = useRef<HTMLElement>(null)
+  const toggleRef = useRef<HTMLButtonElement>(null)
+  const location = useLocation()
   const search = useGlobalSearchShortcut()
+
+  // The off-screen drawer must not leave links in the keyboard or screen-reader
+  // navigation order. Match the same breakpoint as the CSS, including resizing.
+  useEffect(() => {
+    if (!window.matchMedia) return
+    const media = window.matchMedia('(max-width: 860px)')
+    const update = () => {
+      setDrawerLayout(media.matches)
+      if (!media.matches) setMenuOpen(false)
+    }
+    update()
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
+
+  // Browser back/forward, navigation and the global search shortcut must not
+  // leave a second modal drawer open behind a new page or search dialog.
+  useEffect(() => { setMenuOpen(false) }, [location.pathname])
+  useEffect(() => { if (search.open) setMenuOpen(false) }, [search.open])
+
+  useEffect(() => {
+    if (!drawerLayout || !menuOpen) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const drawer = sidebarRef.current
+    const toggle = toggleRef.current
+    drawer?.focus()
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setMenuOpen(false)
+        return
+      }
+      if (event.key !== 'Tab' || !drawer) return
+      const controls = drawer.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])')
+      if (!controls.length) { event.preventDefault(); return }
+      const first = controls[0]
+      const last = controls[controls.length - 1]
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === drawer)) {
+        event.preventDefault(); last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault(); first.focus()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      document.body.style.overflow = previousOverflow
+      // Only return focus when it was still inside the drawer; do not steal it
+      // from a newly opened page or dialog after a navigation.
+      if (drawer?.contains(document.activeElement)) toggle?.focus()
+    }
+  }, [drawerLayout, menuOpen])
 
   const definition = workspaceDefinition(workspace)
   // The order is local state so the up/down controls can rearrange it for this
@@ -307,7 +366,17 @@ export function AppShell() {
 
   return (
     <div className="app-shell">
-      <aside className={menuOpen ? 'sidebar sidebar--open' : 'sidebar'}>
+      <aside
+        id="main-navigation-drawer"
+        ref={sidebarRef}
+        className={menuOpen ? 'sidebar sidebar--open' : 'sidebar'}
+        role={drawerLayout && menuOpen ? 'dialog' : undefined}
+        aria-modal={drawerLayout && menuOpen ? true : undefined}
+        aria-label={drawerLayout && menuOpen ? t('nav.mainNavigation') : undefined}
+        aria-hidden={drawerLayout && !menuOpen ? true : undefined}
+        inert={drawerLayout && !menuOpen ? true : undefined}
+        tabIndex={-1}
+      >
         <Link to="/" className="sidebar__brand" onClick={() => setMenuOpen(false)}>
           <Avatar name="ForgeCRM" size="md" />
           <span className="sidebar__brand-text">
@@ -315,6 +384,9 @@ export function AppShell() {
             <span className="sidebar__brand-sub">{t('brand.shortTagline')}</span>
           </span>
         </Link>
+        <button type="button" className="sidebar__close" aria-label={t('nav.closeMenu')} onClick={() => setMenuOpen(false)}>
+          <IconClose size={20} />
+        </button>
         <nav className="sidebar__nav" aria-label={t('nav.mainNavigation')}>
           {groups.map((group) => (
             <div key={group.key}>
@@ -377,6 +449,8 @@ export function AppShell() {
             <button
               type="button"
               className="btn btn--ghost btn--sm sidebar-toggle"
+              ref={toggleRef}
+              aria-controls="main-navigation-drawer"
               aria-label={t('nav.menu')}
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen((open) => !open)}
