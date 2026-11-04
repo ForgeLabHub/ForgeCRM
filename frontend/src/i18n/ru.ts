@@ -589,7 +589,7 @@ export const ru: Dictionary = {
     emailField: 'Почта',
     phoneField: 'Телефон',
     companyField: 'Компания',
-    jobTitleField: 'Должность',
+    titleField: 'Название',
     sourceField: 'Источник',
     sourceHint: 'Откуда пришёл лид.',
     statusField: 'Статус',
@@ -1417,6 +1417,8 @@ export const ru: Dictionary = {
     selected: 'выбрано: {count}',
     permissionsHint:
       'Учётные данные могут делать только то, что отмечено здесь. Вы не можете выдать разрешение, которого нет у вас самих.',
+    executeWarning:
+      'Без ai.tools.execute клиент пройдёт аутентификацию, но каждый вызов инструмента будет отклонён с 403 — он сможет только посмотреть список инструментов. Добавьте разрешение, если клиент должен их вызывать.',
     creating: 'Создание…',
     createCredential: 'Создать учётные данные',
     rotateTitle: 'Перевыпустить эти учётные данные?',

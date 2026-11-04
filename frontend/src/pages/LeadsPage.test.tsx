@@ -36,7 +36,10 @@ const lead = {
   updated_at: '2026-10-02T09:00:00Z',
 }
 
-function stubFetch(handler: (url: string) => Response | undefined) {
+function stubFetch(
+  handler: (url: string) => Response | undefined,
+  permissions: string[] = ['leads.read', 'leads.update', 'leads.convert'],
+) {
   const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()
     const path = url.replace(/^https?:\/\/[^/]+/, '')
@@ -45,7 +48,7 @@ function stubFetch(handler: (url: string) => Response | undefined) {
         json({
           user: { id: 'u1', email: 'a@example.com', display_name: 'A' },
           organization: { id: 'org-1', name: 'Org' },
-          permissions: ['leads.read', 'leads.update', 'leads.convert'],
+          permissions,
           csrf_token: 't',
         }),
       )
@@ -172,5 +175,39 @@ describe('LeadsPage row navigation', () => {
     const user = userEvent.setup()
     await user.click(await screen.findByText('ada@example.com'))
     await waitFor(() => expect(screen.getByText('Lead detail page')).toBeDefined())
+  })
+})
+
+describe('LeadsPage create form', () => {
+  it('marks the title required so an empty lead is never submitted', async () => {
+    const fetchMock = stubFetch(() => undefined, ['leads.read', 'leads.create'])
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/leads']}>
+          <AuthProvider>
+            <Routes>
+              <Route path="/leads" element={<LeadsPage />} />
+            </Routes>
+          </AuthProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'New lead' }))
+    const dialog = screen.getByRole('dialog')
+    const title = within(dialog).getByLabelText(/Title/)
+    // The title is the one required field on a lead; the browser must block the
+    // submit that previously created a blank row (the D-5 defect).
+    expect(title).toBeRequired()
+
+    await user.click(within(dialog).getByRole('button', { name: 'Create lead' }))
+    expect(
+      fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'POST'),
+    ).toBe(false)
   })
 })

@@ -147,7 +147,15 @@ describe('locale', () => {
       for (const [key, value] of Object.entries(obj)) {
         if (typeof value === 'string') {
           const withoutPlaceholders = value.replace(/\{[^}]*\}/g, ' ')
-          const latin = withoutPlaceholders.match(/[A-Za-z]{4,}/g) ?? []
+          // A dotted lowercase token is a machine identifier the user selects or
+          // types verbatim (`ai.tools.execute`, `contacts.read`), not prose a
+          // translator should rewrite, so it is removed before scanning for stray
+          // English words. Prose that merely contains a Latin word is still caught.
+          const withoutIdentifiers = withoutPlaceholders.replace(
+            /\b[a-z][a-z0-9]*(?:\.[a-z0-9]+)+\b/g,
+            ' ',
+          )
+          const latin = withoutIdentifiers.match(/[A-Za-z]{4,}/g) ?? []
           const stray = latin.filter((word) => !allowed.has(word))
           if (stray.length > 0) offenders.push(`${prefix}${key}: ${value}`)
         } else {

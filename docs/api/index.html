@@ -309,6 +309,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <ul class="nav-list">
 <li data-op><a href="#op-get-api-v1-system-capabilities"><span class="m m-get">GET</span><span class="p">/api/v1/system/capabilities</span></a></li>
 <li data-op><a href="#op-get-api-v1-system-info"><span class="m m-get">GET</span><span class="p">/api/v1/system/info</span></a></li>
+<li data-op><a href="#op-post-csp-report"><span class="m m-post">POST</span><span class="p">/csp-report</span></a></li>
 <li data-op><a href="#op-get-health"><span class="m m-get">GET</span><span class="p">/health</span></a></li>
 <li data-op><a href="#op-get-metrics"><span class="m m-get">GET</span><span class="p">/metrics</span></a></li>
 <li data-op><a href="#op-get-ready"><span class="m m-get">GET</span><span class="p">/ready</span></a></li>
@@ -7348,6 +7349,30 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <div class="resp"><div class="resp-head"><span class="code c-server">500</span> Unexpected failure. The detail is deliberately generic; the cause is in the server log.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
 </div>
 </article>
+<article class="op" id="op-post-csp-report" data-op>
+<h3><span class="m m-post">POST</span> <code class="path">/csp-report</code></h3>
+<p class="summary">Content Security Policy violation reports. The browser posts here without a session, because a violation on the sign-in page has no session, and the body is only logged. The response is always 204 so a client cannot probe the endpoint.</p>
+<div class="op-desc"><p>Content Security Policy violation reports. The browser posts here without a session, because a violation on the sign-in page has no session, and the body is only logged. The response is always 204 so a client cannot probe the endpoint.</p>
+</div>
+<p class="auth anonymous">No authentication required.</p>
+<h4>Responses</h4>
+<div class="resp"><div class="resp-head"><span class="code c-ok">201</span> Success. This operation&#39;s response body is not yet described by a schema; the shape is whatever the handler returns.</div><table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
+</tbody></table>
+<p class="muted">No declared fields.</p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">400</span> The request was malformed: bad JSON, an unknown field, or a missing required parameter.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">404</span> No such resource, or none visible to the caller&#39;s organization.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">409</span> The request conflicts with current state, such as a duplicate external identifier.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">422</span> A field failed validation. `error.details` names each field.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">429</span> Too many requests. Retry after the interval in `Retry-After`.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-server">500</span> Unexpected failure. The detail is deliberately generic; the cause is in the server log.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+</article>
 <article class="op" id="op-get-health" data-op>
 <h3><span class="m m-get">GET</span> <code class="path">/health</code></h3>
 <p class="summary">Liveness probe. Returns 200 while the process is running.</p>
@@ -9032,7 +9057,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <tr><td><code>source</code></td><td>string, nullable</td><td></td></tr>
 <tr><td><code>status</code></td><td>string</td><td></td></tr>
 <tr><td><code>team_id</code></td><td>string, nullable</td><td></td></tr>
-<tr><td><code>title</code></td><td>string</td><td></td></tr>
+<tr><td><code>title</code> <span class="req">required</span></td><td>string</td><td></td></tr>
 </tbody></table>
 </article>
 <article class="op schema" id="schema-listresponseapidocumentresponse" data-op>

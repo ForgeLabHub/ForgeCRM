@@ -3,7 +3,11 @@
 # everything here that is rebuilt inside the image is excluded from the context.
 
 # Version control and editor state.
-.git
+#
+# .git is deliberately NOT excluded: the `buildmeta` stage of the root Dockerfile
+# reads the checked-out revision from it so /ready reports the commit actually
+# built, rather than a hand-maintained environment variable that goes stale. The
+# runtime image never copies .git; only the throwaway buildmeta stage sees it.
 .gitignore
 .github
 .idea

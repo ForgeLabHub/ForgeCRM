@@ -296,10 +296,17 @@ func (s *Server) buildRouter() chi.Router {
 	r.Use(httpx.RequestIDMiddleware)
 	r.Use(httpx.TraceMiddleware)
 	r.Use(httpx.RecoverMiddleware(s.deps.Log))
-	// HSTS is passed in rather than decided here: it is off unless the operator has
-	// configured FORGECRM_HSTS_MAX_AGE, because it is only honoured over HTTPS and is
-	// cached by the browser for its whole max-age. See httpx.SecurityHeadersMiddleware.
-	r.Use(httpx.SecurityHeadersMiddleware(s.deps.Config.HSTSMaxAge))
+	// HSTS and the Content Security Policy are configured, not decided here. HSTS is
+	// off unless the operator sets FORGECRM_HSTS_MAX_AGE, because it is only honoured
+	// over HTTPS and is cached by the browser for its whole max-age. The CSP is
+	// Report-Only unless the operator sets FORGECRM_CSP_ENFORCE, because an enforcing
+	// policy that blocks the bundle is an outage rather than a header.
+	r.Use(httpx.SecurityHeadersMiddlewareWithOptions(httpx.SecurityHeadersOptions{
+		HSTSMaxAge: s.deps.Config.HSTSMaxAge,
+		// Report-Only unless the operator opts in: an enforcing policy that
+		// blocks the bundle is an outage, not a header. See the field's doc.
+		Enforce: s.deps.Config.CSPEnforce,
+	}))
 	// The client address is resolved once, here, against the configured proxy trust
 	// list, and carried in the request context. The rate limiter and the audit trail
 	// then read the same value instead of each deriving its own from headers the
@@ -324,6 +331,16 @@ func (s *Server) buildRouter() chi.Router {
 	// session-gated, so it is mounted outside /api/v1 and outside the rate limiter,
 	// which would otherwise throttle a scrape interval.
 	r.Get("/metrics", s.handleMetricsPrometheus)
+
+	// The Content Security Policy reports to /csp-report. It is anonymous because a
+	// violation on the sign-in page has no session, and it is rate-limited because the
+	// body is logged: without a bound, a broken or hostile client could fill the log.
+	// The sink only records what the browser sent; it trusts none of it.
+	r.With(httpx.RateLimitMiddleware(httpx.RateLimitOptions{
+		Limiter: s.limiter,
+		Subject: httpx.ClientIP,
+		Log:     s.deps.Log,
+	})).Post("/csp-report", s.handleCSPReport)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// The rate limiter covers the API subtree only. Health probes above are

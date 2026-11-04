@@ -40,9 +40,9 @@ Secrets are reported as `present` or `absent`, never printed.
 | `FORGECRM_MIGRATE_ON_START` | API | no | `false` | Apply pending migrations before serving. The API also verifies the schema before it listens, so a failure here stops the process rather than serving broken requests. | `true` | no | recommended |
 | `FORGECRM_STATIC_DIR` | API | no | `public` | Directory holding the built web interface. The root Dockerfile copies the bundle to `/app/public`, sets the working directory to `/app` and sets this. When the directory is absent the API serves API routes only. | `/app/public` | no | no |
 | `FORGECRM_ROLE` | API, Worker | no | none | Selects the binary the image entrypoint runs. `worker` starts the background worker; anything else (or unset) starts the API. Set by Compose and the Render Blueprint so one image can serve both roles. | `worker` | no | no |
-| `FORGECRM_VERSION` | API, Worker, Docker, Compose | no | `0.1.0-dev` | Fallback build version for hosts that do not pass linker flags. Used only when the value was not set at build time. | `1.4.2` | no | recommended |
-| `FORGECRM_COMMIT` | API, Worker, Docker, Compose | no | `unknown` | Fallback commit SHA, same fallback rule as `FORGECRM_VERSION`. Reported by `/ready` and the startup log. | `a1b2c3d` | no | recommended |
-| `RENDER_GIT_COMMIT` | API, Worker | no | none | The checked-out revision, injected by Render. Read as a last fallback for the commit when neither the linker flag nor `FORGECRM_COMMIT` is set, so the startup log shows a real SHA rather than `unknown`. | `a1b2c3d9...` | no | no |
+| `FORGECRM_VERSION` | API, Worker, Docker, Compose | no | `0.1.0-dev` | Fallback build version, used only when the version was not stamped into the binary at build time (no linker flag). | `1.4.2` | no | recommended |
+| `FORGECRM_COMMIT` | API, Worker, Docker, Compose | no | `unknown` | Fallback commit SHA, same fallback rule as `FORGECRM_VERSION`. The image stamps the revision it was built from (read from the git checkout) into the binary, and that stamp wins over this variable, so a deployment that sets this by hand cannot make `/ready` report a stale commit. Leave it unset on a platform that builds from a git checkout. Reported by `/ready` and the startup log. | `a1b2c3d` | no | no |
+| `RENDER_GIT_COMMIT` | API, Worker | no | none | The checked-out revision, injected by Render. Read as a last fallback for the commit when the binary was not stamped at build time and `FORGECRM_COMMIT` is unset, so the startup log shows a real SHA rather than `unknown`. | `a1b2c3d9...` | no | no |
 
 ## Database
 
@@ -72,7 +72,7 @@ is idempotent and refuses to overwrite an existing owner.
 | Name | Component | Required | Default | Description | Example | Secret | Production |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `FORGECRM_SECRET_KEY` | API, Worker | yes in production | random in development | Key material that encrypts stored integration credentials and derives CSRF tokens. Losing it makes stored integration secrets unrecoverable. Must be at least 32 characters in production. | `openssl rand -base64 48` | yes | yes |
-| `FORGECRM_METRICS_TOKEN` | API | no | none | Bearer token protecting `/metrics`. When empty, metrics are served only to authenticated platform admins. | a random string | yes | no |
+| `FORGECRM_METRICS_TOKEN` | API | no | none | Token protecting `/metrics`, sent as `X-Metrics-Token`. When it is empty the endpoint is disabled and answers `503` (`urn:forgecrm:error:disabled`), so a scrape cannot read metrics by accident; a wrong or missing token against a configured endpoint answers `401`. | a random string | yes | no |
 
 ## Sessions, cookies and rate limiting
 
@@ -96,12 +96,15 @@ is idempotent and refuses to overwrite an existing owner.
 | Name | Component | Required | Default | Description | Example | Secret | Production |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `FORGECRM_HSTS_MAX_AGE` | API | no | `0s` (HSTS off) | `Strict-Transport-Security` `max-age`. A zero value sends no header. HSTS is opt-in on purpose: it is honoured only over HTTPS and the browser caches it for the whole max-age, so enabling it before every path serves HTTPS locks users out of a plain-HTTP endpoint with no quick undo. Set it once the host is HTTPS-only. | `31536000s` (one year) | no | recommended |
+| `FORGECRM_CSP_ENFORCE` | API | no | `false` (report-only) | Switches the Content Security Policy from `Content-Security-Policy-Report-Only` to an enforcing `Content-Security-Policy`. Off by default: an enforcing policy that blocks the module bundle turns the application into a blank page, and a violation report is recoverable where a blank page is not. Turn it on once the violation reports reaching `/csp-report` are clean on the real host — including any injection a CDN in front of the app adds, which the application cannot see and a policy can block. | `true` | no | no |
 
-`Content-Security-Policy-Report-Only`, `Reporting-Endpoints` and
-`Referrer-Policy` are emitted unconditionally and are not configurable. The CSP is
-built from the served bundle at startup (same-origin assets, no `eval`, no inline
-handlers, the pre-paint theme script pinned by hash) and is Report-Only so a policy
-mistake produces reports rather than a blank page.
+`Reporting-Endpoints` and `Referrer-Policy` are emitted unconditionally and are
+not configurable. The CSP itself is built from the served bundle at startup
+(same-origin assets, no `eval`, no inline handlers, the pre-paint theme script
+pinned by hash) and is delivered Report-Only unless `FORGECRM_CSP_ENFORCE` is set,
+so a policy mistake produces reports rather than a blank page. The browser posts
+those reports to `/csp-report`, which logs them; the endpoint is anonymous (a
+violation on the sign-in page has no session) and rate-limited.
 
 ## Import Center
 

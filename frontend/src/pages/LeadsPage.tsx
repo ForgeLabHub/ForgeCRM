@@ -231,11 +231,13 @@ export function LeadFormDialog({
             onChange={(event) => update('company', event.target.value)}
           />
         </Field>
-        <Field label={t('leads.jobTitleField')} htmlFor="lead-title">
+        <Field label={t('leads.titleField')} htmlFor="lead-title" required error={errors.title}>
           <input
             id="lead-title"
             value={form.title ?? ''}
             onChange={(event) => update('title', event.target.value)}
+            className={errors.title ? 'input--invalid' : undefined}
+            required
           />
         </Field>
         <Field label={t('leads.sourceField')} htmlFor="lead-source" hint={t('leads.sourceHint')}>
