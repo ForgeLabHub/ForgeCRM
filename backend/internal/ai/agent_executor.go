@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -19,9 +20,9 @@ import (
 // It lives here, not in the agent package, so the dependency runs one way: agent
 // knows nothing about tools, and tools know nothing about approvals. The agent
 // runtime asks this adapter for an execution and hands it the action and the
-// decider; the adapter rebuilds the caller's principal from the database at
-// execution time and invokes the tool through the same permission check a human
-// request would pass through.
+// decider. The adapter reloads the run's original user and the approver at
+// execution time, then invokes the tool as the original user, never as a more
+// privileged approver.
 type AgentExecutor struct {
 	db    *database.DB
 	rbac  *rbac.Service
@@ -73,27 +74,39 @@ func DeniedToolNames() []string {
 	}
 }
 
-// Execution resolves a tool name to a function the agent runtime can call.
-//
-// The returned function re-derives the decider's permissions from the database at
-// execution time, not from anything captured at propose time. A role revoked
-// between the proposal and the approval therefore takes effect: the tool call is
-// authorized against the permission set the user has now, not the one they had
-// when the agent first asked. This is the "no stale authority in background work"
-// rule applied to agent execution.
+// Execution rechecks both the run owner and the approver. A human approval is
+// not authority to expand the run owner's permissions. The tool runs as the
+// owner; the existing requirement that the approver also has its permission is
+// retained. The ambient execution transaction holds the identity and relevant
+// permission rows through the effect, so revocation cannot race the check.
 func (e *AgentExecutor) Execution(toolName string) (agent.ExecutionFunc, error) {
 	tool, ok := e.tools.Get(toolName)
 	if !ok {
 		return nil, fmt.Errorf("unknown tool %q", toolName)
 	}
 	return func(ctx context.Context, action *agent.Action, decider agent.Decider) (any, error) {
-		principal, err := e.principalFor(ctx, decider)
+		if _, ok := database.TxFromContext(ctx); !ok {
+			return nil, errors.New("agent execution requires a transaction")
+		}
+		if action.OrganizationID != decider.OrganizationID {
+			return nil, httpx.ErrNotFound
+		}
+		var ownerID uuid.UUID
+		if err := e.db.Q(ctx).QueryRow(ctx, `SELECT user_id FROM agent_runs WHERE id=$1 AND organization_id=$2 FOR SHARE`, action.RunID, action.OrganizationID).Scan(&ownerID); err != nil {
+			if database.IsNoRows(err) {
+				return nil, httpx.ErrNotFound
+			}
+			return nil, fmt.Errorf("resolve agent run owner: %w", err)
+		}
+		owner, err := e.principalFor(ctx, ownerID, action.OrganizationID, tool.Permission)
 		if err != nil {
 			return nil, err
 		}
-		// The tool registry performs the permission check itself, so the adapter does
-		// not duplicate it. What it guarantees is that the check runs against a
-		// freshly resolved principal.
+		if decider.UserID != ownerID {
+			if _, err := e.principalFor(ctx, decider.UserID, action.OrganizationID, tool.Permission); err != nil {
+				return nil, err
+			}
+		}
 		var args map[string]any
 		if len(action.Arguments) > 0 {
 			if err := json.Unmarshal(action.Arguments, &args); err != nil {
@@ -103,42 +116,45 @@ func (e *AgentExecutor) Execution(toolName string) (agent.ExecutionFunc, error) 
 		if args == nil {
 			args = map[string]any{}
 		}
-		// The confirmation flag is not a security control for the agent path: the
-		// approval is. It is set here so a tool that checks it does not reject a
-		// call that a human has already approved.
+		// The signed approval, not this transport flag, authorizes the write.
 		if tool.Dangerous {
 			args["confirm"] = true
 		}
-		return e.tools.Call(ctx, principal, toolName, args)
+		return e.tools.Call(ctx, owner, toolName, args)
 	}, nil
 }
 
-// principalFor rebuilds the decider's principal from the database.
-func (e *AgentExecutor) principalFor(ctx context.Context, d agent.Decider) (*rbac.Principal, error) {
-	const q = `
-		SELECT u.id, u.email, u.display_name, u.status
-		FROM users u
-		JOIN memberships m ON m.user_id = u.id AND m.organization_id = $2
-		WHERE u.id = $1`
-	var (
-		id, email, name, status string
-	)
-	if err := e.db.Q(ctx).QueryRow(ctx, q, d.UserID, d.OrganizationID).
-		Scan(&id, &email, &name, &status); err != nil {
-		return nil, httpx.NewError(403, httpx.CodeForbidden, "the deciding user is not a member of this organization")
+// principalFor locks active identities and one grant of the needed permission
+// for the duration of the transaction. Permission lookup is organization-scoped.
+func (e *AgentExecutor) principalFor(ctx context.Context, userID, orgID uuid.UUID, required rbac.Permission) (*rbac.Principal, error) {
+	const identity = `SELECT u.id, u.email, u.display_name
+		FROM users u JOIN memberships m ON m.user_id=u.id AND m.organization_id=$2
+		JOIN organizations o ON o.id=m.organization_id
+		WHERE u.id=$1 AND u.status='active' AND m.status='active' AND o.status='active'
+		FOR SHARE OF u,m,o`
+	var id uuid.UUID
+	var email, name string
+	if err := e.db.Q(ctx).QueryRow(ctx, identity, userID, orgID).Scan(&id, &email, &name); err != nil {
+		if database.IsNoRows(err) {
+			return nil, httpx.NewError(403, httpx.CodeForbidden, "agent user is not an active member of this organization")
+		}
+		return nil, fmt.Errorf("resolve agent identity: %w", err)
 	}
-	if status != "active" {
-		return nil, httpx.NewError(403, httpx.CodeForbidden, "the deciding user's account is not active")
+	const grant = `SELECT 1 FROM user_roles ur JOIN role_permissions rp ON rp.role_id=ur.role_id
+		WHERE ur.user_id=$1 AND (ur.organization_id IS NULL OR ur.organization_id=$2)
+		AND rp.permission_key=$3 LIMIT 1 FOR SHARE OF ur,rp`
+	var granted int
+	if err := e.db.Q(ctx).QueryRow(ctx, grant, userID, orgID, string(required)).Scan(&granted); err != nil {
+		if database.IsNoRows(err) {
+			return nil, httpx.NewError(403, httpx.CodeForbidden, "agent user lacks the required tool permission")
+		}
+		return nil, fmt.Errorf("resolve agent permission: %w", err)
 	}
-	userID, err := uuid.Parse(id)
-	if err != nil {
-		return nil, fmt.Errorf("parse user id: %w", err)
-	}
-	perms, err := e.rbac.EffectivePermissions(ctx, userID, d.OrganizationID)
+	perms, err := e.rbac.EffectivePermissions(ctx, id, orgID)
 	if err != nil {
 		return nil, err
 	}
-	return rbac.NewPrincipal(userID, email, name, d.OrganizationID, perms), nil
+	return rbac.NewPrincipal(id, email, name, orgID, perms), nil
 }
 
 // ProposeForAgent builds a proposal for a tool call, deriving the tier and

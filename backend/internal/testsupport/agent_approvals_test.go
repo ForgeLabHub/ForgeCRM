@@ -20,6 +20,7 @@ package testsupport
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"sync"
 	"sync/atomic"
@@ -1112,5 +1113,107 @@ func TestAgentCompleteRunClosesARunWithNoProposals(t *testing.T) {
 	// silently re-open or double-record it.
 	if err := f.svc.CompleteRun(ctx, f.org, run.ID); err == nil {
 		t.Fatal("completing an already-completed run was accepted")
+	}
+}
+
+// Approval by a more privileged reviewer must never lend that person's rights
+// to the user who requested the agent run.
+func TestAgentExecutionUsesRunOwnerAuthority(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		revoke string
+	}{
+		{"removed_role", `DELETE FROM user_roles WHERE user_id=$1 AND organization_id=$2`},
+		{"suspended_membership", `UPDATE memberships SET status='suspended' WHERE user_id=$1 AND organization_id=$2`},
+		{"suspended_user", `UPDATE users SET status='suspended' WHERE id=$1 AND EXISTS (SELECT 1 FROM memberships WHERE user_id=$1 AND organization_id=$2)`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newAgentFixture(t, "agent-owner-"+tc.name[:4], "sales_representative")
+			ctx := context.Background()
+			reviewer := seedMember(t, f.db, f.org, "tenant_admin")
+			run := f.startRun(t, "Create a task")
+			action := f.proposeCreateTask(t, run, "Must not execute", "owner-"+uuid.NewString())
+			if _, err := f.db.Pool().Exec(ctx, tc.revoke, f.userID, f.org); err != nil {
+				t.Fatal(err)
+			}
+			_, _, err := f.svc.Decide(ctx, agent.Decider{UserID: reviewer, OrganizationID: f.org}, action.ID,
+				agent.Decision{Approve: true, ArgumentsHash: action.ArgumentsHash})
+			if err == nil {
+				t.Fatal("reviewer authority was used in place of run owner")
+			}
+			if got := f.countTasks(t); got != 0 {
+				t.Fatalf("created %d tasks without the owner's authority", got)
+			}
+		})
+	}
+}
+
+// The authenticated run owner remains the actor even if another person approves.
+func TestAgentExecutionAttributesTaskToRunOwner(t *testing.T) {
+	f := newAgentFixture(t, "agent-owner-actor", "sales_representative")
+	ctx := context.Background()
+	reviewer := seedMember(t, f.db, f.org, "tenant_admin")
+	run := f.startRun(t, "Create a task")
+	action := f.proposeCreateTask(t, run, "Owned by requester", "owner-"+uuid.NewString())
+	_, _, err := f.svc.Decide(ctx, agent.Decider{UserID: reviewer, OrganizationID: f.org}, action.ID,
+		agent.Decision{Approve: true, ArgumentsHash: action.ArgumentsHash})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var createdBy, assignee uuid.UUID
+	if err := f.db.Pool().QueryRow(ctx, `SELECT created_by, assignee_user_id FROM tasks WHERE organization_id=$1 AND title='Owned by requester'`, f.org).Scan(&createdBy, &assignee); err != nil {
+		t.Fatal(err)
+	}
+	if createdBy != f.userID || assignee != f.userID {
+		t.Fatalf("created_by=%v assignee=%v, want requester %v", createdBy, assignee, f.userID)
+	}
+}
+
+// A concurrent revocation waits until the authorized transaction finishes;
+// after it commits, subsequent actions see the revoked authority.
+func TestAgentExecutionLocksAuthorizationUntilEffect(t *testing.T) {
+	for _, tc := range []struct{ name, sql string }{
+		{"membership", `UPDATE memberships SET status='suspended' WHERE user_id=$1 AND organization_id=$2`},
+		{"grant", `DELETE FROM user_roles WHERE user_id=$1 AND organization_id=$2`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newAgentFixture(t, "agent-lock-"+tc.name, "sales_representative")
+			ctx := context.Background()
+			run := f.startRun(t, "Create a task")
+			log := audit.New(f.db)
+			registry := ai.NewToolRegistry(crm.NewService(f.db, log, outbox.NewStore(f.db)), log)
+			executor := ai.NewAgentExecutor(f.db, rbac.NewService(f.db), registry)
+			exec, err := executor.Execution("create_task")
+			if err != nil {
+				t.Fatal(err)
+			}
+			tx, err := f.db.Pool().Begin(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tx.Rollback(ctx)
+			action := &agent.Action{RunID: run.ID, OrganizationID: f.org, Arguments: json.RawMessage(`{"title":"transactional task"}`)}
+			if _, err := exec(database.WithTx(ctx, tx), action, agent.Decider{UserID: f.userID, OrganizationID: f.org}); err != nil {
+				t.Fatal(err)
+			}
+			done := make(chan error, 1)
+			go func() { _, err := f.db.Pool().Exec(ctx, tc.sql, f.userID, f.org); done <- err }()
+			select {
+			case err := <-done:
+				t.Fatalf("revocation did not wait for execution: %v", err)
+			case <-time.After(150 * time.Millisecond):
+			}
+			if err := tx.Commit(ctx); err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case err := <-done:
+				if err != nil {
+					t.Fatal(err)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("revocation remained blocked after commit")
+			}
+		})
 	}
 }
