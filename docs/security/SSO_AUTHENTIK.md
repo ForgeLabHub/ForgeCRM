@@ -41,7 +41,7 @@
 
 На `0ab799a7460bbacbd66abe662c01be20ff76e38f` новый CI показал успешные frontend, visual, docs и security jobs, но упал extraction: integration test пакета notify импортировал внутренний пакет migrate. Тест перенесён в testsupport, после чего отдельно проверены на PostgreSQL 17 и extraction notify. На `028f2fa18902387853c46bb753e55da3c63f7383` [CI](https://github.com/ForgeLabHub/ForgeCRM/actions/runs/41833317110) прошёл backend unit и интеграционный набор PostgreSQL, extraction, frontend, visual и security, но E2E не смог скачать зависимость с `proxy.golang.org` (HTTP/2 `INTERNAL_ERROR`) и завершился до тестов. Portability прошёл. Повтор failed job через GitHub API отказал с 403 `Resource not accessible by integration`; следующее изменение документации запускает отдельный CI, его результат нужно проверять по новому SHA.
 
-Новые mock-проверки OIDC и SSO end-to-end в этом изменении не запускались и не заявляются. Тесты Telegram-привязки на локальном PostgreSQL 17 не подтверждают безопасность SSO. Результаты последующего CI фиксируются в итоговом отчёте с SHA, а не угадываются здесь.
+На `820ff614a977d1b3404c2838e9ae4411f82ac236` [CI](https://github.com/ForgeLabHub/ForgeCRM/actions/runs/41835263691) и [Portability](https://github.com/ForgeLabHub/ForgeCRM/actions/runs/41835263564) успешно завершились, включая PostgreSQL integration и браузерный E2E. Новые mock-проверки OIDC и SSO end-to-end в этом изменении не запускались и не заявляются. Тесты Telegram на локальном PostgreSQL 17 не подтверждают безопасность SSO. Результаты последующего CI фиксируются в итоговом отчёте с SHA, а не угадываются здесь.
 
 ## 5. Authentik и Keycloak: бесплатность и инфраструктура
 

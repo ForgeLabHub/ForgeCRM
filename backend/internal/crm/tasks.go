@@ -107,6 +107,17 @@ func (s *Service) ListTasks(ctx context.Context, p *rbac.Principal, q ListQuery)
 		args = append(args, q.Status)
 		where = append(where, fmt.Sprintf("status = $%d", len(args)))
 	}
+	if q.OpenTasksOnly {
+		where = append(where, "status IN ('open', 'in_progress')")
+	}
+	if q.TaskDueFrom != nil {
+		args = append(args, *q.TaskDueFrom)
+		where = append(where, fmt.Sprintf("due_at >= $%d", len(args)))
+	}
+	if q.TaskDueBefore != nil {
+		args = append(args, *q.TaskDueBefore)
+		where = append(where, fmt.Sprintf("due_at < $%d", len(args)))
+	}
 	if q.AssigneeID != nil {
 		args = append(args, *q.AssigneeID)
 		where = append(where, fmt.Sprintf("assignee_user_id = $%d", len(args)))

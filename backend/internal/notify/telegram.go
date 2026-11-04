@@ -220,7 +220,10 @@ func (s *TelegramService) ResolveUser(ctx context.Context, telegramUserID int64)
 		JOIN organizations o ON o.id = l.organization_id AND o.status = 'active'
 		WHERE l.telegram_user_id = $1 AND l.linked_at IS NOT NULL AND l.revoked_at IS NULL`
 	if err := s.db.Q(ctx).QueryRow(ctx, q, telegramUserID).Scan(&userID, &orgID, &status, &email, &name); err != nil {
-		return nil, httpx.NewError(403, httpx.CodeForbidden, "this Telegram account is not linked to a ForgeCRM user")
+		if database.IsNoRows(err) {
+			return nil, httpx.NewError(403, httpx.CodeForbidden, "this Telegram account is not linked to a ForgeCRM user")
+		}
+		return nil, fmt.Errorf("resolve telegram account: %w", err)
 	}
 	// A blocked or suspended user loses bot access immediately.
 	if status != "active" {
@@ -336,7 +339,11 @@ func (s *TelegramService) HandleCommand(ctx context.Context, telegramUserID int6
 		}
 		userID, err := s.Link(ctx, LinkRequest{Code: parts[1], TelegramUserID: telegramUserID})
 		if err != nil {
-			return "Could not link this account: " + err.Error(), nil
+			var apiErr *httpx.APIError
+			if errors.As(err, &apiErr) && (apiErr.Status == http.StatusBadRequest || apiErr.Status == http.StatusConflict) {
+				return "Could not link this account. Check the code or unlink the existing account first.", nil
+			}
+			return "", err
 		}
 		return "Linked successfully to ForgeCRM user " + userID.String()[:8] + ".\nUse /tasks to see your open tasks.", nil
 	}
@@ -344,7 +351,11 @@ func (s *TelegramService) HandleCommand(ctx context.Context, telegramUserID int6
 	// Every other command requires a linked, active, permissioned user.
 	principal, err := s.ResolveUser(ctx, telegramUserID)
 	if err != nil {
-		return "This Telegram account is not linked. Send /link <code> first.", nil
+		var apiErr *httpx.APIError
+		if errors.As(err, &apiErr) && apiErr.Status == http.StatusForbidden {
+			return "This Telegram account is not linked. Send /link <code> first.", nil
+		}
+		return "", err
 	}
 
 	switch command {
@@ -355,7 +366,7 @@ func (s *TelegramService) HandleCommand(ctx context.Context, telegramUserID int6
 		return s.listOwnTasks(ctx, principal)
 	case "/unlink":
 		if err := s.Unlink(ctx, principal); err != nil {
-			return "Could not unlink: " + err.Error(), nil
+			return "", err
 		}
 		return "This Telegram account is no longer linked to ForgeCRM.", nil
 	default:
