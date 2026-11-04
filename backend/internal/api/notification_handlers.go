@@ -3,7 +3,6 @@ package api
 import (
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -207,7 +206,7 @@ func (s *Server) handleTelegramLinkCode(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Cache-Control", "no-store")
 	httpx.WriteJSON(w, map[string]any{
 		"code":               code,
-		"expires_in_seconds": int((15 * time.Minute).Seconds()),
+		"expires_in_seconds": int(notify.LinkCodeTTL.Seconds()),
 		"instruction":        "send /link " + code + " to the bot",
 	})
 }

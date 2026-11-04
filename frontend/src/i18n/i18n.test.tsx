@@ -146,7 +146,8 @@ describe('locale', () => {
     const walk = (obj: Record<string, unknown>, prefix: string): void => {
       for (const [key, value] of Object.entries(obj)) {
         if (typeof value === 'string') {
-          const withoutPlaceholders = value.replace(/\{[^}]*\}/g, ' ')
+          // Telegram slash commands are protocol literals, not untranslated prose.
+          const withoutPlaceholders = value.replace(/\{[^}]*\}/g, ' ').replace(/\/[a-z_]+\b/g, ' ')
           const latin = withoutPlaceholders.match(/[A-Za-z]{4,}/g) ?? []
           const stray = latin.filter((word) => !allowed.has(word))
           if (stray.length > 0) offenders.push(`${prefix}${key}: ${value}`)
