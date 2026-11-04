@@ -167,6 +167,54 @@ test.describe('responsive layout', () => {
     await expect(sidebar).not.toBeInViewport()
   })
 
+  test('drawer traps keyboard focus, closes with Escape and restores focus', async ({ authedPage: page }) => {
+    await page.goto('/')
+    const drawer = page.locator('.sidebar')
+    const toggle = page.locator('.sidebar-toggle')
+    await expect(drawer).toHaveAttribute('inert', '')
+    await toggle.click()
+    await expect(drawer).toHaveAttribute('role', 'dialog')
+    await expect(drawer).toBeFocused()
+    expect(await page.evaluate(() => document.body.style.overflow)).toBe('hidden')
+    await page.keyboard.press('Shift+Tab')
+    expect(await drawer.evaluate((node) => node.contains(document.activeElement))).toBe(true)
+    await page.keyboard.press('Tab')
+    expect(await drawer.evaluate((node) => node.contains(document.activeElement))).toBe(true)
+    await page.keyboard.press('Escape')
+    await expect(drawer).toHaveAttribute('inert', '')
+    await expect(toggle).toBeFocused()
+    expect(await page.evaluate(() => document.body.style.overflow)).toBe('')
+  })
+
+  test('a resize or global search does not leave the drawer modal open', async ({ authedPage: page }) => {
+    await page.goto('/')
+    const drawer = page.locator('.sidebar')
+    const toggle = page.locator('.sidebar-toggle')
+    await toggle.click()
+    await page.keyboard.press('Control+k')
+    await expect(drawer).toHaveAttribute('inert', '')
+    await expect(page.locator('.modal')).toBeVisible()
+    await page.keyboard.press('Escape')
+    await toggle.click()
+    await page.setViewportSize(TABLET_LANDSCAPE)
+    await expect(drawer).not.toHaveAttribute('inert', '')
+    await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('')
+  })
+
+  test('phone forms and dialog actions remain usable on a small screen', async ({ authedPage: page }) => {
+    await page.setViewportSize(SMALL_PHONE)
+    await page.goto('/accounts')
+    await page.getByRole('button', { name: 'New account' }).click()
+    const dialog = page.getByRole('dialog')
+    const input = dialog.locator('#account-name')
+    const submit = dialog.getByRole('button', { name: 'Create account' })
+    await expect(input).toBeVisible()
+    await expect(submit).toBeInViewport()
+    expect(await input.evaluate((node) => parseFloat(getComputedStyle(node).fontSize))).toBeGreaterThanOrEqual(16)
+    expect((await submit.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1)
+  })
+
   test('a data table becomes one labelled card per row on a phone', async ({ authedPage: page }) => {
     // A six-column table cannot fit a phone. Below the phone breakpoint the rows
     // stack into cards and each cell is labelled from its column header, so the

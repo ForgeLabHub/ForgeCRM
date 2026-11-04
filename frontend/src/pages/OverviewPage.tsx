@@ -177,6 +177,7 @@ export function OverviewPage() {
             count: session?.permissions.length ?? 0,
           })}
         </div>
+        {session?.organization.name ? <div className="hero__mobile-org">{session.organization.name}</div> : null}
         {info.data ? (
           <div className="hero__chips">
             <Badge tone="neutral">{info.data.service}</Badge>
