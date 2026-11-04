@@ -291,6 +291,9 @@ jobs:
 
   visual:
     name: Visual regression (baselines on Linux)
+    # One-time baseline refresh for PR 52, removed after review.
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -361,12 +364,28 @@ jobs:
       # were made. Playwright starts the Vite dev server itself (see webServer
       # in playwright.config.ts).
       - name: Compare against the committed baselines
+        env:
+          REFRESH_VISUAL: ${{ github.event_name == 'push' && github.ref == 'refs/heads/arena/c55089b3-forgecrm' && contains(github.event.head_commit.message, '[visual-refresh-52]') }}
         run: |
+          if [ "$REFRESH_VISUAL" = true ]; then update='--update-snapshots'; else update=''; fi
           docker run --rm --network host \
             -e FORGECRM_API_URL=http://127.0.0.1:8080 -e CI=1 \
             -v "$PWD":/work -w /work \
             mcr.microsoft.com/playwright:v1.49.1-jammy \
-            bash -lc "npm ci && npx playwright test --project=visual"
+            bash -lc "npm ci && npx playwright test --project=visual $update"
+
+      - name: Commit snapshots for review on the PR branch
+        if: github.event_name == 'push' && github.ref == 'refs/heads/arena/c55089b3-forgecrm' && contains(github.event.head_commit.message, '[visual-refresh-52]')
+        working-directory: .
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/e2e/visual.spec.ts-snapshots/
+          if ! git diff --cached --quiet; then
+            git commit -m "Refresh Linux Playwright visual baselines for review"
+            git push origin HEAD:refs/heads/arena/c55089b3-forgecrm
+          fi
 
       - name: Upload the diff report when a screenshot fails
         if: failure()
