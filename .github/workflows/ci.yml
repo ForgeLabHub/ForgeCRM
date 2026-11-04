@@ -278,7 +278,9 @@ jobs:
       # Playwright starts the Vite dev server itself (see webServer in
       # playwright.config.ts), so there is no separate step for it.
       - name: Run end-to-end tests
-        run: npm run e2e
+        # Keep the console and HTML reports and surface individual failures as
+        # check annotations, so they remain actionable when artifacts are unavailable.
+        run: npm run e2e -- --reporter=list,github,html
 
       - name: Upload the report when a test fails
         if: failure()

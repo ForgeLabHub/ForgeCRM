@@ -1,0 +1,14 @@
+# Used only by start.sh. !override requires Docker Compose 2.24.4 or newer.
+# Replace (not merge) env files and published ports so an unrelated .env, an
+# external database URL or a network-facing production port cannot leak in.
+services:
+  api:
+    env_file: !override
+      - path: ${FORGECRM_ENV_FILE:?run with start.sh}
+        required: true
+    ports: !override
+      - "127.0.0.1:8080:8080"
+  worker:
+    env_file: !override
+      - path: ${FORGECRM_ENV_FILE:?run with start.sh}
+        required: true

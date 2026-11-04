@@ -72,6 +72,30 @@ function renderShell() {
 }
 
 describe('AppShell accessibility', () => {
+  it('makes a closed phone drawer inert and restores focus after Escape', async () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })))
+    renderShell()
+    const user = userEvent.setup()
+    const toggle = await screen.findByRole('button', { name: /^menu$/i })
+    const drawer = document.getElementById('main-navigation-drawer')!
+    expect(drawer).toHaveAttribute('inert')
+    expect(drawer).toHaveAttribute('aria-hidden', 'true')
+
+    await user.click(toggle)
+    expect(drawer).not.toHaveAttribute('inert')
+    expect(drawer).toHaveAttribute('role', 'dialog')
+    expect(drawer).toHaveFocus()
+    expect(document.body.style.overflow).toBe('hidden')
+    await user.keyboard('{Escape}')
+    expect(drawer).toHaveAttribute('inert')
+    expect(document.body.style.overflow).toBe('')
+    expect(toggle).toHaveFocus()
+  })
+
   // The account popover holds an identity block, a theme-switch group and action
   // items. role="menu" requires its children to be menuitems, which this popover
   // is not, so the role must not be present — an invalid tree axe reports.

@@ -39,7 +39,7 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 код изменился, а документ не перегенерировали.
 
 <!-- FACTS:AUTO BEGIN — генерируется backend/cmd/facts-gen, не редактировать вручную -->
-<!-- измерено на HEAD `311cb94ad28cdc47a1e723baa11cbcbaabe007e8` -->
+<!-- измерено на HEAD `1bae14d4b83e83d462a94085928debceb0c9e1b4` -->
 
 ## Backend / Architecture
 
@@ -92,22 +92,22 @@ openapi.json генерируется из живого роутера (`cmd/ope
 |---|---|---|
 | Файлы src (.ts/.tsx) | **125** | frontend/src/**, включая тестовые |
 | Тестовые файлы src | **40** | *.test.ts(x)/.spec.ts(x) в frontend/src |
-| Объявления it()/test() в src | **261** | запускаемые кейсы vitest; test.describe вычитается |
+| Объявления it()/test() в src | **262** | запускаемые кейсы vitest; test.describe вычитается |
 | Файлы страниц | **38** | компоненты в frontend/src/pages (без admin/, без тестов) |
 | Тесты страниц | **20** | *.test.tsx рядом со страницами |
 | Маршрутов <Route path> | **46** | объявления в frontend/src/App.tsx (регистр маршрутизации SPA) |
 | Уникальных путей маршрутов | **44** | различающиеся path по всем <Routes>-деревьям App.tsx; повторения внутри одного дерева запрещены (гейт route_paths_unique) |
 | E2E спецификации | **4** | *.spec.ts в frontend/e2e |
-| E2E тесты | **67** | объявления test() Playwright; test.describe вычитается |
+| E2E тесты | **70** | объявления test() Playwright; test.describe вычитается |
 
 ## CI/CD
 
 | Метрика | Значение | Определение |
 |---|---|---|
 | Workflow-файлов | **2** | *.yml/*.yaml в .github/workflows |
-| Jobs суммарно | **15** | ключи двухпробельного отступа внутри секции jobs: |
+| Jobs суммарно | **16** | ключи двухпробельного отступа внутри секции jobs: |
 
-Список заданий: ci.yml/backend, ci.yml/blitz-cloud, ci.yml/constructor, ci.yml/docker, ci.yml/docs, ci.yml/e2e, ci.yml/extraction, ci.yml/frontend, ci.yml/security, ci.yml/visual, portability.yml/backup-restore, portability.yml/compose-smoke, portability.yml/config-without-secrets, portability.yml/docs, portability.yml/upgrade-path.
+Список заданий: ci.yml/backend, ci.yml/blitz-cloud, ci.yml/constructor, ci.yml/docker, ci.yml/docs, ci.yml/e2e, ci.yml/extraction, ci.yml/frontend, ci.yml/security, ci.yml/visual, portability.yml/backup-restore, portability.yml/compose-smoke, portability.yml/config-without-secrets, portability.yml/docs, portability.yml/local-start-smoke, portability.yml/upgrade-path.
 
 ## Consistency flags
 

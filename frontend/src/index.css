@@ -2236,3 +2236,94 @@ a.metric:hover {
 .page-header__lead { min-width: 0; }
 
 .breadcrumb__current { color: var(--color-text); font-weight: 550; }
+
+/* Phone refinements: retain content and actions while making them usable with
+   touch and without iOS zooming a field when it receives focus. */
+.sidebar__close, .hero__mobile-org { display: none; }
+
+@media (max-width: 860px) {
+  .sidebar { width: min(var(--sidebar-width), calc(100vw - 48px)); }
+  .sidebar__close {
+    position: absolute;
+    right: var(--space-2);
+    top: var(--space-3);
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--color-text-muted);
+    background: transparent;
+    cursor: pointer;
+  }
+  .sidebar__brand { padding-right: 48px; }
+  .sidebar__brand-sub { display: none; }
+  .nav-item { min-height: 44px; }
+  .search-trigger, .menu__trigger, .sidebar-toggle { min-width: 44px; min-height: 44px; justify-content: center; }
+}
+
+@media (max-width: 640px) {
+  .content {
+    padding: var(--space-3);
+    padding-left: max(var(--space-3), env(safe-area-inset-left));
+    padding-right: max(var(--space-3), env(safe-area-inset-right));
+    padding-bottom: max(var(--space-4), env(safe-area-inset-bottom));
+  }
+  .topbar {
+    padding-left: max(var(--space-3), env(safe-area-inset-left));
+    padding-right: max(var(--space-3), env(safe-area-inset-right));
+  }
+  .page-header { gap: var(--space-3); margin-bottom: var(--space-4); }
+  .page-header__lead, .page-header__actions { width: 100%; min-width: 0; }
+  .page-header__actions > * { min-width: 0; }
+  .btn { min-height: 44px; white-space: normal; text-align: center; }
+  .toolbar__search { flex-basis: 100%; min-width: 0; max-width: none; }
+  .form-actions, .modal__footer, .pagination { flex-wrap: wrap; }
+  .form-actions > .btn, .modal__footer > .btn { flex: 1 1 120px; }
+  .modal__footer { padding-left: var(--space-3); padding-right: var(--space-3); }
+  .modal__close { width: 44px; height: 44px; }
+  .modal__body { overscroll-behavior: contain; }
+  input:not([type]), input[type='text'], input[type='email'], input[type='password'],
+  input[type='number'], input[type='date'], input[type='datetime-local'], input[type='url'],
+  input[type='search'], input[type='tel'], select, textarea {
+    min-width: 0;
+    max-width: 100%;
+    font-size: 16px;
+  }
+  input:not([type]), input[type='text'], input[type='email'], input[type='password'],
+  input[type='number'], input[type='date'], input[type='datetime-local'], input[type='url'],
+  input[type='search'], input[type='tel'], select { min-height: 44px; }
+  /* Bare inputs are text fields too. Match the shared field styling on phones. */
+  input:not([type]), input[type='tel'] {
+    width: 100%;
+    padding: 7px 10px;
+    font-family: inherit;
+    color: var(--color-text);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-sm);
+  }
+  input.input--invalid { border-color: var(--color-danger); }
+  input:not([type]):focus, input[type='tel']:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: var(--ring);
+  }
+  input:not([type]):disabled, input[type='tel']:disabled {
+    background: var(--color-surface-sunken);
+    color: var(--color-text-subtle);
+  }
+  .table--stack td { min-width: 0; overflow-wrap: anywhere; }
+  .table--stack td > :last-child:is(.badge, .btn, input) { flex: 0 1 auto; }
+  .grid--stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid--stats > * { min-width: 0; }
+  .metric, .stat { padding: var(--space-3); overflow-wrap: anywhere; }
+  .skeleton { max-width: 100%; }
+  .hero { padding: var(--space-4); margin-bottom: var(--space-4); }
+  .hero__meta, .hero__chips > :not(:nth-child(2)) { display: none; }
+  .hero__chips { margin-top: var(--space-2); }
+  .hero__mobile-org { display: block; margin-top: var(--space-1); color: var(--color-text-muted); font-size: 13px; }
+  .quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .quick-action { min-width: 0; min-height: 48px; padding: var(--space-2); overflow-wrap: anywhere; }
+}
