@@ -218,6 +218,7 @@ func APIContract() openapi.Contract {
 
 	// --- CRM: leads ---------------------------------------------------------
 	c.RequestBodies["POST /api/v1/leads"] = reflect.TypeOf(crm.LeadInput{})
+	c.RequiredBody["LeadInput"] = []string{"title"}
 	c.RequestBodies["PUT /api/v1/leads/{id}"] = reflect.TypeOf(crm.LeadInput{})
 	c.Responses["GET /api/v1/leads"] = reflect.TypeOf(httpx.ListResponse[crm.Lead]{})
 	c.Responses["GET /api/v1/leads/{id}"] = reflect.TypeOf(crm.Lead{})

@@ -24,7 +24,37 @@ COPY frontend/ ./
 RUN npm run build
 
 # ---------------------------------------------------------------------------
-# Stage 2: compile both Go binaries.
+# Stage 2: resolve the build revision from the checkout.
+#
+# The revision is read from the git checkout, not from an environment variable,
+# because a variable is maintained by hand and goes stale: a platform that builds
+# the repository root (blitz.cloud) passes no docker build arguments, so the image
+# used to fall back to a manually set FORGECRM_COMMIT that still named an older
+# commit than the one actually deployed. The checkout is the single source of
+# truth for "what is being built"; the environment remains a fallback for local
+# development, where no checkout is available inside the image.
+#
+# The context is copied into a throwaway stage so this step cannot fail a build:
+# `COPY . /meta` always matches, and a context without .git (a source tarball
+# rather than a clone) yields the "unknown" marker instead of a broken image.
+# The runtime image never sees this stage.
+# ---------------------------------------------------------------------------
+FROM alpine:3.20 AS buildmeta
+
+RUN apk add --no-cache git
+
+WORKDIR /meta
+COPY . /meta
+RUN set -eu; \
+    if [ -d /meta/.git ]; then \
+        git config --global --add safe.directory /meta; \
+        git -C /meta rev-parse HEAD > /revision; \
+    else \
+        printf 'unknown' > /revision; \
+    fi
+
+# ---------------------------------------------------------------------------
+# Stage 3: compile both Go binaries.
 # ---------------------------------------------------------------------------
 FROM golang:1.26.10-alpine AS build
 
@@ -35,20 +65,27 @@ RUN go mod download
 
 COPY backend/ ./
 
-ARG VERSION=dev
-ARG COMMIT=unknown
+# The revision resolved from the checkout. A build argument still wins, so a
+# release pipeline can pin it; only when neither is present does main.go fall
+# back to the environment (local development).
+COPY --from=buildmeta /revision /revision
 
-RUN CGO_ENABLED=0 GOOS=linux go build \
+ARG VERSION=dev
+ARG COMMIT=
+
+RUN set -eu; \
+    revision="${COMMIT:-$(cat /revision)}"; \
+    CGO_ENABLED=0 GOOS=linux go build \
         -trimpath \
-        -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" \
+        -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${revision}" \
         -o /out/forgecrm-api ./cmd/forgecrm-api \
     && CGO_ENABLED=0 GOOS=linux go build \
         -trimpath \
-        -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" \
+        -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${revision}" \
         -o /out/forgecrm-worker ./cmd/forgecrm-worker
 
 # ---------------------------------------------------------------------------
-# Stage 3: minimal runtime image, non-root, no shell.
+# Stage 4: minimal runtime image, non-root, no shell.
 # ---------------------------------------------------------------------------
 FROM alpine:3.20
 

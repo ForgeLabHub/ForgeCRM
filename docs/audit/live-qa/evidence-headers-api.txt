@@ -1,0 +1,61 @@
+# Live QA evidence — 2026-11-04T12:21:25Z
+
+## Availability
+/                  http=200 t=0.470490s type=text/html; charset=utf-8 redirects=0
+/login             http=200 t=0.396134s type=text/html; charset=utf-8 redirects=0
+/health            http=200 t=0.516655s type=application/json; charset=utf-8 redirects=0
+/ready             http=200 t=0.404827s type=application/json; charset=utf-8 redirects=0
+/admin             http=200 t=0.186559s type=text/html; charset=utf-8 redirects=0
+/admin/audit       http=200 t=0.402603s type=text/html; charset=utf-8 redirects=0
+/nonexistent-xyz   http=200 t=0.187600s type=text/html; charset=utf-8 redirects=0
+
+## Bodies
+/health -> {"service":"forgecrm","status":"ok","version":"main"}
+/ready  -> {"commit":"8d350b0cbdbbc815cce3253a083b30cfd706fa15","status":"ready","version":"main"}
+
+## Response headers (/login)
+HTTP/2 200 
+date: Wed, 04 Nov 2026 12:21:28 GMT
+content-type: text/html; charset=utf-8
+accept-ranges: bytes
+content-security-policy-report-only: default-src 'self'; script-src 'self' 'sha256-vnv5pucUkxrn/0vQPxiGLGnKRB8NToF/9rfKNCzOx8E='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'; worker-src 'none'; manifest-src 'none'; report-uri /csp-report; report-to csp-endpoint
+cross-origin-opener-policy: same-origin
+last-modified: Wed, 04 Nov 2026 01:29:57 GMT
+permissions-policy: geolocation=(), microphone=(), camera=()
+referrer-policy: same-origin
+reporting-endpoints: csp-endpoint="/csp-report"
+strict-transport-security: max-age=31536000; includeSubDomains
+traceparent: 00-c3f6e0b96a81cb1065b7ba36e17529c0-ee40dee76848bab1-00
+x-content-type-options: nosniff
+x-frame-options: SAMEORIGIN
+x-request-id: 79061a1dbb0c3bf8b3938312bd785fdc
+x-robots-tag: noindex
+cf-cache-status: DYNAMIC
+x-xss-protection: 1; mode=block
+speculation-rules: "/cdn-cgi/speculation"
+report-to: {"group":"cf-nel","max_age":604800,"endpoints":[{"url":"https://a.nel.cloudflare.com/report/v4?s=nXN6fPL9eK6QeQT1je49lYxpLsLHENikqRFNzFEKztmqhOvvStYvvGNJJVyucgxoafJT63mRQVCl2hAIo94g0psefonmr%2FcLqIV531dNBKY7AQAD2CPOxWW7uEESZKSBBvKDS1m2vP2egEqIFcosSQ%3D%3D"}]}
+nel: {"report_to":"cf-nel","success_fraction":0.0,"max_age":604800}
+expect-ct: max-age=86400, enforce
+server: cloudflare
+cf-ray: a5539423ffb0eb09-ORD
+
+
+## Unauthenticated API probes
+/api/v1/contacts                       http=401 type=application/json; charset=utf-8
+/api/v1/auth/me                        http=401 type=application/json; charset=utf-8
+/api/v1/auth/oidc/providers            http=200 type=application/json; charset=utf-8
+/api/v1/audit                          http=401 type=application/json; charset=utf-8
+/api/v1/users                          http=401 type=application/json; charset=utf-8
+/api/v1/mcp                            http=405 type=application/json; charset=utf-8
+/api/v1/definitely-not-a-route         http=404 type=application/json; charset=utf-8
+/metrics                               http=503 type=application/json; charset=utf-8
+
+## CSRF: POST /auth/logout with no session/token
+{"type":"urn:forgecrm:error:unauthorized","title":"Authentication required","status":401,"detail":"authentication required","instance":"/api/v1/auth/logout","retryable":false,"request_id":"6bbadfadbd8f0b0544cfa898e044ad9a","correlation_id":"6bbadfadbd8f0b0544cfa898e044ad9a","error":{"code":"unauthorized","message":"authentication required"}}
+
+[http=401]
+
+## Validation: POST /auth/login with empty body
+{"type":"urn:forgecrm:error:validation_failed","title":"Validation failed","status":422,"detail":"validation failed","instance":"/api/v1/auth/login","retryable":false,"request_id":"7d7ab063efebfb37a359d333a8dec96e","correlation_id":"7d7ab063efebfb37a359d333a8dec96e","error":{"code":"validation_failed","message":"validation failed","details":{"email":"email and password are required"}}}
+
+[http=422]

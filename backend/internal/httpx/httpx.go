@@ -408,27 +408,22 @@ func RecoverMiddleware(log *slog.Logger) func(http.Handler) http.Handler {
 // Security headers
 // ---------------------------------------------------------------------------
 
-// CSPReportOnly is the Content Security Policy, delivered in Report-Only mode.
+// CSP is the Content Security Policy delivered to browsers.
 //
-// It is Report-Only, not enforcing, because the SPA has not yet been exercised in
-// a real browser against it: an enforcing policy that blocks the module bundle
-// turns the application into a blank page, and a violation report is recoverable
-// where a blank page is an outage. The policy is derived from the built bundle:
-// every asset is same-origin, there is no eval and no inline event handler, and
-// the only inline script is the pre-paint theme bootstrap in index.html, which is
-// pinned by hash (the hash must be recomputed if that script ever changes).
+// It is derived from the built bundle: every asset is same-origin, there is no
+// eval and no inline event handler, and the only inline script is the pre-paint
+// theme bootstrap in index.html, which is pinned by hash (the hash must be
+// recomputed if that script ever changes).
 //
 // style-src carries 'unsafe-inline' provisionally. The app sets 270 React
 // style={{...}} props; React writes those through CSSOM, which CSP does not
 // govern, so they may not require it at all — but that is a claim about browser
-// behaviour, and Report-Only is exactly where such a claim is tested. The
-// directive can be tightened once the reports show no style-src violation.
+// behaviour, and a report-only deployment is exactly where such a claim is
+// tested. The directive can be tightened once the reports show no style-src
+// violation.
 //
-// report-uri and report-to both point at a sink that does not exist yet. A
-// browser that has nowhere to send a report still sends nothing harmful: the
-// report-only header cannot block a resource either way. Adding the endpoint is a
-// separate change; the policy is useful the moment the endpoint lands.
-const CSPReportOnly = "default-src 'self'; " +
+// report-uri and report-to both point at the /csp-report sink.
+const CSP = "default-src 'self'; " +
 	"script-src 'self' 'sha256-vnv5pucUkxrn/0vQPxiGLGnKRB8NToF/9rfKNCzOx8E='; " +
 	"style-src 'self' 'unsafe-inline'; " +
 	"img-src 'self' data: blob:; " +
@@ -444,19 +439,51 @@ const CSPReportOnly = "default-src 'self'; " +
 	"report-uri /csp-report; " +
 	"report-to csp-endpoint"
 
-// CSPReportEndpoint is the Reporting API group named by CSPReportOnly.
+// CSPReportOnly is CSP delivered in Report-Only mode. The two delivery modes are
+// a security-relevant distinction: a report-only policy cannot block a resource,
+// so a deployment that keeps it must not be mistaken for one that enforces.
+//
+// Deprecated: use CSP with SecurityHeadersOptions{Enforce: false}.
+const CSPReportOnly = CSP
+
+// CSPReportEndpoint is the Reporting API group named by the policy.
 const CSPReportEndpoint = "csp-endpoint"
+
+// CSPReportPath is the path the policy reports violations to. It is a same-origin
+// relative path, so the browser posts there without a CORS preflight.
+const CSPReportPath = "/csp-report"
+
+// SecurityHeadersOptions configures the hardening middleware.
+type SecurityHeadersOptions struct {
+	// HSTSMaxAge is the Strict-Transport-Security max-age. Zero means HSTS is
+	// off and no header is emitted, which is the default: HSTS is only honoured
+	// over HTTPS and is cached by the browser for its lifetime, so it is a
+	// deliberate opt-in. The middleware does not inspect the request scheme —
+	// behind a TLS-terminating proxy the process sees plain HTTP and cannot
+	// tell — so the operator enables it once the deployment is known to be
+	// HTTPS-only.
+	HSTSMaxAge time.Duration
+	// Enforce selects the delivery mode. When true the policy is sent as an
+	// enforcing Content-Security-Policy header; when false it is sent as
+	// Content-Security-Policy-Report-Only, which reports violations without
+	// blocking them. The default is report-only because an enforcing policy that
+	// blocks the module bundle turns the application into a blank page, and a
+	// blank page is an outage where a report is not.
+	Enforce bool
+}
 
 // SecurityHeadersMiddleware sets conservative browser hardening headers.
 //
-// hstsMaxAge is the Strict-Transport-Security max-age. A value of zero means HSTS
-// is off and no header is emitted, which is the default: HSTS is only honoured
-// over HTTPS and is cached by the browser for its lifetime, so it is a deliberate
-// opt-in rather than something switched on for every deployment. The middleware
-// does not inspect the request scheme — behind a TLS-terminating proxy the
-// process sees plain HTTP and cannot tell — so the operator enables it once the
-// deployment is known to be HTTPS-only.
+// It is the historical entry point and keeps the original behaviour: the policy
+// is delivered Report-Only. Use SecurityHeadersMiddlewareWithOptions to choose the
+// delivery mode.
 func SecurityHeadersMiddleware(hstsMaxAge time.Duration) func(http.Handler) http.Handler {
+	return SecurityHeadersMiddlewareWithOptions(SecurityHeadersOptions{HSTSMaxAge: hstsMaxAge})
+}
+
+// SecurityHeadersMiddlewareWithOptions sets the hardening headers with an explicit
+// configuration.
+func SecurityHeadersMiddlewareWithOptions(opts SecurityHeadersOptions) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			h := w.Header()
@@ -469,10 +496,16 @@ func SecurityHeadersMiddleware(hstsMaxAge time.Duration) func(http.Handler) http
 			h.Set("Referrer-Policy", "no-referrer")
 			h.Set("Cross-Origin-Opener-Policy", "same-origin")
 			h.Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
-			h.Set("Content-Security-Policy-Report-Only", CSPReportOnly)
-			h.Set("Reporting-Endpoints", CSPReportEndpoint+"=\"/csp-report\"")
-			if hstsMaxAge > 0 {
-				seconds := int64(hstsMaxAge / time.Second)
+			// Exactly one of the two headers is set. Setting both would be a
+			// contradiction the browser resolves by ignoring the enforcing one.
+			if opts.Enforce {
+				h.Set("Content-Security-Policy", CSP)
+			} else {
+				h.Set("Content-Security-Policy-Report-Only", CSP)
+			}
+			h.Set("Reporting-Endpoints", CSPReportEndpoint+"=\""+CSPReportPath+"\"")
+			if opts.HSTSMaxAge > 0 {
+				seconds := int64(opts.HSTSMaxAge / time.Second)
 				h.Set("Strict-Transport-Security", fmt.Sprintf("max-age=%d", seconds))
 			}
 			next.ServeHTTP(w, r)

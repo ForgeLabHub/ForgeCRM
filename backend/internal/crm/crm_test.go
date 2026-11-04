@@ -320,3 +320,30 @@ func TestLooksLikeEmail(t *testing.T) {
 		}
 	}
 }
+
+// TestLeadInputValidateRequiresTitle pins the one required field on a lead.
+//
+// Every sibling that carries a title requires it (deal, task, ticket). The lead
+// was the outlier: an empty POST created a row with title "", which is
+// indistinguishable in a list and defeats the title column the UI sorts on.
+func TestLeadInputValidateRequiresTitle(t *testing.T) {
+	for name, in := range map[string]LeadInput{
+		"empty":      {},
+		"whitespace": {Title: "   "},
+	} {
+		details := detailsOf(t, in.Validate())
+		if _, ok := details["title"]; !ok {
+			t.Errorf("%s title: expected a `title` detail, got %v", name, details)
+		}
+	}
+
+	valid := &LeadInput{Title: "Call back"}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("a lead with a title was rejected: %v", err)
+	}
+	// The status default must still be applied once the title is present; the new
+	// check must not short-circuit the rest of the validator.
+	if valid.Status != "new" {
+		t.Errorf("status default = %q, want new", valid.Status)
+	}
+}

@@ -348,6 +348,9 @@ var leadStatuses = map[string]bool{
 // Validate checks the input.
 func (in *LeadInput) Validate() error {
 	details := map[string]string{}
+	if strings.TrimSpace(in.Title) == "" {
+		details["title"] = "title is required"
+	}
 	if in.Status == "" {
 		in.Status = "new"
 	}

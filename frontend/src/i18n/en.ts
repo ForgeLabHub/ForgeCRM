@@ -595,7 +595,7 @@ export const en = {
     emailField: 'Email',
     phoneField: 'Phone',
     companyField: 'Company',
-    jobTitleField: 'Job title',
+    titleField: 'Title',
     sourceField: 'Source',
     sourceHint: 'Where the lead came from.',
     statusField: 'Status',
@@ -1425,6 +1425,8 @@ export const en = {
     selected: '{count} selected',
     permissionsHint:
       'The credential can do only what is checked here. You cannot grant a permission you do not hold yourself.',
+    executeWarning:
+      'Without ai.tools.execute the client authenticates but every tool call is refused with 403 — it can list tools and nothing more. Add it if the client is meant to run them.',
     creating: 'Creating…',
     createCredential: 'Create credential',
     rotateTitle: 'Rotate this credential?',

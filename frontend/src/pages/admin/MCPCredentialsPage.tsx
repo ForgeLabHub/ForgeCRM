@@ -450,6 +450,9 @@ function CredentialDialog({
                 {errors.permissions}
               </span>
             ) : null}
+            {selected.length > 0 && !selected.includes('ai.tools.execute') ? (
+              <Alert tone="warning">{t('mcpCredentials.executeWarning')}</Alert>
+            ) : null}
           </div>
 
           {permissions.isLoading ? (

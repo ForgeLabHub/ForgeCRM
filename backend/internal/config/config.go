@@ -45,6 +45,18 @@ type Config struct {
 	// The operator opts in once the host is known to serve HTTPS on every path.
 	HSTSMaxAge time.Duration
 
+	// CSPEnforce switches the Content Security Policy from Report-Only to
+	// enforcing. It is off by default because an enforcing policy that blocks the
+	// module bundle turns the application into a blank page, and a blank page is an
+	// outage where a violation report is not. The policy is derived from the bundle,
+	// and a report-only deployment reports violations without blocking them, so an
+	// operator enables this only after the reports are clean on the real host.
+	//
+	// A host that rewrites responses in transit (a CDN that injects a script or an
+	// inline style) can violate a policy the application itself satisfies, which is
+	// why this is a deliberate, per-deployment opt-in rather than a default.
+	CSPEnforce bool
+
 	// DatabaseMaxConns bounds one process's database connection pool.
 	//
 	// It is configurable because the number that matters is replicas x pool, and
@@ -423,6 +435,8 @@ func Load() (*Config, error) {
 	if c.HSTSMaxAge, err = envDuration("FORGECRM_HSTS_MAX_AGE", 0); err != nil {
 		return nil, err
 	}
+	// CSP enforcement is opt-in; report-only is the default.
+	c.CSPEnforce = envBool("FORGECRM_CSP_ENFORCE", false)
 
 	c.Email = EmailConfig{
 		Enabled:   envBool("FORGECRM_SMTP_ENABLED", false),

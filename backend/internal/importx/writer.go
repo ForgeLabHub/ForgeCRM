@@ -98,7 +98,7 @@ var specs = map[string]entitySpec{
 	"lead": {
 		Table: "leads",
 		Fields: []fieldSpec{
-			{Name: "title", Kind: kindText},
+			{Name: "title", Kind: kindText, Required: true},
 			{Name: "first_name", Kind: kindText},
 			{Name: "last_name", Kind: kindText},
 			{Name: "email", Kind: kindText},

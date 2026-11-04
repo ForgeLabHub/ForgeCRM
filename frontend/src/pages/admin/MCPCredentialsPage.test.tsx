@@ -54,6 +54,7 @@ function stubFetch(permissions: string[] = ['mcp.credentials.read', 'mcp.credent
           items: [
             { key: 'accounts.read', category: 'accounts', description: 'View accounts' },
             { key: 'tasks.create', category: 'tasks', description: 'Create tasks' },
+            { key: 'ai.tools.execute', category: 'ai', description: 'Execute AI tools' },
           ],
         }),
       )
@@ -156,5 +157,34 @@ describe('MCPCredentialsPage', () => {
     const json = await screen.findByText(/"mcpServers"/)
     expect(json.textContent).toContain('/api/v1/mcp')
     expect(json.textContent).toContain('Bearer fcmcp_…')
+  })
+})
+
+describe('MCPCredentialsPage permission guidance', () => {
+  it('warns that a credential without ai.tools.execute cannot run tools', async () => {
+    stubFetch()
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'New credential' }))
+    await userEvent.type(screen.getByLabelText(/Name/), 'Read-only agent')
+    // A data-only permission authenticates the client but the protocol refuses
+    // every tool call, which D-4 found an operator cannot guess from the picker.
+    await userEvent.click(screen.getByLabelText('accounts.read'))
+
+    expect(await screen.findByText(/Without ai\.tools\.execute/)).toBeInTheDocument()
+  })
+
+  it('drops the warning once ai.tools.execute is granted', async () => {
+    stubFetch()
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'New credential' }))
+    await userEvent.type(screen.getByLabelText(/Name/), 'Agent')
+    await userEvent.click(screen.getByLabelText('accounts.read'))
+    expect(await screen.findByText(/Without ai\.tools\.execute/)).toBeInTheDocument()
+
+    // Granting the permission the MCP protocol requires clears the warning.
+    await userEvent.click(screen.getByLabelText('ai.tools.execute'))
+    expect(screen.queryByText(/Without ai\.tools\.execute/)).toBeNull()
   })
 })

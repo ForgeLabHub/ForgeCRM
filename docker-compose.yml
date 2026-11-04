@@ -64,7 +64,7 @@ services:
       dockerfile: Dockerfile
       args:
         VERSION: ${FORGECRM_VERSION:-dev}
-        COMMIT: ${FORGECRM_COMMIT:-unknown}
+        COMMIT: ${FORGECRM_COMMIT:-}
     restart: unless-stopped
     depends_on:
       postgres:
@@ -97,7 +97,7 @@ services:
       dockerfile: Dockerfile
       args:
         VERSION: ${FORGECRM_VERSION:-dev}
-        COMMIT: ${FORGECRM_COMMIT:-unknown}
+        COMMIT: ${FORGECRM_COMMIT:-}
     restart: unless-stopped
     # The worker shares the API image and runs the other binary. The entrypoint
     # dispatcher reads FORGECRM_ROLE or its first argument and starts the worker.

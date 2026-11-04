@@ -276,6 +276,50 @@ func TestDockerfilesOmitTheSyntaxDirective(t *testing.T) {
 	}
 }
 
+// TestRootBuildStampsTheRevisionFromTheCheckout guards the fix for the stale
+// commit defect: a platform that builds the repository-root Dockerfile passes no
+// docker build arguments, so the image used to report whatever a human had last
+// typed into FORGECRM_COMMIT. The fix derives the revision from the checkout at
+// build time. That only works while the build context actually contains .git, so
+// this test asserts two invariants that together make the stamp trustworthy:
+//
+//   - the root Dockerfile reads the revision from a git checkout (a buildmeta
+//     stage that runs `git rev-parse HEAD`), rather than trusting the
+//     environment alone;
+//   - .dockerignore does not exclude .git, because excluding it would silently
+//     return the build to the "unknown" fallback and the stale-variable defect
+//     with it.
+func TestRootBuildStampsTheRevisionFromTheCheckout(t *testing.T) {
+	root := repoRoot(t)
+
+	dockerfile, err := os.ReadFile(filepath.Join(root, "Dockerfile"))
+	if err != nil {
+		t.Fatalf("read Dockerfile: %v", err)
+	}
+	src := string(dockerfile)
+	if !strings.Contains(src, "git -C /meta rev-parse HEAD") {
+		t.Error("the root Dockerfile does not resolve the revision from the git checkout; " +
+			"without it the commit reported by /ready comes from a hand-maintained environment " +
+			"variable, which is exactly the defect this change removes")
+	}
+	if !strings.Contains(src, "-X main.commit=") {
+		t.Error("the root Dockerfile does not pass -X main.commit to the linker")
+	}
+
+	ignore, err := os.ReadFile(filepath.Join(root, ".dockerignore"))
+	if err != nil {
+		t.Fatalf("read .dockerignore: %v", err)
+	}
+	for _, line := range strings.Split(string(ignore), "\n") {
+		// A bare `.git` entry excludes the directory from the build context. The
+		// buildmeta stage needs it, so its presence here is the regression.
+		if strings.TrimSpace(line) == ".git" {
+			t.Error(".dockerignore excludes .git, so the buildmeta stage cannot read the " +
+				"checked-out revision and /ready falls back to the stale environment variable again")
+		}
+	}
+}
+
 // TestComposeWorkerSelectsTheWorkerBinary guards the second defect on the
 // compose path: the image ENTRYPOINT defaults to the API, so the worker service
 // must select the other binary. It must do so by more than one signal, because
