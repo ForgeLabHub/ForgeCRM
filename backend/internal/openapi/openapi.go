@@ -169,6 +169,7 @@ type Server struct {
 // OpenAPI an absent `security` inherits the document-level requirement. Omitting it
 // would tell a generated client to send a session cookie to the sign-in endpoint.
 var Anonymous = map[string]string{
+	"POST /api/v1/telegram/webhook":     "Inbound Telegram updates require the X-Telegram-Bot-Api-Secret-Token header and an explicitly enabled webhook. HTTPS must terminate at a trusted proxy.",
 	"GET /health":                       "Liveness probe. Returns 200 while the process is running.",
 	"GET /ready":                        "Readiness probe. Returns 200 only when the database is reachable.",
 	"GET /metrics":                      "Prometheus metrics in the text exposition format. Reachable without a session, so it is closed unless `FORGECRM_METRICS_TOKEN` is set; a scrape must present that token in the `X-Metrics-Token` header. With no token configured it answers 503 `disabled`.",
@@ -190,20 +191,23 @@ var Anonymous = map[string]string{
 // earlier revision did, produced a document that told clients these endpoints were
 // callable anonymously while the server answered 401.
 var SessionOnly = map[string]string{
-	"GET /api/v1/auth/me":               "The current caller and their CSRF token.",
-	"POST /api/v1/auth/logout":          "Sign out and revoke the current session.",
-	"GET /api/v1/auth/sessions":         "The caller's own active sessions.",
-	"GET /api/v1/auth/identities":       "The caller's own linked single sign-on identities.",
-	"DELETE /api/v1/auth/sessions/{id}": "Revoke one of the caller's own sessions.",
-	"POST /api/v1/auth/password/change": "Change the caller's own password.",
-	"POST /api/v1/auth/mfa/enroll":      "Begin enrolling a second factor for the caller.",
-	"POST /api/v1/auth/mfa/confirm":     "Confirm a second factor enrolment.",
-	"POST /api/v1/auth/mfa/disable":     "Disable the caller's second factor.",
-	"POST /api/v1/auth/step-up":         "Re-present a factor to refresh the second-factor window a destructive agent decision requires.",
-	"GET /api/v1/system/info":           "Build and version information.",
-	"GET /api/v1/system/capabilities":   "Advertised capabilities of the running instance.",
-	"GET /api/v1/simulation/catalog":    "The scenario catalog the Simulation Lab can compute. Static metadata about the engine, exposing no tenant data.",
-	"GET /api/v1/forecast/catalog":      "The forecasting methods the engine can compute. Static metadata about the engine, exposing no tenant data.",
+	"GET /api/v1/admin/telegram/status":     "Telegram configuration state, without token or webhook secret.",
+	"POST /api/v1/admin/telegram/link-code": "Create a single-use link challenge for the signed-in user.",
+	"DELETE /api/v1/admin/telegram/link":    "Revoke the signed-in user's Telegram link.",
+	"GET /api/v1/auth/me":                   "The current caller and their CSRF token.",
+	"POST /api/v1/auth/logout":              "Sign out and revoke the current session.",
+	"GET /api/v1/auth/sessions":             "The caller's own active sessions.",
+	"GET /api/v1/auth/identities":           "The caller's own linked single sign-on identities.",
+	"DELETE /api/v1/auth/sessions/{id}":     "Revoke one of the caller's own sessions.",
+	"POST /api/v1/auth/password/change":     "Change the caller's own password.",
+	"POST /api/v1/auth/mfa/enroll":          "Begin enrolling a second factor for the caller.",
+	"POST /api/v1/auth/mfa/confirm":         "Confirm a second factor enrolment.",
+	"POST /api/v1/auth/mfa/disable":         "Disable the caller's second factor.",
+	"POST /api/v1/auth/step-up":             "Re-present a factor to refresh the second-factor window a destructive agent decision requires.",
+	"GET /api/v1/system/info":               "Build and version information.",
+	"GET /api/v1/system/capabilities":       "Advertised capabilities of the running instance.",
+	"GET /api/v1/simulation/catalog":        "The scenario catalog the Simulation Lab can compute. Static metadata about the engine, exposing no tenant data.",
+	"GET /api/v1/forecast/catalog":          "The forecasting methods the engine can compute. Static metadata about the engine, exposing no tenant data.",
 }
 
 // Public is the union of Anonymous and SessionOnly, for callers that only need to

@@ -1,11 +1,14 @@
 package notify
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"strings"
 	"time"
@@ -57,27 +60,67 @@ func (s *TelegramService) Enabled() bool {
 	return s != nil && s.cfg != nil && s.cfg.Enabled && s.cfg.BotToken != ""
 }
 
+// WebhookEnabled is deliberately opt-in and refuses a weak or malformed secret.
+// TLS is terminated by the deployment proxy; this does not establish HTTPS.
+func (s *TelegramService) WebhookEnabled() bool {
+	if !s.Enabled() || !s.cfg.WebhookEnabled || len(s.cfg.WebhookSecret) < 32 || len(s.cfg.WebhookSecret) > 256 {
+		return false
+	}
+	for _, c := range s.cfg.WebhookSecret {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '-') {
+			return false
+		}
+	}
+	return true
+}
+
 // ErrTelegramDisabled is returned when the bot is not configured.
 var ErrTelegramDisabled = errors.New("the Telegram bot is not configured")
 
 // LinkCodeTTL is how long a link code is valid.
 const LinkCodeTTL = 15 * time.Minute
 
-// CreateLinkCode issues a one-time code a user sends to the bot to link accounts.
+// lockTelegramAccount serializes linking and revocation for one CRM account in
+// one organization, even when multiple codes are redeemed concurrently.
+func (s *TelegramService) lockTelegramAccount(ctx context.Context, orgID, userID uuid.UUID) error {
+	_, err := s.db.Q(ctx).Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('telegram-link:' || $1::text || ':' || $2::text, 0))`, orgID, userID)
+	return err
+}
+
+// CreateLinkCode issues a high-entropy, single-use challenge. Only its hash is
+// stored. The active membership is checked again in the redemption transaction.
 func (s *TelegramService) CreateLinkCode(ctx context.Context, p *rbac.Principal) (string, error) {
 	if !s.Enabled() {
 		return "", ErrTelegramDisabled
 	}
-	code, err := secrets.RandomNumericCode(8)
+	if p == nil || p.UserID == uuid.Nil || p.OrganizationID == uuid.Nil {
+		return "", httpx.ErrForbidden
+	}
+	code, err := secrets.RandomToken(32)
 	if err != nil {
 		return "", err
 	}
-	const q = `
-		INSERT INTO telegram_links (organization_id, user_id, telegram_user_id, link_code_hash, link_code_expires_at)
-		VALUES ($1, $2, 0, $3, $4)`
-	if _, err := s.db.Q(ctx).Exec(ctx, q, p.OrganizationID, p.UserID,
-		secrets.HashToken(code), time.Now().Add(LinkCodeTTL)); err != nil {
-		return "", fmt.Errorf("create telegram link code: %w", err)
+	err = s.db.WithTx(ctx, func(ctx context.Context, _ database.Tx) error {
+		if err := s.lockTelegramAccount(ctx, p.OrganizationID, p.UserID); err != nil {
+			return fmt.Errorf("lock telegram account: %w", err)
+		}
+		const q = `INSERT INTO telegram_link_codes (organization_id, user_id, code_hash, expires_at)
+			SELECT m.organization_id, m.user_id, $3, now() + make_interval(secs => $4::int)
+			FROM memberships m JOIN users u ON u.id = m.user_id
+			JOIN organizations o ON o.id = m.organization_id
+			WHERE m.organization_id = $1 AND m.user_id = $2
+			  AND m.status = 'active' AND u.status = 'active' AND o.status = 'active'`
+		tag, err := s.db.Q(ctx).Exec(ctx, q, p.OrganizationID, p.UserID, secrets.HashToken(code), int(LinkCodeTTL.Seconds()))
+		if err != nil {
+			return fmt.Errorf("create telegram link code: %w", err)
+		}
+		if tag.RowsAffected() == 0 {
+			return httpx.ErrForbidden
+		}
+		return nil
+	})
+	if err != nil {
+		return "", err
 	}
 	return code, nil
 }
@@ -89,41 +132,78 @@ type LinkRequest struct {
 	Username       string
 }
 
-// Link associates a Telegram account with a CRM user.
+// Link atomically consumes a code and associates it with a private Telegram user.
+// A webhook must independently establish that the sender and private chat match.
 func (s *TelegramService) Link(ctx context.Context, req LinkRequest) (uuid.UUID, error) {
 	if !s.Enabled() {
 		return uuid.Nil, ErrTelegramDisabled
 	}
-	var (
-		id     uuid.UUID
-		userID uuid.UUID
-		orgID  uuid.UUID
-		expiry time.Time
-	)
-	const sel = `
-		SELECT id, user_id, organization_id, link_code_expires_at
-		FROM telegram_links
-		WHERE link_code_hash = $1 AND linked_at IS NULL AND revoked_at IS NULL
-		ORDER BY created_at DESC LIMIT 1`
-	if err := s.db.Q(ctx).QueryRow(ctx, sel, secrets.HashToken(req.Code)).Scan(&id, &userID, &orgID, &expiry); err != nil {
-		return uuid.Nil, httpx.NewError(400, httpx.CodeBadRequest, "the link code is not valid")
+	invalid := httpx.NewError(400, httpx.CodeBadRequest, "the link code is not valid or has expired")
+	if req.TelegramUserID <= 0 || len(req.Code) != 43 || len(req.Username) > 64 {
+		return uuid.Nil, invalid
 	}
-	if time.Now().After(expiry) {
-		return uuid.Nil, httpx.NewError(400, httpx.CodeBadRequest, "the link code has expired")
+	hash := secrets.HashToken(req.Code)
+	var userID, orgID uuid.UUID
+	// This lookup only identifies the account lock. The code is rechecked and
+	// consumed under that lock in the transaction; a stale lookup cannot succeed.
+	err := s.db.Q(ctx).QueryRow(ctx, `SELECT user_id, organization_id FROM telegram_link_codes WHERE code_hash = $1`, hash).Scan(&userID, &orgID)
+	if database.IsNoRows(err) {
+		return uuid.Nil, invalid
 	}
-	err := s.db.WithTx(ctx, func(ctx context.Context, _ database.Tx) error {
-		// Remove any previous link for this Telegram account so one chat maps to
-		// exactly one CRM user.
-		const clear = `DELETE FROM telegram_links WHERE telegram_user_id = $1 AND id <> $2`
-		if _, err := s.db.Q(ctx).Exec(ctx, clear, req.TelegramUserID, id); err != nil {
-			return err
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("lookup telegram link code: %w", err)
+	}
+	err = s.db.WithTx(ctx, func(ctx context.Context, _ database.Tx) error {
+		if err := s.lockTelegramAccount(ctx, orgID, userID); err != nil {
+			return fmt.Errorf("lock telegram account: %w", err)
 		}
-		const upd = `
-			UPDATE telegram_links
-			SET telegram_user_id=$2, telegram_username=NULLIF($3,''), linked_at=now(), link_code_hash=NULL
-			WHERE id=$1`
-		if _, err := s.db.Q(ctx).Exec(ctx, upd, id, req.TelegramUserID, req.Username); err != nil {
-			return err
+		// Lock membership, user and organization until commit so disabling any of
+		// them cannot race a successful link. All conditions are checked in SQL.
+		var active bool
+		const membership = `SELECT true FROM memberships m
+			JOIN users u ON u.id=m.user_id JOIN organizations o ON o.id=m.organization_id
+			WHERE m.user_id=$1 AND m.organization_id=$2 AND m.status='active'
+			  AND u.status='active' AND o.status='active' FOR SHARE OF m, u, o`
+		if err := s.db.Q(ctx).QueryRow(ctx, membership, userID, orgID).Scan(&active); err != nil {
+			if database.IsNoRows(err) {
+				return invalid
+			}
+			return fmt.Errorf("check telegram membership: %w", err)
+		}
+		tag, err := s.db.Q(ctx).Exec(ctx, `DELETE FROM telegram_link_codes
+			WHERE code_hash=$1 AND user_id=$2 AND organization_id=$3 AND expires_at > now()`, hash, userID, orgID)
+		if err != nil {
+			return fmt.Errorf("consume telegram link code: %w", err)
+		}
+		if tag.RowsAffected() != 1 {
+			return invalid
+		}
+		var existing int64
+		err = s.db.Q(ctx).QueryRow(ctx, `SELECT telegram_user_id FROM telegram_links
+			WHERE organization_id=$1 AND user_id=$2 AND linked_at IS NOT NULL AND revoked_at IS NULL LIMIT 1`, orgID, userID).Scan(&existing)
+		if err != nil && !database.IsNoRows(err) {
+			return fmt.Errorf("lookup existing telegram link: %w", err)
+		}
+		if err == nil && existing != req.TelegramUserID {
+			return httpx.NewError(409, httpx.CodeConflict, "unlink the existing Telegram account first")
+		}
+		// The unique Telegram ID prevents concurrent claims by different accounts.
+		// Never steal another account's active link, even across organizations.
+		var id uuid.UUID
+		const link = `INSERT INTO telegram_links (organization_id,user_id,telegram_user_id,telegram_username,linked_at)
+			VALUES ($1,$2,$3,NULLIF($4,''),now())
+			ON CONFLICT (telegram_user_id) DO UPDATE SET
+			  organization_id=EXCLUDED.organization_id, user_id=EXCLUDED.user_id,
+			  telegram_username=EXCLUDED.telegram_username, linked_at=now(), revoked_at=NULL,
+			  link_code_hash=NULL, link_code_expires_at=NULL
+			WHERE telegram_links.revoked_at IS NOT NULL OR
+			  (telegram_links.user_id=EXCLUDED.user_id AND telegram_links.organization_id=EXCLUDED.organization_id)
+			RETURNING id`
+		if err := s.db.Q(ctx).QueryRow(ctx, link, orgID, userID, req.TelegramUserID, req.Username).Scan(&id); err != nil {
+			if database.IsNoRows(err) {
+				return httpx.NewError(409, httpx.CodeConflict, "Telegram account is already linked")
+			}
+			return fmt.Errorf("link telegram account: %w", err)
 		}
 		return s.audit.Record(ctx, audit.Entry{
 			OrganizationID: &orgID, ActorUserID: &userID,
@@ -148,13 +228,21 @@ func (s *TelegramService) ResolveUser(ctx context.Context, telegramUserID int64)
 		email  string
 		name   string
 	)
-	const q = `
+	q := `
 		SELECT l.user_id, l.organization_id, u.status, u.email, u.display_name
 		FROM telegram_links l
 		JOIN users u ON u.id = l.user_id
+		JOIN memberships m ON m.user_id = l.user_id AND m.organization_id = l.organization_id AND m.status = 'active'
+		JOIN organizations o ON o.id = l.organization_id AND o.status = 'active'
 		WHERE l.telegram_user_id = $1 AND l.linked_at IS NOT NULL AND l.revoked_at IS NULL`
+	if _, ok := database.TxFromContext(ctx); ok {
+		q += " FOR SHARE OF l, m, u, o"
+	}
 	if err := s.db.Q(ctx).QueryRow(ctx, q, telegramUserID).Scan(&userID, &orgID, &status, &email, &name); err != nil {
-		return nil, httpx.NewError(403, httpx.CodeForbidden, "this Telegram account is not linked to a ForgeCRM user")
+		if database.IsNoRows(err) {
+			return nil, httpx.NewError(403, httpx.CodeForbidden, "this Telegram account is not linked to a ForgeCRM user")
+		}
+		return nil, fmt.Errorf("resolve telegram account: %w", err)
 	}
 	// A blocked or suspended user loses bot access immediately.
 	if status != "active" {
@@ -173,6 +261,13 @@ func (s *TelegramService) ResolveUser(ctx context.Context, telegramUserID int64)
 // Unlink revokes a Telegram link.
 func (s *TelegramService) Unlink(ctx context.Context, p *rbac.Principal) error {
 	return s.db.WithTx(ctx, func(ctx context.Context, _ database.Tx) error {
+		if err := s.lockTelegramAccount(ctx, p.OrganizationID, p.UserID); err != nil {
+			return fmt.Errorf("lock telegram account: %w", err)
+		}
+		codes, err := s.db.Q(ctx).Exec(ctx, `DELETE FROM telegram_link_codes WHERE organization_id=$1 AND user_id=$2`, p.OrganizationID, p.UserID)
+		if err != nil {
+			return fmt.Errorf("revoke telegram link codes: %w", err)
+		}
 		const q = `
 			UPDATE telegram_links SET revoked_at = now()
 			WHERE user_id = $1 AND organization_id = $2 AND revoked_at IS NULL`
@@ -180,7 +275,7 @@ func (s *TelegramService) Unlink(ctx context.Context, p *rbac.Principal) error {
 		if err != nil {
 			return fmt.Errorf("unlink telegram: %w", err)
 		}
-		if tag.RowsAffected() == 0 {
+		if tag.RowsAffected() == 0 && codes.RowsAffected() == 0 {
 			return httpx.ErrNotFound
 		}
 		return s.audit.Record(ctx, audit.Entry{
@@ -263,7 +358,11 @@ func (s *TelegramService) HandleCommand(ctx context.Context, telegramUserID int6
 		}
 		userID, err := s.Link(ctx, LinkRequest{Code: parts[1], TelegramUserID: telegramUserID})
 		if err != nil {
-			return "Could not link this account: " + err.Error(), nil
+			var apiErr *httpx.APIError
+			if errors.As(err, &apiErr) && (apiErr.Status == http.StatusBadRequest || apiErr.Status == http.StatusConflict) {
+				return "Could not link this account. Check the code or unlink the existing account first.", nil
+			}
+			return "", err
 		}
 		return "Linked successfully to ForgeCRM user " + userID.String()[:8] + ".\nUse /tasks to see your open tasks.", nil
 	}
@@ -271,7 +370,11 @@ func (s *TelegramService) HandleCommand(ctx context.Context, telegramUserID int6
 	// Every other command requires a linked, active, permissioned user.
 	principal, err := s.ResolveUser(ctx, telegramUserID)
 	if err != nil {
-		return "This Telegram account is not linked. Send /link <code> first.", nil
+		var apiErr *httpx.APIError
+		if errors.As(err, &apiErr) && apiErr.Status == http.StatusForbidden {
+			return "This Telegram account is not linked. Send /link <code> first.", nil
+		}
+		return "", err
 	}
 
 	switch command {
@@ -282,7 +385,7 @@ func (s *TelegramService) HandleCommand(ctx context.Context, telegramUserID int6
 		return s.listOwnTasks(ctx, principal)
 	case "/unlink":
 		if err := s.Unlink(ctx, principal); err != nil {
-			return "Could not unlink: " + err.Error(), nil
+			return "", err
 		}
 		return "This Telegram account is no longer linked to ForgeCRM.", nil
 	default:
@@ -347,16 +450,27 @@ func (s *TelegramService) sendMessage(ctx context.Context, chatID int64, text st
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", s.cfg.BotToken)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(string(payload)))
 	if err != nil {
-		return err
+		// URL parsing errors can contain the bot token as well.
+		return errors.New("send telegram message: invalid request")
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("send telegram message: %w", err)
+		// net/http errors may contain the URL, including the bot token. Never return
+		// or log that error; the caller can safely report this generic failure.
+		return errors.New("send telegram message: request failed")
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("telegram API returned HTTP %d", resp.StatusCode)
+	}
+	// A successful HTTP status alone is not proof Telegram accepted the API request.
+	// Do not return the response body: it may contain sensitive message data.
+	var result struct {
+		OK bool `json:"ok"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&result); err != nil || !result.OK {
+		return errors.New("telegram API did not confirm acceptance")
 	}
 	return nil
 }
@@ -379,12 +493,18 @@ func (s *TelegramService) NotifyUser(ctx context.Context, orgID uuid.UUID, userI
 	const q = `
 		SELECT l.telegram_user_id, u.email
 		FROM telegram_links l
-		JOIN users u ON u.id = l.user_id
-		WHERE l.user_id = $1 AND l.linked_at IS NOT NULL AND l.revoked_at IS NULL LIMIT 1`
+		JOIN users u ON u.id = l.user_id AND u.status = 'active'
+		JOIN memberships m ON m.user_id = l.user_id AND m.organization_id = l.organization_id AND m.status = 'active'
+		JOIN organizations o ON o.id = l.organization_id AND o.status = 'active'
+		WHERE l.user_id = $1 AND l.organization_id = $2
+		  AND l.linked_at IS NOT NULL AND l.revoked_at IS NULL LIMIT 1`
 	var chatID int64
 	var email string
-	if err := s.db.Q(ctx).QueryRow(ctx, q, userID).Scan(&chatID, &email); err != nil {
-		return nil
+	if err := s.db.Q(ctx).QueryRow(ctx, q, userID, orgID).Scan(&chatID, &email); err != nil {
+		if database.IsNoRows(err) {
+			return nil
+		}
+		return fmt.Errorf("resolve telegram recipient: %w", err)
 	}
 	// The gate is asked before the bot is contacted, so a message consent forbids is
 	// never sent, rather than being sent and then explained away.
@@ -392,4 +512,183 @@ func (s *TelegramService) NotifyUser(ctx context.Context, orgID uuid.UUID, userI
 		return err
 	}
 	return s.sendMessage(ctx, chatID, text)
+}
+
+// ErrTelegramRecipientUnavailable indicates a pending response must be discarded:
+// the original account was unlinked, disabled, or moved to another chat.
+var ErrTelegramRecipientUnavailable = errors.New("telegram recipient is no longer available")
+
+// ReplyLinked sends a response only if the exact original link is still active.
+// It must run in the receipt transaction so the share lock lasts through the
+// send and cannot race a revoke or reassignment. The regular consent gate applies.
+func (s *TelegramService) ReplyLinked(ctx context.Context, chatID int64, orgID, userID uuid.UUID, text string) error {
+	if !s.Enabled() {
+		return ErrTelegramDisabled
+	}
+	if _, ok := database.TxFromContext(ctx); !ok {
+		return errors.New("telegram reply requires a transaction")
+	}
+	var email string
+	err := s.db.Q(ctx).QueryRow(ctx, `SELECT u.email FROM telegram_links l
+		JOIN users u ON u.id=l.user_id AND u.status='active'
+		JOIN memberships m ON m.user_id=l.user_id AND m.organization_id=l.organization_id AND m.status='active'
+		JOIN organizations o ON o.id=l.organization_id AND o.status='active'
+		WHERE l.telegram_user_id=$1 AND l.organization_id=$2 AND l.user_id=$3
+		AND l.linked_at IS NOT NULL AND l.revoked_at IS NULL FOR SHARE OF l,u,m,o`, chatID, orgID, userID).Scan(&email)
+	if database.IsNoRows(err) {
+		return ErrTelegramRecipientUnavailable
+	}
+	if err != nil {
+		return fmt.Errorf("resolve telegram reply recipient: %w", err)
+	}
+	if err := enforce(ctx, s.gate, &orgID, &userID, email, string(PurposeTransactional), ChannelTelegram); err != nil {
+		return err
+	}
+	return s.sendMessage(ctx, chatID, text)
+}
+
+// ReplySystem is limited to pre-defined, non-sensitive responses to a private
+// user-initiated interaction. An existing (even revoked) link is checked against
+// that person's consent; an unknown chat uses the account-level policy.
+func (s *TelegramService) ReplySystem(ctx context.Context, chatID int64, kind string) error {
+	if !s.Enabled() {
+		return ErrTelegramDisabled
+	}
+	if _, ok := database.TxFromContext(ctx); !ok {
+		return errors.New("telegram reply requires a transaction")
+	}
+	var text string
+	switch kind {
+	case "help":
+		text = "ForgeCRM bot\n/link <code> — link an account\n/tasks — open tasks\n/today — tasks due today (UTC)\n/task <id> — task details\n/done <id> — complete\n/due <id> <RFC3339> — reschedule"
+	case "link_usage":
+		text = "Generate a code in ForgeCRM and send /link <code> here."
+	case "link_failed":
+		text = "Could not link this account. Check the code or unlink the existing account first."
+	case "not_linked":
+		text = "This account is not linked. Send /link <code> first."
+	case "unknown":
+		text = "Unknown command. Send /help for available commands."
+	default:
+		return errors.New("unknown telegram system reply")
+	}
+	var org, user uuid.UUID
+	var email string
+	err := s.db.Q(ctx).QueryRow(ctx, `SELECT l.organization_id,l.user_id,u.email FROM telegram_links l
+		JOIN users u ON u.id=l.user_id WHERE l.telegram_user_id=$1 FOR SHARE OF l,u`, chatID).Scan(&org, &user, &email)
+	if err != nil && !database.IsNoRows(err) {
+		return fmt.Errorf("resolve telegram system reply: %w", err)
+	}
+	if err == nil {
+		if err := enforce(ctx, s.gate, &org, &user, email, string(PurposeTransactional), ChannelTelegram); err != nil {
+			return err
+		}
+	} else if err := enforce(ctx, s.gate, nil, nil, "", string(PurposeTransactional), ChannelTelegram); err != nil {
+		return err
+	}
+	return s.sendMessage(ctx, chatID, text)
+}
+
+// TaskDeliveryResult distinguishes API acceptance from proof of delivery. An
+// image error is sanitized and retained even when text fallback succeeds.
+type TaskDeliveryResult struct {
+	Status     string
+	ImageError string
+}
+
+// NotifyTask sends a CRM-backed card using the same recipient and consent policy
+// as other notifications. The caller must hold any domain locks needed to ensure
+// the task is still assigned to the recipient while this method executes.
+func (s *TelegramService) NotifyTask(ctx context.Context, orgID, userID uuid.UUID, card TaskCard) (TaskDeliveryResult, error) {
+	var result TaskDeliveryResult
+	if !s.Enabled() {
+		return result, ErrTelegramDisabled
+	}
+	var chatID int64
+	var email string
+	const q = `SELECT l.telegram_user_id,u.email FROM telegram_links l
+		JOIN users u ON u.id=l.user_id AND u.status='active'
+		JOIN memberships m ON m.user_id=l.user_id AND m.organization_id=l.organization_id AND m.status='active'
+		JOIN organizations o ON o.id=l.organization_id AND o.status='active'
+		WHERE l.organization_id=$1 AND l.user_id=$2 AND l.linked_at IS NOT NULL AND l.revoked_at IS NULL`
+	query := q
+	if _, ok := database.TxFromContext(ctx); ok {
+		query += " FOR SHARE OF l,u,m,o"
+	}
+	err := s.db.Q(ctx).QueryRow(ctx, query, orgID, userID).Scan(&chatID, &email)
+	if database.IsNoRows(err) {
+		result.Status = "no_recipient"
+		return result, nil
+	}
+	if err != nil {
+		return result, fmt.Errorf("resolve telegram recipient: %w", err)
+	}
+	if err := enforce(ctx, s.gate, &orgID, &userID, email, string(PurposeTransactional), ChannelTelegram); err != nil {
+		if errors.Is(err, ErrConsentBlocked) {
+			result.Status = "blocked"
+			return result, nil
+		}
+		return result, err
+	}
+	image, text, err := RenderTaskCard(card)
+	if err != nil && text == "" {
+		return result, err
+	}
+	if err == nil {
+		err = s.sendPhoto(ctx, chatID, text, image)
+	}
+	if err == nil {
+		result.Status = "photo_accepted"
+		return result, nil
+	}
+	// Error messages from both the renderer and transport are bounded and never
+	// include the API URL, response body, message text or token.
+	result.ImageError = err.Error()
+	if err := s.sendMessage(ctx, chatID, text); err != nil {
+		return result, err
+	}
+	result.Status = "text_accepted"
+	return result, nil
+}
+
+func (s *TelegramService) sendPhoto(ctx context.Context, chatID int64, caption string, photo []byte) error {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	if err := writer.WriteField("chat_id", fmt.Sprint(chatID)); err != nil {
+		return errors.New("telegram photo request failed")
+	}
+	if err := writer.WriteField("caption", caption); err != nil {
+		return errors.New("telegram photo request failed")
+	}
+	part, err := writer.CreateFormFile("photo", "task.png")
+	if err != nil {
+		return errors.New("telegram photo request failed")
+	}
+	if _, err := part.Write(photo); err != nil {
+		return errors.New("telegram photo request failed")
+	}
+	if err := writer.Close(); err != nil {
+		return errors.New("telegram photo request failed")
+	}
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendPhoto", s.cfg.BotToken)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, &body)
+	if err != nil {
+		return errors.New("telegram photo request invalid")
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return errors.New("telegram photo request failed")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("telegram photo API returned HTTP %d", resp.StatusCode)
+	}
+	var result struct {
+		OK bool `json:"ok"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&result); err != nil || !result.OK {
+		return errors.New("telegram photo API did not confirm acceptance")
+	}
+	return nil
 }

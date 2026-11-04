@@ -18,6 +18,7 @@ require (
 	github.com/xuri/excelize/v2 v2.11.1-0.20261003002531-6258dcebc4e2
 	go.yaml.in/yaml/v3 v3.0.5
 	golang.org/x/crypto v0.58.1-0.20261009181718-2f1f834330b2
+	golang.org/x/image v0.44.0
 	golang.org/x/oauth2 v0.37.0
 	modernc.org/sqlite v1.34.5
 )

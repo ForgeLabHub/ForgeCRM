@@ -7,7 +7,7 @@ import { useT } from '../../i18n'
 
 export function TelegramPage() {
   const t = useT()
-  const [linkCode, setLinkCode] = useState<{ code: string; expires_at: string } | null>(null)
+  const [linkCode, setLinkCode] = useState<{ code: string; expires_in_seconds: number } | null>(null)
   const [unlinking, setUnlinking] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -55,35 +55,25 @@ export function TelegramPage() {
                 ) : (
                   <Badge tone="neutral">{t('telegram.disabled')}</Badge>
                 )}
-                {status.data.configured ? (
+                {status.data.enabled ? (
                   <Badge tone="success">{t('telegram.tokenSet')}</Badge>
-                ) : (
-                  <Badge tone="warning">{t('telegram.noToken')}</Badge>
-                )}
-                {status.data.webhook_set ? (
-                  <Badge tone="accent">{t('telegram.webhookRegistered')}</Badge>
                 ) : null}
               </div>
 
-              {!status.data.configured ? (
+              {!status.data.enabled ? (
                 <Alert tone="info">{t('telegram.noTokenInfo')}</Alert>
-              ) : (
-                <dl className="dl">
-                  <dt>{t('telegram.bot')}</dt>
-                  <dd className="mono">{status.data.bot_username ?? '—'}</dd>
-                  {status.data.last_error ? (
-                    <>
-                      <dt>{t('telegram.lastError')}</dt>
-                      <dd className="text-danger">{status.data.last_error}</dd>
-                    </>
-                  ) : null}
-                </dl>
-              )}
+              ) : status.data.linking_available ? (
+                <Alert tone="info">{t('telegram.linkingConfiguredNotice')}</Alert>
+              ) : null}
             </div>
           ) : null}
         </Card>
 
-        {status.data?.configured ? (
+        {status.data?.enabled && !status.data.linking_available ? (
+          <Alert tone="info">{t('telegram.linkingUnavailable')}</Alert>
+        ) : null}
+
+        {status.data?.enabled && status.data.linking_available ? (
           <Card title={t('telegram.linkAccount')}>
             <div className="stack">
               <p className="text-muted text-sm">{t('telegram.linkIntro')}</p>
@@ -97,9 +87,6 @@ export function TelegramPage() {
                 >
                   {requestCode.isPending ? t('telegram.generating') : t('telegram.generateCode')}
                 </button>
-                <button type="button" className="btn btn--danger btn--sm" onClick={() => setUnlinking(true)}>
-                  {t('telegram.unlinkAccount')}
-                </button>
               </div>
 
               {linkCode ? (
@@ -108,12 +95,17 @@ export function TelegramPage() {
                   <strong className="mono">{linkCode.code}</strong>
                   <br />
                   {t('telegram.codeExpires', {
-                    time: new Date(linkCode.expires_at).toLocaleTimeString(),
+                    seconds: linkCode.expires_in_seconds,
                   })}
                 </Alert>
               ) : null}
             </div>
           </Card>
+        ) : null}
+        {status.data ? (
+          <button type="button" className="btn btn--danger btn--sm" onClick={() => setUnlinking(true)}>
+            {t('telegram.unlinkAccount')}
+          </button>
         ) : null}
       </div>
 

@@ -16,7 +16,7 @@ import (
 
 var (
 	reReadmeRBAC = regexp.MustCompile(`RBAC:\s*([0-9]+)\s+разрешени`)
-	reReadmeAPI  = regexp.MustCompile(`([0-9]+)\s+(?:путей|путь),\s*([0-9]+)\s+операци`)
+	reReadmeAPI  = regexp.MustCompile(`([0-9]+)\s+(?:путь|пути|путей),\s*([0-9]+)\s+операци`)
 	// A license claim must name MIT as a whole word in a licensing phrase. A bare
 	// "MIT" would also match the "MIT" inside FORGECRM_RATE_LIMIT_STORE, which is
 	// how a broken claim slips through — the same trap the shell guard fixes with

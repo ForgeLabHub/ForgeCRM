@@ -424,9 +424,14 @@ type ListQuery struct {
 	ContactID       *uuid.UUID
 	TicketID        *uuid.UUID
 	AssigneeID      *uuid.UUID
-	PipelineID      *uuid.UUID
-	From            *time.Time
-	To              *time.Time
+	// OpenTasksOnly and due bounds are used by callers which need an actionable
+	// task list. DueBefore is exclusive, allowing adjacent day windows.
+	OpenTasksOnly bool
+	TaskDueFrom   *time.Time
+	TaskDueBefore *time.Time
+	PipelineID    *uuid.UUID
+	From          *time.Time
+	To            *time.Time
 	// ExpectedCloseBefore selects deals whose expected close date is before an
 	// instant. It is what a "deal is overdue" query needs, and it is expressed as a
 	// bound rather than a boolean so the caller chooses the cutoff.

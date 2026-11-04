@@ -26,7 +26,7 @@ func TestStatusAndKindVocabulariesAreWellFormed(t *testing.T) {
 
 	kinds := []string{
 		KindImportExecute, KindImportDryRun, KindExportExecute, KindMigrationRun,
-		KindWebhookDeliver, KindEmailSend, KindOutboxDrain, KindReconcile,
+		KindWebhookDeliver, KindEmailSend, KindTelegramTaskNotification, KindOutboxDrain, KindReconcile,
 		KindRetentionSweep, KindImportTempSweep, KindImportFileReclaim, KindAgentSweep,
 		KindStorageReconcile,
 	}

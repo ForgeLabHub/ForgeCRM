@@ -219,6 +219,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <li data-op><a href="#op-post-api-v1-tasks"><span class="m m-post">POST</span><span class="p">/api/v1/tasks</span></a></li>
 <li data-op><a href="#op-get-api-v1-tasks-id"><span class="m m-get">GET</span><span class="p">/api/v1/tasks/{id}</span></a></li>
 <li data-op><a href="#op-put-api-v1-tasks-id"><span class="m m-put">PUT</span><span class="p">/api/v1/tasks/{id}</span></a></li>
+<li data-op><a href="#op-post-api-v1-telegram-webhook"><span class="m m-post">POST</span><span class="p">/api/v1/telegram/webhook</span></a></li>
 <li data-op><a href="#op-get-api-v1-tickets"><span class="m m-get">GET</span><span class="p">/api/v1/tickets</span></a></li>
 <li data-op><a href="#op-post-api-v1-tickets"><span class="m m-post">POST</span><span class="p">/api/v1/tickets</span></a></li>
 <li data-op><a href="#op-get-api-v1-tickets-id"><span class="m m-get">GET</span><span class="p">/api/v1/tickets/{id}</span></a></li>
@@ -1482,8 +1483,8 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 </article>
 <article class="op" id="op-delete-api-v1-admin-telegram-link" data-op>
 <h3><span class="m m-delete">DELETE</span> <code class="path">/api/v1/admin/telegram/link</code></h3>
-<p class="summary">Archive or delete a link</p>
-<div class="op-desc"><p>Requires the `email.manage` permission.</p>
+<p class="summary">Revoke the signed-in user&#39;s Telegram link.</p>
+<div class="op-desc"><p>Revoke the signed-in user&#39;s Telegram link.</p>
 </div>
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
@@ -1510,8 +1511,8 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 </article>
 <article class="op" id="op-post-api-v1-admin-telegram-link-code" data-op>
 <h3><span class="m m-post">POST</span> <code class="path">/api/v1/admin/telegram/link-code</code></h3>
-<p class="summary">Create a link-code</p>
-<div class="op-desc"><p>Requires the `email.manage` permission.</p>
+<p class="summary">Create a single-use link challenge for the signed-in user.</p>
+<div class="op-desc"><p>Create a single-use link challenge for the signed-in user.</p>
 </div>
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
@@ -1541,8 +1542,8 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 </article>
 <article class="op" id="op-get-api-v1-admin-telegram-status" data-op>
 <h3><span class="m m-get">GET</span> <code class="path">/api/v1/admin/telegram/status</code></h3>
-<p class="summary">List status</p>
-<div class="op-desc"><p>Requires the `email.manage` permission.</p>
+<p class="summary">Telegram configuration state, without token or webhook secret.</p>
+<div class="op-desc"><p>Telegram configuration state, without token or webhook secret.</p>
 </div>
 <h4>Parameters</h4>
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
@@ -5130,6 +5131,30 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <div class="resp"><div class="resp-head"><span class="code c-client">401</span> No valid session, or the session has expired. Sign in again.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
 </div>
 <div class="resp"><div class="resp-head"><span class="code c-client">403</span> Authenticated, but the caller lacks the required permission.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">404</span> No such resource, or none visible to the caller&#39;s organization.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">409</span> The request conflicts with current state, such as a duplicate external identifier.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">422</span> A field failed validation. `error.details` names each field.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">429</span> Too many requests. Retry after the interval in `Retry-After`.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-server">500</span> Unexpected failure. The detail is deliberately generic; the cause is in the server log.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+</article>
+<article class="op" id="op-post-api-v1-telegram-webhook" data-op>
+<h3><span class="m m-post">POST</span> <code class="path">/api/v1/telegram/webhook</code></h3>
+<p class="summary">Inbound Telegram updates require the X-Telegram-Bot-Api-Secret-Token header and an explicitly enabled webhook. HTTPS must terminate at a trusted proxy.</p>
+<div class="op-desc"><p>Inbound Telegram updates require the X-Telegram-Bot-Api-Secret-Token header and an explicitly enabled webhook. HTTPS must terminate at a trusted proxy.</p>
+</div>
+<p class="auth anonymous">No authentication required.</p>
+<h4>Responses</h4>
+<div class="resp"><div class="resp-head"><span class="code c-ok">201</span> Success. This operation&#39;s response body is not yet described by a schema; the shape is whatever the handler returns.</div><table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
+</tbody></table>
+<p class="muted">No declared fields.</p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">400</span> The request was malformed: bad JSON, an unknown field, or a missing required parameter.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
 </div>
 <div class="resp"><div class="resp-head"><span class="code c-client">404</span> No such resource, or none visible to the caller&#39;s organization.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
 </div>

@@ -107,6 +107,17 @@ func (s *Service) ListTasks(ctx context.Context, p *rbac.Principal, q ListQuery)
 		args = append(args, q.Status)
 		where = append(where, fmt.Sprintf("status = $%d", len(args)))
 	}
+	if q.OpenTasksOnly {
+		where = append(where, "status IN ('open', 'in_progress')")
+	}
+	if q.TaskDueFrom != nil {
+		args = append(args, *q.TaskDueFrom)
+		where = append(where, fmt.Sprintf("due_at >= $%d", len(args)))
+	}
+	if q.TaskDueBefore != nil {
+		args = append(args, *q.TaskDueBefore)
+		where = append(where, fmt.Sprintf("due_at < $%d", len(args)))
+	}
 	if q.AssigneeID != nil {
 		args = append(args, *q.AssigneeID)
 		where = append(where, fmt.Sprintf("assignee_user_id = $%d", len(args)))
@@ -204,8 +215,12 @@ func (s *Service) CreateTask(ctx context.Context, p *rbac.Principal, in TaskInpu
 			return wrapConstraint(err, "task")
 		}
 		created = t
+		var scheduleID uuid.UUID
+		if err := s.db.Q(ctx).QueryRow(ctx, `SELECT telegram_due_revision FROM tasks WHERE id=$1`, t.ID).Scan(&scheduleID); err != nil {
+			return err
+		}
 		if err := s.outbox.Emit(ctx, &p.OrganizationID, outbox.EventTaskCreated, map[string]any{
-			"task_id": t.ID, "assignee_user_id": t.AssigneeUserID,
+			"task_id": t.ID, "assignee_user_id": t.AssigneeUserID, "due_at": t.DueAt, "schedule_id": scheduleID,
 		}); err != nil {
 			return err
 		}
@@ -231,6 +246,15 @@ func (s *Service) UpdateTask(ctx context.Context, p *rbac.Principal, id uuid.UUI
 	}
 	var updated *Task
 	err := s.db.WithTx(ctx, func(ctx context.Context, _ database.Tx) error {
+		// Serialize the before/after snapshot with concurrent updates so emitted
+		// task events describe the transition that actually occurred.
+		var locked uuid.UUID
+		if err := s.db.Q(ctx).QueryRow(ctx, `SELECT id FROM tasks WHERE id=$1 AND organization_id=$2 FOR UPDATE`, id, p.OrganizationID).Scan(&locked); err != nil {
+			if database.IsNoRows(err) {
+				return ErrNotFound
+			}
+			return fmt.Errorf("lock task: %w", err)
+		}
 		before, err := s.GetTask(ctx, p, id)
 		if err != nil {
 			return err
@@ -254,9 +278,28 @@ func (s *Service) UpdateTask(ctx context.Context, p *rbac.Principal, id uuid.UUI
 			return wrapConstraint(err, "task")
 		}
 		updated = t
+		var scheduleID uuid.UUID
+		if err := s.db.Q(ctx).QueryRow(ctx, `SELECT telegram_due_revision FROM tasks WHERE id=$1`, t.ID).Scan(&scheduleID); err != nil {
+			return err
+		}
 		if before.Status != "completed" && t.Status == "completed" {
 			if err := s.outbox.Emit(ctx, &p.OrganizationID, outbox.EventTaskCompleted, map[string]any{
-				"task_id": t.ID,
+				"task_id": t.ID, "assignee_user_id": t.AssigneeUserID, "due_at": t.DueAt, "schedule_id": scheduleID,
+			}); err != nil {
+				return err
+			}
+		}
+		if t.AssigneeUserID != nil && (before.AssigneeUserID == nil || *before.AssigneeUserID != *t.AssigneeUserID) {
+			if err := s.outbox.Emit(ctx, &p.OrganizationID, outbox.EventTaskAssigned, map[string]any{
+				"task_id": t.ID, "assignee_user_id": t.AssigneeUserID, "due_at": t.DueAt, "schedule_id": scheduleID,
+			}); err != nil {
+				return err
+			}
+		}
+		dueChanged := (before.DueAt == nil) != (t.DueAt == nil) || (before.DueAt != nil && t.DueAt != nil && !before.DueAt.Equal(*t.DueAt))
+		if dueChanged && t.AssigneeUserID != nil {
+			if err := s.outbox.Emit(ctx, &p.OrganizationID, outbox.EventTaskDueChanged, map[string]any{
+				"task_id": t.ID, "assignee_user_id": t.AssigneeUserID, "due_at": t.DueAt, "schedule_id": scheduleID,
 			}); err != nil {
 				return err
 			}

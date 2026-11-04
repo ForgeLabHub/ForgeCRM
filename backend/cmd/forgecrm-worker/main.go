@@ -246,7 +246,7 @@ func run() error {
 	loops.Add(1)
 	go func() {
 		defer loops.Done()
-		runOutboxLoop(loopCtx, log, outboxStore, dispatcher, wfEngine, workerID+"-outbox", cfg.WorkerPollEvery)
+		runOutboxLoop(loopCtx, log, outboxStore, dispatcher, wfEngine, db, telegramSvc, workerID+"-outbox", cfg.WorkerPollEvery)
 	}()
 
 	// Stale job recovery: a worker that died mid-job would otherwise leave the row
@@ -264,6 +264,27 @@ func run() error {
 	go func() {
 		defer loops.Done()
 		runMaintenanceLoop(loopCtx, log, queue)
+	}()
+
+	// Discover pre-existing overdue tasks without adding a second queue.
+	loops.Add(1)
+	go func() {
+		defer loops.Done()
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			if err := cleanupTelegram(loopCtx, db); err != nil && loopCtx.Err() == nil {
+				log.Warn("could not clean expired Telegram data")
+			}
+			if err := sweepTelegramOverdue(loopCtx, db, registry.telegram); err != nil && loopCtx.Err() == nil {
+				log.Warn("could not schedule overdue Telegram tasks")
+			}
+			select {
+			case <-loopCtx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
 	}()
 
 	// Webhook delivery: the loop that actually sends the rows the dispatcher
@@ -378,6 +399,9 @@ func (r *handlerRegistry) handle(ctx context.Context, queue *jobs.Queue, job *jo
 		}
 		return r.sender.SendDelivery(ctx, payload.DeliveryID)
 
+	case jobs.KindTelegramTaskNotification:
+		return r.sendTelegramTask(ctx, queue, job)
+
 	case jobs.KindEmailSend:
 		var payload struct {
 			To       []string   `json:"to"`
@@ -460,6 +484,10 @@ func (r *handlerRegistry) drainOutbox(ctx context.Context) error {
 		// entry published. Delivery is at-least-once, so a crash between the two
 		// steps produces a retry rather than a lost event.
 		if _, err := r.dispatcher.Dispatch(ctx, ev); err != nil {
+			_ = r.outbox.MarkFailed(ctx, ev.ID, err)
+			continue
+		}
+		if err := enqueueTelegramForEvent(ctx, r.db, r.telegram, ev); err != nil {
 			_ = r.outbox.MarkFailed(ctx, ev.ID, err)
 			continue
 		}
@@ -678,7 +706,7 @@ func workerLoop(loopCtx, jobCtx context.Context, log *slog.Logger, queue *jobs.Q
 }
 
 func runOutboxLoop(ctx context.Context, log *slog.Logger, store *outbox.Store,
-	dispatcher *events.Dispatcher, wf *workflow.Engine, workerID string, poll time.Duration) {
+	dispatcher *events.Dispatcher, wf *workflow.Engine, db *database.DB, telegram *notify.TelegramService, workerID string, poll time.Duration) {
 
 	if poll <= 0 {
 		poll = 2 * time.Second
@@ -720,6 +748,11 @@ func runOutboxLoop(ctx context.Context, log *slog.Logger, store *outbox.Store,
 				if _, err := dispatcher.Dispatch(evCtx, ev); err != nil {
 					log.Warn("could not dispatch an event", "event_id", ev.ID, "error", err)
 					_ = store.MarkFailed(ctx, ev.ID, err)
+					continue
+				}
+				if err := enqueueTelegramForEvent(evCtx, db, telegram, ev); err != nil {
+					log.Warn("could not schedule telegram notification", "event_id", ev.ID)
+					_ = store.MarkFailed(ctx, ev.ID, errors.New("could not schedule telegram notification"))
 					continue
 				}
 				// Run event-triggered workflows. De-duplication inside the engine makes a

@@ -146,11 +146,8 @@ describe('locale', () => {
     const walk = (obj: Record<string, unknown>, prefix: string): void => {
       for (const [key, value] of Object.entries(obj)) {
         if (typeof value === 'string') {
-          const withoutPlaceholders = value.replace(/\{[^}]*\}/g, ' ')
-          // A dotted lowercase token is a machine identifier the user selects or
-          // types verbatim (`ai.tools.execute`, `contacts.read`), not prose a
-          // translator should rewrite, so it is removed before scanning for stray
-          // English words. Prose that merely contains a Latin word is still caught.
+          // Protocol commands and dotted machine identifiers are not English prose.
+          const withoutPlaceholders = value.replace(/\{[^}]*\}/g, ' ').replace(/\/[a-z_]+\b/g, ' ')
           const withoutIdentifiers = withoutPlaceholders.replace(
             /\b[a-z][a-z0-9]*(?:\.[a-z0-9]+)+\b/g,
             ' ',

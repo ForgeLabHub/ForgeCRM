@@ -57,9 +57,7 @@ if [ -s "$openapi_file" ]; then
   json_ops=$(awk '/^  "paths": \{/{f=1; next} f && /^  \}/{exit} f && /^      "(get|post|put|patch|delete)": \{/{n++} END{print n+0}' "$openapi_file")
   if [ "$json_paths" -gt 0 ] && [ "$json_ops" -ge "$json_paths" ]; then
     ok "openapi.json: $json_paths путей, $json_ops операций"
-    # README объявляет оба числа в строке статуса API. Согласование числительного
-    # с существительным в русском зависит от последней цифры (181 путь, 235
-    # операций), поэтому принимаются все падежные формы, а не одна.
+    # Accept Russian inflections while comparing the actual counts.
     readme_paths=$(grep -oE '[0-9]+ пут(ь|и|ей)' "$readme" | grep -oE '[0-9]+' | head -1)
     readme_ops=$(grep -oE '[0-9]+ операци(я|и|й)' "$readme" | grep -oE '[0-9]+' | head -1)
     if [ -z "$readme_paths" ] || [ -z "$readme_ops" ]; then

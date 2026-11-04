@@ -38,6 +38,8 @@ const (
 	EventDealWon            = "crm.deal.won"
 	EventDealLost           = "crm.deal.lost"
 	EventTaskCreated        = "crm.task.created"
+	EventTaskAssigned       = "crm.task.assigned"
+	EventTaskDueChanged     = "crm.task.due_changed"
 	EventTaskCompleted      = "crm.task.completed"
 	EventTicketCreated      = "support.ticket.created"
 	EventTicketUpdated      = "support.ticket.updated"
@@ -66,7 +68,7 @@ func EventTypes() []string {
 		EventLeadCreated, EventLeadUpdated, EventLeadConverted,
 		EventDealCreated, EventDealUpdated, EventDealStageChanged,
 		EventDealWon, EventDealLost,
-		EventTaskCreated, EventTaskCompleted,
+		EventTaskCreated, EventTaskAssigned, EventTaskDueChanged, EventTaskCompleted,
 		EventTicketCreated, EventTicketUpdated, EventTicketClosed,
 		EventImportCompleted, EventImportFailed, EventMigrationCompleted,
 		EventIntegrationRun, EventUserInvited, EventUserBlocked,

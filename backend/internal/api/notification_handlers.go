@@ -3,7 +3,6 @@ package api
 import (
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -27,9 +26,9 @@ func (s *Server) mountNotifications(r chi.Router) {
 		r.With(s.perm(rbac.PermNotificationsRead)).Get("/log", s.handleEmailLog)
 	})
 	r.Route("/admin/telegram", func(r chi.Router) {
-		r.With(s.perm(rbac.PermEmailManage)).Get("/status", s.handleTelegramStatus)
-		r.With(s.perm(rbac.PermEmailManage)).Post("/link-code", s.handleTelegramLinkCode)
-		r.With(s.perm(rbac.PermEmailManage)).Delete("/link", s.handleTelegramUnlink)
+		r.Get("/status", s.handleTelegramStatus)
+		r.Post("/link-code", s.handleTelegramLinkCode)
+		r.Delete("/link", s.handleTelegramUnlink)
 	})
 }
 
@@ -175,10 +174,16 @@ func (s *Server) handleEmailLog(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleTelegramStatus(w http.ResponseWriter, r *http.Request) {
+	commands := []string{}
+	if s.deps.Telegram.WebhookEnabled() {
+		commands = []string{"/start", "/help", "/link", "/tasks", "/today", "/task", "/done", "/due"}
+	}
 	httpx.WriteJSON(w, map[string]any{
-		"enabled":  s.deps.Telegram.Enabled(),
-		"reason":   reasonIfDisabled(s.deps.Telegram.Enabled(), "no Telegram bot token is configured; the platform works normally without it"),
-		"commands": []string{"/start", "/link", "/tasks", "/unlink", "/help"},
+		"enabled": s.deps.Telegram.Enabled(),
+		"reason":  reasonIfDisabled(s.deps.Telegram.Enabled(), "Telegram is disabled or no bot token is configured; the platform works normally without it"),
+		// Configuration does not prove Telegram registered or can reach the URL.
+		"linking_available": s.deps.Telegram.WebhookEnabled(),
+		"commands":          commands,
 	})
 }
 
@@ -194,6 +199,10 @@ func (s *Server) handleTelegramLinkCode(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
+	if !s.deps.Telegram.WebhookEnabled() {
+		httpx.WriteError(w, r, httpx.NewError(http.StatusServiceUnavailable, httpx.CodeDisabled, "Telegram webhook is not configured"))
+		return
+	}
 	code, err := s.deps.Telegram.CreateLinkCode(r.Context(), p)
 	if err != nil {
 		s.respondDomainError(w, r, err)
@@ -205,7 +214,7 @@ func (s *Server) handleTelegramLinkCode(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Cache-Control", "no-store")
 	httpx.WriteJSON(w, map[string]any{
 		"code":               code,
-		"expires_in_seconds": int((15 * time.Minute).Seconds()),
+		"expires_in_seconds": int(notify.LinkCodeTTL.Seconds()),
 		"instruction":        "send /link " + code + " to the bot",
 	})
 }

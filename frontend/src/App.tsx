@@ -373,11 +373,7 @@ export function App() {
         />
         <Route
           path="admin/telegram"
-          element={
-            <RequirePermission permission="email.manage">
-              <TelegramPage />
-            </RequirePermission>
-          }
+          element={<TelegramPage />}
         />
         <Route
           path="admin/sso"

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { authApi } from '../api/auth'
 import { errorMessage, fieldErrors } from '../api/client'
@@ -66,6 +67,8 @@ export function AccountPage() {
                 <Badge tone="warning">{t('profile.notEnabled')}</Badge>
               )}
             </dd>
+            <dt>{t('telegram.title')}</dt>
+            <dd><Link to="/admin/telegram">{t('telegram.linkAccount')}</Link></dd>
             <dt>{t('profile.teams')}</dt>
             <dd>
               {session?.teams.length ? (
