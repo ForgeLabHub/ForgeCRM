@@ -2937,6 +2937,8 @@ a.metric:hover {
 @media (max-width: 720px) {
   .workspace-switcher__text { display: none; }
   .workspace-menu { min-width: 260px; }
+}
+
 /* Phone refinements: retain content and actions while making them usable with
    touch and without iOS zooming a field when it receives focus. */
 .sidebar__close, .hero__mobile-org { display: none; }
