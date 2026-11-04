@@ -211,7 +211,9 @@ test.describe('responsive layout', () => {
     await expect(input).toBeVisible()
     await expect(submit).toBeInViewport()
     expect(await input.evaluate((node) => parseFloat(getComputedStyle(node).fontSize))).toBeGreaterThanOrEqual(16)
-    expect((await submit.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+    // The sheet animates with a scale transform. Measure the final rendered
+    // target, not a transient frame while the opening animation is in flight.
+    await expect.poll(async () => (await submit.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44)
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1)
   })
 
