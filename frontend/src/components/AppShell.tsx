@@ -244,6 +244,11 @@ function AccountMenu() {
             {t('nav.account')}
           </Link>
 
+          <Link to="/appearance" className="menu__item" onClick={() => setOpen(false)}>
+            <IconSliders size={16} />
+            {t('nav.appearance')}
+          </Link>
+
           <button
             type="button"
             className="menu__item menu__item--danger"

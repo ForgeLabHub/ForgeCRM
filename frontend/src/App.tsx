@@ -45,6 +45,7 @@ const SSOPage = lazy(() => import('./pages/admin/SSOPage').then((m) => ({ defaul
 const MCPCredentialsPage = lazy(() => import('./pages/admin/MCPCredentialsPage').then((m) => ({ default: m.MCPCredentialsPage })))
 const TenantSettingsPage = lazy(() => import('./pages/admin/TenantSettingsPage').then((m) => ({ default: m.TenantSettingsPage })))
 const AccountPage = lazy(() => import('./pages/AccountPage').then((m) => ({ default: m.AccountPage })))
+const AppearancePage = lazy(() => import('./pages/AppearancePage').then((m) => ({ default: m.AppearancePage })))
 const ForbiddenPage = lazy(() => import('./pages/ErrorPages').then((m) => ({ default: m.ForbiddenPage })))
 const NotFoundPage = lazy(() => import('./pages/ErrorPages').then((m) => ({ default: m.NotFoundPage })))
 import { RequirePermission } from './components/RequirePermission'
@@ -401,6 +402,7 @@ export function App() {
         />
 
         <Route path="account" element={<AccountPage />} />
+        <Route path="appearance" element={<AppearancePage />} />
         <Route path="forbidden" element={<ForbiddenPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>

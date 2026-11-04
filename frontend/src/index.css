@@ -2236,3 +2236,565 @@ a.metric:hover {
 .page-header__lead { min-width: 0; }
 
 .breadcrumb__current { color: var(--color-text); font-weight: 550; }
+
+/* ============================================================ visual styles ==
+ *
+ * Ten complete looks, not ten accent colours. Each block below sets the whole
+ * token set the interface reads, so choosing a style restyles every screen at
+ * once — dashboard, tables, forms, modals, the sidebar — from one attribute on
+ * <html>. The structural rules at the end of each block are the few places a
+ * style changes shape rather than colour (radius, borders, blur, a background
+ * gradient), because those are what make the styles feel different from each
+ * other instead of like the same page in a different hue.
+ *
+ * These blocks come after the base palettes on purpose: a style supplies its own
+ * colours, so it must win over `:root[data-theme='dark']` at equal specificity.
+ * The default style has no block here — it is the palette at the top of the file.
+ *
+ * Every foreground/background pair the application actually renders is checked
+ * by src/theme/contrast.test.ts, which reads this file.
+ */
+
+/* Minimal — near-monochrome, flat, almost no chrome. */
+:root[data-style='minimal'] {
+  color-scheme: light;
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-surface-sunken: #f7f7f8;
+  --color-border: #ececec;
+  --color-border-strong: #d4d4d4;
+  --color-text: #16181d;
+  --color-text-muted: #5b6069;
+  --color-text-subtle: #6b7078;
+  --color-accent: #111827;
+  --color-accent-hover: #000000;
+  --color-accent-soft: #f1f2f4;
+  --color-on-accent: #ffffff;
+  --color-danger: #b42318;
+  --color-danger-soft: #fef3f2;
+  --color-success: #027a48;
+  --color-success-soft: #ecfdf3;
+  --color-warning: #b54708;
+  --color-warning-soft: #fffaeb;
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 10px;
+  --shadow-sm: none;
+  --shadow: none;
+  --shadow-md: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-lg: 0 8px 24px rgba(16, 24, 40, 0.1);
+  --color-overlay: rgba(16, 24, 40, 0.4);
+}
+:root[data-style='minimal'] .card { box-shadow: none; border-color: var(--color-border); }
+:root[data-style='minimal'] .sidebar { background: var(--color-surface); }
+
+/* Midnight — a deep, cool dark theme. */
+:root[data-style='midnight'] {
+  color-scheme: dark;
+  --color-bg: #070a12;
+  --color-surface: #0e1422;
+  --color-surface-raised: #131a2b;
+  --color-surface-sunken: #0a0f1a;
+  --color-border: #1e2740;
+  --color-border-strong: #2f3b5c;
+  --color-text: #e7ecf5;
+  --color-text-muted: #a3b0c7;
+  --color-text-subtle: #8f9cba;
+  --color-accent: #5b8cff;
+  --color-accent-hover: #7aa2ff;
+  --color-accent-soft: #16203a;
+  --color-on-accent: #06101f;
+  --color-danger: #f4938a;
+  --color-danger-soft: #3a1d1b;
+  --color-success: #6bd3a0;
+  --color-success-soft: #12301f;
+  --color-warning: #e6bd6b;
+  --color-warning-soft: #33270f;
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --color-overlay: rgba(2, 4, 10, 0.66);
+  --shadow-md: 0 8px 22px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.66);
+}
+:root[data-style='midnight'] body { background: var(--color-bg); }
+
+/* Glass — translucent surfaces over a soft gradient, with a real blur. */
+:root[data-style='glass'] {
+  color-scheme: light;
+  --color-bg: #e9eefb;
+  --color-surface: rgba(255, 255, 255, 0.72);
+  --color-surface-raised: rgba(255, 255, 255, 0.85);
+  --color-surface-sunken: rgba(255, 255, 255, 0.45);
+  --color-border: rgba(255, 255, 255, 0.65);
+  --color-border-strong: rgba(120, 138, 178, 0.45);
+  --color-text: #101828;
+  --color-text-muted: #46506a;
+  --color-text-subtle: #5a6478;
+  --color-accent: #5b4bf0;
+  --color-accent-hover: #4a3ae0;
+  --color-accent-soft: rgba(91, 75, 240, 0.10);
+  --color-on-accent: #ffffff;
+  --color-danger: #c0362c;
+  --color-danger-soft: rgba(220, 38, 38, 0.12);
+  --color-success: #1f7a4d;
+  --color-success-soft: rgba(31, 122, 77, 0.12);
+  --color-warning: #9a6212;
+  --color-warning-soft: rgba(154, 98, 18, 0.14);
+  --radius-sm: 10px;
+  --radius: 16px;
+  --radius-lg: 22px;
+  --color-overlay: rgba(30, 41, 71, 0.4);
+  --shadow-sm: 0 1px 2px rgba(31, 41, 71, 0.08);
+  --shadow-md: 0 8px 24px rgba(31, 41, 71, 0.14);
+  --shadow-lg: 0 24px 60px rgba(31, 41, 71, 0.2);
+}
+:root[data-style='glass'] body {
+  background:
+    radial-gradient(1200px 700px at 12% -8%, #d8e2ff 0%, transparent 55%),
+    radial-gradient(1000px 620px at 92% 4%, #ffe3f3 0%, transparent 50%),
+    var(--color-bg);
+}
+:root[data-style='glass'] .card,
+:root[data-style='glass'] .sidebar,
+:root[data-style='glass'] .topbar,
+:root[data-style='glass'] .modal,
+:root[data-style='glass'] .menu__popover {
+  backdrop-filter: saturate(180%) blur(14px);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
+}
+
+/* Premium — restrained charcoal with a metallic gold accent and squared corners. */
+:root[data-style='premium'] {
+  color-scheme: dark;
+  --color-bg: #0f1115;
+  --color-surface: #171a21;
+  --color-surface-raised: #1d2129;
+  --color-surface-sunken: #12151b;
+  --color-border: #2a2f39;
+  --color-border-strong: #3b424f;
+  --color-text: #f3f1ec;
+  --color-text-muted: #b6b1a6;
+  --color-text-subtle: #9d988d;
+  --color-accent: #c9a227;
+  --color-accent-hover: #d9b23a;
+  --color-accent-soft: #2a2412;
+  --color-on-accent: #17150a;
+  --color-danger: #e59a90;
+  --color-danger-soft: #3a211e;
+  --color-success: #7bd0a0;
+  --color-success-soft: #14301f;
+  --color-warning: #e6c06b;
+  --color-warning-soft: #33280f;
+  --font-sans: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia,
+    "Times New Roman", ui-serif, serif;
+  --radius-sm: 3px;
+  --radius: 4px;
+  --radius-lg: 6px;
+  --color-overlay: rgba(3, 4, 7, 0.7);
+  --shadow-md: 0 8px 22px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.66);
+}
+:root[data-style='premium'] .sidebar__brand-text,
+:root[data-style='premium'] .sidebar__group-label { letter-spacing: 0.04em; }
+
+/* Brutalist — black borders, hard shadows, no radius, raw contrast. */
+:root[data-style='brutalist'] {
+  color-scheme: light;
+  --color-bg: #f5f5ef;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-surface-sunken: #f0f0e6;
+  --color-border: #000000;
+  --color-border-strong: #000000;
+  --color-text: #000000;
+  --color-text-muted: #1a1a1a;
+  --color-text-subtle: #333333;
+  --color-accent: #000000;
+  --color-accent-hover: #1a1a1a;
+  --color-accent-soft: #ffe500;
+  --color-on-accent: #ffffff;
+  --color-danger: #cc0000;
+  --color-danger-soft: #ffe0e0;
+  --color-success: #006600;
+  --color-success-soft: #e0f2e0;
+  --color-warning: #a35b00;
+  --color-warning-soft: #ffedcc;
+  --radius-sm: 0;
+  --radius: 0;
+  --radius-lg: 0;
+  --shadow-sm: 2px 2px 0 #000000;
+  --shadow: 3px 3px 0 #000000;
+  --shadow-md: 4px 4px 0 #000000;
+  --shadow-lg: 6px 6px 0 #000000;
+  --color-overlay: rgba(0, 0, 0, 0.55);
+}
+:root[data-style='brutalist'] .card,
+:root[data-style='brutalist'] .btn,
+:root[data-style='brutalist'] input,
+:root[data-style='brutalist'] select,
+:root[data-style='brutalist'] textarea,
+:root[data-style='brutalist'] .menu__popover { border-width: 2px; }
+:root[data-style='brutalist'] .btn { box-shadow: 3px 3px 0 #000000; font-weight: 700; }
+:root[data-style='brutalist'] .sidebar { border-right-width: 2px; }
+:root[data-style='brutalist'] .nav-item--active { border: 2px solid #000000; }
+
+/* Cyberpunk — a neon future on near-black. */
+:root[data-style='cyberpunk'] {
+  color-scheme: dark;
+  --color-bg: #05010f;
+  --color-surface: #0c0420;
+  --color-surface-raised: #140830;
+  --color-surface-sunken: #0a0318;
+  --color-border: #2a1060;
+  --color-border-strong: #43189a;
+  --color-text: #eafcff;
+  --color-text-muted: #b9a8e8;
+  --color-text-subtle: #9d8fd0;
+  --color-accent: #ff2bd6;
+  --color-accent-hover: #ff5ee0;
+  --color-accent-soft: #2a0a3a;
+  --color-on-accent: #0a0016;
+  --color-danger: #ff5a5a;
+  --color-danger-soft: #330d14;
+  --color-success: #39ff9e;
+  --color-success-soft: #06301f;
+  --color-warning: #ffe14d;
+  --color-warning-soft: #332a05;
+  --radius-sm: 2px;
+  --radius: 4px;
+  --radius-lg: 6px;
+  --color-overlay: rgba(2, 0, 8, 0.72);
+  --shadow-md: 0 0 18px rgba(255, 43, 214, 0.35);
+  --shadow-lg: 0 0 34px rgba(255, 43, 214, 0.45);
+}
+:root[data-style='cyberpunk'] h1,
+:root[data-style='cyberpunk'] h2,
+:root[data-style='cyberpunk'] .sidebar__brand { text-shadow: 0 0 12px rgba(255, 43, 214, 0.55); }
+:root[data-style='cyberpunk'] .btn--primary { box-shadow: 0 0 14px rgba(255, 43, 214, 0.6); }
+
+/* Soft — pastel, generously rounded, gentle shadows. */
+:root[data-style='soft'] {
+  color-scheme: light;
+  --color-bg: #f6f7fb;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-surface-sunken: #f0f2f8;
+  --color-border: #e6e9f2;
+  --color-border-strong: #d3d8e8;
+  --color-text: #1f2430;
+  --color-text-muted: #5b6478;
+  --color-text-subtle: #656d80;
+  --color-accent: #4b62d8;
+  --color-accent-hover: #3d52c0;
+  --color-accent-soft: #eef2ff;
+  --color-on-accent: #ffffff;
+  --color-danger: #e0637a;
+  --color-danger-soft: #fdeef1;
+  --color-success: #3fae7f;
+  --color-success-soft: #e9f7f0;
+  --color-warning: #d99a3a;
+  --color-warning-soft: #fdf3e4;
+  --radius-sm: 12px;
+  --radius: 16px;
+  --radius-lg: 22px;
+  --color-overlay: rgba(31, 41, 71, 0.35);
+  --shadow-sm: 0 2px 6px rgba(76, 96, 160, 0.08);
+  --shadow-md: 0 10px 26px rgba(76, 96, 160, 0.14);
+  --shadow-lg: 0 22px 54px rgba(76, 96, 160, 0.18);
+}
+
+/* Editorial — serif type, a strict grid, and squared corners. */
+:root[data-style='editorial'] {
+  color-scheme: light;
+  --color-bg: #fbfbf9;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-surface-sunken: #f4f4f0;
+  --color-border: #e2e2dc;
+  --color-border-strong: #c9c9c0;
+  --color-text: #14140f;
+  --color-text-muted: #4f4f46;
+  --color-text-subtle: #6a6a5f;
+  --color-accent: #1a1a1a;
+  --color-accent-hover: #000000;
+  --color-accent-soft: #f0efe9;
+  --color-on-accent: #ffffff;
+  --color-danger: #9b1c1c;
+  --color-danger-soft: #fbeeee;
+  --color-success: #14532d;
+  --color-success-soft: #eaf5ee;
+  --color-warning: #7c4a03;
+  --color-warning-soft: #faf0e0;
+  --font-sans: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia,
+    "Times New Roman", ui-serif, serif;
+  --radius-sm: 2px;
+  --radius: 3px;
+  --radius-lg: 4px;
+  --shadow-sm: none;
+  --shadow: none;
+  --shadow-md: 0 1px 2px rgba(20, 20, 15, 0.08);
+  --shadow-lg: 0 10px 30px rgba(20, 20, 15, 0.12);
+  --color-overlay: rgba(20, 20, 15, 0.45);
+}
+:root[data-style='editorial'] .sidebar__group-label { letter-spacing: 0.14em; }
+:root[data-style='editorial'] th { letter-spacing: 0.1em; }
+
+/* Warm — a calm, sunny palette of clay and amber. */
+:root[data-style='warm'] {
+  color-scheme: light;
+  --color-bg: #faf5ef;
+  --color-surface: #fffdfa;
+  --color-surface-raised: #fffdfa;
+  --color-surface-sunken: #f5ece0;
+  --color-border: #eadfce;
+  --color-border-strong: #d8c8b0;
+  --color-text: #3a2f26;
+  --color-text-muted: #6f6053;
+  --color-text-subtle: #7a6c5b;
+  --color-accent: #9c5220;
+  --color-accent-hover: #8a4818;
+  --color-accent-soft: #f9ede1;
+  --color-on-accent: #ffffff;
+  --color-danger: #b3402f;
+  --color-danger-soft: #fbeae5;
+  --color-success: #4f7a3a;
+  --color-success-soft: #eef4e6;
+  --color-warning: #b07d1e;
+  --color-warning-soft: #fbf1da;
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --color-overlay: rgba(58, 47, 38, 0.45);
+  --shadow-sm: 0 1px 2px rgba(120, 90, 60, 0.08);
+  --shadow-md: 0 6px 18px rgba(120, 90, 60, 0.14);
+  --shadow-lg: 0 18px 44px rgba(120, 90, 60, 0.18);
+}
+
+/* Colorful — a vivid, high-energy palette over a soft gradient. */
+:root[data-style='colorful'] {
+  color-scheme: light;
+  --color-bg: #f3f0ff;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-surface-sunken: #f6f3ff;
+  --color-border: #e6e0ff;
+  --color-border-strong: #cdc2ff;
+  --color-text: #1b1533;
+  --color-text-muted: #5b5478;
+  --color-text-subtle: #6e6790;
+  --color-accent: #7c3aed;
+  --color-accent-hover: #6d28d9;
+  --color-accent-soft: #efe8ff;
+  --color-on-accent: #ffffff;
+  --color-danger: #e11d48;
+  --color-danger-soft: #ffe9ee;
+  --color-success: #059669;
+  --color-success-soft: #e3f8ef;
+  --color-warning: #d97706;
+  --color-warning-soft: #fdf1de;
+  --radius-sm: 10px;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --color-overlay: rgba(43, 29, 84, 0.45);
+  --shadow-sm: 0 2px 6px rgba(124, 58, 237, 0.1);
+  --shadow-md: 0 10px 26px rgba(124, 58, 237, 0.16);
+  --shadow-lg: 0 22px 54px rgba(124, 58, 237, 0.2);
+}
+:root[data-style='colorful'] body {
+  background:
+    radial-gradient(900px 520px at 0% 0%, #e7ddff 0%, transparent 55%),
+    radial-gradient(900px 520px at 100% 0%, #ffe0ee 0%, transparent 52%),
+    var(--color-bg);
+}
+:root[data-style='colorful'] .nav-item--active {
+  background: linear-gradient(90deg, var(--color-accent-soft), transparent);
+}
+
+/* Accent override — applied after the styles so it wins at equal specificity.
+   `theme` is the absence of an override: each style keeps the accent it chose.
+   The soft variant is derived so it adapts to the light or dark surface the
+   style sets, and the on-accent colour is white on every offered accent, all of
+   which are dark enough for white to clear WCAG AA. */
+:root[data-accent='indigo'] {
+  --color-accent: #4338ca;
+  --color-accent-hover: #3730a3;
+  --color-accent-soft: color-mix(in srgb, #4338ca 14%, transparent);
+  --color-on-accent: #ffffff;
+}
+:root[data-accent='emerald'] {
+  --color-accent: #047857;
+  --color-accent-hover: #036b4e;
+  --color-accent-soft: color-mix(in srgb, #047857 14%, transparent);
+  --color-on-accent: #ffffff;
+}
+:root[data-accent='amber'] {
+  --color-accent: #b45309;
+  --color-accent-hover: #9a4507;
+  --color-accent-soft: color-mix(in srgb, #b45309 16%, transparent);
+  --color-on-accent: #ffffff;
+}
+:root[data-accent='rose'] {
+  --color-accent: #be123c;
+  --color-accent-hover: #a10f34;
+  --color-accent-soft: color-mix(in srgb, #be123c 14%, transparent);
+  --color-on-accent: #ffffff;
+}
+:root[data-accent='cyan'] {
+  --color-accent: #0e7490;
+  --color-accent-hover: #0c657e;
+  --color-accent-soft: color-mix(in srgb, #0e7490 14%, transparent);
+  --color-on-accent: #ffffff;
+}
+
+/* Density — a spacing multiplier, not a separate stylesheet. Every component
+   already reads the space scale, so tightening or loosening it here changes the
+   whole application at once and keeps the styles composable with it. */
+:root[data-density='compact'] {
+  --space-3: 10px;
+  --space-4: 12px;
+  --space-5: 18px;
+  --space-6: 24px;
+  --space-7: 34px;
+}
+:root[data-density='spacious'] {
+  --space-3: 14px;
+  --space-4: 20px;
+  --space-5: 30px;
+  --space-6: 40px;
+  --space-7: 58px;
+}
+
+/* ------------------------------------------------------------- appearance -- */
+
+/* The style picker. A grid of cards, each a thumbnail and a description, so the
+   choice is made by looking rather than by reading a list of names. */
+.style-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
+  gap: var(--space-3);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.style-grid__item { min-width: 0; }
+
+.style-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  height: 100%;
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.style-card--active {
+  border-color: var(--color-accent);
+  box-shadow: var(--ring);
+}
+
+.style-card__text { display: flex; flex-direction: column; gap: 3px; }
+
+.style-card__name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.style-card__desc {
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+  line-height: 1.45;
+}
+
+.style-card__actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: auto;
+}
+
+/* The thumbnail is a fixed, small sketch of the layout, drawn with the style's
+   own colours so the card reads as a preview of that style. */
+.style-thumb {
+  display: flex;
+  height: 68px;
+  overflow: hidden;
+  border: 1px solid;
+  border-radius: var(--radius-sm);
+}
+
+.style-thumb__rail {
+  width: 26%;
+  border-right: 1px solid;
+  opacity: 0.9;
+}
+
+.style-thumb__body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+  padding: 7px;
+}
+
+.style-thumb__bar { height: 8px; width: 46%; border-radius: 3px; }
+
+.style-thumb__card {
+  flex: 1;
+  border: 1px solid;
+  border-radius: 3px;
+  opacity: 0.95;
+}
+
+/* Accent swatches. */
+.swatch-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px 11px 6px 8px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.swatch:hover { color: var(--color-text); }
+
+.swatch--active {
+  color: var(--color-text);
+  border-color: var(--color-accent);
+  box-shadow: var(--ring);
+}
+
+.swatch__dot {
+  width: 15px;
+  height: 15px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+/* `theme` shows the accent the current style picks, so its dot is a conic blend
+   rather than a single colour that would misrepresent it. */
+.swatch__dot--theme { background: conic-gradient(#4338ca, #047857, #b45309, #be123c, #0e7490, #4338ca); }
+.swatch__dot--indigo { background: #4338ca; }
+.swatch__dot--emerald { background: #047857; }
+.swatch__dot--amber { background: #b45309; }
+.swatch__dot--rose { background: #be123c; }
+.swatch__dot--cyan { background: #0e7490; }
