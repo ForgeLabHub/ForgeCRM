@@ -240,6 +240,48 @@ export const en = {
       warm: { name: 'Warm', description: 'A calm palette of clay, sand and amber.' },
       colorful: { name: 'Colorful', description: 'Vivid violet over a bright gradient.' },
     },
+    layoutsHeading: 'Interface experience',
+    layoutsHint:
+      'A full redesign of the app frame — navigation, chrome and palette together — each in the pattern of a market-leading CRM. The visual styles below further re-skin the Classic experience.',
+    layoutDeviceNote:
+      'The experience applies instantly and is remembered on this device only; it never changes your account or anyone else’s screen.',
+    layout: {
+      classic: {
+        name: 'Classic',
+        inspired: 'ForgeCRM original',
+        description:
+          'The anatomy the app shipped with: a navigation rail on the left, a utility bar on top. Every visual style below re-skins this frame.',
+      },
+      stratus: {
+        name: 'Stratus',
+        inspired: 'Cloud-suite pattern (Salesforce Lightning)',
+        description:
+          'A gradient suite header with a waffle launcher holding every section, a strip of object tabs for the active workspace, and a pinned utility bar for notifications, tasks and AI.',
+      },
+      horizon: {
+        name: 'Horizon',
+        inspired: 'Growth-suite pattern (HubSpot)',
+        description:
+          'One dark top bar where each product area opens as a dropdown menu, a light contextual bar beneath it, and a warm coral accent across wide card-first pages.',
+      },
+      pulse: {
+        name: 'Pulse',
+        inspired: 'Work-board pattern (monday.com)',
+        description:
+          'A dark rail of colour-coded workspace tiles beside a light panel listing everything in the workspace. Orientation is peripheral: the lit tile is where you are.',
+      },
+      slate: {
+        name: 'Slate',
+        inspired: 'Command-first pattern (Linear)',
+        description:
+          'A slim, permanently dark sidebar, a breadcrumb top bar, and the Ctrl+K palette as the main verb. Smaller, tighter and quieter than every other frame.',
+      },
+    },
+  },
+  shell: {
+    launcher: 'App launcher',
+    launcherHint: 'Every section you have access to, in one panel.',
+    quickLinks: 'Quick links',
   },
   overview: {
     greeting: 'Welcome back, {name}',

@@ -51,6 +51,58 @@ export type Density = (typeof DENSITIES)[number]
 export const DEFAULT_DENSITY: Density = 'standard'
 export const DENSITY_STORAGE_KEY = 'forgecrm.density'
 
+/**
+ * Interface experiences: complete redesigns of the application shell.
+ *
+ * A style changes what the app looks like; an experience changes how the app is
+ * put together — the shell's anatomy (rails, tab bars, launchers, dropdown
+ * navigation), its palette, its density defaults and its content framing. Each
+ * one is modelled on a pattern proven by a market-leading CRM and rebuilt for
+ * this product's navigation model, so switching experiences is closer to using
+ * a different application than to re-skinning the same one.
+ *
+ * `classic` is the shell the app shipped with: navigation rail on the left,
+ * utility top bar on top. The named experiences are:
+ *
+ * - `stratus` — cloud suite in the Salesforce Lightning pattern: gradient brand
+ *   header, an app launcher grid with every section, a horizontal object tab
+ *   strip, and a pinned utility bar.
+ * - `horizon` — marketing-suite pattern popularised by HubSpot: a dark top
+ *   navigation bar whose sections open as dropdown menus, a light contextual
+ *   sub-bar and a coral accent.
+ * - `pulse` — work-board pattern from monday.com: a dark rail of colourful
+ *   workspace tiles beside a light panel listing everything in the workspace.
+ * - `slate` — command-first minimalism in the Linear mould: a compact dark
+ *   sidebar, a breadcrumb top bar and the search palette as the main verb.
+ *
+ * The layout is a device preference, stored locally and applied instantly; it
+ * re-skins every screen because the experiences also ship their own token set.
+ */
+export const LAYOUTS = ['classic', 'stratus', 'horizon', 'pulse', 'slate'] as const
+export type Layout = (typeof LAYOUTS)[number]
+
+/** All experiences are selectable, `classic` included — it is the way back. */
+export const SELECTABLE_LAYOUTS: readonly Layout[] = LAYOUTS
+
+export const DEFAULT_LAYOUT: Layout = 'classic'
+export const LAYOUT_STORAGE_KEY = 'forgecrm.layout'
+
+export function isLayout(value: string | null): value is Layout {
+  return value !== null && (LAYOUTS as readonly string[]).includes(value)
+}
+
+export function layoutLabelKey(layout: Layout): TranslationKey {
+  return `appearance.layout.${layout}.name` as TranslationKey
+}
+
+export function layoutDescriptionKey(layout: Layout): TranslationKey {
+  return `appearance.layout.${layout}.description` as TranslationKey
+}
+
+export function layoutInspiredKey(layout: Layout): TranslationKey {
+  return `appearance.layout.${layout}.inspired` as TranslationKey
+}
+
 /** The label key for a style card. `default` reuses the light/dark wording. */
 export function styleLabelKey(style: ThemeStyle): TranslationKey {
   return `appearance.style.${style}.name` as TranslationKey

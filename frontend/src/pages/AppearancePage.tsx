@@ -16,12 +16,17 @@ import { useTheme } from '../theme'
 import {
   ACCENTS,
   DENSITIES,
+  SELECTABLE_LAYOUTS,
   THEME_STYLES,
   STYLE_SWATCH,
   accentLabelKey,
   densityLabelKey,
+  layoutDescriptionKey,
+  layoutInspiredKey,
+  layoutLabelKey,
   styleDescriptionKey,
   styleLabelKey,
+  type Layout,
   type ThemeStyle,
 } from '../theme/themes'
 
@@ -41,6 +46,58 @@ function StyleThumbnail({ style }: { style: ThemeStyle }) {
         <span className="style-thumb__card" style={{ background: swatch.surface, borderColor: swatch.text }} />
       </span>
     </span>
+  )
+}
+
+/**
+ * A miniature rendering of each experience's anatomy — rail, bar, tiles,
+ * canvas — drawn in CSS rather than screenshotted, so it can never drift from
+ * the shell it advertises into the past.
+ */
+function LayoutThumbnail({ layout }: { layout: Layout }) {
+  return (
+    <span className={`layout-thumb layout-thumb--${layout}`} aria-hidden="true">
+      <span className="lt-a" />
+      <span className="lt-b" />
+      <span className="lt-c">
+        <i />
+        <i />
+        <i />
+      </span>
+    </span>
+  )
+}
+
+/**
+ * The experience picker: one card per interface, applied on click. Unlike the
+ * style cards there is no preview step — an experience is the frame itself, so
+ * the honest preview is simply rendering it.
+ */
+function LayoutPicker() {
+  const t = useT()
+  const { layout, setLayout } = useTheme()
+  return (
+    <ul className="layout-grid">
+      {SELECTABLE_LAYOUTS.map((option) => (
+        <li key={option}>
+          <button
+            type="button"
+            className={option === layout ? 'layout-card layout-card--active' : 'layout-card'}
+            aria-pressed={option === layout}
+            aria-current={option === layout ? 'true' : undefined}
+            onClick={() => void setLayout(option)}
+          >
+            <LayoutThumbnail layout={option} />
+            <span className="layout-card__name">
+              {t(layoutLabelKey(option))}
+              {option === layout ? <span className="badge badge--accent">{t('appearance.current')}</span> : null}
+            </span>
+            <span className="layout-card__inspired">{t(layoutInspiredKey(option))}</span>
+            <span className="layout-card__desc">{t(layoutDescriptionKey(option))}</span>
+          </button>
+        </li>
+      ))}
+    </ul>
   )
 }
 
@@ -69,6 +126,17 @@ export function AppearancePage() {
       <div className="stack">
         {syncError ? <Alert tone="error">{t('appearance.saveError')}</Alert> : null}
         {saving ? <p role="status">{t('appearance.saving')}</p> : null}
+
+        <Card title={t('appearance.layoutsHeading')}>
+          <p className="text-muted text-sm" style={{ marginBottom: 'var(--space-4)' }}>
+            {t('appearance.layoutsHint')}
+          </p>
+          <LayoutPicker />
+          <p className="text-muted text-sm" style={{ marginTop: 'var(--space-3)' }}>
+            {t('appearance.layoutDeviceNote')}
+          </p>
+        </Card>
+
         <Card title={t('appearance.stylesHeading')}>
           <p className="text-muted text-sm" style={{ marginBottom: 'var(--space-4)' }}>
             {t('appearance.stylesHint')}
