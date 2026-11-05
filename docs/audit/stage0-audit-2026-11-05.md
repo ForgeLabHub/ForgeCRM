@@ -172,7 +172,7 @@ HEAD: `2f84e24` (`main`) — плюс незакоммиченная правк�
   (`oidc_login_states.link_user_id`, выставленный только аутентифицированным запросом).
   Отказывает, если субъект уже связан с другим аккаунтом (`ErrIdentityAlreadyLinked`) или
   у аккаунта уже есть другая связь у этого провайдера (`ErrIdentityInUse`); гонка закрыта
-  уникальным индексом `user_identities_provider_user_key` (миграция 0035).
+  уникальным индексом `user_identities_provider_user_key` (миграция 0037).
 - Точка входа привязки — `POST /api/v1/auth/identities/link` под `withCSRF`; обычный вход
   `GET /api/v1/auth/oidc/start` передаёт `uuid.Nil` и привязку начать не может.
 - Снятие — `DELETE /api/v1/auth/identities/{id}`, где `user_id` из сессии входит в предикат.
