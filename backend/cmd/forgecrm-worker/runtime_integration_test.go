@@ -432,11 +432,21 @@ func TestWorkerBinaryDrainsOutboxIntoDeliveries(t *testing.T) {
 		t.Fatalf("the worker did not turn the outbox event into a webhook delivery; log follows:\n%s", worker.read())
 	}
 
+	// The delivery row is written before the event is marked published, so poll for
+	// the flag rather than reading once: a single read races the mark and fails
+	// intermittently even though the drain is correct.
 	var published bool
-	if err := db.Pool().QueryRow(ctx, `
-		SELECT published_at IS NOT NULL FROM outbox_events WHERE organization_id = $1 AND event_type = $2`,
-		orgID, outbox.EventContactCreated).Scan(&published); err != nil {
-		t.Fatalf("read the event's published state: %v", err)
+	deadline = time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		if err := db.Pool().QueryRow(ctx, `
+			SELECT published_at IS NOT NULL FROM outbox_events WHERE organization_id = $1 AND event_type = $2`,
+			orgID, outbox.EventContactCreated).Scan(&published); err != nil {
+			t.Fatalf("read the event's published state: %v", err)
+		}
+		if published {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 	if !published {
 		t.Error("the outbox event was dispatched but never marked published, so every drain would re-dispatch it")
