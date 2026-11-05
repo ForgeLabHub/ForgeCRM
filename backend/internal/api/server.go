@@ -670,25 +670,10 @@ func (s *Server) ensureDefaultOrganization(ctx context.Context, userID uuid.UUID
 	return orgID, nil
 }
 
+// userTeams resolves the caller's active teams through the RBAC service, so the
+// session principal and every other principal builder scope records the same way.
 func (s *Server) userTeams(ctx context.Context, userID, orgID uuid.UUID) ([]uuid.UUID, error) {
-	const q = `
-		SELECT tm.team_id FROM team_members tm
-		JOIN teams t ON t.id = tm.team_id
-		WHERE tm.user_id = $1 AND t.organization_id = $2 AND t.archived_at IS NULL`
-	rows, err := s.deps.DB.Q(ctx).Query(ctx, q, userID, orgID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []uuid.UUID
-	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		out = append(out, id)
-	}
-	return out, rows.Err()
+	return s.deps.RBAC.TeamIDsForUser(ctx, userID, orgID)
 }
 
 // withCSRF requires a valid CSRF token for a single state-changing route.

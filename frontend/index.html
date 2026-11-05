@@ -24,12 +24,32 @@
        */
       (function () {
         try {
+          var root = document.documentElement;
           var stored = localStorage.getItem('forgecrm.theme');
           var mode = stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
           var dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
           var resolved = mode === 'system' ? (dark ? 'dark' : 'light') : mode;
-          document.documentElement.setAttribute('data-theme', resolved);
-          document.documentElement.style.colorScheme = resolved;
+          root.setAttribute('data-theme', resolved);
+          root.style.colorScheme = resolved;
+
+          /* The style, accent and density are written from storage here too, for
+             the same reason: a named style replaces the base palette, so applying
+             it after the first frame would flash the default colours first. Only
+             values the app knows are applied; anything else is ignored, and the
+             provider corrects it on mount. */
+          var styles = ['default', 'minimal', 'midnight', 'glass', 'premium', 'brutalist', 'cyberpunk', 'soft', 'editorial', 'warm', 'colorful'];
+          var accents = ['theme', 'indigo', 'emerald', 'amber', 'rose', 'cyan'];
+          var densities = ['compact', 'standard', 'spacious'];
+          function pick(key, allowed) {
+            var v = localStorage.getItem(key);
+            return allowed.indexOf(v) >= 0 ? v : null;
+          }
+          var style = pick('forgecrm.style', styles);
+          if (style) root.setAttribute('data-style', style);
+          var accent = pick('forgecrm.accent', accents);
+          if (accent) root.setAttribute('data-accent', accent);
+          var density = pick('forgecrm.density', densities);
+          if (density) root.setAttribute('data-density', density);
         } catch (e) {
           /* storage unavailable: the stylesheet default applies */
         }

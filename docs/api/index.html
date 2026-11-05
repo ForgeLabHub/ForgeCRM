@@ -431,7 +431,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <li data-op><a href="#schema-listresponsecrmtask">ListResponseCrmTask</a></li>
 <li data-op><a href="#schema-listresponsecrmticket">ListResponseCrmTicket</a></li>
 <li data-op><a href="#schema-listresponseimportxjob">ListResponseImportxJob</a></li>
-<li data-op><a href="#schema-listresponsemap-string-interface">ListResponseMap[string]interface {}</a></li>
+<li data-op><a href="#schema-listresponsemapstringinterface">ListResponseMapStringInterface</a></li>
 <li data-op><a href="#schema-listresponsemcpcredcredential">ListResponseMcpcredCredential</a></li>
 <li data-op><a href="#schema-listresponsetenantconfigrevision">ListResponseTenantconfigRevision</a></li>
 <li data-op><a href="#schema-listresponsetenantconfigsetting">ListResponseTenantconfigSetting</a></li>
@@ -1663,7 +1663,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <tr><td><code>order</code></td><td>query</td><td>string — one of asc, desc</td><td>no</td><td></td></tr>
 </tbody></table>
 <h4>Responses</h4>
-<div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success.</div><p class="ref">See <a href="#schema-listresponsemap-string-interface"><code>ListResponseMap[string]interface {}</code></a></p>
+<div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success.</div><p class="ref">See <a href="#schema-listresponsemapstringinterface"><code>ListResponseMapStringInterface</code></a></p>
 </div>
 <div class="resp"><div class="resp-head"><span class="code c-client">400</span> The request was malformed: bad JSON, an unknown field, or a missing required parameter.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
 </div>
@@ -2870,8 +2870,8 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <tr><td><code>q</code></td><td>query</td><td>string</td><td>no</td><td>Free-text filter.</td></tr>
 <tr><td><code>sort</code></td><td>query</td><td>string</td><td>no</td><td>Field to sort by. An unknown field is rejected.</td></tr>
 <tr><td><code>order</code></td><td>query</td><td>string — one of asc, desc</td><td>no</td><td></td></tr>
-<tr><td><code>contact_id</code></td><td>query</td><td><span class="muted">unspecified</span></td><td>no</td><td>The contact the decision is about. Pass this or `email`, not both.</td></tr>
-<tr><td><code>email</code></td><td>query</td><td><span class="muted">unspecified</span></td><td>no</td><td>The email address the decision is about, for a person not in the CRM.</td></tr>
+<tr><td><code>contact_id</code></td><td>query</td><td>string (uuid)</td><td>no</td><td>The contact the decision is about. Pass this or `email`, not both.</td></tr>
+<tr><td><code>email</code></td><td>query</td><td>string (email)</td><td>no</td><td>The email address the decision is about, for a person not in the CRM.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success.</div><p class="ref">See <a href="#schema-listresponseconsentrecord"><code>ListResponseConsentRecord</code></a></p>
@@ -2937,8 +2937,8 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <tr><td><code>q</code></td><td>query</td><td>string</td><td>no</td><td>Free-text filter.</td></tr>
 <tr><td><code>sort</code></td><td>query</td><td>string</td><td>no</td><td>Field to sort by. An unknown field is rejected.</td></tr>
 <tr><td><code>order</code></td><td>query</td><td>string — one of asc, desc</td><td>no</td><td></td></tr>
-<tr><td><code>contact_id</code></td><td>query</td><td><span class="muted">unspecified</span></td><td>no</td><td>The contact the decision is about. Pass this or `email`, not both.</td></tr>
-<tr><td><code>email</code></td><td>query</td><td><span class="muted">unspecified</span></td><td>no</td><td>The email address the decision is about, for a person not in the CRM.</td></tr>
+<tr><td><code>contact_id</code></td><td>query</td><td>string (uuid)</td><td>no</td><td>The contact the decision is about. Pass this or `email`, not both.</td></tr>
+<tr><td><code>email</code></td><td>query</td><td>string (email)</td><td>no</td><td>The email address the decision is about, for a person not in the CRM.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success.</div><p class="ref">See <a href="#schema-listresponseconsentrecord"><code>ListResponseConsentRecord</code></a></p>
@@ -2972,8 +2972,8 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <tr><td><code>q</code></td><td>query</td><td>string</td><td>no</td><td>Free-text filter.</td></tr>
 <tr><td><code>sort</code></td><td>query</td><td>string</td><td>no</td><td>Field to sort by. An unknown field is rejected.</td></tr>
 <tr><td><code>order</code></td><td>query</td><td>string — one of asc, desc</td><td>no</td><td></td></tr>
-<tr><td><code>contact_id</code></td><td>query</td><td><span class="muted">unspecified</span></td><td>no</td><td>The contact the decision is about. Pass this or `email`, not both.</td></tr>
-<tr><td><code>email</code></td><td>query</td><td><span class="muted">unspecified</span></td><td>no</td><td>The email address the decision is about, for a person not in the CRM.</td></tr>
+<tr><td><code>contact_id</code></td><td>query</td><td>string (uuid)</td><td>no</td><td>The contact the decision is about. Pass this or `email`, not both.</td></tr>
+<tr><td><code>email</code></td><td>query</td><td>string (email)</td><td>no</td><td>The email address the decision is about, for a person not in the CRM.</td></tr>
 <tr><td><code>purpose</code></td><td>query</td><td>string — one of marketing, transactional, product_updates, research</td><td>yes</td><td>The purpose to decide for.</td></tr>
 <tr><td><code>channel</code></td><td>query</td><td>string — one of email, telegram, webhook</td><td>yes</td><td>The channel to decide for.</td></tr>
 </tbody></table>
@@ -3009,8 +3009,8 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <tr><td><code>q</code></td><td>query</td><td>string</td><td>no</td><td>Free-text filter.</td></tr>
 <tr><td><code>sort</code></td><td>query</td><td>string</td><td>no</td><td>Field to sort by. An unknown field is rejected.</td></tr>
 <tr><td><code>order</code></td><td>query</td><td>string — one of asc, desc</td><td>no</td><td></td></tr>
-<tr><td><code>contact_id</code></td><td>query</td><td><span class="muted">unspecified</span></td><td>no</td><td>The contact the decision is about. Pass this or `email`, not both.</td></tr>
-<tr><td><code>email</code></td><td>query</td><td><span class="muted">unspecified</span></td><td>no</td><td>The email address the decision is about, for a person not in the CRM.</td></tr>
+<tr><td><code>contact_id</code></td><td>query</td><td>string (uuid)</td><td>no</td><td>The contact the decision is about. Pass this or `email`, not both.</td></tr>
+<tr><td><code>email</code></td><td>query</td><td>string (email)</td><td>no</td><td>The email address the decision is about, for a person not in the CRM.</td></tr>
 <tr><td><code>purpose</code></td><td>query</td><td>string — one of marketing, transactional, product_updates, research</td><td>yes</td><td>The purpose to show the history of.</td></tr>
 <tr><td><code>channel</code></td><td>query</td><td>string — one of email, telegram, webhook</td><td>yes</td><td>The channel to show the history of.</td></tr>
 </tbody></table>
@@ -4388,10 +4388,9 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>limit</code></td><td>query</td><td>integer — 1..200</td><td>no</td><td>Page size. Values above the server maximum are clamped, not rejected.</td></tr>
 <tr><td><code>offset</code></td><td>query</td><td>integer — ≥ 0</td><td>no</td><td></td></tr>
-<tr><td><code>q</code></td><td>query</td><td>string</td><td>no</td><td>Free-text filter.</td></tr>
+<tr><td><code>q</code></td><td>query</td><td>string</td><td>yes</td><td>The term to search for. Required; a request without it is rejected.</td></tr>
 <tr><td><code>sort</code></td><td>query</td><td>string</td><td>no</td><td>Field to sort by. An unknown field is rejected.</td></tr>
 <tr><td><code>order</code></td><td>query</td><td>string — one of asc, desc</td><td>no</td><td></td></tr>
-<tr><td><code>q</code></td><td>query</td><td>string</td><td>yes</td><td>The term to search for. Required; a request without it is rejected.</td></tr>
 </tbody></table>
 <h4>Responses</h4>
 <div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success. This operation&#39;s response body is not yet described by a schema; the shape is whatever the handler returns.</div><table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
@@ -9193,8 +9192,8 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <tr><td><code>total</code> <span class="req">required</span></td><td>integer</td><td></td></tr>
 </tbody></table>
 </article>
-<article class="op schema" id="schema-listresponsemap-string-interface" data-op>
-<h3><code>ListResponseMap[string]interface {}</code></h3>
+<article class="op schema" id="schema-listresponsemapstringinterface" data-op>
+<h3><code>ListResponseMapStringInterface</code></h3>
 <table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>items</code> <span class="req">required</span></td><td>array of object</td><td></td></tr>
 <tr><td><code>limit</code> <span class="req">required</span></td><td>integer</td><td></td></tr>

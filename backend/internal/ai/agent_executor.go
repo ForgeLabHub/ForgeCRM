@@ -154,7 +154,11 @@ func (e *AgentExecutor) principalFor(ctx context.Context, userID, orgID uuid.UUI
 	if err != nil {
 		return nil, err
 	}
-	return rbac.NewPrincipal(id, email, name, orgID, perms), nil
+	p := rbac.NewPrincipal(id, email, name, orgID, perms)
+	if teams, err := e.rbac.TeamIDsForUser(ctx, id, orgID); err == nil {
+		p.TeamIDs = teams
+	}
+	return p, nil
 }
 
 // ProposeForAgent builds a proposal for a tool call, deriving the tier and

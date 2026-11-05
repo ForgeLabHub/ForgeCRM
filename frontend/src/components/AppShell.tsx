@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, Suspense } from 'react'
+import { useEffect, useMemo, useRef, useState, Suspense } from 'react'
 import type { JSX } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
@@ -6,136 +6,24 @@ import { GlobalSearch } from './GlobalSearch'
 import { useGlobalSearchShortcut } from '../hooks/useGlobalSearch'
 import { useI18n, type TranslationKey } from '../i18n'
 import { useTheme, THEME_MODES, type ThemeMode } from '../theme'
+import { useWorkspace } from '../workspace/WorkspaceProvider'
+import { NAV_GROUPS, navEntryFor, type NavEntry } from '../navigation'
+import { WORKSPACE_DEFINITIONS, workspaceDefinition } from '../workspaces'
 import { Avatar, Skeleton } from './ui'
 import {
-  IconActivity,
-  IconBadgeCheck,
-  IconBell,
-  IconBuilding,
-  IconChart,
-  IconCheckSquare,
   IconChevronDown,
-  IconClipboardCheck,
-  IconClock,
   IconClose,
-  IconDatabase,
-  IconFlask,
-  IconGlobe,
-  IconGrid,
-  IconInbox,
-  IconKanban,
-  IconKeyRound,
   IconLayers,
-  IconLifeBuoy,
-  IconLock,
   IconLogOut,
-  IconMail,
   IconMenu,
   IconMonitor,
   IconMoon,
-  IconPlug,
-  IconScroll,
   IconSearch,
-  IconSend,
-  IconShield,
-  IconShieldAlert,
   IconSliders,
-  IconSparkles,
-  IconStethoscope,
   IconSun,
-  IconTarget,
-  IconTerminal,
-  IconTrendingUp,
   IconUser,
-  IconUserCog,
-  IconUsers,
-  IconUsersRound,
-  IconWebhook,
-  IconWorkflow,
   type IconProps,
 } from './icons'
-
-interface NavEntry {
-  to: string
-  /** Translation key for the label, resolved at render so a language change
-   *  relabels the whole sidebar without a reload. */
-  labelKey: TranslationKey
-  permission?: string
-  icon: (props: IconProps) => JSX.Element
-}
-
-interface NavGroup {
-  labelKey: TranslationKey
-  items: NavEntry[]
-}
-
-/**
- * Navigation is grouped by intent rather than by API prefix, so the sidebar
- * reads as a product rather than as a route table. Each entry declares the
- * permission it needs and is hidden without it, but the server enforces the
- * same permission independently: hiding a link is convenience, not security.
- *
- * Labels are translation keys, not literals, so switching language relabels the
- * navigation as one unit instead of leaving half the sidebar in the old tongue.
- * Every entry carries an icon so the eye can find a section by shape before it
- * reads the label.
- */
-const NAV_GROUPS: NavGroup[] = [
-  {
-    labelKey: 'nav.workspace',
-    items: [
-      { to: '/', labelKey: 'nav.overview', icon: IconGrid },
-      { to: '/accounts', labelKey: 'nav.accounts', permission: 'accounts.read', icon: IconBuilding },
-      { to: '/contacts', labelKey: 'nav.contacts', permission: 'contacts.read', icon: IconUsers },
-      { to: '/leads', labelKey: 'nav.leads', permission: 'leads.read', icon: IconTarget },
-      { to: '/deals', labelKey: 'nav.deals', permission: 'deals.read', icon: IconKanban },
-      { to: '/tasks', labelKey: 'nav.tasks', permission: 'tasks.read', icon: IconCheckSquare },
-      { to: '/tickets', labelKey: 'nav.support', permission: 'tickets.read', icon: IconLifeBuoy },
-      { to: '/reports', labelKey: 'nav.reports', permission: 'reports.read', icon: IconChart },
-      { to: '/simulation', labelKey: 'nav.simulation', permission: 'simulation.read', icon: IconFlask },
-      { to: '/forecast', labelKey: 'nav.forecasting', permission: 'forecast.read', icon: IconTrendingUp },
-      { to: '/risk', labelKey: 'nav.risk', permission: 'risk.read', icon: IconShieldAlert },
-    ],
-  },
-  {
-    labelKey: 'nav.data',
-    items: [
-      { to: '/imports', labelKey: 'nav.importCenter', permission: 'imports.read', icon: IconInbox },
-      { to: '/migrations', labelKey: 'nav.migrations', permission: 'migrations.read', icon: IconDatabase },
-      { to: '/integrations', labelKey: 'nav.integrations', permission: 'integrations.read', icon: IconPlug },
-    ],
-  },
-  {
-    labelKey: 'nav.platform',
-    items: [
-      { to: '/webhooks', labelKey: 'nav.webhooks', permission: 'webhooks.manage', icon: IconWebhook },
-      { to: '/events', labelKey: 'nav.events', permission: 'events.read', icon: IconActivity },
-      { to: '/workflows', labelKey: 'nav.workflows', permission: 'workflows.read', icon: IconWorkflow },
-      { to: '/jobs', labelKey: 'nav.jobs', permission: 'jobs.read', icon: IconClock },
-      { to: '/approvals', labelKey: 'nav.approvals', permission: 'approvals.read', icon: IconBadgeCheck },
-      { to: '/notifications', labelKey: 'nav.notifications', permission: 'notifications.read', icon: IconBell },
-      { to: '/ai', labelKey: 'nav.ai', permission: 'ai.read', icon: IconSparkles },
-    ],
-  },
-  {
-    labelKey: 'nav.administration',
-    items: [
-      { to: '/admin/users', labelKey: 'nav.users', permission: 'users.read', icon: IconUserCog },
-      { to: '/admin/roles', labelKey: 'nav.roles', permission: 'roles.read', icon: IconKeyRound },
-      { to: '/admin/organizations', labelKey: 'nav.organizations', permission: 'organizations.read', icon: IconGlobe },
-      { to: '/admin/teams', labelKey: 'nav.teams', permission: 'teams.manage', icon: IconUsersRound },
-      { to: '/admin/email', labelKey: 'nav.email', permission: 'email.manage', icon: IconMail },
-      { to: '/admin/telegram', labelKey: 'nav.telegram', permission: 'email.manage', icon: IconSend },
-      { to: '/admin/consent', labelKey: 'nav.consent', permission: 'consent.read', icon: IconScroll },
-      { to: '/admin/sso', labelKey: 'nav.sso', permission: 'sso.read', icon: IconLock },
-      { to: '/admin/mcp-credentials', labelKey: 'nav.mcpCredentials', permission: 'mcp.credentials.read', icon: IconTerminal },
-      { to: '/admin/configuration', labelKey: 'nav.configuration', permission: 'tenant.settings.read', icon: IconSliders },
-      { to: '/admin/audit', labelKey: 'nav.audit', permission: 'audit.read', icon: IconClipboardCheck },
-      { to: '/admin/security', labelKey: 'nav.security', permission: 'security.read', icon: IconShield },
-      { to: '/admin/diagnostics', labelKey: 'nav.diagnostics', permission: 'logs.read', icon: IconStethoscope },
-    ],
-  },
-]
 
 const THEME_ICON: Record<ThemeMode, (props: IconProps) => JSX.Element> = {
   light: IconSun,
@@ -244,6 +132,11 @@ function AccountMenu() {
             {t('nav.account')}
           </Link>
 
+          <Link to="/appearance" className="menu__item" onClick={() => setOpen(false)}>
+            <IconSliders size={16} />
+            {t('nav.appearance')}
+          </Link>
+
           <button
             type="button"
             className="menu__item menu__item--danger"
@@ -276,9 +169,98 @@ function RouteFallback() {
   )
 }
 
+/**
+ * The workspace switcher in the top bar.
+ *
+ * It names the current workspace and lists the others with a one-line
+ * description, so the choice is made by what each view is for rather than by
+ * guessing from a name. It grants nothing: the shell filters every route through
+ * the same permission check regardless of which workspace is active.
+ */
+function WorkspaceSwitcher() {
+  const { t } = useI18n()
+  const { workspace, setWorkspace } = useWorkspace()
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onPointerDown = (event: MouseEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false)
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open])
+
+  const current = workspaceDefinition(workspace)
+
+  return (
+    <div className="menu" ref={ref}>
+      <button
+        type="button"
+        className="workspace-switcher"
+        aria-haspopup="true"
+        aria-expanded={open}
+        aria-label={t('workspace.switchLabel')}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span className="workspace-switcher__glyph" aria-hidden="true">{current.glyph}</span>
+        <span className="workspace-switcher__text">
+          <span className="workspace-switcher__sub">{t('workspace.label')}</span>
+          <span className="workspace-switcher__name truncate">{t(current.labelKey)}</span>
+        </span>
+        <IconChevronDown size={15} />
+      </button>
+
+      {open ? (
+        <div className="menu__popover workspace-menu" role="group" aria-label={t('workspace.switchLabel')}>
+          <p className="workspace-menu__hint">{t('workspace.hint')}</p>
+          {WORKSPACE_DEFINITIONS.map((definition) => (
+            <button
+              key={definition.id}
+              type="button"
+              className={
+                definition.id === workspace
+                  ? 'workspace-option workspace-option--active'
+                  : 'workspace-option'
+              }
+              aria-pressed={definition.id === workspace}
+              onClick={() => {
+                setWorkspace(definition.id)
+                setOpen(false)
+              }}
+            >
+              <span className="workspace-option__glyph" aria-hidden="true">{definition.glyph}</span>
+              <span className="workspace-option__text">
+                <span className="workspace-option__name">{t(definition.labelKey)}</span>
+                <span className="workspace-option__desc">{t(definition.descriptionKey)}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+interface RenderGroup {
+  key: string
+  labelKey: TranslationKey
+  items: NavEntry[]
+  reorder: boolean
+}
+
 export function AppShell() {
   const { session, can } = useAuth()
   const { t } = useI18n()
+  const { workspace } = useWorkspace()
   const [menuOpen, setMenuOpen] = useState(false)
   const [drawerLayout, setDrawerLayout] = useState(
     () => typeof window !== 'undefined' && window.matchMedia?.('(max-width: 860px)').matches === true,
@@ -341,10 +323,46 @@ export function AppShell() {
     }
   }, [drawerLayout, menuOpen])
 
-  const groups = NAV_GROUPS.map((group) => ({
-    ...group,
-    items: group.items.filter((item) => !item.permission || can(item.permission)),
-  })).filter((group) => group.items.length > 0)
+  const definition = workspaceDefinition(workspace)
+  // The order is local state so the up/down controls can rearrange it for this
+  // session; it is seeded from the workspace definition and re-seeded when the
+  // workspace changes, so switching away and back restores the intended order.
+  const [order, setOrder] = useState<string[]>(definition.routes)
+  useEffect(() => {
+    setOrder(workspaceDefinition(workspace).routes)
+  }, [workspace])
+
+  const moveRoute = (route: string, delta: -1 | 1) =>
+    setOrder((previous) => {
+      const from = previous.indexOf(route)
+      const to = from + delta
+      if (from < 0 || to < 0 || to >= previous.length) return previous
+      const next = [...previous]
+      ;[next[from], next[to]] = [next[to], next[from]]
+      return next
+    })
+
+  const groups = useMemo<RenderGroup[]>(() => {
+    const allowed = (item: NavEntry) => !item.permission || can(item.permission)
+    if (workspace === 'all') {
+      // The ungrouped product view: the full, grouped navigation, unchanged.
+      return NAV_GROUPS.map((group) => ({
+        key: group.labelKey,
+        labelKey: group.labelKey,
+        items: group.items.filter(allowed),
+        reorder: false,
+      })).filter((group) => group.items.length > 0)
+    }
+    // A workspace is one flat list in the order the role cares about. Routes the
+    // user cannot read are dropped, so a workspace never shows a dead link.
+    const items = order
+      .map((route) => navEntryFor(route))
+      .filter((entry): entry is NavEntry => entry !== undefined)
+      .filter(allowed)
+    return items.length > 0
+      ? [{ key: definition.labelKey, labelKey: definition.labelKey, items, reorder: true }]
+      : []
+  }, [workspace, order, can, definition.labelKey])
 
   return (
     <div className="app-shell">
@@ -371,21 +389,44 @@ export function AppShell() {
         </button>
         <nav className="sidebar__nav" aria-label={t('nav.mainNavigation')}>
           {groups.map((group) => (
-            <div key={group.labelKey}>
+            <div key={group.key}>
               <div className="sidebar__group-label">{t(group.labelKey)}</div>
-              {group.items.map((item) => {
+              {group.items.map((item, index) => {
                 const Icon = item.icon
                 return (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    end={item.to === '/'}
-                    className={({ isActive }) => (isActive ? 'nav-item nav-item--active' : 'nav-item')}
-                    onClick={() => setMenuOpen(false)}
-                  >
-                    <Icon size={17} />
-                    <span className="truncate">{t(item.labelKey)}</span>
-                  </NavLink>
+                  <div key={item.to} className="nav-row">
+                    <NavLink
+                      to={item.to}
+                      end={item.to === '/'}
+                      className={({ isActive }) => (isActive ? 'nav-item nav-item--active' : 'nav-item')}
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      <Icon size={17} />
+                      <span className="truncate">{t(item.labelKey)}</span>
+                    </NavLink>
+                    {group.reorder ? (
+                      <span className="nav-row__controls">
+                        <button
+                          type="button"
+                          className="nav-row__move"
+                          aria-label={t('workspace.moveUp', { name: t(item.labelKey) })}
+                          disabled={index === 0}
+                          onClick={() => moveRoute(item.to, -1)}
+                        >
+                          ▲
+                        </button>
+                        <button
+                          type="button"
+                          className="nav-row__move"
+                          aria-label={t('workspace.moveDown', { name: t(item.labelKey) })}
+                          disabled={index === group.items.length - 1}
+                          onClick={() => moveRoute(item.to, 1)}
+                        >
+                          ▼
+                        </button>
+                      </span>
+                    ) : null}
+                  </div>
                 )
               })}
             </div>
@@ -443,6 +484,7 @@ export function AppShell() {
           </div>
 
           <div className="topbar__user">
+            <WorkspaceSwitcher />
             <AccountMenu />
           </div>
         </header>

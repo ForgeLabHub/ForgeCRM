@@ -24,6 +24,7 @@ extract_pkg "$WORK" ratelimit "ratelimit" "example.com/notify-extracted/ratelimi
 extract_pkg "$WORK" rbac "rbac" "example.com/notify-extracted/rbac"
 extract_pkg "$WORK" retention "retention" "example.com/notify-extracted/retention"
 extract_pkg "$WORK" secrets "secrets" "example.com/notify-extracted/secrets"
+extract_pkg "$WORK" telegramtext "telegramtext" "example.com/notify-extracted/telegramtext"
 install_module_files "$WORK" "$HERE"
 rewrite_import "$WORK" "github.com/geff1778/forgecrm/internal/notify" "example.com/notify-extracted"
 rewrite_import "$WORK" "github.com/geff1778/forgecrm/internal/audit" "example.com/notify-extracted/audit"
@@ -35,6 +36,7 @@ rewrite_import "$WORK" "github.com/geff1778/forgecrm/internal/ratelimit" "exampl
 rewrite_import "$WORK" "github.com/geff1778/forgecrm/internal/rbac" "example.com/notify-extracted/rbac"
 rewrite_import "$WORK" "github.com/geff1778/forgecrm/internal/retention" "example.com/notify-extracted/retention"
 rewrite_import "$WORK" "github.com/geff1778/forgecrm/internal/secrets" "example.com/notify-extracted/secrets"
+rewrite_import "$WORK" "github.com/geff1778/forgecrm/internal/telegramtext" "example.com/notify-extracted/telegramtext"
 
 step "verify: notify stands alone"
 assert_no_monolith_import "$WORK"

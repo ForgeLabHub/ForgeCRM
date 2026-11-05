@@ -142,11 +142,11 @@ func (s *Service) ListTasks(ctx context.Context, p *rbac.Principal, q ListQuery)
 		args = append(args, "%"+q.Search+"%")
 		where = append(where, fmt.Sprintf("title ILIKE $%d", len(args)))
 	}
-	// Record-level rule: without the assign permission, a user only sees tasks
+	// Record-level rule: without the assign permission, a caller only sees tasks
 	// assigned to them or to one of their teams.
-	if !p.Has(rbac.PermTasksAssign) {
-		args = append(args, p.UserID, p.TeamIDs)
-		where = append(where, fmt.Sprintf("(assignee_user_id = $%d OR team_id = ANY($%d))", len(args)-1, len(args)))
+	if frag, withArgs := objectOwnerPredicate(p, rbac.PermTasksAssign, "assignee_user_id", false, args); frag != "" {
+		where = append(where, frag)
+		args = withArgs
 	}
 	whereSQL := strings.Join(where, " AND ")
 	var total int64
@@ -173,10 +173,16 @@ func (s *Service) ListTasks(ctx context.Context, p *rbac.Principal, q ListQuery)
 	return out, total, rows.Err()
 }
 
-// GetTask loads one task in scope.
+// GetTask loads one task in the caller's object scope: it returns only a task the
+// caller could also see in a list.
 func (s *Service) GetTask(ctx context.Context, p *rbac.Principal, id uuid.UUID) (*Task, error) {
-	const q = `SELECT ` + taskColumns + ` FROM tasks WHERE id = $1 AND organization_id = $2`
-	t, err := scanTask(s.db.Q(ctx).QueryRow(ctx, q, id, p.OrganizationID))
+	where := "id = $1 AND organization_id = $2"
+	args := []any{id, p.OrganizationID}
+	if frag, withArgs := objectOwnerPredicate(p, rbac.PermTasksAssign, "assignee_user_id", false, args); frag != "" {
+		where += " AND " + frag
+		args = withArgs
+	}
+	t, err := scanTask(s.db.Q(ctx).QueryRow(ctx, `SELECT `+taskColumns+` FROM tasks WHERE `+where, args...))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -606,9 +612,11 @@ func (s *Service) ListTickets(ctx context.Context, p *rbac.Principal, q ListQuer
 		args = append(args, "%"+q.Search+"%")
 		where = append(where, fmt.Sprintf("subject ILIKE $%d", len(args)))
 	}
-	if !p.Has(rbac.PermTicketsAssign) {
-		args = append(args, p.UserID, p.TeamIDs)
-		where = append(where, fmt.Sprintf("(assignee_user_id = $%d OR team_id = ANY($%d))", len(args)-1, len(args)))
+	// Record-level rule: without the assign permission, a caller only sees tickets
+	// assigned to them or to one of their teams.
+	if frag, withArgs := objectOwnerPredicate(p, rbac.PermTicketsAssign, "assignee_user_id", false, args); frag != "" {
+		where = append(where, frag)
+		args = withArgs
 	}
 	whereSQL := strings.Join(where, " AND ")
 	var total int64
@@ -635,10 +643,16 @@ func (s *Service) ListTickets(ctx context.Context, p *rbac.Principal, q ListQuer
 	return out, total, rows.Err()
 }
 
-// GetTicket loads one ticket in scope.
+// GetTicket loads one ticket in the caller's object scope: it returns only a
+// ticket the caller could also see in a list.
 func (s *Service) GetTicket(ctx context.Context, p *rbac.Principal, id uuid.UUID) (*Ticket, error) {
-	const q = `SELECT ` + ticketColumns + ` FROM tickets WHERE id = $1 AND organization_id = $2`
-	t, err := scanTicket(s.db.Q(ctx).QueryRow(ctx, q, id, p.OrganizationID))
+	where := "id = $1 AND organization_id = $2"
+	args := []any{id, p.OrganizationID}
+	if frag, withArgs := objectOwnerPredicate(p, rbac.PermTicketsAssign, "assignee_user_id", false, args); frag != "" {
+		where += " AND " + frag
+		args = withArgs
+	}
+	t, err := scanTicket(s.db.Q(ctx).QueryRow(ctx, `SELECT `+ticketColumns+` FROM tickets WHERE `+where, args...))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -726,7 +740,17 @@ func (s *Service) UpdateTicket(ctx context.Context, p *rbac.Principal, id uuid.U
 	}
 	var updated *Ticket
 	err := s.db.WithTx(ctx, func(ctx context.Context, _ database.Tx) error {
-		const q = `
+		// The object-level rule applies to writes too: a caller who cannot read a
+		// ticket must not be able to edit it through a guessed id.
+		where := "id=$1 AND organization_id=$2"
+		args := []any{id, p.OrganizationID, in.Subject,
+			in.Description, in.Status, in.Priority, in.Channel, in.AccountID, in.ContactID,
+			in.AssigneeUserID, in.TeamID}
+		if frag, withArgs := objectOwnerPredicate(p, rbac.PermTicketsAssign, "assignee_user_id", false, args); frag != "" {
+			where += " AND " + frag
+			args = withArgs
+		}
+		q := `
 			UPDATE tickets SET subject=$3, description=$4, status=$5, priority=$6, channel=$7,
 				account_id=$8, contact_id=$9, assignee_user_id=$10, team_id=$11,
 				first_responded_at = CASE WHEN first_responded_at IS NULL AND $5 IN ('open','pending','resolved','closed') THEN now() ELSE first_responded_at END,
@@ -735,11 +759,9 @@ func (s *Service) UpdateTicket(ctx context.Context, p *rbac.Principal, id uuid.U
 					WHEN resolution_due_at IS NOT NULL AND $5 IN ('resolved','closed') AND now() > resolution_due_at THEN true
 					WHEN resolution_due_at IS NOT NULL AND $5 NOT IN ('resolved','closed') AND now() > resolution_due_at THEN true
 					ELSE sla_breached END
-			WHERE id=$1 AND organization_id=$2
+			WHERE ` + where + `
 			RETURNING ` + ticketColumns
-		t, err := scanTicket(s.db.Q(ctx).QueryRow(ctx, q, id, p.OrganizationID, in.Subject,
-			in.Description, in.Status, in.Priority, in.Channel, in.AccountID, in.ContactID,
-			in.AssigneeUserID, in.TeamID))
+		t, err := scanTicket(s.db.Q(ctx).QueryRow(ctx, q, args...))
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		}

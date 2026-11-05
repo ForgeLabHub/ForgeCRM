@@ -15,6 +15,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from '../hooks/useAuth'
 import { I18nProvider } from '../i18n'
 import { ThemeProvider } from '../theme'
+import { WorkspaceProvider } from '../workspace/WorkspaceProvider'
 import { AppShell } from './AppShell'
 import type { MeResponse } from '../types/api'
 
@@ -58,11 +59,13 @@ function renderShell() {
         <ThemeProvider>
           <MemoryRouter initialEntries={['/']}>
             <AuthProvider>
-              <Routes>
-                <Route path="/" element={<AppShell />}>
-                  <Route index element={<div>Overview</div>} />
-                </Route>
-              </Routes>
+              <WorkspaceProvider>
+                <Routes>
+                  <Route path="/" element={<AppShell />}>
+                    <Route index element={<div>Overview</div>} />
+                  </Route>
+                </Routes>
+              </WorkspaceProvider>
             </AuthProvider>
           </MemoryRouter>
         </ThemeProvider>

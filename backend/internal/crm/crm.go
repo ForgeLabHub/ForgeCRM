@@ -252,9 +252,9 @@ func (s *Service) ListAccounts(ctx context.Context, p *rbac.Principal, q ListQue
 	}
 	// Record-level rule: a caller who cannot read all accounts only sees the ones
 	// they own or that belong to their teams.
-	if !p.Has(rbac.PermAccountsArchive) && len(p.TeamIDs) > 0 {
-		args = append(args, p.UserID, p.TeamIDs)
-		where = append(where, fmt.Sprintf("(owner_user_id = $%d OR team_id = ANY($%d))", len(args)-1, len(args)))
+	if frag, withArgs := objectOwnerPredicate(p, rbac.PermAccountsArchive, "owner_user_id", true, args); frag != "" {
+		where = append(where, frag)
+		args = withArgs
 	}
 
 	whereSQL := strings.Join(where, " AND ")
@@ -285,10 +285,16 @@ func (s *Service) ListAccounts(ctx context.Context, p *rbac.Principal, q ListQue
 	return out, total, rows.Err()
 }
 
-// GetAccount loads one account, scoped to the caller's organization.
+// GetAccount loads one account in the caller's object scope: it returns only an
+// account the caller could also see in a list.
 func (s *Service) GetAccount(ctx context.Context, p *rbac.Principal, id uuid.UUID) (*Account, error) {
-	const q = `SELECT ` + accountColumns + ` FROM accounts WHERE id = $1 AND organization_id = $2`
-	a, err := scanAccount(s.db.Q(ctx).QueryRow(ctx, q, id, p.OrganizationID))
+	where := "id = $1 AND organization_id = $2"
+	args := []any{id, p.OrganizationID}
+	if frag, withArgs := objectOwnerPredicate(p, rbac.PermAccountsArchive, "owner_user_id", true, args); frag != "" {
+		where += " AND " + frag
+		args = withArgs
+	}
+	a, err := scanAccount(s.db.Q(ctx).QueryRow(ctx, `SELECT `+accountColumns+` FROM accounts WHERE `+where, args...))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -448,6 +454,34 @@ type ListQuery struct {
 
 // ErrNotFound is returned when a record does not exist in the caller's scope.
 var ErrNotFound = errors.New("not found")
+
+// objectOwnerPredicate is the single object-level authorization rule for the
+// records that carry an owner and a team: accounts, contacts, leads, deals,
+// tasks and tickets.
+//
+// A caller who cannot reach every record of a type — expressed by holding the
+// archive permission for that type, or the assign permission for tasks and
+// tickets — only sees the records they own or that belong to one of their teams.
+// ownerColumn names the column holding the owning user: owner_user_id for
+// accounts, contacts, leads and deals, and assignee_user_id for tasks and
+// tickets. teamlessReadsAll preserves the behaviour each entity's list query
+// already had: for shared CRM records an unowned caller is treated as an
+// organization-wide reader, while for personal work items a caller without a
+// team sees only their own. It returns the SQL fragment and the arguments it
+// binds, or an empty fragment when the caller may read the whole organization.
+//
+// The rule is applied identically by the list queries and by the single-record
+// reads, so a record a caller cannot see in a list cannot be fetched by id
+// either. The two paths used to disagree, which is exactly the object-level
+// authorization gap this closes. It is also applied to the mutation paths, so a
+// record the caller cannot read cannot be written through a guessed id.
+func objectOwnerPredicate(p *rbac.Principal, reachPerm rbac.Permission, ownerColumn string, teamlessReadsAll bool, args []any) (string, []any) {
+	if p.Has(reachPerm) || (teamlessReadsAll && len(p.TeamIDs) == 0) {
+		return "", args
+	}
+	args = append(args, p.UserID, p.TeamIDs)
+	return fmt.Sprintf("(%s = $%d OR team_id = ANY($%d))", ownerColumn, len(args)-1, len(args)), args
+}
 
 // ErrConflict is returned on a uniqueness violation.
 var ErrConflict = errors.New("conflict")

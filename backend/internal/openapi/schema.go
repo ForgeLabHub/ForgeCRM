@@ -227,11 +227,37 @@ func genericArgName(p string) string {
 	}
 	var out strings.Builder
 	for _, part := range parts[start:] {
-		if part == "" {
+		out.WriteString(exportSegment(part))
+	}
+	return out.String()
+}
+
+// exportSegment turns one segment of a printed type parameter into a component-name
+// fragment: illegal characters are dropped and each word is capitalised.
+//
+// A parameter prints with whatever punctuation its type uses. "map[string]interface {}"
+// carries brackets, a space, and braces, none of which OpenAPI permits in a component
+// key, so an instantiation over it would otherwise emit a `$ref` no validator accepts.
+// A run of illegal characters is treated as a word break, which keeps the derived name
+// legal and readable: "MapStringInterface" rather than "Mapstringinterface".
+func exportSegment(part string) string {
+	legal := func(r rune) bool {
+		return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' ||
+			r >= '0' && r <= '9' || r == '_' || r == '-'
+	}
+	var out strings.Builder
+	upperNext := true
+	for _, r := range part {
+		if !legal(r) {
+			upperNext = true
 			continue
 		}
-		out.WriteString(strings.ToUpper(part[:1]))
-		out.WriteString(part[1:])
+		if upperNext {
+			out.WriteString(strings.ToUpper(string(r)))
+			upperNext = false
+			continue
+		}
+		out.WriteRune(r)
 	}
 	return out.String()
 }

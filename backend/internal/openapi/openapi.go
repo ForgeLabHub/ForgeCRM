@@ -460,7 +460,7 @@ func operationFor(rt Route, group string, perms map[string]string, c Contract, r
 		op.Parameters = append(op.Parameters, idempotencyParam())
 	}
 	for _, q := range c.QueryParams[rt.Key()] {
-		op.Parameters = append(op.Parameters, parameter{
+		op.Parameters = setQueryParam(op.Parameters, parameter{
 			Name: q.Name, In: "query", Required: q.Required,
 			Schema: q.Schema, Description: q.Description,
 		})
@@ -482,6 +482,22 @@ func operationFor(rt Route, group string, perms map[string]string, c Contract, r
 		op.Security = &none
 	}
 	return op, nil
+}
+
+// setQueryParam adds p, replacing an existing query parameter with the same name.
+//
+// A route declaration refines the shared collection contract rather than adding to it:
+// `/search` requires `q`, while the shared contract leaves it optional. Appending both
+// would emit the name twice, which is not a valid parameter list and would leave a
+// generated client unable to tell which declaration wins.
+func setQueryParam(params []parameter, p parameter) []parameter {
+	for i, existing := range params {
+		if existing.In == "query" && existing.Name == p.Name {
+			params[i] = p
+			return params
+		}
+	}
+	return append(params, p)
 }
 
 // addSortEnum narrows the shared `sort` parameter to the columns the resource allows.

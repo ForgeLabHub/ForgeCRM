@@ -525,8 +525,8 @@ func APIContract() openapi.Contract {
 		"GET /api/v1/consent/history", "GET /api/v1/consent/decide",
 	} {
 		c.QueryParams[op] = []openapi.QueryParam{
-			{Name: "contact_id", Description: "The contact the decision is about. Pass this or `email`, not both."},
-			{Name: "email", Description: "The email address the decision is about, for a person not in the CRM."},
+			{Name: "contact_id", Schema: map[string]any{"type": "string", "format": "uuid"}, Description: "The contact the decision is about. Pass this or `email`, not both."},
+			{Name: "email", Schema: map[string]any{"type": "string", "format": "email"}, Description: "The email address the decision is about, for a person not in the CRM."},
 		}
 	}
 	c.QueryParams["GET /api/v1/consent/history"] = append(c.QueryParams["GET /api/v1/consent/history"],

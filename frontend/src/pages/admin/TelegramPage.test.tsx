@@ -35,6 +35,15 @@ describe('TelegramPage', () => {
     expect(screen.queryByRole('button', { name: 'Generate link code' })).not.toBeInTheDocument()
   })
 
+  it('documents every bot command in the interface', async () => {
+    vi.mocked(telegramApi.status).mockResolvedValue({ enabled: true, linking_available: true })
+    renderPage()
+    expect(await screen.findByText('What the bot can do')).toBeInTheDocument()
+    for (const command of ['/start', '/help', '/language', '/tasks', '/overdue', '/profile', '/notifications']) {
+      expect(screen.getByText(command)).toBeInTheDocument()
+    }
+  })
+
   it('uses the API duration for the link code expiry when linking is available', async () => {
     vi.mocked(telegramApi.status).mockResolvedValue({ enabled: true, linking_available: true })
     vi.mocked(telegramApi.linkCode).mockResolvedValue({ code: '12345678', expires_in_seconds: 900 })
