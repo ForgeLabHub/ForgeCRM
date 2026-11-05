@@ -14,7 +14,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"os"
 	"testing"
 
 	"github.com/google/uuid"
@@ -23,30 +22,20 @@ import (
 	"github.com/geff1778/forgecrm/internal/database"
 	"github.com/geff1778/forgecrm/internal/migrate"
 	"github.com/geff1778/forgecrm/internal/rbac"
+	"github.com/geff1778/forgecrm/internal/testdb"
 )
 
 // connectOrSkip returns a pool for the test database, or skips the test when no
 // URL is configured so the default `go test ./...` stays green.
 func connectOrSkip(t *testing.T) *database.DB {
 	t.Helper()
-
-	url := os.Getenv("FORGECRM_TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("FORGECRM_TEST_DATABASE_URL is not set; skipping integration test")
-	}
-
-	db, err := database.Connect(context.Background(), url)
-	if err != nil {
-		t.Fatalf("connect to the test database: %v", err)
-	}
-	t.Cleanup(db.Close)
-
-	return db
+	return testdb.Connect(t)
 }
 
 // freshSchema drops and rebuilds the public schema, then applies every migration.
 // This gives each test a known starting point instead of depending on whatever a
-// previous run left behind.
+// previous run left behind. It resets this package's own database, which no other
+// test binary shares.
 func freshSchema(t *testing.T, db *database.DB) {
 	t.Helper()
 	ctx := context.Background()
@@ -55,7 +44,7 @@ func freshSchema(t *testing.T, db *database.DB) {
 		t.Fatalf("reset the schema: %v", err)
 	}
 
-	if _, err := migrate.Up(os.Getenv("FORGECRM_TEST_DATABASE_URL"), slog.Default()); err != nil {
+	if _, err := migrate.Up(testdb.URL(t), slog.Default()); err != nil {
 		t.Fatalf("apply migrations: %v", err)
 	}
 }
@@ -82,7 +71,7 @@ func TestMigrationsApplyAndAreIdempotent(t *testing.T) {
 		t.Fatalf("schema version = %d, want at least 5", version)
 	}
 
-	applied, err := migrate.Up(os.Getenv("FORGECRM_TEST_DATABASE_URL"), slog.Default())
+	applied, err := migrate.Up(testdb.URL(t), slog.Default())
 	if err != nil {
 		t.Fatalf("second migration run failed: %v", err)
 	}

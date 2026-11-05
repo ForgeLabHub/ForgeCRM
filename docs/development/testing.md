@@ -20,11 +20,15 @@
    что неверно — код или утверждение.
 2. **Unit-тесты не открывают БД.** Бизнес-логика, требующая PostgreSQL для проверки,
    проверяется интеграционным тестом, а не «мок-базой».
-3. **Интеграционные тесты помечены** `//go:build integration` (26 файлов) и запускаются
+3. **Интеграционные тесты помечены** `//go:build integration` (67 файлов) и запускаются
    только с `-tags=integration` и явным `FORGECRM_TEST_DATABASE_URL`. Случайный запуск
    против рабочей базы невозможен.
-4. **Каждый дефект безопасности получает регрессионный тест** — иначе он вернётся.
-5. **Утверждение в документации ищет себе тест.** См.
+4. **Каждый пакет заводит свою базу.** `internal/testdb` выводит из
+   `FORGECRM_TEST_DATABASE_URL` приватную базу `forgecrm_test_<пакет>_<pid>`, поэтому
+   пакеты не делят одну схему и идут параллельно. Раньше все они сбрасывали общую
+   `public`, и прогон требовал `-p 1`, иначе один пакет ронял таблицы другого.
+5. **Каждый дефект безопасности получает регрессионный тест** — иначе он вернётся.
+6. **Утверждение в документации ищет себе тест.** См.
    [verification/matrix.md](../verification/matrix.md).
 
 ## Запуск против реальной базы
@@ -36,6 +40,27 @@ make test-integration TEST_DATABASE_URL='postgres://forgecrm:forgecrm@127.0.0.1:
 ```
 
 Тестовая база должна быть отдельной: интеграционные тесты создают и удаляют данные.
+
+### Локальное окружение, совпадающее с CI
+
+Чтобы локальный прогон был неотличим от джобы `backend` в CI, есть
+`scripts/integration-env.sh`: он поднимает `postgres:17-alpine` и
+`redis:7-alpine` — те же образы, что в CI, но на отдельных портах (55432/56379),
+чтобы не трогать рабочий стек.
+
+```bash
+./scripts/integration-env.sh up
+export FORGECRM_TEST_DATABASE_URL='postgres://forgecrm:forgecrm@127.0.0.1:55432/forgecrm_test?sslmode=disable'
+export FORGECRM_TEST_REDIS_URL='redis://127.0.0.1:56379/1'
+make test-integration TEST_DATABASE_URL="$FORGECRM_TEST_DATABASE_URL"
+./scripts/integration-env.sh down
+```
+
+### Фикстуры
+
+`internal/testfixture` (test-only) собирает арендатора, пользователей с
+резолвнутыми правами и связный граф домена, чтобы тест не писал SQL для
+подготовки. Подробнее — [quality/TEST_ARCHITECTURE.md](../quality/TEST_ARCHITECTURE.md).
 
 ## E2E
 

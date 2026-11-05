@@ -28,6 +28,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/migrate"
 	"github.com/geff1778/forgecrm/internal/rbac"
 	"github.com/geff1778/forgecrm/internal/secrets"
+	"github.com/geff1778/forgecrm/internal/testdb"
 )
 
 const testPassword = "correct-horse-battery"
@@ -37,17 +38,10 @@ const testPassword = "correct-horse-battery"
 func newLockoutFixture(t *testing.T, threshold int, window time.Duration) (*Service, *database.DB, uuid.UUID, string) {
 	t.Helper()
 
-	url := os.Getenv("FORGECRM_TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("FORGECRM_TEST_DATABASE_URL is not set; skipping integration test")
-	}
+	url := testdb.URL(t)
 
 	ctx := context.Background()
-	db, err := database.Connect(ctx, url)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(db.Close)
+	db := testdb.Connect(t)
 
 	// One schema reset per fixture. Tests that need isolation call this; tests in
 	// the same package must not run in parallel, which the default is.
@@ -122,7 +116,7 @@ func TestConcurrentFailuresAcrossReplicasAreAllCounted(t *testing.T) {
 
 	_, db, id, email := newLockoutFixture(t, threshold, time.Minute)
 
-	url := os.Getenv("FORGECRM_TEST_DATABASE_URL")
+	url := testdb.URL(t)
 	keyring, err := secrets.NewKeyring("test-secret-key-that-is-long-enough-for-hkdf-derivation")
 	if err != nil {
 		t.Fatalf("keyring: %v", err)
@@ -189,7 +183,7 @@ func TestConcurrentFailuresAcrossReplicasAreAllCounted(t *testing.T) {
 func TestLockAppliesAcrossReplicas(t *testing.T) {
 	svcA, db, _, email := newLockoutFixture(t, 3, 15*time.Minute)
 
-	url := os.Getenv("FORGECRM_TEST_DATABASE_URL")
+	url := testdb.URL(t)
 	keyring, err := secrets.NewKeyring("test-secret-key-that-is-long-enough-for-hkdf-derivation")
 	if err != nil {
 		t.Fatalf("keyring: %v", err)

@@ -49,6 +49,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/jobs"
 	"github.com/geff1778/forgecrm/internal/outbox"
 	"github.com/geff1778/forgecrm/internal/rbac"
+	"github.com/geff1778/forgecrm/internal/testdb"
 )
 
 // benchScale is the row count seeded into each entity table.
@@ -112,10 +113,7 @@ type benchFixtures struct {
 func newBenchHarness(b *testing.B) *harness {
 	b.Helper()
 
-	url := os.Getenv("FORGECRM_TEST_DATABASE_URL")
-	if url == "" {
-		b.Skip("FORGECRM_TEST_DATABASE_URL is not set; skipping the performance benchmark")
-	}
+	url := testdb.URL(b)
 	if !disposableDatabase(url) {
 		b.Fatalf("refusing to seed %q: the benchmark resets the schema, so the database name "+
 			"must mark it disposable (bench, test, scratch or ci)", url)
