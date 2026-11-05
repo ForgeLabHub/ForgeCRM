@@ -26,13 +26,11 @@
 | E2E: spec-файлов / тестов | 4 / 67 |
 | Integration-файлы (`//go:build integration`) | 62 |
 
-> **Дельта рабочего дерева.** Phase 2 добавила test-only пакеты `internal/testdb`
-> и `internal/testfixture` (незакоммичены на момент записи). Они меняют счётчики:
-> пакеты **55 (50 в `internal`)**, Go-файлы без тестов **155**, тестовые файлы
-> **146**, тестовые функции **901** (facts-gen: 900 — исключает `TestMain`),
-> integration-файлы **63**. Эти пакеты не линкуются в бинарь и не меняют
-> production-поверхность; дельта показана, чтобы baseline и текущее состояние не
-> смешивались.
+> **Дельта к текущему `main`.** После baseline Phase 2 добавила test-only пакеты
+> `internal/testdb` и `internal/testfixture` (уже в `main`). Текущие счётчики на
+> `HEAD`: integration-файлы **70** (на baseline `cc65d3f` — 62). Эти пакеты не
+> линкуются в бинарь и не меняют production-поверхность; дельта показана, чтобы
+> baseline и текущее состояние не смешивались.
 
 ## 1. Архитектура в двух словах
 
@@ -244,7 +242,7 @@ baseline `cc65d3f`. Каждое число воспроизводимо ком�
 | Go-файлы без тестов | `git ls-files ... \| grep -v '_test.go$'` | 151 |
 | Go-тестовые файлы | `git ls-files ... \| grep '_test.go$'` | 143 |
 | Тестовые функции Go | `git grep -hoE '^func Test[A-Za-z0-9_]+' HEAD -- '*_test.go'` | 890 |
-| Integration-файлы | `git grep -l '^//go:build integration' HEAD -- '*.go'` | 62 |
+| Integration-файлы | `git grep -l '^//go:build integration' HEAD -- '*.go'` | 62 (baseline `cc65d3f`) / **70** (текущий `main`) |
 | Миграции up/down | `ls internal/migrations/*.up.sql` / `*.down.sql` | 33 / 33 |
 | Таблиц БД | уникальные `CREATE TABLE` во всех up-миграциях | 80 |
 | RBAC-права | `len(rbac.All())` (совпадает с каталогом и сидом) | 103 |
@@ -267,8 +265,10 @@ baseline `cc65d3f`. Каждое число воспроизводимо ком�
   facts-gen (оно учитывает обёртки и вычитает `test.describe`). Реестр использует
   канонические 261 из `project-facts.md`.
 - E2E-тестов 62 при подсчёте `test(` и 67 по facts-gen (учитывает параметризацию).
-- «26 файлов» в старом тексте `docs/development/testing.md` было ошибочным; реальное
-  число файлов с тегом — 62, документ исправлен.
+- «26 файлов» в старом тексте `docs/development/testing.md` было ошибочным; на
+  baseline Phase 1 (`cc65d3f`) число файлов с тегом — 62, документ исправлен.
+  К текущему `main` набор вырос до **70** (Phase 2 добавила `testdb`/`testfixture`,
+  Phase 1 — новые integration-тесты); см. §0.
 
 **Проверенные утверждения о высокорисковых компонентах.**
 
