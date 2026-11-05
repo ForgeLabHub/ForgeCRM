@@ -28,7 +28,7 @@
 
 > **Дельта к текущему `main`.** После baseline Phase 2 добавила test-only пакеты
 > `internal/testdb` и `internal/testfixture` (уже в `main`). Текущие счётчики на
-> `HEAD`: integration-файлы **70** (на baseline `cc65d3f` — 62). Эти пакеты не
+> `HEAD`: integration-файлы **71** (на baseline `cc65d3f` — 62). Эти пакеты не
 > линкуются в бинарь и не меняют production-поверхность; дельта показана, чтобы
 > baseline и текущее состояние не смешивались.
 
