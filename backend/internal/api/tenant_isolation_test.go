@@ -54,6 +54,10 @@ type harness struct {
 	db     *database.DB
 	server http.Handler
 	cfg    *config.Config
+	// ssoStateCookie is the browser-binding cookie the last SSO sign-in or link
+	// start set. A real browser carries it to the callback; the harness replays it
+	// so the callback sees the same binding it was issued with.
+	ssoStateCookie *http.Cookie
 	// svcs is the service graph the server was built from. The HTTP surface is what
 	// most tests exercise, but a benchmark also times the work behind a route — the
 	// queue, the outbox, the import executor — and reaches those through this.

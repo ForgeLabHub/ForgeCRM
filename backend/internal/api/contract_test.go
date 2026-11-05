@@ -471,3 +471,92 @@ func requestBodyDescription(t *testing.T, paths map[string]any, component string
 	}
 	return ""
 }
+
+// TestIdentityCollectionIsItemsOnly pins the shape of GET /api/v1/auth/identities.
+//
+// The handler emits a non-paginated {items} collection, matching the pipelines and
+// tags routes. The contract once declared a paginated ListResponse, whose four
+// required fields a client would expect to find; a generated SDK would then read
+// total/limit/offset off a body that never carries them. The collection is small and
+// bounded, so items-only is the honest shape, and this test fails if the declaration
+// drifts back to one that promises pagination the handler does not produce.
+func TestIdentityCollectionIsItemsOnly(t *testing.T) {
+	doc := buildDocument(t)
+	schemas := schemasOf(t, doc)
+
+	ref := successSchemaRef(t, doc, "GET", "/api/v1/auth/identities")
+	const prefix = "#/components/schemas/"
+	if !strings.HasPrefix(ref, prefix) {
+		t.Fatalf("the identities success response is not a component reference: %q", ref)
+	}
+	schema, ok := schemas[strings.TrimPrefix(ref, prefix)].(map[string]any)
+	if !ok {
+		t.Fatalf("the identities success response references %q, which is not defined", ref)
+	}
+	props, _ := schema["properties"].(map[string]any)
+	if len(props) != 1 {
+		keys := make([]string, 0, len(props))
+		for k := range props {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		t.Fatalf("the identities response has %v, want only items: the handler emits no total/limit/offset", keys)
+	}
+	if _, ok := props["items"].(map[string]any); !ok {
+		t.Fatalf("the identities response has no items property: %v", props)
+	}
+	required, _ := schema["required"].([]any)
+	if len(required) != 1 || required[0] != "items" {
+		t.Fatalf("the identities response requires %v, want only items", required)
+	}
+}
+
+// TestIdentityLinkIsNotACreatedResource pins the success status of the linking route.
+//
+// POST /api/v1/auth/identities/link returns the authorization URL for the browser to
+// visit; it creates no server-side resource, so it answers 200. The POST convention
+// infers 201 for a route with no path parameter, which would tell a generated client
+// that a resource had been created at a location that does not exist. The route must
+// therefore carry an explicit override, and this test fails if it is dropped.
+func TestIdentityLinkIsNotACreatedResource(t *testing.T) {
+	doc := buildDocument(t)
+	paths, _ := doc["paths"].(map[string]any)
+	item, _ := paths["/api/v1/auth/identities/link"].(map[string]any)
+	op, _ := item["post"].(map[string]any)
+	if op == nil {
+		t.Fatal("POST /api/v1/auth/identities/link is missing from the document")
+	}
+	responses, _ := op["responses"].(map[string]any)
+	if _, ok := responses["200"]; !ok {
+		keys := make([]string, 0, len(responses))
+		for k := range responses {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		t.Fatalf("the linking route answers %v, want 200: it returns an authorization URL, not a created resource", keys)
+	}
+	if _, ok := responses["201"]; ok {
+		t.Fatal("the linking route is documented as creating a resource with 201; it creates none")
+	}
+}
+
+// successSchemaRef returns the $ref of a route's 200 success response schema.
+func successSchemaRef(t *testing.T, doc map[string]any, method, path string) string {
+	t.Helper()
+	paths, _ := doc["paths"].(map[string]any)
+	item, _ := paths[path].(map[string]any)
+	op, _ := item[strings.ToLower(method)].(map[string]any)
+	if op == nil {
+		t.Fatalf("%s %s is missing from the document", method, path)
+	}
+	responses, _ := op["responses"].(map[string]any)
+	resp, _ := responses["200"].(map[string]any)
+	if resp == nil {
+		t.Fatalf("%s %s has no 200 response", method, path)
+	}
+	content, _ := resp["content"].(map[string]any)
+	mt, _ := content["application/json"].(map[string]any)
+	schema, _ := mt["schema"].(map[string]any)
+	ref, _ := schema["$ref"].(string)
+	return ref
+}

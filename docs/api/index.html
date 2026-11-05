@@ -108,6 +108,8 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <li data-op><a href="#op-get-api-v1-auth-appearance"><span class="m m-get">GET</span><span class="p">/api/v1/auth/appearance</span></a></li>
 <li data-op><a href="#op-put-api-v1-auth-appearance"><span class="m m-put">PUT</span><span class="p">/api/v1/auth/appearance</span></a></li>
 <li data-op><a href="#op-get-api-v1-auth-identities"><span class="m m-get">GET</span><span class="p">/api/v1/auth/identities</span></a></li>
+<li data-op><a href="#op-post-api-v1-auth-identities-link"><span class="m m-post">POST</span><span class="p">/api/v1/auth/identities/link</span></a></li>
+<li data-op><a href="#op-delete-api-v1-auth-identities-id"><span class="m m-delete">DELETE</span><span class="p">/api/v1/auth/identities/{id}</span></a></li>
 <li data-op><a href="#op-post-api-v1-auth-login"><span class="m m-post">POST</span><span class="p">/api/v1/auth/login</span></a></li>
 <li data-op><a href="#op-post-api-v1-auth-logout"><span class="m m-post">POST</span><span class="p">/api/v1/auth/logout</span></a></li>
 <li data-op><a href="#op-get-api-v1-auth-me"><span class="m m-get">GET</span><span class="p">/api/v1/auth/me</span></a></li>
@@ -410,6 +412,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <li data-op><a href="#schema-forecastrunlistresponse">ForecastRunListResponse</a></li>
 <li data-op><a href="#schema-forecastrunresponse">ForecastRunResponse</a></li>
 <li data-op><a href="#schema-healthresponse">HealthResponse</a></li>
+<li data-op><a href="#schema-identitylistresponse">IdentityListResponse</a></li>
 <li data-op><a href="#schema-importjob">ImportJob</a></li>
 <li data-op><a href="#schema-importrequest">ImportRequest</a></li>
 <li data-op><a href="#schema-importuploadresponse">ImportUploadResponse</a></li>
@@ -423,6 +426,7 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <li data-op><a href="#schema-lead">Lead</a></li>
 <li data-op><a href="#schema-leadconversionresponse">LeadConversionResponse</a></li>
 <li data-op><a href="#schema-leadinput">LeadInput</a></li>
+<li data-op><a href="#schema-linkedidentity">LinkedIdentity</a></li>
 <li data-op><a href="#schema-listresponseapidocumentresponse">ListResponseApiDocumentResponse</a></li>
 <li data-op><a href="#schema-listresponseapiusersummary">ListResponseApiUserSummary</a></li>
 <li data-op><a href="#schema-listresponseconsentrecord">ListResponseConsentRecord</a></li>
@@ -435,7 +439,6 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <li data-op><a href="#schema-listresponsecrmtask">ListResponseCrmTask</a></li>
 <li data-op><a href="#schema-listresponsecrmticket">ListResponseCrmTicket</a></li>
 <li data-op><a href="#schema-listresponseimportxjob">ListResponseImportxJob</a></li>
-<li data-op><a href="#schema-listresponsemapstringinterface">ListResponseMapStringInterface</a></li>
 <li data-op><a href="#schema-listresponsemcpcredcredential">ListResponseMcpcredCredential</a></li>
 <li data-op><a href="#schema-listresponsetenantconfigrevision">ListResponseTenantconfigRevision</a></li>
 <li data-op><a href="#schema-listresponsetenantconfigsetting">ListResponseTenantconfigSetting</a></li>
@@ -457,6 +460,8 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <li data-op><a href="#schema-migrationjob">MigrationJob</a></li>
 <li data-op><a href="#schema-money">Money</a></li>
 <li data-op><a href="#schema-movestagerequest">MoveStageRequest</a></li>
+<li data-op><a href="#schema-oidclinkstartrequest">OidcLinkStartRequest</a></li>
+<li data-op><a href="#schema-oidclinkstartresponse">OidcLinkStartResponse</a></li>
 <li data-op><a href="#schema-oidcproviderinput">OidcProviderInput</a></li>
 <li data-op><a href="#schema-oidcproviderlistresponse">OidcProviderListResponse</a></li>
 <li data-op><a href="#schema-oidcproviderresponse">OidcProviderResponse</a></li>
@@ -1731,8 +1736,68 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <tr><td><code>order</code></td><td>query</td><td>string — one of asc, desc</td><td>no</td><td></td></tr>
 </tbody></table>
 <h4>Responses</h4>
-<div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success.</div><p class="ref">See <a href="#schema-listresponsemapstringinterface"><code>ListResponseMapStringInterface</code></a></p>
+<div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success.</div><p class="ref">See <a href="#schema-identitylistresponse"><code>IdentityListResponse</code></a></p>
 </div>
+<div class="resp"><div class="resp-head"><span class="code c-client">400</span> The request was malformed: bad JSON, an unknown field, or a missing required parameter.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">401</span> No valid session, or the session has expired. Sign in again.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">403</span> Authenticated, but the caller lacks the required permission.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">404</span> No such resource, or none visible to the caller&#39;s organization.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">409</span> The request conflicts with current state, such as a duplicate external identifier.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">422</span> A field failed validation. `error.details` names each field.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">429</span> Too many requests. Retry after the interval in `Retry-After`.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-server">500</span> Unexpected failure. The detail is deliberately generic; the cause is in the server log.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+</article>
+<article class="op" id="op-post-api-v1-auth-identities-link" data-op>
+<h3><span class="m m-post">POST</span> <code class="path">/api/v1/auth/identities/link</code></h3>
+<p class="summary">Begin explicitly linking a single sign-on identity to the caller&#39;s own account, returning the authorization URL to visit.</p>
+<div class="op-desc"><p>Begin explicitly linking a single sign-on identity to the caller&#39;s own account, returning the authorization URL to visit.</p>
+</div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
+<h4>Request body <span class="req">required</span></h4>
+<p class="ref">See <a href="#schema-oidclinkstartrequest"><code>OidcLinkStartRequest</code></a></p>
+<h4>Responses</h4>
+<div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success.</div><p class="ref">See <a href="#schema-oidclinkstartresponse"><code>OidcLinkStartResponse</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">400</span> The request was malformed: bad JSON, an unknown field, or a missing required parameter.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">401</span> No valid session, or the session has expired. Sign in again.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">403</span> Authenticated, but the caller lacks the required permission.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">404</span> No such resource, or none visible to the caller&#39;s organization.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">409</span> The request conflicts with current state, such as a duplicate external identifier.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">422</span> A field failed validation. `error.details` names each field.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">429</span> Too many requests. Retry after the interval in `Retry-After`.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-server">500</span> Unexpected failure. The detail is deliberately generic; the cause is in the server log.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+</article>
+<article class="op" id="op-delete-api-v1-auth-identities-id" data-op>
+<h3><span class="m m-delete">DELETE</span> <code class="path">/api/v1/auth/identities/{id}</code></h3>
+<p class="summary">Remove one of the caller&#39;s own linked single sign-on identities.</p>
+<div class="op-desc"><p>Remove one of the caller&#39;s own linked single sign-on identities.</p>
+</div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>id</code></td><td>path</td><td>string (uuid)</td><td>yes</td><td></td></tr>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
+<h4>Responses</h4>
+<div class="resp"><div class="resp-head"><span class="code c-ok">204</span> The operation succeeded. No body is returned.</div></div>
 <div class="resp"><div class="resp-head"><span class="code c-client">400</span> The request was malformed: bad JSON, an unknown field, or a missing required parameter.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
 </div>
 <div class="resp"><div class="resp-head"><span class="code c-client">401</span> No valid session, or the session has expired. Sign in again.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
@@ -8964,6 +9029,12 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <tr><td><code>version</code> <span class="req">required</span></td><td>string</td><td></td></tr>
 </tbody></table>
 </article>
+<article class="op schema" id="schema-identitylistresponse" data-op>
+<h3><code>IdentityListResponse</code></h3>
+<table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>items</code> <span class="req">required</span></td><td>array of <a href="#schema-linkedidentity"><code>LinkedIdentity</code></a></td><td></td></tr>
+</tbody></table>
+</article>
 <article class="op schema" id="schema-importjob" data-op>
 <h3><code>ImportJob</code></h3>
 <table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
@@ -9173,6 +9244,19 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <tr><td><code>title</code> <span class="req">required</span></td><td>string</td><td></td></tr>
 </tbody></table>
 </article>
+<article class="op schema" id="schema-linkedidentity" data-op>
+<h3><code>LinkedIdentity</code></h3>
+<table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>created_at</code></td><td>string (date-time)</td><td></td></tr>
+<tr><td><code>email</code></td><td>string</td><td></td></tr>
+<tr><td><code>id</code></td><td>string (uuid)</td><td></td></tr>
+<tr><td><code>last_login_at</code></td><td>string (date-time)</td><td></td></tr>
+<tr><td><code>provider_id</code></td><td>string (uuid)</td><td></td></tr>
+<tr><td><code>provider_key</code></td><td>string</td><td></td></tr>
+<tr><td><code>provider_name</code></td><td>string</td><td></td></tr>
+<tr><td><code>subject</code></td><td>string</td><td></td></tr>
+</tbody></table>
+</article>
 <article class="op schema" id="schema-listresponseapidocumentresponse" data-op>
 <h3><code>ListResponseApiDocumentResponse</code></h3>
 <table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
@@ -9276,15 +9360,6 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <h3><code>ListResponseImportxJob</code></h3>
 <table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>items</code> <span class="req">required</span></td><td>array of <a href="#schema-importjob"><code>ImportJob</code></a></td><td></td></tr>
-<tr><td><code>limit</code> <span class="req">required</span></td><td>integer</td><td></td></tr>
-<tr><td><code>offset</code> <span class="req">required</span></td><td>integer</td><td></td></tr>
-<tr><td><code>total</code> <span class="req">required</span></td><td>integer</td><td></td></tr>
-</tbody></table>
-</article>
-<article class="op schema" id="schema-listresponsemapstringinterface" data-op>
-<h3><code>ListResponseMapStringInterface</code></h3>
-<table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
-<tr><td><code>items</code> <span class="req">required</span></td><td>array of object</td><td></td></tr>
 <tr><td><code>limit</code> <span class="req">required</span></td><td>integer</td><td></td></tr>
 <tr><td><code>offset</code> <span class="req">required</span></td><td>integer</td><td></td></tr>
 <tr><td><code>total</code> <span class="req">required</span></td><td>integer</td><td></td></tr>
@@ -9484,6 +9559,18 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>note</code></td><td>string</td><td></td></tr>
 <tr><td><code>stage_id</code> <span class="req">required</span></td><td>string</td><td></td></tr>
+</tbody></table>
+</article>
+<article class="op schema" id="schema-oidclinkstartrequest" data-op>
+<h3><code>OidcLinkStartRequest</code></h3>
+<table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>provider</code></td><td>string</td><td></td></tr>
+</tbody></table>
+</article>
+<article class="op schema" id="schema-oidclinkstartresponse" data-op>
+<h3><code>OidcLinkStartResponse</code></h3>
+<table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>authorization_url</code> <span class="req">required</span></td><td>string</td><td></td></tr>
 </tbody></table>
 </article>
 <article class="op schema" id="schema-oidcproviderinput" data-op>

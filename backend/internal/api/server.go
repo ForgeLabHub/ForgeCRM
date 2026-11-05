@@ -407,6 +407,11 @@ func (s *Server) buildRouter() chi.Router {
 				r.Post("/logout", s.withCSRF(s.handleLogout))
 				r.Get("/sessions", s.handleListSessions)
 				r.Get("/identities", s.handleListMyIdentities)
+				// Explicit binding: the caller asks to attach a provider identity to
+				// their own account. POST plus CSRF, because a top-level GET navigation
+				// would send the session cookie without proving the user's intent.
+				r.Post("/identities/link", s.withCSRF(s.handleOIDCLinkStart))
+				r.Delete("/identities/{id}", s.withCSRF(s.handleUnlinkMyIdentity))
 				r.Delete("/sessions/{id}", s.withCSRF(s.handleRevokeSession))
 				r.Post("/password/change", s.withCSRF(s.handlePasswordChange))
 				r.Post("/mfa/enroll", s.withCSRF(s.handleMFAEnroll))

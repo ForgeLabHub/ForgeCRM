@@ -16,6 +16,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/jobs"
 	"github.com/geff1778/forgecrm/internal/mcpcred"
 	"github.com/geff1778/forgecrm/internal/migratex"
+	"github.com/geff1778/forgecrm/internal/oidc"
 	"github.com/geff1778/forgecrm/internal/openapi"
 	"github.com/geff1778/forgecrm/internal/tenantconfig"
 	"github.com/geff1778/forgecrm/internal/views"
@@ -111,7 +112,12 @@ func APIContract() openapi.Contract {
 	// answer a redirect rather than a JSON body; only the provider list and the
 	// administration routes carry a schema.
 	c.Responses["GET /api/v1/auth/oidc/providers"] = reflect.TypeOf(ssoProvidersResponse{})
-	c.Responses["GET /api/v1/auth/identities"] = reflect.TypeOf(httpx.ListResponse[map[string]any]{})
+	c.Responses["GET /api/v1/auth/identities"] = reflect.TypeOf(identityListResponse{})
+	c.RequestBodies["POST /api/v1/auth/identities/link"] = reflect.TypeOf(oidcLinkStartRequest{})
+	c.Responses["POST /api/v1/auth/identities/link"] = reflect.TypeOf(oidcLinkStartResponse{})
+	// The link route returns an authorization URL for the browser to visit; it creates
+	// no resource, so 200 is honest where the POST convention would infer 201.
+	c.SuccessStatus["POST /api/v1/auth/identities/link"] = 200
 	c.RequestBodies["POST /api/v1/admin/sso/providers"] = reflect.TypeOf(oidcProviderInput{})
 	c.RequiredBody["OidcProviderInput"] = []string{"key", "display_name", "issuer", "client_id"}
 	c.Responses["GET /api/v1/admin/sso/providers"] = reflect.TypeOf(oidcProviderListResponse{})
@@ -752,6 +758,10 @@ type pipelineListResponse struct {
 
 type tagListResponse struct {
 	Items []crm.Tag `json:"items"`
+}
+
+type identityListResponse struct {
+	Items []oidc.LinkedIdentity `json:"items"`
 }
 
 type jobAcceptedResponse struct {

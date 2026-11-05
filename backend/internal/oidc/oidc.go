@@ -15,12 +15,12 @@
 //   - Everything the provider asserts about a person arrives as an ID token. The
 //     signature, the issuer, the audience, the expiry and the nonce are all
 //     verified before any claim is read. See provider.go.
-//   - An email claim is only used to find an existing account when the provider
-//     says the address is verified and the address is inside the configured
-//     domains. Otherwise a provider that lets a user set an arbitrary unverified
-//     address would be an account-takeover path.
-//   - A local account is identified by (provider, subject), never by email. Email
-//     addresses change and providers recycle them.
+//   - An email claim never selects an existing local account. It may gate
+//     just-in-time provisioning through the configured domains, but a verified
+//     address is not proof the account holder consented, so adopting an existing
+//     account by address would be an account-takeover path. A local account is
+//     identified by (provider, subject) alone, and binding a new subject to an
+//     existing account is a deliberate act by that signed-in account holder.
 //
 // # Sessions
 //
@@ -32,7 +32,10 @@ package oidc
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -44,6 +47,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/geff1778/forgecrm/internal/audit"
 	"github.com/geff1778/forgecrm/internal/config"
@@ -64,16 +68,49 @@ var (
 	ErrTokenInvalid = errors.New("the identity provider response failed verification")
 	// ErrNoAccount means the provider authenticated the person but no local account
 	// is linked and just-in-time provisioning is off.
-	ErrNoAccount = errors.New("no account is linked to this identity; ask an administrator to invite you")
+	ErrNoAccount = errors.New("no account is linked to this identity; sign in another way and link it, or ask an administrator to invite you")
 	// ErrEmailNotAllowed means the asserted address is outside the provider's
 	// permitted domains, or is not verified.
 	ErrEmailNotAllowed = errors.New("the identity provider did not assert a permitted, verified email address")
+	// ErrIdentityAlreadyLinked means the provider subject is already bound to a
+	// local account, so it cannot be bound to a second one.
+	ErrIdentityAlreadyLinked = errors.New("this identity is already linked to an account")
+	// ErrIdentityInUse means the caller's account is already bound to a different
+	// subject at this provider, so a second link would be ambiguous.
+	ErrIdentityInUse = errors.New("this account already has an identity at this provider")
+	// ErrIdentityNotFound means the caller has no such link to remove.
+	ErrIdentityNotFound = errors.New("no such linked identity")
+	// ErrAccountExists means a local account already carries the asserted
+	// address, so just-in-time provisioning cannot create a second one. The
+	// address is not used to attach the subject to that account; binding an
+	// identity to an existing account is an explicit, separate act.
+	ErrAccountExists = errors.New("an account with this email address already exists; sign in another way and link this identity to it")
 	// ErrProviderUnreachable means discovery or the token exchange failed. It is
 	// distinct from a bad token so the interface can offer a retry.
 	ErrProviderUnreachable = errors.New("the identity provider could not be reached")
 	// ErrInvalidProvider means the provider definition is not usable.
 	ErrInvalidProvider = errors.New("the identity provider configuration is invalid")
+	// ErrProviderNotInScope means the provider exists but belongs to another
+	// tenant, so the caller may not read or change it. It is deliberately the same
+	// error as an unknown provider so a caller cannot probe for the existence of a
+	// provider in an organization it does not act in.
+	ErrProviderNotInScope = errors.New("unknown or disabled identity provider")
 )
+
+// BindingError marks a failure that happened while explicitly linking a provider
+// identity to an already-signed-in account. The callback uses it to send the
+// browser back to the Security Center, where the binding was started, rather
+// than to the sign-in page.
+type BindingError struct{ Err error }
+
+func (e *BindingError) Error() string { return e.Err.Error() }
+func (e *BindingError) Unwrap() error { return e.Err }
+
+// IsBindingError reports whether err was raised while binding an identity.
+func IsBindingError(err error) bool {
+	var be *BindingError
+	return errors.As(err, &be)
+}
 
 // StateTTL bounds how long an authorization request may stay open.
 const StateTTL = 10 * time.Minute
@@ -132,11 +169,17 @@ type Identity struct {
 	DisplayName    string
 	ProviderID     uuid.UUID
 	ProviderKey    string
-	// Linked is true when this sign-in attached the provider subject to an
-	// existing account.
-	Linked bool
 	// Provisioned is true when this sign-in created the local account.
 	Provisioned bool
+	// Bound is true when this sign-in attached the provider subject to the
+	// already-signed-in account that requested the binding.
+	Bound bool
+	// LinkIdentityID names the user_identities row a Bound result created, so the
+	// caller can report exactly what was linked.
+	LinkIdentityID uuid.UUID
+	// IdentityExists is true when the provider subject was already linked to a
+	// local account. The sign-in succeeded for that account.
+	IdentityExists bool
 }
 
 // Service performs the authorization-code flow and resolves the local account.
@@ -178,6 +221,26 @@ func NewService(db *database.DB, cfg *config.Config, keyring *secrets.Keyring,
 // Enabled reports whether SSO is configured at all.
 func (s *Service) Enabled() bool {
 	return s != nil && s.cfg != nil && s.cfg.OIDC.Enabled
+}
+
+// ProviderScope bounds which providers an administrative caller may read or
+// mutate. A platform owner passes the zero value and sees platform-wide
+// providers; everyone else is confined to their own tenant.
+type ProviderScope struct {
+	OrgID           uuid.UUID
+	IsPlatformOwner bool
+}
+
+// allows reports whether a provider falls inside the caller's administrative
+// scope: a platform-wide provider for a platform owner, or a provider owned by
+// the caller's own organization. A tenant administrator never reaches a
+// platform-wide provider through this path, because a mutation that changed the
+// provider every tenant signs in through is not theirs to make.
+func (sc ProviderScope) allows(p *Provider) bool {
+	if sc.IsPlatformOwner {
+		return p.OrganizationID == nil
+	}
+	return p.OrganizationID != nil && *p.OrganizationID == sc.OrgID
 }
 
 // ---------------------------------------------------------------------------
@@ -314,8 +377,33 @@ func (s *Service) resolveByKey(ctx context.Context, key string) (*Provider, erro
 	return p, nil
 }
 
-// Create stores a new provider.
-func (s *Service) Create(ctx context.Context, in ProviderInput, actor uuid.UUID) (*Provider, error) {
+// scopePredicate renders the SQL fragment that restricts a mutation to the rows
+// the scope may touch, plus its bind arguments. Placeholder numbering continues
+// from n so the caller can append it to a statement that already binds n-1
+// values. A platform owner is confined to platform-wide rows (organization_id IS
+// NULL); everyone else is confined to their own organization.
+func scopePredicate(sc ProviderScope, n int) (string, []any) {
+	if sc.IsPlatformOwner {
+		return "organization_id IS NULL", nil
+	}
+	return fmt.Sprintf("organization_id = $%d", n), []any{sc.OrgID}
+}
+
+// Create stores a provider. A tenant administrator can only create a provider in
+// their own organization: the scope overrides whatever the request body asked
+// for, so a caller cannot plant a provider in a tenant it does not act in. A
+// platform owner creates the platform-wide provider (organization_id NULL), which
+// is the one every tenant signs in through.
+func (s *Service) Create(ctx context.Context, in ProviderInput, scope ProviderScope, actor uuid.UUID) (*Provider, error) {
+	// The scope decides ownership outright; the request body's organization is
+	// ignored so a tenant administrator cannot plant a provider elsewhere. It is
+	// set before validation, which checks that JIT provisioning is tenant-scoped.
+	if scope.IsPlatformOwner {
+		in.OrganizationID = nil
+	} else {
+		tenant := scope.OrgID
+		in.OrganizationID = &tenant
+	}
 	if err := validateProviderInput(in); err != nil {
 		return nil, err
 	}
@@ -349,8 +437,10 @@ func (s *Service) Create(ctx context.Context, in ProviderInput, actor uuid.UUID)
 
 // Update changes a provider. An empty ClientSecret leaves the stored one in
 // place, so an operator can change the display name without re-entering a secret
-// they cannot read back.
-func (s *Service) Update(ctx context.Context, id uuid.UUID, in ProviderInput, actor uuid.UUID) (*Provider, error) {
+// they cannot read back. The scope is part of the WHERE clause, so a caller who
+// names a provider belonging to another tenant updates nothing and is told it is
+// unknown rather than that it is forbidden.
+func (s *Service) Update(ctx context.Context, id uuid.UUID, in ProviderInput, scope ProviderScope, actor uuid.UUID) (*Provider, error) {
 	if err := validateProviderInput(in); err != nil {
 		return nil, err
 	}
@@ -362,6 +452,12 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in ProviderInput, ac
 		}
 		enc = sealed
 	}
+	pred, predArgs := scopePredicate(scope, 11)
+	args := append([]any{
+		id, in.DisplayName, in.Issuer, in.ClientID, enc,
+		defaultScopes(in.Scopes), nonNilTextArray(in.AllowedEmailDomains),
+		in.JITProvisioning, in.DefaultRoleKey, in.Enabled,
+	}, predArgs...)
 	row := s.db.Q(ctx).QueryRow(ctx, `
 		UPDATE oidc_providers SET
 			display_name = $2,
@@ -373,14 +469,12 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in ProviderInput, ac
 			jit_provisioning = $8,
 			default_role_key = NULLIF($9,''),
 			enabled = $10
-		WHERE id = $1
+		WHERE id = $1 AND `+pred+`
 		RETURNING `+providerColumns,
-		id, in.DisplayName, in.Issuer, in.ClientID, enc,
-		defaultScopes(in.Scopes), nonNilTextArray(in.AllowedEmailDomains),
-		in.JITProvisioning, in.DefaultRoleKey, in.Enabled)
+		args...)
 	p, err := s.scanProvider(row)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrUnknownProvider
+		return nil, ErrProviderNotInScope
 	}
 	if err != nil {
 		return nil, fmt.Errorf("update identity provider: %w", err)
@@ -388,51 +482,58 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in ProviderInput, ac
 	return p, nil
 }
 
-// Delete removes a provider. Linked identities and in-flight states cascade.
-func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
-	tag, err := s.db.Q(ctx).Exec(ctx, `DELETE FROM oidc_providers WHERE id = $1`, id)
+// Delete removes a provider. Linked identities and in-flight states cascade. The
+// scope is part of the WHERE clause for the same reason as Update: a caller
+// cannot delete a provider outside its tenant.
+func (s *Service) Delete(ctx context.Context, id uuid.UUID, scope ProviderScope) error {
+	pred, predArgs := scopePredicate(scope, 2)
+	args := append([]any{id}, predArgs...)
+	tag, err := s.db.Q(ctx).Exec(ctx,
+		`DELETE FROM oidc_providers WHERE id = $1 AND `+pred, args...)
 	if err != nil {
 		return fmt.Errorf("delete identity provider: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return ErrUnknownProvider
+		return ErrProviderNotInScope
 	}
 	return nil
 }
 
-// ListIdentities returns the provider links for an account.
-func (s *Service) ListIdentities(ctx context.Context, userID uuid.UUID) ([]map[string]any, error) {
+// LinkedIdentity is a user_identities row as shown to the account holder.
+type LinkedIdentity struct {
+	ID           uuid.UUID `json:"id"`
+	ProviderID   uuid.UUID `json:"provider_id"`
+	ProviderKey  string    `json:"provider_key"`
+	ProviderName string    `json:"provider_name"`
+	Subject      string    `json:"subject"`
+	Email        string    `json:"email,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+	LastLoginAt  time.Time `json:"last_login_at"`
+}
+
+// ListIdentities returns the provider links for an account, oldest first so the
+// original link reads first in the interface.
+func (s *Service) ListIdentities(ctx context.Context, userID uuid.UUID) ([]LinkedIdentity, error) {
 	rows, err := s.db.Q(ctx).Query(ctx, `
-		SELECT i.id, p.key, p.display_name, i.subject, i.email, i.created_at, i.last_login_at
+		SELECT i.id, i.provider_id, p.key, p.display_name, i.subject,
+		       COALESCE(i.email, ''), i.created_at, i.last_login_at
 		FROM user_identities i
 		JOIN oidc_providers p ON p.id = i.provider_id
 		WHERE i.user_id = $1
-		ORDER BY p.key`, userID)
+		ORDER BY i.created_at`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("list identities: %w", err)
 	}
 	defer rows.Close()
 
-	var out []map[string]any
+	out := make([]LinkedIdentity, 0, 4)
 	for rows.Next() {
-		var (
-			id, providerKey, providerName, subject string
-			email                                  *string
-			createdAt                              time.Time
-			lastLogin                              *time.Time
-		)
-		if err := rows.Scan(&id, &providerKey, &providerName, &subject, &email, &createdAt, &lastLogin); err != nil {
+		var li LinkedIdentity
+		if err := rows.Scan(&li.ID, &li.ProviderID, &li.ProviderKey, &li.ProviderName,
+			&li.Subject, &li.Email, &li.CreatedAt, &li.LastLoginAt); err != nil {
 			return nil, fmt.Errorf("read identity: %w", err)
 		}
-		out = append(out, map[string]any{
-			"id":            id,
-			"provider_key":  providerKey,
-			"provider_name": providerName,
-			"subject":       subject,
-			"email":         email,
-			"created_at":    createdAt,
-			"last_login_at": lastLogin,
-		})
+		out = append(out, li)
 	}
 	return out, rows.Err()
 }
@@ -489,22 +590,28 @@ func validateProviderInput(in ProviderInput) error {
 // Begin starts an authorization request and returns the URL to send the browser
 // to. The state, nonce and PKCE verifier are stored server-side; the browser
 // carries only the opaque state.
-func (s *Service) Begin(ctx context.Context, providerKey, returnTo string) (string, error) {
+//
+// linkUserID is empty for an ordinary sign-in. When it is set, the request is an
+// explicit binding: the callback attaches the resulting subject to that account
+// instead of resolving a different one. The caller must have authenticated as that
+// user; the service re-reads the account on the callback so a deleted user cannot
+// be linked.
+func (s *Service) Begin(ctx context.Context, providerKey, returnTo string, linkUserID uuid.UUID) (string, string, error) {
 	if !s.Enabled() {
-		return "", ErrDisabled
+		return "", "", ErrDisabled
 	}
 	provider, err := s.resolveByKey(ctx, providerKey)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	state, err := randomString(32)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	nonce, err := randomString(32)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	verifier := generateVerifier()
 
@@ -512,21 +619,43 @@ func (s *Service) Begin(ctx context.Context, providerKey, returnTo string) (stri
 	// the callback cannot be turned into an open redirect.
 	safeReturn := SafeReturnTo(returnTo)
 
+	var linkArg any
+	if linkUserID != uuid.Nil {
+		linkArg = linkUserID
+	}
+
+	// Bind the state to a random secret the browser must echo back on the
+	// callback. Only its hash is stored, so a reader of oidc_login_states cannot
+	// reconstruct a usable binding. The raw value is returned for the caller to set
+	// as an HttpOnly cookie on the redirect.
+	browserBinding, err := randomString(32)
+	if err != nil {
+		return "", "", err
+	}
+
 	const q = `
-		INSERT INTO oidc_login_states (state, provider_id, nonce, code_verifier, return_to, expires_at)
-		VALUES ($1,$2,$3,$4,$5,$6)`
+		INSERT INTO oidc_login_states (state, provider_id, nonce, code_verifier, return_to, link_user_id, browser_binding_hash, expires_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`
 	if _, err := s.db.Q(ctx).Exec(ctx, q, state, provider.ID, nonce, verifier,
-		safeReturn, time.Now().Add(StateTTL)); err != nil {
-		return "", fmt.Errorf("record the sign-in request: %w", err)
+		safeReturn, linkArg, hashBinding(browserBinding), time.Now().Add(StateTTL)); err != nil {
+		return "", "", fmt.Errorf("record the sign-in request: %w", err)
 	}
 
 	cfg := s.oauthConfig(ctx, provider)
-	return cfg.AuthCodeURL(state, nonceOption(nonce), s256ChallengeOption(verifier)), nil
+	return cfg.AuthCodeURL(state, nonceOption(nonce), s256ChallengeOption(verifier)), browserBinding, nil
+}
+
+// hashBinding derives the stored form of a browser-binding secret. SHA-256 is
+// enough: the secret is 32 bytes from crypto/rand, so it is not guessable and
+// does not need a slow KDF.
+func hashBinding(secret string) string {
+	sum := sha256.Sum256([]byte(secret))
+	return hex.EncodeToString(sum[:])
 }
 
 // Complete finishes an authorization request: it exchanges the code, verifies the
 // ID token, and resolves the local account. It does not create a session.
-func (s *Service) Complete(ctx context.Context, code, state, ip, userAgent string) (*Identity, error) {
+func (s *Service) Complete(ctx context.Context, code, state, browserBinding, ip, userAgent string) (*Identity, error) {
 	if !s.Enabled() {
 		return nil, ErrDisabled
 	}
@@ -537,21 +666,33 @@ func (s *Service) Complete(ctx context.Context, code, state, ip, userAgent strin
 	// Claim the state row atomically. A second use of the same state finds no row,
 	// which closes the replay window on a stolen authorization response.
 	var (
-		providerID uuid.UUID
-		nonce      string
-		verifier   string
+		providerID         uuid.UUID
+		nonce              string
+		verifier           string
+		linkUserID         *uuid.UUID
+		browserBindingHash *string
 	)
 	const claimQ = `
 		UPDATE oidc_login_states
 		SET consumed_at = now()
 		WHERE state = $1 AND consumed_at IS NULL AND expires_at > now()
-		RETURNING provider_id, nonce, code_verifier`
-	err := s.db.Q(ctx).QueryRow(ctx, claimQ, state).Scan(&providerID, &nonce, &verifier)
+		RETURNING provider_id, nonce, code_verifier, link_user_id, browser_binding_hash`
+	err := s.db.Q(ctx).QueryRow(ctx, claimQ, state).Scan(&providerID, &nonce, &verifier, &linkUserID, &browserBindingHash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrStateInvalid
 	}
 	if err != nil {
 		return nil, fmt.Errorf("claim the sign-in request: %w", err)
+	}
+
+	// The callback must arrive in the same browser that began the flow. The state
+	// is accepted only when the HttpOnly binding cookie it was issued with comes
+	// back, which a state handed to another browser cannot carry. A NULL stored
+	// hash means the state predates this check; refuse it rather than skip the
+	// comparison, so a state with no binding never completes.
+	if browserBindingHash == nil ||
+		subtle.ConstantTimeCompare([]byte(*browserBindingHash), []byte(hashBinding(browserBinding))) != 1 {
+		return nil, ErrStateInvalid
 	}
 
 	provider, err := s.GetByID(ctx, providerID)
@@ -608,10 +749,25 @@ func (s *Service) Complete(ctx context.Context, code, state, ip, userAgent strin
 	}
 
 	displayName := firstNonEmpty(claims.Name, claims.PreferredName, email)
+	if linkUserID != nil {
+		id, err := s.bindIdentity(ctx, provider, *linkUserID, idToken.Subject, email, displayName, ip, userAgent)
+		if err != nil {
+			// Tag it so the callback returns the browser to the Security Center where the
+			// binding started, not to the sign-in page.
+			return nil, &BindingError{Err: err}
+		}
+		return id, nil
+	}
 	return s.resolveIdentity(ctx, provider, idToken.Subject, email, claims.EmailVerified, displayName, ip, userAgent)
 }
 
-// resolveIdentity finds or creates the local account for a verified subject.
+// resolveIdentity finds the local account for a verified subject.
+//
+// The lookup is by subject alone. An address is never used to attach a subject to
+// an account: the provider asserts the address, and a provider that lets a user
+// choose an arbitrary verified address would then hand them whatever local account
+// already carries it. Binding an identity to an existing account is a separate,
+// explicit act — see bindIdentity.
 func (s *Service) resolveIdentity(ctx context.Context, provider *Provider, subject, email string,
 	emailVerified bool, displayName, ip, userAgent string) (*Identity, error) {
 
@@ -638,62 +794,34 @@ func (s *Service) resolveIdentity(ctx context.Context, provider *Provider, subje
 		}
 		return &Identity{
 			UserID: userID, OrganizationID: orgID, Email: email, DisplayName: displayName,
-			ProviderID: provider.ID, ProviderKey: provider.Key,
+			ProviderID: provider.ID, ProviderKey: provider.Key, IdentityExists: true,
 		}, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, fmt.Errorf("look up the linked identity: %w", err)
 	}
 
-	// 2. No link. Finding or creating an account by email requires a verified
-	// address, because an unverified one is attacker-controlled.
+	// 2. No link. Provisioning needs a verified address because the new account is
+	// created with it, and an unverified one is attacker-controlled.
 	if email == "" || !emailVerified {
 		return nil, ErrEmailNotAllowed
 	}
 
-	// 2a. An existing account with that address is linked.
-	var (
-		existingID uuid.UUID
-		status     string
-	)
-	err = s.db.Q(ctx).QueryRow(ctx, `SELECT id, status FROM users WHERE email = $1`, email).
-		Scan(&existingID, &status)
+	// An account already carrying the asserted address is never adopted by the
+	// sign-in. The address is what the provider asserts, and it is not proof that
+	// the person is that account's owner; a provider that lets someone choose a
+	// verified address would otherwise hand them the account. Attaching this
+	// subject to the existing account is an explicit act the signed-in owner takes
+	// in the Security Center.
+	var existingID uuid.UUID
+	err = s.db.Q(ctx).QueryRow(ctx, `SELECT id FROM users WHERE email = $1`, email).Scan(&existingID)
 	switch {
 	case err == nil:
-		if status == "blocked" || status == "suspended" {
-			s.audit.RecordSecurityAsync(audit.SecurityEvent{
-				UserID: audit.UUIDPtr(existingID), Type: "auth.login_blocked", Severity: "warn",
-				Message:  "SSO sign-in attempted on an inactive account",
-				Metadata: map[string]any{"provider": provider.Key, "status": status},
-				IP:       ip, UserAgent: userAgent,
-			})
-			return nil, fmt.Errorf("%w: account is not active", ErrNoAccount)
-		}
-		if _, err := s.db.Q(ctx).Exec(ctx,
-			`INSERT INTO user_identities (user_id, provider_id, subject, email, last_login_at)
-			 VALUES ($1,$2,$3,NULLIF($4,''), now())
-			 ON CONFLICT (provider_id, subject) DO UPDATE SET last_login_at = now()`,
-			existingID, provider.ID, subject, email); err != nil {
-			return nil, fmt.Errorf("link the identity to the existing account: %w", err)
-		}
-		if err := s.db.Q(ctx).QueryRow(ctx,
-			`SELECT organization_id FROM memberships WHERE user_id = $1 AND status = 'active'
-			 ORDER BY is_org_owner DESC, created_at LIMIT 1`, existingID).Scan(&orgID); err != nil {
-			if !errors.Is(err, pgx.ErrNoRows) {
-				return nil, fmt.Errorf("resolve the account organization: %w", err)
-			}
-		}
-		return &Identity{
-			UserID: existingID, OrganizationID: orgID, Email: email, DisplayName: displayName,
-			ProviderID: provider.ID, ProviderKey: provider.Key, Linked: true,
-		}, nil
-	case errors.Is(err, pgx.ErrNoRows):
-		// fall through to provisioning
-	default:
+		return nil, ErrAccountExists
+	case !errors.Is(err, pgx.ErrNoRows):
 		return nil, fmt.Errorf("look up an account by email: %w", err)
 	}
 
-	// 2b. No account. Provision one only if the provider permits it.
 	if !provider.JITProvisioning || provider.OrganizationID == nil {
 		return nil, ErrNoAccount
 	}
@@ -711,6 +839,135 @@ func (s *Service) resolveIdentity(ctx context.Context, provider *Provider, subje
 	return identity, nil
 }
 
+// bindIdentity attaches a verified subject to the account that requested the
+// binding. The account is re-read here, so a user deleted between the request and
+// the callback cannot be linked. A subject already linked elsewhere, or an account
+// already linked at this provider, is refused: two links for one pair would make
+// "which account is this identity" ambiguous.
+func (s *Service) bindIdentity(ctx context.Context, provider *Provider, userID uuid.UUID,
+	subject, email, displayName, ip, userAgent string) (*Identity, error) {
+
+	var (
+		status string
+		orgID  *uuid.UUID
+	)
+	err := s.db.Q(ctx).QueryRow(ctx, `SELECT status FROM users WHERE id = $1`, userID).Scan(&status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNoAccount
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read the account being linked: %w", err)
+	}
+	if status == "blocked" || status == "suspended" {
+		return nil, fmt.Errorf("%w: account is not active", ErrNoAccount)
+	}
+
+	// Another account already owns this subject.
+	var owner uuid.UUID
+	err = s.db.Q(ctx).QueryRow(ctx,
+		`SELECT user_id FROM user_identities WHERE provider_id = $1 AND subject = $2`,
+		provider.ID, subject).Scan(&owner)
+	switch {
+	case err == nil && owner == userID:
+		// Already linked to this very account: idempotent success.
+		if err := s.db.Q(ctx).QueryRow(ctx,
+			`SELECT organization_id FROM memberships WHERE user_id = $1 AND status = 'active'
+			 ORDER BY is_org_owner DESC, created_at LIMIT 1`, userID).Scan(&orgID); err != nil {
+			if !errors.Is(err, pgx.ErrNoRows) {
+				return nil, fmt.Errorf("resolve the account organization: %w", err)
+			}
+		}
+		return &Identity{
+			UserID: userID, OrganizationID: orgID, Email: email, DisplayName: displayName,
+			ProviderID: provider.ID, ProviderKey: provider.Key, Bound: true,
+		}, nil
+	case err == nil:
+		return nil, ErrIdentityAlreadyLinked
+	case !errors.Is(err, pgx.ErrNoRows):
+		return nil, fmt.Errorf("look up the identity being linked: %w", err)
+	}
+
+	// This account already has a different subject at this provider.
+	var mine uuid.UUID
+	err = s.db.Q(ctx).QueryRow(ctx,
+		`SELECT subject FROM user_identities WHERE provider_id = $1 AND user_id = $2`,
+		provider.ID, userID).Scan(&mine)
+	if err == nil {
+		return nil, ErrIdentityInUse
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("look up the account's existing identity: %w", err)
+	}
+
+	var identityID uuid.UUID
+	err = s.db.Q(ctx).QueryRow(ctx,
+		`INSERT INTO user_identities (user_id, provider_id, subject, email, last_login_at)
+		 VALUES ($1,$2,$3,NULLIF($4,''), now())
+		 RETURNING id`, userID, provider.ID, subject, email).Scan(&identityID)
+	if err != nil {
+		// A concurrent request can win the race between the checks above and this
+		// insert. Each unique index names a different conflict, so the message says
+		// which one lost rather than guessing.
+		if name := uniqueViolationConstraint(err); name != "" {
+			if name == "user_identities_provider_user_key" {
+				return nil, ErrIdentityInUse
+			}
+			return nil, ErrIdentityAlreadyLinked
+		}
+		return nil, fmt.Errorf("link the identity to the account: %w", err)
+	}
+
+	if err := s.db.Q(ctx).QueryRow(ctx,
+		`SELECT organization_id FROM memberships WHERE user_id = $1 AND status = 'active'
+		 ORDER BY is_org_owner DESC, created_at LIMIT 1`, userID).Scan(&orgID); err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("resolve the account organization: %w", err)
+		}
+	}
+
+	s.audit.RecordSecurityAsync(audit.SecurityEvent{
+		UserID: audit.UUIDPtr(userID), Type: "auth.sso_identity_linked", Severity: "info",
+		Message:  "an external identity was linked to an account",
+		Metadata: map[string]any{"provider": provider.Key, "subject": subject},
+		IP:       ip, UserAgent: userAgent,
+	})
+
+	return &Identity{
+		UserID: userID, OrganizationID: orgID, Email: email, DisplayName: displayName,
+		ProviderID: provider.ID, ProviderKey: provider.Key, Bound: true, LinkIdentityID: identityID,
+	}, nil
+}
+
+// UnlinkIdentity removes one of the caller's own provider links. The user id is
+// part of the predicate, so a caller can only remove a link they own.
+func (s *Service) UnlinkIdentity(ctx context.Context, userID, identityID uuid.UUID, ip, userAgent string) error {
+	tag, err := s.db.Q(ctx).Exec(ctx,
+		`DELETE FROM user_identities WHERE id = $1 AND user_id = $2`, identityID, userID)
+	if err != nil {
+		return fmt.Errorf("remove the identity link: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrIdentityNotFound
+	}
+	s.audit.RecordSecurityAsync(audit.SecurityEvent{
+		UserID: audit.UUIDPtr(userID), Type: "auth.sso_identity_unlinked", Severity: "info",
+		Message:  "an external identity was removed from an account",
+		Metadata: map[string]any{"identity_id": identityID.String()},
+		IP:       ip, UserAgent: userAgent,
+	})
+	return nil
+}
+
+// uniqueViolationConstraint returns the name of the unique constraint a
+// PostgreSQL unique-violation error names, or "" when err is not one.
+func uniqueViolationConstraint(err error) string {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return pgErr.ConstraintName
+	}
+	return ""
+}
+
 // provision creates the user, its membership and its identity link in one
 // transaction, so a partial account can never be left behind.
 func (s *Service) provision(ctx context.Context, provider *Provider, subject, email, displayName string) (*Identity, error) {
@@ -723,6 +980,12 @@ func (s *Service) provision(ctx context.Context, provider *Provider, subject, em
 			INSERT INTO users (email, display_name, status)
 			VALUES ($1, $2, 'active')
 			RETURNING id`, email, displayName).Scan(&userID); err != nil {
+			// A concurrent sign-in can create the same address between the check in
+			// resolveIdentity and this insert. Translate the race into the same
+			// domain error, not an opaque constraint failure.
+			if uniqueViolationConstraint(err) != "" {
+				return ErrAccountExists
+			}
 			return fmt.Errorf("create the account: %w", err)
 		}
 		if _, err := tx.Exec(ctx, `
@@ -742,6 +1005,11 @@ func (s *Service) provision(ctx context.Context, provider *Provider, subject, em
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO user_identities (user_id, provider_id, subject, email, last_login_at)
 			VALUES ($1,$2,$3,$4, now())`, userID, provider.ID, subject, email); err != nil {
+			// The subject was linked to another account between the lookups and this
+			// insert. Report it as a binding conflict so the caller sees one meaning.
+			if uniqueViolationConstraint(err) != "" {
+				return ErrIdentityAlreadyLinked
+			}
 			return fmt.Errorf("link the identity: %w", err)
 		}
 		return nil

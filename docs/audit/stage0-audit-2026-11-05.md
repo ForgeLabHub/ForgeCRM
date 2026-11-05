@@ -36,15 +36,18 @@ HEAD: `2f84e24` (`main`) — плюс незакоммиченная правк�
 | Проверка | Команда | Результат |
 |---|---|---|
 | Типы | `npm run typecheck` | чисто |
-| Тесты | `npm run test` | 43 файла, 339 тестов — все прошли |
+| Тесты | `npm run test` | 43 файла, 342 теста — все прошли |
 | Линт | `npm run lint` | 0 ошибок, 31 предупреждение |
 | Сборка | `npm run build` | успешно |
 
-### 1.3 Незакоммиченная правка генератора OpenAPI
+### 1.3 Незакоммиченная работа
 
-Рабочее дерево этой копии **не чистое**: на момент аудита поверх `2f84e24` лежит
-незакоммиченная правка генератора спецификации (7 файлов). Она сделана в этой же сессии,
-покрыта тестами и зелёная, но не отправлена — то есть `main` её не содержит.
+Рабочее дерево этой копии **не чистое**. Поверх `2f84e24` лежит незакоммиченная работа
+двух видов: правка генератора OpenAPI (начатая раньше) и реализация явного связывания
+внешних удостоверений SSO/OIDC (Фаза 2). Всё покрыто тестами и зелёное, но не отправлено —
+то есть `main` этого не содержит.
+
+Правка генератора OpenAPI:
 
 | Файл | Что изменено |
 |---|---|
@@ -52,12 +55,25 @@ HEAD: `2f84e24` (`main`) — плюс незакоммиченная правк�
 | `internal/openapi/schema.go` | `exportSegment` — имя компонента, выведенное из generic-типа, очищается до допустимых символов (`map[string]interface {}` → `MapStringInterface`) |
 | `internal/api/contract.go` | у `contact_id`/`email` в `/consent/*` появилась схема (`uuid`/`email`) вместо `null` |
 | `internal/openapi/openapi_test.go` | +4 теста: `TestQueryParametersAreTyped`, `TestComponentNamesAreLegal`, `TestEveryComponentRefResolves`, `TestNoDuplicateParameters` |
-| `docs/api/openapi.json`, `docs/api/index.html` | перегенерированы генератором |
-| `docs/verification/project-facts.md` | перегенерирован `facts-gen` |
+
+Явное связывание SSO/OIDC (см. §2.4): `internal/oidc/oidc.go` (`resolveIdentity` больше
+не ищет аккаунт по адресу; добавлены `bindIdentity`/`UnlinkIdentity`, `BindingError`,
+`ProviderScope`), `internal/oidc/provider.go` (`IsBindingConflict`), `internal/api/oidc_handlers.go`
+(`handleOIDCLinkStart`, `handleUnlinkMyIdentity`, коды `account_exists`/`identity_conflict`),
+`internal/api/server.go` (маршруты `POST /auth/identities/link`, `DELETE /auth/identities/{id}`),
+`internal/api/contract.go`, `internal/api/sso_integration_test.go` (+8 сценариев),
+`internal/migrations/0037_oidc_explicit_binding.{up,down}.sql`, фронтенд
+(`api/auth.ts`, `pages/admin/SecurityPage.tsx` + тест, `i18n/en.ts`, `i18n/ru.ts`,
+`components/ui.tsx` — закрываемый `Alert`, `index.css`).
+
+Артефакты `docs/api/openapi.json`, `docs/api/index.html` и `docs/verification/project-facts.md`
+перегенерированы из живого роутера и кода.
 
 Проверка на этом дереве: `go build`, `go vet`, `gofmt -l`, `go test ./...` — всё зелёное;
-`openapi-gen -check` и `facts-gen -check` сообщают, что артефакты актуальны. То есть правка
-консистентна и готова к отправке; незакрытым остаётся только её незакоммиченное состояние.
+`go test -tags=integration` для набора `TestSSO*` — 15 сценариев против живого PostgreSQL
+прошли; `openapi-gen -check`, `facts-gen -check` и `docs-check.sh` сообщают, что артефакты
+актуальны. Работа консистентна и готова к отправке; незакрытым остаётся её незакоммиченное
+состояние.
 
 ### 1.4 CI на опубликованном SHA
 
@@ -123,6 +139,12 @@ HEAD: `2f84e24` (`main`) — плюс незакоммиченная правк�
 Замечание: D-2/D-3/D-5 — снимок состояния на момент сертификации, а не ложь. Их стоит
 обновить, потому что читатель принимает числа за текущие.
 
+**Статус (обновлено 2026-11-05).** D-1 исправлен в `docs/ROADMAP.md:428` (238 операций,
+184 пути). D-2/D-3/D-5 закрыты не переписыванием снимка, а явным дополнением в шапке
+`FINAL_RELEASE_CERTIFICATION.md`: документ помечен как снимок сертифицированного SHA
+`2d87ee1`, и дополнение называет текущие числа на `2f84e24` (16/16 CI, 31 предупреждение
+линта, 53 Go-пакета). D-4 (заметка про Telegram) остаётся открытым.
+
 ### 2.3 Два release-blocker из прошлого шага — закрыты как «не блокеры»
 
 - **B-1 (устаревший commit в `/ready`).** В этой копии API-процесс не запущен, поэтому
@@ -132,6 +154,36 @@ HEAD: `2f84e24` (`main`) — плюс незакоммиченная правк�
   блокер**.
 - **B-2 (дрейф доков про Telegram).** Подтверждён как дрейф текста (D-4). Код и миграции
   на месте; расходится только заметка. Статус: **дрейф документации, не блокер**.
+
+### 2.4 SSO/OIDC — жёсткое требование: без автосвязывания по подтверждённому адресу
+
+Требование: вход через провайдера **не должен** привязывать внешнее удостоверение к
+существующему локальному аккаунту по совпадению подтверждённого провайдером адреса.
+Связывание — только явное действие владельца аккаунта.
+
+Проверено в коде:
+
+- `resolveIdentity` (`internal/oidc/oidc.go`) ищет аккаунт **только** по
+  `(provider_id, subject)`. Если субъект не связан, адрес проверяется на существующий
+  аккаунт и при совпадении возвращается `ErrAccountExists` — аккаунт **не** усыновляется,
+  сессия не выдаётся, строка в `user_identities` не создаётся. JIT-провижининг создаёт
+  новый аккаунт, только когда адрес не занят.
+- `bindIdentity` привязывает субъект к аккаунту, который **сам запросил** привязку
+  (`oidc_login_states.link_user_id`, выставленный только аутентифицированным запросом).
+  Отказывает, если субъект уже связан с другим аккаунтом (`ErrIdentityAlreadyLinked`) или
+  у аккаунта уже есть другая связь у этого провайдера (`ErrIdentityInUse`); гонка закрыта
+  уникальным индексом `user_identities_provider_user_key` (миграция 0037).
+- Точка входа привязки — `POST /api/v1/auth/identities/link` под `withCSRF`; обычный вход
+  `GET /api/v1/auth/oidc/start` передаёт `uuid.Nil` и привязку начать не может.
+- Снятие — `DELETE /api/v1/auth/identities/{id}`, где `user_id` из сессии входит в предикат.
+
+Доказательство: `go test -tags=integration -run TestSSO ./internal/api/` — 15 сценариев
+против живого PostgreSQL, включая `TestSSODoesNotAdoptAnExistingAccountByVerifiedEmail`
+(адрес занят → `sso_error=account_exists`, 0 cookie, 1 пользователь, 0 связей),
+`TestSSOExplicitBindingAttachesIdentityToTheSignedInAccount`,
+`TestSSOBindingRefusesASubjectAlreadyLinkedElsewhere`,
+`TestSSOUnlinkRemovesOnlyTheCallersOwnIdentity`, `TestSSOBindingRequiresCSRF`.
+Статус: **VERIFIED**.
 
 ---
 
@@ -222,9 +274,10 @@ internal/risk  internal/simulate  internal/wiring
 
 **Baseline честный и зелёный.** Сборка, vet, формат, модульные тесты, интеграционные
 тесты против живого PostgreSQL, OpenAPI-гейт, docs-гейт, факты проекта, фронтенд
-(typecheck/339 тестов/сборка) и CI 16/16 — всё проходит на `2f84e24`. Плюс поверх него
-лежит зелёная, но незакоммиченная правка генератора OpenAPI (§1.3): она проверена на этом
-дереве, но `main` её не содержит.
+(typecheck/342 теста/сборка) и CI 16/16 — всё проходит на `2f84e24`. Плюс поверх него
+лежит зелёная, но незакоммиченная работа (§1.3): правка генератора OpenAPI и явное
+связывание внешних удостоверений SSO/OIDC. Обе проверены на этом дереве (включая 15
+интеграционных сценариев `TestSSO*` против живого PostgreSQL), но `main` их не содержит.
 
 Код соответствует 136 закрытым пунктам (`VERIFIED` 130 + `VERIFIED FIXED` 6); я не нашёл
 пункта, помеченного `VERIFIED`, который на деле не имел бы реализации. Единственные
