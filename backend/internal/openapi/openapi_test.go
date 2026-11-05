@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -327,6 +328,46 @@ func TestPathParametersAreTyped(t *testing.T) {
 	}
 }
 
+// TestQueryParametersAreTyped checks that a declared query filter carries a schema.
+//
+// The generator emits whatever the contract declares. A QueryParam whose Schema is
+// left nil is written to the document as `"schema": null`, which is not a valid
+// OpenAPI parameter object: a generated client cannot type the argument, and a
+// meta-schema validator rejects the whole document. Typing one field is easy to
+// forget, so the omission is asserted here rather than trusted to review.
+func TestQueryParametersAreTyped(t *testing.T) {
+	var doc struct {
+		Paths map[string]map[string]struct {
+			Parameters []struct {
+				Name   string          `json:"name"`
+				In     string          `json:"in"`
+				Schema json.RawMessage `json:"schema"`
+			} `json:"parameters"`
+		} `json:"paths"`
+	}
+	if err := json.Unmarshal(generate(t), &doc); err != nil {
+		t.Fatal(err)
+	}
+
+	untyped := 0
+	for path, ops := range doc.Paths {
+		for method, op := range ops {
+			for _, p := range op.Parameters {
+				if p.In != "query" {
+					continue
+				}
+				if len(p.Schema) == 0 || string(p.Schema) == "null" {
+					untyped++
+					t.Logf("%s %s: query parameter %q has no schema", strings.ToUpper(method), path, p.Name)
+				}
+			}
+		}
+	}
+	if untyped > 0 {
+		t.Errorf("%d query parameters are untyped; declare a schema so clients can validate them", untyped)
+	}
+}
+
 // TestIdempotencyKeyIsDocumentedOnMutations checks the specification describes the
 // header the middleware actually accepts, and only where it is accepted.
 //
@@ -492,5 +533,92 @@ func pathParamNames(path string) []string {
 		}
 		out = append(out, path[start+1:start+end])
 		path = path[start+end+1:]
+	}
+}
+
+// componentKeyPattern is the key grammar OpenAPI allows for components.
+//
+// A key that does not match it makes the whole document invalid: a validator rejects
+// it outright, and a client generator cannot name the type. Derived names are built
+// from Go type names, which may carry punctuation a Go identifier does not.
+var componentKeyPattern = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
+
+// TestComponentNamesAreLegal checks every component key against the OpenAPI grammar.
+//
+// The name of a generic instantiation is derived from the printed type parameter.
+// One of them is `map[string]any`, whose printed form contains brackets, a space and
+// braces; an unsanitised derivation emitted a `$ref` to a key no validator accepts,
+// so the document was invalid for every client even though it parsed as JSON.
+func TestComponentNamesAreLegal(t *testing.T) {
+	var doc struct {
+		Components struct {
+			Schemas map[string]json.RawMessage `json:"schemas"`
+		} `json:"components"`
+	}
+	if err := json.Unmarshal(generate(t), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Components.Schemas) == 0 {
+		t.Fatal("no components generated; the test would pass vacuously")
+	}
+	for name := range doc.Components.Schemas {
+		if !componentKeyPattern.MatchString(name) {
+			t.Errorf("component %q is not a legal OpenAPI key; it does not match %s", name, componentKeyPattern)
+		}
+	}
+}
+
+// TestEveryComponentRefResolves checks that each `$ref` names a component that exists.
+//
+// A dangling reference is worse than a missing schema: the document still parses, so
+// nothing fails until a generated client tries to resolve the type.
+func TestEveryComponentRefResolves(t *testing.T) {
+	var doc struct {
+		Components struct {
+			Schemas map[string]json.RawMessage `json:"schemas"`
+		} `json:"components"`
+		Paths map[string]json.RawMessage `json:"paths"`
+	}
+	raw := generate(t)
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range regexp.MustCompile(`"#/components/schemas/([^"]+)"`).FindAllSubmatch(raw, -1) {
+		name := string(m[1])
+		if _, ok := doc.Components.Schemas[name]; !ok {
+			t.Errorf("$ref %q has no matching component", name)
+		}
+	}
+}
+
+// TestNoDuplicateParameters checks that no operation declares a parameter twice.
+//
+// A parameter is identified by its name and location, so two query parameters named
+// `q` make the operation invalid and leave a client unable to tell which one wins.
+// The shared collection contract and a route declaration both contribute parameters,
+// and a route that refines one must replace it rather than add a second copy.
+func TestNoDuplicateParameters(t *testing.T) {
+	var doc struct {
+		Paths map[string]map[string]struct {
+			Parameters []struct {
+				Name string `json:"name"`
+				In   string `json:"in"`
+			} `json:"parameters"`
+		} `json:"paths"`
+	}
+	if err := json.Unmarshal(generate(t), &doc); err != nil {
+		t.Fatal(err)
+	}
+	for path, ops := range doc.Paths {
+		for method, op := range ops {
+			seen := map[string]bool{}
+			for _, p := range op.Parameters {
+				key := p.In + " " + p.Name
+				if seen[key] {
+					t.Errorf("%s %s declares %s parameter %q twice", strings.ToUpper(method), path, p.In, p.Name)
+				}
+				seen[key] = true
+			}
+		}
 	}
 }

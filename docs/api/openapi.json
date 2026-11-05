@@ -8081,7 +8081,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ListResponseMap[string]interface {}"
+                  "$ref": "#/components/schemas/ListResponseMapStringInterface"
                 }
               }
             }
@@ -11091,13 +11091,19 @@
             "name": "contact_id",
             "in": "query",
             "description": "The contact the decision is about. Pass this or `email`, not both.",
-            "schema": null
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
           },
           {
             "name": "email",
             "in": "query",
             "description": "The email address the decision is about, for a person not in the CRM.",
-            "schema": null
+            "schema": {
+              "format": "email",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -11457,13 +11463,19 @@
             "name": "contact_id",
             "in": "query",
             "description": "The contact the decision is about. Pass this or `email`, not both.",
-            "schema": null
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
           },
           {
             "name": "email",
             "in": "query",
             "description": "The email address the decision is about, for a person not in the CRM.",
-            "schema": null
+            "schema": {
+              "format": "email",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -11661,13 +11673,19 @@
             "name": "contact_id",
             "in": "query",
             "description": "The contact the decision is about. Pass this or `email`, not both.",
-            "schema": null
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
           },
           {
             "name": "email",
             "in": "query",
             "description": "The email address the decision is about, for a person not in the CRM.",
-            "schema": null
+            "schema": {
+              "format": "email",
+              "type": "string"
+            }
           },
           {
             "name": "purpose",
@@ -11894,13 +11912,19 @@
             "name": "contact_id",
             "in": "query",
             "description": "The contact the decision is about. Pass this or `email`, not both.",
-            "schema": null
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
           },
           {
             "name": "email",
             "in": "query",
             "description": "The email address the decision is about, for a person not in the CRM.",
-            "schema": null
+            "schema": {
+              "format": "email",
+              "type": "string"
+            }
           },
           {
             "name": "purpose",
@@ -27873,7 +27897,8 @@
           {
             "name": "q",
             "in": "query",
-            "description": "Free-text filter.",
+            "required": true,
+            "description": "The term to search for. Required; a request without it is rejected.",
             "schema": {
               "type": "string"
             }
@@ -27895,15 +27920,6 @@
                 "asc",
                 "desc"
               ],
-              "type": "string"
-            }
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "required": true,
-            "description": "The term to search for. Required; a request without it is rejected.",
-            "schema": {
               "type": "string"
             }
           }
@@ -43743,7 +43759,7 @@
         ],
         "type": "object"
       },
-      "ListResponseMap[string]interface {}": {
+      "ListResponseMapStringInterface": {
         "properties": {
           "items": {
             "items": {
