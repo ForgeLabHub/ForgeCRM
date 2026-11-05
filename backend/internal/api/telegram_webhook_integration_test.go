@@ -432,3 +432,140 @@ func TestTelegramLocalizationAndCallbacksPostgres(t *testing.T) {
 		t.Fatalf("overdue body: %q", msg)
 	}
 }
+
+// TestTelegramSettingsAndUnlinkPostgres exercises the notification-settings menu,
+// the per-type toggle callback, and the confirmed unlink flow end to end. It
+// proves the toggle is persisted per account, that unlink asks for confirmation
+// first, that cancelling keeps the link, and that a confirmed unlink revokes it.
+func TestTelegramSettingsAndUnlinkPostgres(t *testing.T) {
+	mock := &telegramMockTransport{}
+	previous := http.DefaultTransport
+	http.DefaultTransport = mock
+	t.Cleanup(func() { http.DefaultTransport = previous })
+	cfg := testConfig(t)
+	cfg.Telegram = config.TelegramConfig{Enabled: true, BotToken: "test-only-token", WebhookSecret: strings.Repeat("s", 32), WebhookEnabled: true}
+	h := newHarnessWithConfig(t, cfg)
+	secret := cfg.Telegram.WebhookSecret
+
+	postMessage := func(id int, chat int64, text string) int {
+		t.Helper()
+		payload, err := json.Marshal(map[string]any{"update_id": id, "message": map[string]any{"message_id": id + 1, "date": 1730000000, "from": map[string]any{"id": chat, "is_bot": false}, "chat": map[string]any{"id": chat, "type": "private"}, "text": text}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/telegram/webhook", bytes.NewReader(payload))
+		req.Header.Set("X-Telegram-Bot-Api-Secret-Token", secret)
+		rec := httptest.NewRecorder()
+		h.server.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	postCallback := func(id int, chat int64, data string) int {
+		t.Helper()
+		payload, err := json.Marshal(map[string]any{
+			"update_id": id,
+			"callback_query": map[string]any{
+				"id":      fmt.Sprintf("cb-%d", id),
+				"from":    map[string]any{"id": chat, "is_bot": false},
+				"message": map[string]any{"message_id": id + 1, "chat": map[string]any{"id": chat, "type": "private"}},
+				"data":    data,
+			},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/telegram/webhook", bytes.NewReader(payload))
+		req.Header.Set("X-Telegram-Bot-Api-Secret-Token", secret)
+		rec := httptest.NewRecorder()
+		h.server.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	lastMessage := func() string {
+		mock.mu.Lock()
+		defer mock.mu.Unlock()
+		if len(mock.messages) == 0 {
+			return ""
+		}
+		return mock.messages[len(mock.messages)-1]
+	}
+	hasCallback := func(data string) bool {
+		mock.mu.Lock()
+		defer mock.mu.Unlock()
+		for _, c := range mock.callbacks {
+			if c == data {
+				return true
+			}
+		}
+		return false
+	}
+
+	org := h.seedOrganization("Telegram Settings")
+	user := h.seedUser("telegram-settings@example.test", "Test-Passw0rd-2026!!", "Settings")
+	h.joinOrganization(user, org, "tenant_admin")
+	p := rbac.NewPrincipal(user, "telegram-settings@example.test", "Settings", org, nil)
+	code, err := h.svcs.Telegram.CreateLinkCode(context.Background(), p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := postMessage(200, 600, "/link "+code); got != 200 {
+		t.Fatalf("link: %d", got)
+	}
+
+	// The settings menu lists the per-type toggles, defaulting to On.
+	if got := postMessage(201, 600, "/settings"); got != 200 {
+		t.Fatalf("settings: %d", got)
+	}
+	if msg := lastMessage(); !strings.Contains(msg, "Notification settings") || !hasCallback("notif:overdue") {
+		t.Fatalf("settings body: %q", msg)
+	}
+	// A tap flips the type and persists it for this account only.
+	if got := postCallback(202, 600, "notif:overdue"); got != 200 {
+		t.Fatalf("toggle callback: %d", got)
+	}
+	var enabled bool
+	if err := h.db.Pool().QueryRow(context.Background(), `SELECT enabled FROM telegram_notification_preferences WHERE telegram_user_id=600 AND kind='overdue'`).Scan(&enabled); err != nil || enabled {
+		t.Fatalf("preference not stored: %v %v", enabled, err)
+	}
+	// A second tap flips it back.
+	if got := postCallback(203, 600, "notif:overdue"); got != 200 {
+		t.Fatalf("toggle back: %d", got)
+	}
+	if err := h.db.Pool().QueryRow(context.Background(), `SELECT enabled FROM telegram_notification_preferences WHERE telegram_user_id=600 AND kind='overdue'`).Scan(&enabled); err != nil || !enabled {
+		t.Fatalf("preference not restored: %v %v", enabled, err)
+	}
+	// An unknown toggle payload is refused, not silently stored.
+	if got := postCallback(204, 600, "notif:bogus"); got != 200 {
+		t.Fatalf("unknown toggle: %d", got)
+	}
+
+	// /unlink asks for confirmation and cancel keeps the link active.
+	if got := postMessage(205, 600, "/unlink"); got != 200 {
+		t.Fatalf("unlink prompt: %d", got)
+	}
+	if msg := lastMessage(); !strings.Contains(msg, "Unlink") || !hasCallback("unlink:confirm") || !hasCallback("unlink:cancel") {
+		t.Fatalf("unlink prompt body: %q", msg)
+	}
+	if got := postCallback(206, 600, "unlink:cancel"); got != 200 {
+		t.Fatalf("unlink cancel: %d", got)
+	}
+	var active int
+	if err := h.db.Pool().QueryRow(context.Background(), `SELECT count(*) FROM telegram_links WHERE telegram_user_id=600 AND revoked_at IS NULL`).Scan(&active); err != nil || active != 1 {
+		t.Fatalf("cancel revoked the link: %d %v", active, err)
+	}
+	// A confirmed unlink revokes the link and answers with the unlinked notice.
+	if got := postCallback(207, 600, "unlink:confirm"); got != 200 {
+		t.Fatalf("unlink confirm: %d", got)
+	}
+	if err := h.db.Pool().QueryRow(context.Background(), `SELECT count(*) FROM telegram_links WHERE telegram_user_id=600 AND revoked_at IS NULL`).Scan(&active); err != nil || active != 0 {
+		t.Fatalf("link not revoked: %d %v", active, err)
+	}
+	if msg := lastMessage(); !strings.Contains(msg, "Unlinked") {
+		t.Fatalf("unlink confirmation body: %q", msg)
+	}
+	// The unlinked account no longer receives task data.
+	if got := postMessage(208, 600, "/tasks"); got != 200 {
+		t.Fatalf("post-unlink tasks: %d", got)
+	}
+	if msg := lastMessage(); !strings.Contains(msg, "not linked") {
+		t.Fatalf("post-unlink message: %q", msg)
+	}
+}

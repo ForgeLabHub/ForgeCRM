@@ -18,7 +18,10 @@ var russian = map[Key]string{
 		"• /tasks — твои активные задачи\n" +
 		"• /overdue — твои просроченные задачи\n" +
 		"• /profile — твой привязанный аккаунт\n" +
+		"• /notifications — последние уведомления\n" +
+		"• /settings — выбрать, какие уведомления получать\n" +
 		"• /language — сменить язык\n" +
+		"• /unlink — отвязать аккаунт\n" +
 		"• /help — эта справка\n\n" +
 		"Как привязать аккаунт: открой ForgeCRM → Настройки → Telegram, сгенерируй код и отправь /link <код>.\n" +
 		"Как получать уведомления: привяжи аккаунт и оставь уведомления включёнными в ForgeCRM.\n" +
@@ -62,4 +65,22 @@ var russian = map[Key]string{
 	KeyDuePrefix:          "срок %s",
 	KeyOpenTaskWithID:     "Открой задачу командой /task и её ID.",
 	KeyTaskLine:           "%s — %s",
+	KeyNotifSettings:      "Настройки уведомлений — нажмите на тип, чтобы включить или выключить:",
+	KeyNotifOn:            "Вкл",
+	KeyNotifOff:           "Выкл",
+	KeyNotifAssignment:    "Назначение",
+	KeyNotifDueChanged:    "Срок изменён",
+	KeyNotifOverdue:       "Просрочка",
+	KeyNotifCompleted:     "Завершение",
+	KeyUnlinkConfirm:      "Отвязать этот Telegram от ForgeCRM? Вы перестанете получать уведомления здесь.",
+	KeyUnlinkDone:         "Отвязано. Привязать снова можно командой /link <код>.",
+	BtnNotifications:      "🔔 Уведомления",
+	BtnSettings:           "⚙️ Настройки",
+	BtnUnlink:             "🔗 Отвязать",
+	BtnUnlinkConfirm:      "✅ Отвязать",
+	BtnUnlinkCancel:       "⬅️ Отмена",
+	BtnNotifAssignment:    "Назначение",
+	BtnNotifDueChanged:    "Срок изменён",
+	BtnNotifOverdue:       "Просрочка",
+	BtnNotifCompleted:     "Завершение",
 }
