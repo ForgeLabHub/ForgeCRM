@@ -119,7 +119,8 @@ test.describe('sign-in page', () => {
     expect(overflows).toBe(false)
   })
 
-  test('keeps the language and theme choice after signing in', async ({ page }) => {
+  test('keeps the language and restores account appearance after signing in', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'light' })
     await page.goto('/login')
     // Theme first, then language: the theme control's accessible name is itself
     // translated, so choosing the theme before switching keeps the label English.
@@ -130,10 +131,16 @@ test.describe('sign-in page', () => {
     await page.getByLabel('Пароль', { exact: true }).fill(E2E_PASSWORD)
     await page.getByRole('button', { name: 'Войти' }).click()
 
-    // The workspace loads with the same theme and language: the preference is not
-    // reset by the sign-in transition.
+    // Account settings are authoritative after sign-in; the anonymous device
+    // choice must not silently overwrite another person's saved preference.
     await expect(page).toHaveURL(/\/$/, { timeout: 15_000 })
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
     await expect(page.locator('html')).toHaveAttribute('lang', 'ru')
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    const response = await page.request.get('/api/v1/auth/appearance')
+    expect(response.ok()).toBeTruthy()
+    const settings = await response.json()
+    const expectedMode = settings.mode === 'system' ? 'light' : settings.mode
+    await expect(page.locator('html')).toHaveAttribute('data-theme', expectedMode)
+    await expect(page.locator('html')).toHaveAttribute('data-style', settings.effective_style)
   })
 })

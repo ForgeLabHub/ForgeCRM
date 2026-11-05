@@ -39,8 +39,8 @@ beforeEach(() => {
 describe('AppearancePage', () => {
   it('shows all ten styles plus the default', () => {
     renderPage()
-    // Ten selectable styles, each with an Apply button.
-    expect(screen.getAllByRole('button', { name: 'Apply' })).toHaveLength(10)
+    // Ten selectable styles plus the original palette, each with an Apply button.
+    expect(screen.getAllByRole('button', { name: 'Apply' })).toHaveLength(11)
   })
 
   it('applies a style to the document and persists it', async () => {

@@ -195,6 +195,8 @@ var SessionOnly = map[string]string{
 	"POST /api/v1/admin/telegram/link-code": "Create a single-use link challenge for the signed-in user.",
 	"DELETE /api/v1/admin/telegram/link":    "Revoke the signed-in user's Telegram link.",
 	"GET /api/v1/auth/me":                   "The current caller and their CSRF token.",
+	"GET /api/v1/auth/appearance":           "The caller's own appearance preferences and role-derived default.",
+	"PUT /api/v1/auth/appearance":           "Replace the caller's appearance preferences; a null or absent style selects the role-derived default.",
 	"POST /api/v1/auth/logout":              "Sign out and revoke the current session.",
 	"GET /api/v1/auth/sessions":             "The caller's own active sessions.",
 	"GET /api/v1/auth/identities":           "The caller's own linked single sign-on identities.",

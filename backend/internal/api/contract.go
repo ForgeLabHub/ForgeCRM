@@ -102,6 +102,10 @@ func APIContract() openapi.Contract {
 	c.Responses["POST /api/v1/auth/step-up"] = reflect.TypeOf(stepUpResponse{})
 
 	c.Responses["GET /api/v1/auth/me"] = reflect.TypeOf(meResponse{})
+	c.Responses["GET /api/v1/auth/appearance"] = reflect.TypeOf(appearanceResponse{})
+	c.RequestBodies["PUT /api/v1/auth/appearance"] = reflect.TypeOf(appearanceInput{})
+	c.RequiredBody["AppearanceInput"] = []string{"mode", "accent", "density"}
+	c.Responses["PUT /api/v1/auth/appearance"] = reflect.TypeOf(appearanceResponse{})
 
 	// Single sign-on. The start and callback are browser navigations, so they
 	// answer a redirect rather than a JSON body; only the provider list and the
