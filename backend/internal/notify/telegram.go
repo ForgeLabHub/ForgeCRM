@@ -344,6 +344,109 @@ func (s *TelegramService) SetUserLocale(ctx context.Context, telegramUserID int6
 	return nil
 }
 
+// NotificationKind names a per-account notification preference. The set matches
+// the worker's task notification kinds, so a preference toggled here is the same
+// key the delivery path checks.
+type NotificationKind string
+
+const (
+	KindAssignment NotificationKind = "assignment"
+	KindDueChanged NotificationKind = "due_changed"
+	KindOverdue    NotificationKind = "overdue"
+	KindCompleted  NotificationKind = "completed"
+)
+
+// NotificationKinds lists the toggles in a stable order for the settings menu.
+var NotificationKinds = []NotificationKind{KindAssignment, KindDueChanged, KindOverdue, KindCompleted}
+
+// IsNotificationKind reports whether a stored or incoming kind is one the
+// assistant knows, so an unknown value cannot silently become a toggle.
+func IsNotificationKind(kind string) bool {
+	switch NotificationKind(kind) {
+	case KindAssignment, KindDueChanged, KindOverdue, KindCompleted:
+		return true
+	default:
+		return false
+	}
+}
+
+// NotificationPreferences returns the effective per-type preferences for an
+// account. A type with no stored row defaults to enabled, so the map is complete
+// and a caller never has to distinguish "missing" from "true".
+func (s *TelegramService) NotificationPreferences(ctx context.Context, telegramUserID int64) (map[NotificationKind]bool, error) {
+	prefs := make(map[NotificationKind]bool, len(NotificationKinds))
+	for _, kind := range NotificationKinds {
+		prefs[kind] = true
+	}
+	if !s.Enabled() || telegramUserID <= 0 {
+		return prefs, nil
+	}
+	rows, err := s.db.Q(ctx).Query(ctx, `SELECT kind, enabled FROM telegram_notification_preferences WHERE telegram_user_id=$1`, telegramUserID)
+	if err != nil {
+		return nil, fmt.Errorf("load telegram notification preferences: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var kind string
+		var enabled bool
+		if err := rows.Scan(&kind, &enabled); err != nil {
+			return nil, fmt.Errorf("scan telegram notification preference: %w", err)
+		}
+		if IsNotificationKind(kind) {
+			prefs[NotificationKind(kind)] = enabled
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("load telegram notification preferences: %w", err)
+	}
+	return prefs, nil
+}
+
+// SetNotificationPreference stores one toggle for an account. It is idempotent
+// and, like the locale, safe to call before the account is linked.
+func (s *TelegramService) SetNotificationPreference(ctx context.Context, telegramUserID int64, kind NotificationKind, enabled bool) error {
+	if !s.Enabled() || telegramUserID <= 0 {
+		return ErrTelegramDisabled
+	}
+	if !IsNotificationKind(string(kind)) {
+		return errors.New("unknown notification kind")
+	}
+	const q = `INSERT INTO telegram_notification_preferences (telegram_user_id, kind, enabled) VALUES ($1, $2, $3)
+                ON CONFLICT (telegram_user_id, kind) DO UPDATE SET enabled=EXCLUDED.enabled, updated_at=now()`
+	if _, err := s.db.Q(ctx).Exec(ctx, q, telegramUserID, string(kind), enabled); err != nil {
+		return fmt.Errorf("store telegram notification preference: %w", err)
+	}
+	return nil
+}
+
+// NotificationEnabled reports whether a type is enabled for a linked user's
+// Telegram account. It is the delivery-path check: an unknown or unlinked user
+// has no stored row and therefore keeps the default (enabled), so this only ever
+// silences a type the person explicitly turned off. A lookup error is returned so
+// the caller can retry rather than send a message the person asked not to get.
+func (s *TelegramService) NotificationEnabled(ctx context.Context, orgID, userID uuid.UUID, kind NotificationKind) (bool, error) {
+	if !s.Enabled() {
+		return true, nil
+	}
+	if !IsNotificationKind(string(kind)) {
+		return true, nil
+	}
+	var telegramUserID int64
+	err := s.db.Q(ctx).QueryRow(ctx, `SELECT telegram_user_id FROM telegram_links
+                WHERE organization_id=$1 AND user_id=$2 AND linked_at IS NOT NULL AND revoked_at IS NULL LIMIT 1`, orgID, userID).Scan(&telegramUserID)
+	if database.IsNoRows(err) {
+		return true, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("resolve telegram account for preferences: %w", err)
+	}
+	prefs, err := s.NotificationPreferences(ctx, telegramUserID)
+	if err != nil {
+		return false, err
+	}
+	return prefs[kind], nil
+}
+
 // MarkOnboarded records that the introduction has been shown, so /start does not
 // repeat it. It does not overwrite a chosen locale.
 func (s *TelegramService) MarkOnboarded(ctx context.Context, telegramUserID int64) error {
@@ -389,6 +492,8 @@ var AllowedCommands = map[string]string{
 	"/due":           "reschedule a task",
 	"/profile":       "show your linked account",
 	"/notifications": "show your recent notifications",
+	"/settings":      "choose which notification types you receive",
+	"/unlink":        "unlink this Telegram account",
 }
 
 // HandleCommand processes a bot command for a linked user and returns the reply.

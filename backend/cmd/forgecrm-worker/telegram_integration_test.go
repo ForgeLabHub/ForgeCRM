@@ -270,6 +270,57 @@ func TestTelegramWorkerPostgres(t *testing.T) {
 	if _, err := db.Pool().Exec(ctx, `INSERT INTO user_roles(user_id,organization_id,role_id) SELECT $1,$2,id FROM roles WHERE organization_id IS NULL AND key='tenant_admin'`, user, org); err != nil {
 		t.Fatal(err)
 	}
+	// A per-account preference silences one type without touching consent or RBAC:
+	// the job is a no-op, recorded as "muted", and no transport call happens.
+	if err := tg.SetNotificationPreference(ctx, 123, notify.KindAssignment, false); err != nil {
+		t.Fatal(err)
+	}
+	muted := makeJob("test:muted", "assignment")
+	photoBefore = mock.photo.Load()
+	if err := r.handle(ctx, queue, muted); err != nil {
+		t.Fatal(err)
+	}
+	if mock.photo.Load() != photoBefore {
+		t.Fatal("muted preference was ignored")
+	}
+	if err := db.Pool().QueryRow(ctx, `SELECT outcome FROM telegram_task_delivery_receipts WHERE dedupe_key='test:muted'`).Scan(&outcome); err != nil || outcome != "muted" {
+		t.Fatalf("muted outcome %s: %v", outcome, err)
+	}
+	// Re-enabling restores delivery.
+	if err := tg.SetNotificationPreference(ctx, 123, notify.KindAssignment, true); err != nil {
+		t.Fatal(err)
+	}
+	// The card language follows the assistant choice, then the CRM locale, then
+	// English. The user row was seeded with locale 'ru'.
+	readLocale := func() string {
+		t.Helper()
+		var got string
+		if err := db.Pool().QueryRow(ctx, `SELECT COALESCE(ts.locale,u.locale,'en')
+			FROM tasks t
+			JOIN users u ON u.id=t.assignee_user_id
+			LEFT JOIN telegram_links l ON l.organization_id=t.organization_id AND l.user_id=t.assignee_user_id
+				AND l.linked_at IS NOT NULL AND l.revoked_at IS NULL
+			LEFT JOIN telegram_user_settings ts ON ts.telegram_user_id=l.telegram_user_id
+			WHERE t.id=$1`, task).Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	if got := readLocale(); got != "ru" {
+		t.Fatalf("card locale with no assistant setting = %q, want ru", got)
+	}
+	if _, err := db.Pool().Exec(ctx, `INSERT INTO telegram_user_settings(telegram_user_id,locale) VALUES(123,'en') ON CONFLICT (telegram_user_id) DO UPDATE SET locale='en'`); err != nil {
+		t.Fatal(err)
+	}
+	if got := readLocale(); got != "en" {
+		t.Fatalf("assistant locale must win over CRM locale, got %q", got)
+	}
+	if _, err := db.Pool().Exec(ctx, `DELETE FROM telegram_user_settings WHERE telegram_user_id=123`); err != nil {
+		t.Fatal(err)
+	}
+	if got := readLocale(); got != "ru" {
+		t.Fatalf("card locale must fall back to CRM locale, got %q", got)
+	}
 	// Completion uses the current CRM state and a real photo card.
 	if _, err := crmSvc.UpdateTask(ctx, p, task, crm.TaskInput{Title: created.Title, Status: "completed", Priority: "normal", AssigneeUserID: &user, DueAt: &newDue}); err != nil {
 		t.Fatal(err)
