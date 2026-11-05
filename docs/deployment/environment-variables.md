@@ -171,12 +171,16 @@ the sweep reports the rows a real run would remove and deletes nothing until
 ## AI provider (optional)
 
 The platform runs fully without a model provider. `ollama` keeps prompts local.
+Naming a hosted provider (`openai`, `groq`) is enough: its public endpoint is
+filled in unless `FORGECRM_AI_BASE_URL` overrides it. `ollama` and
+`openai_compatible` always need an explicit base URL. The provider kind is a
+closed set; an unrecognised value is rejected at startup.
 
 | Name | Component | Required | Default | Description | Example | Secret | Production |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `FORGECRM_AI_ENABLED` | API, Worker | no | `false` | Enables AI features. Disabled when the provider is `none`. | `false` | no | no |
-| `FORGECRM_AI_PROVIDER` | API, Worker | no | `none` | Provider kind: `none`, `ollama`, `openai`, `openai_compatible`. | `ollama` | no | no |
-| `FORGECRM_AI_BASE_URL` | API, Worker | yes when enabled | none | Provider base URL. | `http://ollama:11434` | no | no |
+| `FORGECRM_AI_PROVIDER` | API, Worker | no | `none` | Provider kind: `none`, `ollama`, `openai`, `openai_compatible`, `groq`. | `groq` | no | no |
+| `FORGECRM_AI_BASE_URL` | API, Worker | yes when enabled | none | Provider base URL. Implied for `openai` and `groq`; required for `ollama` and `openai_compatible`. | `http://ollama:11434` | no | no |
 | `FORGECRM_AI_API_KEY` | API, Worker | no | none | Provider API key. | a secret string | yes | no |
 | `FORGECRM_AI_MODEL` | API, Worker | yes when enabled | none | Model name. | `llama3.1` | no | no |
 | `FORGECRM_AI_TIMEOUT` | API, Worker | no | `60s` | Per-request timeout. | `60s` | no | no |

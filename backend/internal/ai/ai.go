@@ -130,11 +130,14 @@ func NewService(cfg *config.AIConfig, db *database.DB, auditLog *audit.Logger, c
 	s := &Service{cfg: cfg, db: db, audit: auditLog, crm: crmSvc, log: log, now: time.Now, limiter: limiter}
 	if cfg != nil && cfg.Enabled {
 		switch cfg.Provider {
-		case "ollama":
+		case config.AIProviderOllama:
 			s.provider = &OllamaProvider{baseURL: cfg.BaseURL, model: cfg.Model, timeout: cfg.Timeout}
-		case "openai", "openai_compatible":
+		case config.AIProviderOpenAI, config.AIProviderOpenAICompatible, config.AIProviderGroq:
+			// Groq speaks the OpenAI chat completions protocol, so it reuses the
+			// same adapter; only the base URL differs, and config supplies it.
 			s.provider = &OpenAICompatibleProvider{
 				baseURL: cfg.BaseURL, apiKey: cfg.APIKey, model: cfg.Model, timeout: cfg.Timeout,
+				name: cfg.Provider,
 			}
 		}
 	}
@@ -439,10 +442,20 @@ type OpenAICompatibleProvider struct {
 	apiKey  string
 	model   string
 	timeout time.Duration
+	// name is the configured provider kind ("openai", "groq", ...). It is empty
+	// for a provider built directly, which Name() reports as the generic
+	// "openai_compatible". Reporting the configured kind matters because the
+	// admin status and the audit log both quote this string back to an operator.
+	name string
 }
 
 // Name implements Provider.
-func (p *OpenAICompatibleProvider) Name() string { return "openai_compatible" }
+func (p *OpenAICompatibleProvider) Name() string {
+	if p.name != "" {
+		return p.name
+	}
+	return "openai_compatible"
+}
 
 // Model implements Provider.
 func (p *OpenAICompatibleProvider) Model() string { return p.model }

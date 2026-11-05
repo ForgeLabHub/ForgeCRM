@@ -1,10 +1,23 @@
 # Gitleaks configuration.
 #
-# The default rule set is kept in full; this file only narrows one false
-# positive. See https://github.com/gitleaks/gitleaks for the rule definitions.
+# The default rule set is kept in full; this file adds one vendor rule the
+# defaults miss and narrows two false positives. See
+# https://github.com/gitleaks/gitleaks for the rule definitions.
 
 [extend]
 useDefault = true
+
+# Groq keys are `gsk_` followed by a base62 body. The default `generic-api-key`
+# rule only reports one when it sits next to a variable name such as API_KEY, so
+# a bare key pasted into a config or a note goes unnoticed; this names the shape
+# on its own. Length is bounded only on the low side, and the trailing `\b`
+# stops a mid-token match, so a key longer than any issued today is still
+# caught.
+[[rules]]
+id = "groq-api-key"
+description = "Found a Groq API key, which grants access to the Groq inference API."
+regex = '''\bgsk_[A-Za-z0-9]{40,}\b'''
+keywords = ["gsk_"]
 
 [[allowlists]]
 description = "Fixed CI-only placeholder keys, never used outside a CI job"

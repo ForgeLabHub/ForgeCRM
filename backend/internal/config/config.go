@@ -167,6 +167,47 @@ type AIConfig struct {
 	MaxRequestsMin int
 }
 
+// AI provider kinds accepted by FORGECRM_AI_PROVIDER. The set is closed: a value
+// outside it builds no provider at all, which leaves the subsystem reading as
+// "on" while every call reports the provider unavailable. Validation turns that
+// into a startup error instead.
+const (
+	AIProviderNone             = "none"
+	AIProviderOllama           = "ollama"
+	AIProviderOpenAI           = "openai"
+	AIProviderOpenAICompatible = "openai_compatible"
+	AIProviderGroq             = "groq"
+)
+
+// aiProviderBaseURLs holds the public endpoint of a hosted provider, so a
+// deployment that names only the provider still reaches it. Ollama is absent on
+// purpose: it is self-hosted, and only the operator knows its address.
+var aiProviderBaseURLs = map[string]string{
+	AIProviderOpenAI: "https://api.openai.com/v1",
+	AIProviderGroq:   "https://api.groq.com/openai/v1",
+}
+
+// AIProviderKinds is the closed set, in the order the error message lists it. It
+// is exported so the API can publish the same set instead of keeping a second
+// list that drifts: the provider catalog on /ai/providers and the values
+// FORGECRM_AI_PROVIDER accepts are then the same list by construction.
+func AIProviderKinds() []string {
+	return []string{
+		AIProviderNone, AIProviderOllama, AIProviderOpenAI,
+		AIProviderOpenAICompatible, AIProviderGroq,
+	}
+}
+
+// validAIProvider reports whether name is a kind the AI layer can build.
+func validAIProvider(name string) bool {
+	for _, kind := range AIProviderKinds() {
+		if name == kind {
+			return true
+		}
+	}
+	return false
+}
+
 // MCPConfig configures credentials for external MCP clients.
 type MCPConfig struct {
 	// RequestsPerMin bounds tool calls made through one credential, per minute. It is
@@ -471,7 +512,7 @@ func Load() (*Config, error) {
 
 	c.AI = AIConfig{
 		Enabled:        envBool("FORGECRM_AI_ENABLED", false),
-		Provider:       env("FORGECRM_AI_PROVIDER", "none"),
+		Provider:       strings.ToLower(strings.TrimSpace(env("FORGECRM_AI_PROVIDER", AIProviderNone))),
 		BaseURL:        env("FORGECRM_AI_BASE_URL", ""),
 		APIKey:         env("FORGECRM_AI_API_KEY", ""),
 		Model:          env("FORGECRM_AI_MODEL", ""),
@@ -480,7 +521,13 @@ func Load() (*Config, error) {
 	if c.AI.Timeout, err = envDuration("FORGECRM_AI_TIMEOUT", 60*time.Second); err != nil {
 		return nil, err
 	}
-	if c.AI.Provider == "none" || c.AI.Provider == "" {
+	// A hosted provider has one public endpoint, so naming the provider is enough.
+	// An explicit FORGECRM_AI_BASE_URL still wins, which is what points at a
+	// self-hosted gateway that speaks the same protocol.
+	if c.AI.BaseURL == "" {
+		c.AI.BaseURL = aiProviderBaseURLs[c.AI.Provider]
+	}
+	if c.AI.Provider == AIProviderNone {
 		c.AI.Enabled = false
 	}
 
@@ -686,6 +733,13 @@ func (c *Config) Validate() error {
 	}
 	if c.Email.Enabled && (c.Email.Host == "" || c.Email.From == "") {
 		return fmt.Errorf("SMTP enabled but FORGECRM_SMTP_HOST or FORGECRM_SMTP_FROM is empty")
+	}
+	// The provider kind is a closed set, so an unrecognised value is rejected
+	// rather than falling through to "no provider": the AI layer builds nothing
+	// for an unknown name, yet FORGECRM_AI_ENABLED still reads as on, and the
+	// failure surfaces only as "provider unavailable" on every call.
+	if !validAIProvider(c.AI.Provider) {
+		return fmt.Errorf("FORGECRM_AI_PROVIDER must be one of %s, got %q", strings.Join(AIProviderKinds(), ", "), c.AI.Provider)
 	}
 	if c.AI.Enabled && (c.AI.BaseURL == "" || c.AI.Model == "") {
 		return fmt.Errorf("AI enabled but FORGECRM_AI_BASE_URL or FORGECRM_AI_MODEL is empty")
