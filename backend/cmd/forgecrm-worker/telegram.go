@@ -141,8 +141,17 @@ func (r *handlerRegistry) sendTelegramTask(ctx context.Context, queue *jobs.Queu
 		var title, status, priority, locale string
 		var due *time.Time
 		var scheduleID uuid.UUID
-		err = r.db.Q(ctx).QueryRow(ctx, `SELECT t.title,t.status,t.priority,t.due_at,u.locale,t.telegram_due_revision
-			FROM tasks t JOIN users u ON u.id=t.assignee_user_id
+		// The card's language is the one chosen in the assistant
+		// (telegram_user_settings), falling back to the CRM user's locale and then
+		// English. The assistant's language never rewrites the CRM locale, so the
+		// two can legitimately differ.
+		err = r.db.Q(ctx).QueryRow(ctx, `SELECT t.title,t.status,t.priority,t.due_at,
+				COALESCE(ts.locale, u.locale, 'en'),t.telegram_due_revision
+			FROM tasks t
+			JOIN users u ON u.id=t.assignee_user_id
+			LEFT JOIN telegram_links l ON l.organization_id=t.organization_id AND l.user_id=t.assignee_user_id
+				AND l.linked_at IS NOT NULL AND l.revoked_at IS NULL
+			LEFT JOIN telegram_user_settings ts ON ts.telegram_user_id=l.telegram_user_id
 			WHERE t.id=$1 AND t.organization_id=$2 AND t.assignee_user_id=$3 AND t.archived_at IS NULL
 			FOR SHARE OF t,u`, payload.TaskID, *job.OrganizationID, payload.UserID).Scan(&title, &status, &priority, &due, &locale, &scheduleID)
 		if database.IsNoRows(err) {
@@ -186,6 +195,17 @@ func (r *handlerRegistry) sendTelegramTask(ctx context.Context, queue *jobs.Queu
 		principal := rbac.NewPrincipal(payload.UserID, "", "", *job.OrganizationID, perms)
 		if !principal.Has(rbac.PermTasksRead) {
 			result.Status = "forbidden"
+			return nil
+		}
+		// A per-account preference can silence a type the person turned off. The
+		// account-level consent gate still applies inside NotifyTask; this only
+		// removes a type, never grants one.
+		wanted, err := r.telegram.NotificationEnabled(ctx, *job.OrganizationID, payload.UserID, notify.NotificationKind(payload.Kind))
+		if err != nil {
+			return err
+		}
+		if !wanted {
+			result.Status = "muted"
 			return nil
 		}
 		result, err = r.telegram.NotifyTask(ctx, *job.OrganizationID, payload.UserID, notify.TaskCard{Kind: payload.Kind, Locale: locale, Title: title, Priority: priority, DueAt: due})
