@@ -227,7 +227,7 @@ func (s *Service) readFunnel(ctx context.Context, orgID uuid.UUID, currency stri
 		       count(d.id),
 		       COALESCE(sum(d.amount), 0)::text
 		FROM pipeline_stages s
-		LEFT JOIN deals d ON d.stage_id = s.id AND d.archived_at IS NULL
+		LEFT JOIN deals d ON d.stage_id = s.id AND d.organization_id = s.organization_id AND d.archived_at IS NULL
 		     AND d.status = 'open' AND d.currency = $3
 		WHERE s.pipeline_id = $1 AND s.organization_id = $2
 		GROUP BY s.id, s.name, s.position, s.probability

@@ -26,7 +26,7 @@
 | Подбор пароля | блокировка после `FORGECRM_LOCKOUT_THRESHOLD`, отдельный rate limit входа, журнал `login_attempts` | `internal/authn/lockout_integration_test.go` |
 | Захват сессии | HttpOnly + SameSite + Secure cookie, ротация сессии, step-up для деструктивных действий | `internal/api/session_sharing_test.go`, `step_up_handlers.go` |
 | Обход CSRF | обязательный CSRF-заголовок для небезопасных методов | `internal/api/*_test.go` |
-| Межарендаторская утечка | tenant-контекст в запросе, обязательный `organization_id`, тесты изоляции | `tenant_isolation_test.go`, `isolation_cases_test.go` |
+| Межарендаторская утечка | tenant-контекст в запросе, обязательный `organization_id`, проверка ссылок на чужие записи на всех путях записи (CRM и воркер импорта), join'ы с `organization_id` в `ON`, тесты изоляции | `tenant_isolation_test.go`, `isolation_cases_test.go`, `internal/testsupport/import_tenant_ref_test.go` |
 | Обход RBAC | право объявлено на маршруте, тест на «каждый маршрут объявляет право» | `capabilities_test.go`, `contract_test.go` |
 | Zip-bomb / path traversal в импорте | лимиты глубины, количества файлов, распакованного объёма и коэффициента сжатия | `internal/importx/safe/*_test.go` |
 | CSV-инъекция при экспорте | экранирование формул в ячейках | тесты экспорта |

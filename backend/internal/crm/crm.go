@@ -311,6 +311,11 @@ func (s *Service) CreateAccount(ctx context.Context, p *rbac.Principal, in Accou
 	}
 	var created *Account
 	err := s.db.WithTx(ctx, func(ctx context.Context, _ database.Tx) error {
+		if err := s.assertOptionalRefs(ctx, p.OrganizationID, map[string]*uuid.UUID{
+			"team_id": in.TeamID, "owner_user_id": in.OwnerUserID,
+		}); err != nil {
+			return err
+		}
 		const q = `
 			INSERT INTO accounts (organization_id, name, legal_name, industry, website, phone,
 				email, tax_id, address_line1, city, region, postal_code, country, annual_revenue,
@@ -352,6 +357,11 @@ func (s *Service) UpdateAccount(ctx context.Context, p *rbac.Principal, id uuid.
 	err := s.db.WithTx(ctx, func(ctx context.Context, _ database.Tx) error {
 		before, err := s.GetAccount(ctx, p, id)
 		if err != nil {
+			return err
+		}
+		if err := s.assertOptionalRefs(ctx, p.OrganizationID, map[string]*uuid.UUID{
+			"team_id": in.TeamID, "owner_user_id": in.OwnerUserID,
+		}); err != nil {
 			return err
 		}
 		const q = `

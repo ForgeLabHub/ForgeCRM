@@ -473,6 +473,60 @@ func (s *Service) findExisting(ctx context.Context, orgID uuid.UUID, spec entity
 	return &id, nil
 }
 
+// refTables maps an importable reference field to the table its id must exist
+// in. The import worker writes rows directly rather than through crm.Service, so
+// it has to apply the same tenant check the API does: a foreign key only proves
+// the referenced row exists somewhere, not that it belongs to the importing
+// organization. Without this, an import in one tenant can store a reference to
+// another tenant's record, and every later read that dereferences it (a join, a
+// risk signal, an export) crosses the boundary.
+//
+// "users" is checked against membership rather than an organization column,
+// because users are not org-scoped themselves.
+var refTables = map[string]string{
+	"account_id":         "accounts",
+	"contact_id":         "contacts",
+	"deal_id":            "deals",
+	"ticket_id":          "tickets",
+	"primary_contact_id": "contacts",
+	"team_id":            "teams",
+	"owner_user_id":      "users",
+	"assignee_user_id":   "users",
+}
+
+// assertRefsInOrg rejects an import row that references a record outside the
+// importing organization. It is called with the coerced values of one row, so a
+// bad reference fails that row (and is reported as a row error) rather than the
+// whole import.
+func (s *Service) assertRefsInOrg(ctx context.Context, orgID uuid.UUID, values map[string]any) error {
+	for field, table := range refTables {
+		raw, ok := values[field]
+		if !ok || raw == nil {
+			continue
+		}
+		id, ok := raw.(uuid.UUID)
+		if !ok || id == uuid.Nil {
+			continue
+		}
+		var q string
+		if table == "users" {
+			q = `SELECT 1 FROM memberships WHERE user_id = $1 AND organization_id = $2 AND status = 'active'`
+		} else {
+			q = `SELECT 1 FROM ` + table + ` WHERE id = $1 AND organization_id = $2`
+		}
+		var one int
+		err := s.db.Q(ctx).QueryRow(ctx, q, id, orgID).Scan(&one)
+		if err == pgx.ErrNoRows {
+			return httpx.ValidationError(map[string]string{
+				field: "does not belong to this organization"})
+		}
+		if err != nil {
+			return fmt.Errorf("check %s scope: %w", field, err)
+		}
+	}
+	return nil
+}
+
 // writeRow inserts or updates one row and returns the outcome.
 func (s *Service) writeRow(ctx context.Context, orgID, actorID uuid.UUID, entityType string,
 	spec entitySpec, opts Options, values map[string]any) (writeOutcome, error) {
@@ -487,6 +541,13 @@ func (s *Service) writeRow(ctx context.Context, orgID, actorID uuid.UUID, entity
 		if _, ok := values["owner_user_id"]; !ok {
 			values["owner_user_id"] = *opts.DefaultOwnerID
 		}
+	}
+
+	// A reference to a record in another organization must never be stored. The
+	// check runs before findExisting so a bad row cannot even be matched against,
+	// and it covers the values the defaults above may have just added.
+	if err := s.assertRefsInOrg(ctx, orgID, values); err != nil {
+		return outcomeFailed, err
 	}
 
 	existing, err := s.findExisting(ctx, orgID, spec, opts, values)
