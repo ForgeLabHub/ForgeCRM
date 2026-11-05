@@ -61,6 +61,21 @@ async function prime(page: Page, opts: { theme?: 'light' | 'dark'; locale?: 'en'
   )
 }
 
+// Visual baselines deliberately exercise the original light/dark palette.
+// Appearance is account-scoped now, so configure it through the real API rather
+// than assuming localStorage controls an authenticated user's settings.
+async function setVisualAppearance(page: Page, mode: 'light' | 'dark' = 'light') {
+  const me = await page.request.get('/api/v1/auth/me')
+  expect(me.ok()).toBeTruthy()
+  const { csrf_token } = await me.json()
+  const response = await page.request.put('/api/v1/auth/appearance', {
+    headers: { 'X-CSRF-Token': csrf_token },
+    data: { style: 'default', mode, accent: 'theme', density: 'standard' },
+  })
+  expect(response.ok()).toBeTruthy()
+  await page.reload()
+}
+
 test.describe('visual: sign-in', () => {
   test('the two-pane sign-in page', async ({ page }) => {
     await page.goto('/login')
@@ -96,6 +111,7 @@ test.describe('visual: workspace', () => {
   test('the app shell and dashboard in dark mode', async ({ page }) => {
     await prime(page, { theme: 'dark' })
     await signIn(page)
+    await setVisualAppearance(page, 'dark')
     await ready(page, page.getByRole('heading', { level: 1 }))
     // Dark mode is where the contrast tokens are most visible.
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
@@ -106,6 +122,7 @@ test.describe('visual: workspace', () => {
 
   test('the accounts data table', async ({ page }) => {
     await signIn(page)
+    await setVisualAppearance(page)
     const name = `Visual Corp ${RUN_ID}`
     await createAccount(page, name)
     await page.goto('/accounts')
@@ -127,6 +144,7 @@ test.describe('visual: workspace', () => {
 
   test('the accounts table stacked into cards on a phone', async ({ page }) => {
     await signIn(page)
+    await setVisualAppearance(page)
     const name = `Visual Corp ${RUN_ID}`
     await createAccount(page, name)
     await page.setViewportSize({ width: 390, height: 844 })
@@ -146,6 +164,7 @@ test.describe('visual: workspace', () => {
 
   test('the create-account dialog', async ({ page }) => {
     await signIn(page)
+    await setVisualAppearance(page)
     await page.goto('/accounts')
     // The scrim is translucent, so whatever sits behind it is part of the
     // image. Filter to a fixed term that matches nothing first, so the
@@ -164,6 +183,7 @@ test.describe('visual: workspace', () => {
 
   test('the reports stat tiles and pipeline table', async ({ page }) => {
     await signIn(page)
+    await setVisualAppearance(page)
     await page.goto('/reports')
     await ready(page, page.getByRole('heading', { name: 'Reports' }))
     await expect(page).toHaveScreenshot('reports-desktop-light-en.png', {

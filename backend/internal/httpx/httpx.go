@@ -424,7 +424,7 @@ func RecoverMiddleware(log *slog.Logger) func(http.Handler) http.Handler {
 //
 // report-uri and report-to both point at the /csp-report sink.
 const CSP = "default-src 'self'; " +
-	"script-src 'self' 'sha256-vnv5pucUkxrn/0vQPxiGLGnKRB8NToF/9rfKNCzOx8E='; " +
+	"script-src 'self' 'sha256-0q4OzFn8httmwOOUbz9YXYOSZNfbSSnJzYzRYjZakOs='; " +
 	"style-src 'self' 'unsafe-inline'; " +
 	"img-src 'self' data: blob:; " +
 	"font-src 'self'; " +

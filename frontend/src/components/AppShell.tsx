@@ -48,7 +48,7 @@ const THEME_LABEL_KEY: Record<ThemeMode, TranslationKey> = {
 function AccountMenu() {
   const { session, signOut } = useAuth()
   const { t } = useI18n()
-  const { mode, setMode } = useTheme()
+  const { mode, setMode, saving, syncError, ready } = useTheme()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -116,7 +116,8 @@ function AccountMenu() {
                       : 'menu__theme-option'
                   }
                   aria-pressed={option === mode}
-                  onClick={() => setMode(option)}
+                  disabled={saving || !ready}
+                  onClick={() => void setMode(option)}
                 >
                   <Icon size={14} />
                   <span>{t(THEME_LABEL_KEY[option])}</span>
@@ -125,6 +126,7 @@ function AccountMenu() {
             })}
           </div>
 
+          {syncError ? <p role="alert" className="text-sm">{t('appearance.saveError')}</p> : null}
           <div className="menu__separator" />
 
           <Link to="/account" className="menu__item" onClick={() => setOpen(false)}>
