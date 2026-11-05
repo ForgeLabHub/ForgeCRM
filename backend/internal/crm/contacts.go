@@ -126,7 +126,7 @@ func (s *Service) ListContacts(ctx context.Context, p *rbac.Principal, q ListQue
 	}
 	// Record-level rule: a caller who cannot read all contacts only sees the ones
 	// they own or that belong to their teams.
-	if frag, withArgs := objectOwnerPredicate(p, rbac.PermContactsArchive, "owner_user_id", true, args); frag != "" {
+	if frag, withArgs := objectOwnerPredicateFor(p, "contact", args); frag != "" {
 		where = append(where, frag)
 		args = withArgs
 	}
@@ -161,7 +161,7 @@ func (s *Service) ListContacts(ctx context.Context, p *rbac.Principal, q ListQue
 func (s *Service) GetContact(ctx context.Context, p *rbac.Principal, id uuid.UUID) (*Contact, error) {
 	where := "id = $1 AND organization_id = $2"
 	args := []any{id, p.OrganizationID}
-	if frag, withArgs := objectOwnerPredicate(p, rbac.PermContactsArchive, "owner_user_id", true, args); frag != "" {
+	if frag, withArgs := objectOwnerPredicateFor(p, "contact", args); frag != "" {
 		where += " AND " + frag
 		args = withArgs
 	}
@@ -232,7 +232,7 @@ func (s *Service) UpdateContact(ctx context.Context, p *rbac.Principal, id uuid.
 			in.FirstName, in.LastName, in.Email, in.Phone, in.Mobile, in.JobTitle, in.Department,
 			in.IsPrimary, in.OwnerUserID, in.TeamID, in.ExternalSource, in.ExternalID,
 			orEmptyJSON(in.CustomFields)}
-		if frag, withArgs := objectOwnerPredicate(p, rbac.PermContactsArchive, "owner_user_id", true, args); frag != "" {
+		if frag, withArgs := objectOwnerPredicateFor(p, "contact", args); frag != "" {
 			where += " AND " + frag
 			args = withArgs
 		}
@@ -428,7 +428,7 @@ func (s *Service) ListLeads(ctx context.Context, p *rbac.Principal, q ListQuery)
 	}
 	// Record-level rule: a caller who cannot read all leads only sees the ones they
 	// own or that belong to their teams.
-	if frag, withArgs := objectOwnerPredicate(p, rbac.PermLeadsArchive, "owner_user_id", true, args); frag != "" {
+	if frag, withArgs := objectOwnerPredicateFor(p, "lead", args); frag != "" {
 		where = append(where, frag)
 		args = withArgs
 	}
@@ -462,7 +462,7 @@ func (s *Service) ListLeads(ctx context.Context, p *rbac.Principal, q ListQuery)
 func (s *Service) GetLead(ctx context.Context, p *rbac.Principal, id uuid.UUID) (*Lead, error) {
 	where := "id = $1 AND organization_id = $2"
 	args := []any{id, p.OrganizationID}
-	if frag, withArgs := objectOwnerPredicate(p, rbac.PermLeadsArchive, "owner_user_id", true, args); frag != "" {
+	if frag, withArgs := objectOwnerPredicateFor(p, "lead", args); frag != "" {
 		where += " AND " + frag
 		args = withArgs
 	}
@@ -525,7 +525,7 @@ func (s *Service) UpdateLead(ctx context.Context, p *rbac.Principal, id uuid.UUI
 			in.FirstName, in.LastName, in.Email, in.Phone, in.Company, in.Source, in.Status,
 			in.Score, in.Notes, in.OwnerUserID, in.TeamID, in.ExternalSource, in.ExternalID,
 			orEmptyJSON(in.CustomFields)}
-		if frag, withArgs := objectOwnerPredicate(p, rbac.PermLeadsArchive, "owner_user_id", true, args); frag != "" {
+		if frag, withArgs := objectOwnerPredicateFor(p, "lead", args); frag != "" {
 			where += " AND " + frag
 			args = withArgs
 		}

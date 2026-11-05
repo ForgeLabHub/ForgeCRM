@@ -144,7 +144,7 @@ func (s *Service) ListTasks(ctx context.Context, p *rbac.Principal, q ListQuery)
 	}
 	// Record-level rule: without the assign permission, a caller only sees tasks
 	// assigned to them or to one of their teams.
-	if frag, withArgs := objectOwnerPredicate(p, rbac.PermTasksAssign, "assignee_user_id", false, args); frag != "" {
+	if frag, withArgs := objectOwnerPredicateFor(p, "task", args); frag != "" {
 		where = append(where, frag)
 		args = withArgs
 	}
@@ -178,7 +178,7 @@ func (s *Service) ListTasks(ctx context.Context, p *rbac.Principal, q ListQuery)
 func (s *Service) GetTask(ctx context.Context, p *rbac.Principal, id uuid.UUID) (*Task, error) {
 	where := "id = $1 AND organization_id = $2"
 	args := []any{id, p.OrganizationID}
-	if frag, withArgs := objectOwnerPredicate(p, rbac.PermTasksAssign, "assignee_user_id", false, args); frag != "" {
+	if frag, withArgs := objectOwnerPredicateFor(p, "task", args); frag != "" {
 		where += " AND " + frag
 		args = withArgs
 	}
@@ -432,6 +432,14 @@ func (s *Service) ListActivities(ctx context.Context, p *rbac.Principal, q ListQ
 		args = append(args, *q.To)
 		where = append(where, fmt.Sprintf("occurred_at <= $%d", len(args)))
 	}
+	// The feed is a nested view of the records activities hang from: a caller who
+	// cannot read a parent record must not see its history, and the global feed
+	// must not become a way around that. A caller with full reach on every parent
+	// type is left unfiltered, so nothing changes for them.
+	if frag, scopeArgs := activityScopeFilter(p, len(args)); frag != "" {
+		where = append(where, frag)
+		args = append(args, scopeArgs...)
+	}
 	whereSQL := strings.Join(where, " AND ")
 	var total int64
 	if err := s.db.Q(ctx).QueryRow(ctx, "SELECT count(*) FROM activities WHERE "+whereSQL, args...).Scan(&total); err != nil {
@@ -614,7 +622,7 @@ func (s *Service) ListTickets(ctx context.Context, p *rbac.Principal, q ListQuer
 	}
 	// Record-level rule: without the assign permission, a caller only sees tickets
 	// assigned to them or to one of their teams.
-	if frag, withArgs := objectOwnerPredicate(p, rbac.PermTicketsAssign, "assignee_user_id", false, args); frag != "" {
+	if frag, withArgs := objectOwnerPredicateFor(p, "ticket", args); frag != "" {
 		where = append(where, frag)
 		args = withArgs
 	}
@@ -648,7 +656,7 @@ func (s *Service) ListTickets(ctx context.Context, p *rbac.Principal, q ListQuer
 func (s *Service) GetTicket(ctx context.Context, p *rbac.Principal, id uuid.UUID) (*Ticket, error) {
 	where := "id = $1 AND organization_id = $2"
 	args := []any{id, p.OrganizationID}
-	if frag, withArgs := objectOwnerPredicate(p, rbac.PermTicketsAssign, "assignee_user_id", false, args); frag != "" {
+	if frag, withArgs := objectOwnerPredicateFor(p, "ticket", args); frag != "" {
 		where += " AND " + frag
 		args = withArgs
 	}
@@ -746,7 +754,7 @@ func (s *Service) UpdateTicket(ctx context.Context, p *rbac.Principal, id uuid.U
 		args := []any{id, p.OrganizationID, in.Subject,
 			in.Description, in.Status, in.Priority, in.Channel, in.AccountID, in.ContactID,
 			in.AssigneeUserID, in.TeamID}
-		if frag, withArgs := objectOwnerPredicate(p, rbac.PermTicketsAssign, "assignee_user_id", false, args); frag != "" {
+		if frag, withArgs := objectOwnerPredicateFor(p, "ticket", args); frag != "" {
 			where += " AND " + frag
 			args = withArgs
 		}

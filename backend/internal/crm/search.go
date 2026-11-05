@@ -79,6 +79,9 @@ func (s *Service) ListEntityTags(ctx context.Context, p *rbac.Principal, entityT
 	if !validTaggableTypes[entityType] {
 		return nil, httpx.ValidationError(map[string]string{"entity_type": "unsupported entity type"})
 	}
+	if err := s.ensureReadableObject(ctx, p, entityType, entityID); err != nil {
+		return nil, err
+	}
 	const q = `
 		SELECT t.id, t.name, t.color, t.created_at
 		FROM taggables g
@@ -107,6 +110,11 @@ func (s *Service) TagEntity(ctx context.Context, p *rbac.Principal, tagID uuid.U
 		return httpx.ValidationError(map[string]string{"entity_type": "unsupported entity type"})
 	}
 	return s.db.WithTx(ctx, func(ctx context.Context, _ database.Tx) error {
+		// The tag link hangs off the record: the caller must be able to read it,
+		// or an attach becomes a way to write against a hidden record.
+		if err := s.ensureReadableObject(ctx, p, entityType, entityID); err != nil {
+			return err
+		}
 		// Verify the tag belongs to the caller's organization.
 		var exists int
 		const tagQ = `SELECT 1 FROM tags WHERE id = $1 AND organization_id = $2`
@@ -150,6 +158,9 @@ func (s *Service) ListComments(ctx context.Context, p *rbac.Principal, entityTyp
 	if !validTaggableTypes[entityType] {
 		return nil, httpx.ValidationError(map[string]string{"entity_type": "unsupported entity type"})
 	}
+	if err := s.ensureReadableObject(ctx, p, entityType, entityID); err != nil {
+		return nil, err
+	}
 	const q = `
 		SELECT c.id, c.entity_type, c.entity_id, c.body, c.author_user_id, u.display_name, c.created_at
 		FROM comments c
@@ -181,6 +192,9 @@ func (s *Service) CreateComment(ctx context.Context, p *rbac.Principal, entityTy
 	body = strings.TrimSpace(body)
 	if body == "" {
 		return nil, httpx.ValidationError(map[string]string{"body": "comment must not be empty"})
+	}
+	if err := s.ensureReadableObject(ctx, p, entityType, entityID); err != nil {
+		return nil, err
 	}
 	var c Comment
 	const q = `
@@ -393,38 +407,35 @@ func (s *Service) Search(ctx context.Context, p *rbac.Principal, term string, li
 	like := "%" + term + "%"
 
 	type source struct {
-		permission       rbac.Permission
-		reachPerm        rbac.Permission
-		ownerColumn      string
-		teamlessReadsAll bool
-		entityType       string
-		sql              string
+		permission rbac.Permission
+		entityType string
+		sql        string
 	}
 	sources := []source{
-		{rbac.PermAccountsRead, rbac.PermAccountsArchive, "owner_user_id", true, "account", `
+		{rbac.PermAccountsRead, "account", `
 			SELECT id, name, COALESCE(email::text,''), updated_at FROM accounts
 			WHERE organization_id = $1 AND archived_at IS NULL AND (name ILIKE $2 OR COALESCE(email::text,'') ILIKE $2)
 			ORDER BY updated_at DESC LIMIT $3`},
-		{rbac.PermContactsRead, rbac.PermContactsArchive, "owner_user_id", true, "contact", `
+		{rbac.PermContactsRead, "contact", `
 			SELECT id, COALESCE(NULLIF(TRIM(COALESCE(first_name,'') || ' ' || COALESCE(last_name,'')), ''), COALESCE(email::text,'')),
 			       COALESCE(email::text,''), updated_at FROM contacts
 			WHERE organization_id = $1 AND archived_at IS NULL
 			  AND (COALESCE(first_name,'') ILIKE $2 OR COALESCE(last_name,'') ILIKE $2 OR COALESCE(email::text,'') ILIKE $2)
 			ORDER BY updated_at DESC LIMIT $3`},
-		{rbac.PermLeadsRead, rbac.PermLeadsArchive, "owner_user_id", true, "lead", `
+		{rbac.PermLeadsRead, "lead", `
 			SELECT id, COALESCE(NULLIF(title,''), COALESCE(company,'')), COALESCE(email::text,''), updated_at FROM leads
 			WHERE organization_id = $1 AND archived_at IS NULL
 			  AND (title ILIKE $2 OR COALESCE(company,'') ILIKE $2 OR COALESCE(email::text,'') ILIKE $2)
 			ORDER BY updated_at DESC LIMIT $3`},
-		{rbac.PermDealsRead, rbac.PermDealsArchive, "owner_user_id", true, "deal", `
+		{rbac.PermDealsRead, "deal", `
 			SELECT id, title, COALESCE(currency,'') || ' ' || amount::text, updated_at FROM deals
 			WHERE organization_id = $1 AND archived_at IS NULL AND title ILIKE $2
 			ORDER BY updated_at DESC LIMIT $3`},
-		{rbac.PermTicketsRead, rbac.PermTicketsAssign, "assignee_user_id", false, "ticket", `
+		{rbac.PermTicketsRead, "ticket", `
 			SELECT id, subject, COALESCE(status,''), updated_at FROM tickets
 			WHERE organization_id = $1 AND archived_at IS NULL AND subject ILIKE $2
 			ORDER BY updated_at DESC LIMIT $3`},
-		{rbac.PermTasksRead, rbac.PermTasksAssign, "assignee_user_id", false, "task", `
+		{rbac.PermTasksRead, "task", `
 			SELECT id, title, COALESCE(status,''), updated_at FROM tasks
 			WHERE organization_id = $1 AND archived_at IS NULL AND title ILIKE $2
 			ORDER BY updated_at DESC LIMIT $3`},
@@ -439,7 +450,7 @@ func (s *Service) Search(ctx context.Context, p *rbac.Principal, term string, li
 		// caller cannot list must not be discoverable by searching for its name.
 		sql := src.sql
 		sqlArgs := []any{p.OrganizationID, like, limit}
-		if frag, withArgs := objectOwnerPredicate(p, src.reachPerm, src.ownerColumn, src.teamlessReadsAll, sqlArgs); frag != "" {
+		if frag, withArgs := objectOwnerPredicateFor(p, src.entityType, sqlArgs); frag != "" {
 			sql = strings.Replace(sql, "ORDER BY updated_at DESC LIMIT $3",
 				"AND "+frag+" ORDER BY updated_at DESC LIMIT $3", 1)
 			sqlArgs = withArgs

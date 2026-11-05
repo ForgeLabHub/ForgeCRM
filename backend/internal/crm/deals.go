@@ -312,7 +312,7 @@ func (s *Service) ListDeals(ctx context.Context, p *rbac.Principal, q ListQuery)
 	}
 	// Record-level rule: a caller who cannot archive deals only sees the deals they
 	// own or that belong to their teams.
-	if frag, withArgs := objectOwnerPredicate(p, rbac.PermDealsArchive, "owner_user_id", true, args); frag != "" {
+	if frag, withArgs := objectOwnerPredicateFor(p, "deal", args); frag != "" {
 		where = append(where, frag)
 		args = withArgs
 	}
@@ -346,7 +346,7 @@ func (s *Service) ListDeals(ctx context.Context, p *rbac.Principal, q ListQuery)
 func (s *Service) GetDeal(ctx context.Context, p *rbac.Principal, id uuid.UUID) (*Deal, error) {
 	where := "id = $1 AND organization_id = $2"
 	args := []any{id, p.OrganizationID}
-	if frag, withArgs := objectOwnerPredicate(p, rbac.PermDealsArchive, "owner_user_id", true, args); frag != "" {
+	if frag, withArgs := objectOwnerPredicateFor(p, "deal", args); frag != "" {
 		where += " AND " + frag
 		args = withArgs
 	}
