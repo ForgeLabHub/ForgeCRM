@@ -14,9 +14,11 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/geff1778/forgecrm/internal/audit"
+	"github.com/geff1778/forgecrm/internal/config"
 	"github.com/geff1778/forgecrm/internal/crm"
 	"github.com/geff1778/forgecrm/internal/database"
 	"github.com/geff1778/forgecrm/internal/httpx"
+	"github.com/geff1778/forgecrm/internal/importx"
 	"github.com/geff1778/forgecrm/internal/migrate"
 	"github.com/geff1778/forgecrm/internal/outbox"
 	"github.com/geff1778/forgecrm/internal/rbac"
@@ -313,5 +315,108 @@ func TestTeamlessCallerSeesOnlyOwnWorkItems(t *testing.T) {
 	}
 	if _, err := f.svc.GetTask(ctx, teamless, own.ID); err != nil {
 		t.Fatalf("a teamless caller could not read their own task: %v", err)
+	}
+}
+
+// TestExportRespectsTheObjectRule checks that a CSV/JSONL export cannot be used to
+// dump records the caller cannot see in a list. The export path is a bulk read
+// with the same object-level obligation as a list, and the doc comment already
+// promises it behaves "exactly like a list request".
+func TestExportRespectsTheObjectRule(t *testing.T) {
+	f := newObjectAuthzFixture(t)
+	ctx := context.Background()
+	svc, err := importx.NewService(f.db, &config.Config{ImportTempDir: t.TempDir()},
+		audit.New(f.db), nil, nil, nil, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := func(p *rbac.Principal) map[string]bool {
+		t.Helper()
+		names := map[string]bool{}
+		if _, err := svc.Export(ctx, p, "account", "jsonl", func(row map[string]any) error {
+			if n, ok := row["name"].(string); ok {
+				names[n] = true
+			}
+			return nil
+		}); err != nil {
+			t.Fatalf("export: %v", err)
+		}
+		return names
+	}
+	if seen(f.readOnlyBob)["Zebra Account"] {
+		t.Fatal("bob's export leaked an account the account list hides from him")
+	}
+	if !seen(f.managerAlice)["Zebra Account"] {
+		t.Fatal("alice's export must still contain her own account")
+	}
+}
+
+// TestCommentsRespectTheObjectRule checks that comments cannot be read or written
+// against a record the caller cannot see. Comments are a nested resource: the
+// authorization decision belongs to the parent record.
+func TestCommentsRespectTheObjectRule(t *testing.T) {
+	f := newObjectAuthzFixture(t)
+	ctx := context.Background()
+	acct := f.aliceOnly["account"]
+
+	if _, err := f.svc.CreateComment(ctx, f.readOnlyBob, "account", acct, "leak"); !errors.Is(err, crm.ErrNotFound) {
+		t.Fatalf("bob commented on an account he cannot read: err = %v, want ErrNotFound", err)
+	}
+	if _, err := f.svc.CreateComment(ctx, f.managerAlice, "account", acct, "ok"); err != nil {
+		t.Fatalf("alice could not comment on her own account: %v", err)
+	}
+	if _, err := f.svc.ListComments(ctx, f.readOnlyBob, "account", acct); !errors.Is(err, crm.ErrNotFound) {
+		t.Fatalf("bob listed comments on an account he cannot read: err = %v, want ErrNotFound", err)
+	}
+	comments, err := f.svc.ListComments(ctx, f.managerAlice, "account", acct)
+	if err != nil {
+		t.Fatalf("alice could not list comments on her own account: %v", err)
+	}
+	if len(comments) != 1 {
+		t.Fatalf("alice sees %d comments on her account, want 1", len(comments))
+	}
+}
+
+// TestAccountActivitiesRespectTheObjectRule checks that the per-account activity
+// feed cannot surface another user's record, and that it still works for a caller
+// who may read the account.
+func TestAccountActivitiesRespectTheObjectRule(t *testing.T) {
+	f := newObjectAuthzFixture(t)
+	ctx := context.Background()
+	acct := f.aliceOnly["account"]
+	_, err := f.svc.CreateActivity(ctx, f.managerAlice, crm.ActivityInput{
+		Type: "note", Subject: "called", AccountID: &acct,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The feed is filtered, not rejected: bob must simply not see the activity.
+	leaked, _, err := f.svc.ListActivities(ctx, f.readOnlyBob, crm.ListQuery{
+		Pagination: httpx.Pagination{Limit: 20}, AccountID: &acct,
+	})
+	if err != nil {
+		t.Fatalf("listing activities for a caller who cannot read the account: %v", err)
+	}
+	if len(leaked) != 0 {
+		t.Fatalf("bob sees %d activities on an account he cannot read, want 0", len(leaked))
+	}
+	// The global feed must not be a way around the same rule.
+	global, _, err := f.svc.ListActivities(ctx, f.readOnlyBob, crm.ListQuery{
+		Pagination: httpx.Pagination{Limit: 20},
+	})
+	if err != nil {
+		t.Fatalf("listing the global activity feed: %v", err)
+	}
+	if len(global) != 0 {
+		t.Fatalf("bob's global feed leaked %d activities, want 0", len(global))
+	}
+	list, _, err := f.svc.ListActivities(ctx, f.managerAlice, crm.ListQuery{
+		Pagination: httpx.Pagination{Limit: 20}, AccountID: &acct,
+	})
+	if err != nil {
+		t.Fatalf("alice could not list activities on her own account: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("alice sees %d activities on her account, want 1", len(list))
 	}
 }

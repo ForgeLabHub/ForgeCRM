@@ -252,7 +252,7 @@ func (s *Service) ListAccounts(ctx context.Context, p *rbac.Principal, q ListQue
 	}
 	// Record-level rule: a caller who cannot read all accounts only sees the ones
 	// they own or that belong to their teams.
-	if frag, withArgs := objectOwnerPredicate(p, rbac.PermAccountsArchive, "owner_user_id", true, args); frag != "" {
+	if frag, withArgs := objectOwnerPredicateFor(p, "account", args); frag != "" {
 		where = append(where, frag)
 		args = withArgs
 	}
@@ -290,7 +290,7 @@ func (s *Service) ListAccounts(ctx context.Context, p *rbac.Principal, q ListQue
 func (s *Service) GetAccount(ctx context.Context, p *rbac.Principal, id uuid.UUID) (*Account, error) {
 	where := "id = $1 AND organization_id = $2"
 	args := []any{id, p.OrganizationID}
-	if frag, withArgs := objectOwnerPredicate(p, rbac.PermAccountsArchive, "owner_user_id", true, args); frag != "" {
+	if frag, withArgs := objectOwnerPredicateFor(p, "account", args); frag != "" {
 		where += " AND " + frag
 		args = withArgs
 	}
@@ -455,32 +455,174 @@ type ListQuery struct {
 // ErrNotFound is returned when a record does not exist in the caller's scope.
 var ErrNotFound = errors.New("not found")
 
-// objectOwnerPredicate is the single object-level authorization rule for the
-// records that carry an owner and a team: accounts, contacts, leads, deals,
-// tasks and tickets.
+// objectRule describes how one entity type is reached at the object level.
 //
-// A caller who cannot reach every record of a type — expressed by holding the
-// archive permission for that type, or the assign permission for tasks and
-// tickets — only sees the records they own or that belong to one of their teams.
-// ownerColumn names the column holding the owning user: owner_user_id for
-// accounts, contacts, leads and deals, and assignee_user_id for tasks and
-// tickets. teamlessReadsAll preserves the behaviour each entity's list query
-// already had: for shared CRM records an unowned caller is treated as an
+// reachPerm is the permission that lets a caller reach every record of the type:
+// the archive permission for the shared CRM records, the assign permission for
+// the personal work items. ownerColumn is the column holding the owning user.
+// teamlessReadsAll preserves the behaviour each entity's list query already had:
+// for shared CRM records a caller without a team is treated as an
 // organization-wide reader, while for personal work items a caller without a
-// team sees only their own. It returns the SQL fragment and the arguments it
-// binds, or an empty fragment when the caller may read the whole organization.
+// team sees only their own.
+type objectRule struct {
+	reachPerm        rbac.Permission
+	ownerColumn      string
+	teamlessReadsAll bool
+}
+
+// objectRules is the single source of truth for the object-level authorization
+// rule. Every read and write path for an entity — list, single-record read,
+// search, export, the nested feeds that hang off a parent record, and the
+// mutations — resolves its rule here, so the paths cannot drift apart again.
 //
-// The rule is applied identically by the list queries and by the single-record
-// reads, so a record a caller cannot see in a list cannot be fetched by id
-// either. The two paths used to disagree, which is exactly the object-level
-// authorization gap this closes. It is also applied to the mutation paths, so a
-// record the caller cannot read cannot be written through a guessed id.
-func objectOwnerPredicate(p *rbac.Principal, reachPerm rbac.Permission, ownerColumn string, teamlessReadsAll bool, args []any) (string, []any) {
-	if p.Has(reachPerm) || (teamlessReadsAll && len(p.TeamIDs) == 0) {
+// A path that cannot name its entity type in this table has no object-level rule
+// and must be handled explicitly, not left to a default.
+var objectRules = map[string]objectRule{
+	"account": {rbac.PermAccountsArchive, "owner_user_id", true},
+	"contact": {rbac.PermContactsArchive, "owner_user_id", true},
+	"lead":    {rbac.PermLeadsArchive, "owner_user_id", true},
+	"deal":    {rbac.PermDealsArchive, "owner_user_id", true},
+	"task":    {rbac.PermTasksAssign, "assignee_user_id", false},
+	"ticket":  {rbac.PermTicketsAssign, "assignee_user_id", false},
+}
+
+// objectOwnerPredicateFor is the object-level authorization rule for an entity
+// type, resolved through objectRules.
+//
+// A caller who cannot reach every record of the type only sees the records they
+// own or that belong to one of their teams. The rule is applied identically by
+// list queries, single-record reads, search, export and mutations, so a record a
+// caller cannot see in a list cannot be fetched, exported or written through a
+// guessed id either. It returns the SQL fragment and the arguments it binds, or
+// an empty fragment when the caller may reach the whole organization.
+//
+// An unknown entity type returns an empty fragment: callers validate the entity
+// type before they reach here, and this function must not invent a rule for a
+// type it does not know.
+func objectOwnerPredicateFor(p *rbac.Principal, entityType string, args []any) (string, []any) {
+	ownerColumn, applies := objectScopeParts(p, entityType)
+	if !applies {
 		return "", args
 	}
 	args = append(args, p.UserID, p.TeamIDs)
 	return fmt.Sprintf("(%s = $%d OR team_id = ANY($%d))", ownerColumn, len(args)-1, len(args)), args
+}
+
+// objectScopeParts reports whether the object-level rule applies to this caller
+// for this entity type, and if so which column holds the owner. It is the one
+// place the rule is decided; objectOwnerPredicateFor and ObjectScopeFilter both
+// build their SQL from it.
+func objectScopeParts(p *rbac.Principal, entityType string) (ownerColumn string, applies bool) {
+	rule, ok := objectRules[entityType]
+	if !ok {
+		return "", false
+	}
+	if p.Has(rule.reachPerm) || (rule.teamlessReadsAll && len(p.TeamIDs) == 0) {
+		return "", false
+	}
+	return rule.ownerColumn, true
+}
+
+// ObjectScopeFilter returns the object-level SQL filter for an entity type with
+// placeholders numbered from baseArg+1, together with the arguments it binds. It
+// is the same rule objectOwnerPredicateFor applies, exposed for callers outside
+// this package — the export writer — that assemble their own query. baseArg must
+// be the number of parameters the caller has already bound. An empty filter means
+// the caller may reach every record of the type, and no arguments are returned.
+//
+// The activity feed is a nested view of several parent types, so it delegates to
+// activityScopeFilter rather than a single owner column.
+func ObjectScopeFilter(p *rbac.Principal, entityType string, baseArg int) (string, []any) {
+	if entityType == "activity" {
+		return activityScopeFilter(p, baseArg)
+	}
+	ownerColumn, applies := objectScopeParts(p, entityType)
+	if !applies {
+		return "", nil
+	}
+	return fmt.Sprintf("(%s = $%d OR team_id = ANY($%d))", ownerColumn, baseArg+1, baseArg+2),
+		[]any{p.UserID, p.TeamIDs}
+}
+
+// activityParentTypes maps the parent columns an activity can hang from to the
+// entity type whose object rule governs whether the activity may be seen.
+var activityParentTypes = []struct {
+	column     string
+	entityType string
+	table      string
+}{
+	{"account_id", "account", "accounts"},
+	{"contact_id", "contact", "contacts"},
+	{"deal_id", "deal", "deals"},
+	{"ticket_id", "ticket", "tickets"},
+}
+
+// activityScopeFilter restricts the global activity feed to activities the caller
+// can reach through at least one of their parent records, using the same
+// per-entity object rules as everything else. Placeholders are numbered from
+// baseArg+1.
+//
+// When the caller is unrestricted on every parent type, it returns an empty
+// filter and no arguments, so a caller with full reach still sees every activity,
+// including the ones with no parent at all. A caller who is restricted on at
+// least one parent type sees only activities linked to a parent they can reach,
+// which is what stops the global feed from disclosing other users' history.
+func activityScopeFilter(p *rbac.Principal, baseArg int) (string, []any) {
+	var clauses []string
+	var args []any
+	n := baseArg
+	restricted := false
+	for _, pt := range activityParentTypes {
+		ownerColumn, applies := objectScopeParts(p, pt.entityType)
+		if !applies {
+			clauses = append(clauses, pt.column+" IS NOT NULL")
+			continue
+		}
+		restricted = true
+		n++
+		userArg := n
+		n++
+		teamArg := n
+		args = append(args, p.UserID, p.TeamIDs)
+		clauses = append(clauses, fmt.Sprintf(
+			"%s IS NOT NULL AND EXISTS (SELECT 1 FROM %s x WHERE x.id = activities.%s AND (x.%s = $%d OR x.team_id = ANY($%d)))",
+			pt.column, pt.table, pt.column, ownerColumn, userArg, teamArg))
+	}
+	if !restricted {
+		return "", nil
+	}
+	return "(" + strings.Join(clauses, " OR ") + ")", args
+}
+
+// ensureReadableObject returns ErrNotFound unless the caller can read the named
+// record. A nested resource — comments, activities, tags — calls it before it
+// touches data that hangs off a parent record: the authorization decision belongs
+// to the parent, and a parent the caller cannot read must not be addressable by
+// id. It reuses the single-record reads, so a nested path can never be looser
+// than the record it hangs from.
+func (s *Service) ensureReadableObject(ctx context.Context, p *rbac.Principal, entityType string, id uuid.UUID) error {
+	switch entityType {
+	case "account":
+		_, err := s.GetAccount(ctx, p, id)
+		return err
+	case "contact":
+		_, err := s.GetContact(ctx, p, id)
+		return err
+	case "lead":
+		_, err := s.GetLead(ctx, p, id)
+		return err
+	case "deal":
+		_, err := s.GetDeal(ctx, p, id)
+		return err
+	case "task":
+		_, err := s.GetTask(ctx, p, id)
+		return err
+	case "ticket":
+		_, err := s.GetTicket(ctx, p, id)
+		return err
+	default:
+		return httpx.ValidationError(map[string]string{"entity_type": "unsupported entity type"})
+	}
 }
 
 // ErrConflict is returned on a uniqueness violation.

@@ -805,7 +805,16 @@ func (s *Service) Export(ctx context.Context, p *rbac.Principal, entityType, for
 
 	q := fmt.Sprintf(`SELECT %s FROM %s WHERE organization_id = $1 AND archived_at IS NULL ORDER BY created_at`,
 		strings.Join(selects, ", "), spec.Table)
-	rows, err := s.db.Q(ctx).Query(ctx, q, p.OrganizationID)
+	qArgs := []any{p.OrganizationID}
+	// Export is a bulk read and obeys the same object-level rule as the list
+	// endpoint: a caller who cannot see a record in a list must not be able to
+	// pull it out of an export either.
+	if frag, scopeArgs := crm.ObjectScopeFilter(p, entityType, len(qArgs)); frag != "" {
+		q = fmt.Sprintf(`SELECT %s FROM %s WHERE organization_id = $1 AND archived_at IS NULL AND %s ORDER BY created_at`,
+			strings.Join(selects, ", "), spec.Table, frag)
+		qArgs = append(qArgs, scopeArgs...)
+	}
+	rows, err := s.db.Q(ctx).Query(ctx, q, qArgs...)
 	if err != nil {
 		return 0, fmt.Errorf("export %s: %w", entityType, err)
 	}
