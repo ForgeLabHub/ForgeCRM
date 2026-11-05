@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/geff1778/forgecrm/internal/ai"
+	"github.com/geff1778/forgecrm/internal/config"
 	"github.com/geff1778/forgecrm/internal/httpx"
 	"github.com/geff1778/forgecrm/internal/rbac"
 )
@@ -28,13 +29,35 @@ func (s *Server) handleAIStatus(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, s.deps.AI.Status(r.Context()))
 }
 
+// aiProviderCatalog describes the provider kinds the platform can be configured
+// with, keyed by the value FORGECRM_AI_PROVIDER takes. The kinds themselves come
+// from config.AIProviderKinds, so the catalog cannot advertise a provider the
+// config layer would reject, nor hide one it accepts.
+var aiProviderCatalog = map[string]struct {
+	Description string
+	RequiresKey bool
+}{
+	config.AIProviderOllama:           {"A local model served by Ollama", false},
+	config.AIProviderOpenAI:           {"OpenAI's hosted chat completions API", true},
+	config.AIProviderOpenAICompatible: {"Any OpenAI-compatible chat completions API", true},
+	config.AIProviderGroq:             {"Groq's OpenAI-compatible chat completions API", true},
+}
+
 // handleAIProviders lists the provider kinds the platform can be configured with.
 func (s *Server) handleAIProviders(w http.ResponseWriter, r *http.Request) {
+	items := make([]map[string]any, 0, len(aiProviderCatalog))
+	for _, kind := range config.AIProviderKinds() {
+		entry, ok := aiProviderCatalog[kind]
+		if !ok {
+			// "none" is a valid setting but not a provider, so it is not listed.
+			continue
+		}
+		items = append(items, map[string]any{
+			"name": kind, "description": entry.Description, "requires_api_key": entry.RequiresKey,
+		})
+	}
 	httpx.WriteJSON(w, map[string]any{
-		"items": []map[string]any{
-			{"name": "ollama", "description": "A local model served by Ollama", "requires_api_key": false},
-			{"name": "openai_compatible", "description": "Any OpenAI-compatible chat completions API", "requires_api_key": true},
-		},
+		"items":      items,
 		"configured": s.deps.AI.ProviderName(),
 		"note":       "configure a provider with FORGECRM_AI_PROVIDER and the matching settings; no provider is required",
 	})
