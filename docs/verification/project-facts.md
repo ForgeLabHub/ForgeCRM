@@ -39,17 +39,17 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 код изменился, а документ не перегенерировали.
 
 <!-- FACTS:AUTO BEGIN — генерируется backend/cmd/facts-gen, не редактировать вручную -->
-<!-- измерено на HEAD `5616d46b01c13f70efec52a9d272e5d1365905af` -->
+<!-- измерено на HEAD `6b28125b437027c41ba5e5063d23c7528441df26` -->
 
 ## Backend / Architecture
 
 | Метрика | Значение | Определение |
 |---|---|---|
-| Пакеты Go (весь backend) | **55** | каталоги с хотя бы одним .go-файлом под backend/ |
-| Пакеты Go (backend/internal) | **50** | то же, ограничено backend/internal/** |
-| Go-файлы без тестов | **157** | *.go, кроме *_test.go |
-| Go тестовых файлов | **148** | *_test.go |
-| Тестовые функции Go | **918** | верхнеуровневые func TestXxx(*testing.T), TestMain исключён |
+| Пакеты Go (весь backend) | **57** | каталоги с хотя бы одним .go-файлом под backend/ |
+| Пакеты Go (backend/internal) | **52** | то же, ограничено backend/internal/** |
+| Go-файлы без тестов | **161** | *.go, кроме *_test.go |
+| Go тестовых файлов | **156** | *_test.go |
+| Тестовые функции Go | **942** | верхнеуровневые func TestXxx(*testing.T), TestMain исключён |
 | Бенчмарки Go | **3** | func BenchmarkXxx |
 | Fuzz-тесты Go | **0** | func FuzzXxx |
 | Example-тесты Go | **0** | func ExampleXxx |
