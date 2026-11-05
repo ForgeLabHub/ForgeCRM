@@ -176,6 +176,10 @@ export const en = {
     errors: {
       no_account:
         'Your identity was verified, but no ForgeCRM account is linked to it. Ask an administrator to invite you.',
+      account_exists:
+        'An account already uses this verified address. Sign in to it and link this identity from the Security Center; it will not be linked automatically.',
+      identity_conflict:
+        'This provider identity is already linked to another account. Remove it there first, then link it here.',
       account_inactive: 'This account is not active. Contact an administrator.',
       no_organization:
         'Your identity is verified, but it is not a member of any organization in this deployment.',
@@ -1377,6 +1381,27 @@ export const en = {
     revokeText:
       'The device signed in with this session will be signed out and must authenticate again.',
     revokeConfirm: 'Revoke session',
+    tabIdentities: 'Linked identities',
+    identitiesTitle: 'Linked identities',
+    identitiesMeta:
+      'Provider identities bound to your account. A verified address is never linked automatically; you choose when to link.',
+    identitiesEmpty: 'No provider identity is linked to your account.',
+    identitiesNoProviders: 'No identity provider is enabled, so there is nothing to link.',
+    identitiesColumnProvider: 'Provider',
+    identitiesColumnSubject: 'Subject',
+    identitiesColumnLinked: 'Linked',
+    identitiesColumnLastUsed: 'Last used',
+    identitiesLink: 'Link',
+    identitiesUnlink: 'Unlink',
+    identitiesLinkTitle: 'Link an identity',
+    identitiesLinkHint:
+      'You will be sent to the provider to confirm, then returned here with the identity bound to this account.',
+    identitiesUnlinkTitle: 'Unlink this identity?',
+    identitiesUnlinkText:
+      'Signing in with "{provider}" will no longer reach this account. Your password keeps working.',
+    identitiesUnlinkConfirm: 'Unlink',
+    identitiesLinkedBanner: 'The identity was linked to your account.',
+    identitiesErrorBanner: 'Linking did not complete.',
   },
   tenantSettings: {
     title: 'Organization configuration',

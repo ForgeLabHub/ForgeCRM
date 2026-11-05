@@ -39,7 +39,7 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 код изменился, а документ не перегенерировали.
 
 <!-- FACTS:AUTO BEGIN — генерируется backend/cmd/facts-gen, не редактировать вручную -->
-<!-- измерено на HEAD `4cff39ff261a2ab88c68be1fbe846aa8aff229e7` -->
+<!-- измерено на HEAD `b319866fbc03016a2a3799067ba9d376a6c3987f` -->
 
 ## Backend / Architecture
 
@@ -49,7 +49,7 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 | Пакеты Go (backend/internal) | **49** | то же, ограничено backend/internal/** |
 | Go-файлы без тестов | **155** | *.go, кроме *_test.go |
 | Go тестовых файлов | **146** | *_test.go |
-| Тестовые функции Go | **912** | верхнеуровневые func TestXxx(*testing.T), TestMain исключён |
+| Тестовые функции Go | **918** | верхнеуровневые func TestXxx(*testing.T), TestMain исключён |
 | Бенчмарки Go | **3** | func BenchmarkXxx |
 | Fuzz-тесты Go | **0** | func FuzzXxx |
 | Example-тесты Go | **0** | func ExampleXxx |
@@ -58,8 +58,8 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 
 | Метрика | Значение | Определение |
 |---|---|---|
-| Миграций up | **34** | *.up.sql в backend/internal/migrations |
-| Миграций down | **34** | *.down.sql там же |
+| Миграций up | **35** | *.up.sql в backend/internal/migrations |
+| Миграций down | **35** | *.down.sql там же |
 | Таблиц БД | **81** | уникальные имена CREATE TABLE во всех up-миграциях |
 
 ## Security (RBAC)
@@ -80,8 +80,8 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 
 | Метрика | Значение | Определение |
 |---|---|---|
-| OpenAPI paths | **182** | ключи objects.paths в docs/api/openapi.json |
-| OpenAPI operations | **236** | методы get/post/put/patch/delete внутри paths |
+| OpenAPI paths | **184** | ключи objects.paths в docs/api/openapi.json |
+| OpenAPI operations | **238** | методы get/post/put/patch/delete внутри paths |
 
 openapi.json генерируется из живого роутера (`cmd/openapi-gen`), поэтому
 счётчик отражает код, а CI-гейт `openapi-check` не даёт документу устареть.
@@ -92,7 +92,7 @@ openapi.json генерируется из живого роутера (`cmd/ope
 |---|---|---|
 | Файлы src (.ts/.tsx) | **133** | frontend/src/**, включая тестовые |
 | Тестовые файлы src | **43** | *.test.ts(x)/.spec.ts(x) в frontend/src |
-| Объявления it()/test() в src | **280** | запускаемые кейсы vitest; test.describe вычитается |
+| Объявления it()/test() в src | **283** | запускаемые кейсы vitest; test.describe вычитается |
 | Файлы страниц | **39** | компоненты в frontend/src/pages (без admin/, без тестов) |
 | Тесты страниц | **21** | *.test.tsx рядом со страницами |
 | Маршрутов <Route path> | **47** | объявления в frontend/src/App.tsx (регистр маршрутизации SPA) |

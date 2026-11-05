@@ -10,6 +10,19 @@
 
 ### Added
 
+- **Явное связывание внешнего удостоверения вместо автосвязывания по email.**
+  Вход по SSO/OIDC больше не привязывает субъекта провайдера к локальному аккаунту,
+  который уже носит подтверждённый провайдером адрес. Провайдер владеет адресом, и
+  провайдер, позволяющий задать произвольный *подтверждённый* адрес, иначе отдал бы
+  чужой аккаунт. Теперь `resolveIdentity` ищет аккаунт только по субъекту: связанный
+  субъект входит, известный адрес отвечает `account_exists`, неизвестный проходит JIT.
+  Привязка — отдельное действие владельца аккаунта: `POST /api/v1/auth/identities/link`
+  (POST и CSRF, потому что навигация GET отправила бы cookie без доказательства
+  намерения) возвращает authorization URL, а `DELETE /api/v1/auth/identities/{id}`
+  снимает связь. Миграция `0037_oidc_explicit_binding` добавляет `oidc_login_states.link_user_id`
+  и уникальный индекс «одна связь на аккаунт и провайдера». `TestSSODoesNotAdoptAnExistingAccountByVerifiedEmail`,
+  `TestSSOExplicitBindingAttachesIdentityToTheSignedInAccount` и
+  `TestSSOBindingRefusesASubjectAlreadyLinkedElsewhere` держат это поведение.
 - **Хлебные крошки на страницах-записях.** Примитив `Breadcrumb` в
   `frontend/src/components/ui.tsx` показывает путь назад к списку, из которого
   открыта запись, и принимается через новый проп `breadcrumb` у `PageHeader`.

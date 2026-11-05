@@ -205,13 +205,21 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
 export function Alert({
   tone,
   children,
+  onDismiss,
 }: {
   tone: 'error' | 'success' | 'warning' | 'info'
   children: ReactNode
+  /** When set, the alert offers a close control; the caller decides what to clear. */
+  onDismiss?: () => void
 }) {
   return (
     <div className={`alert alert--${tone}`} role={tone === 'error' ? 'alert' : 'status'}>
-      {children}
+      <div className="alert__body">{children}</div>
+      {onDismiss ? (
+        <button type="button" className="alert__dismiss" onClick={onDismiss}>
+          &times;
+        </button>
+      ) : null}
     </div>
   )
 }
