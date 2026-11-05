@@ -401,31 +401,12 @@ func (s *Service) loadOwner(ctx context.Context, cred *Credential) (*rbac.Princi
 	// with, even for an owner's account.
 	p := rbac.NewPrincipal(id, email, displayName, cred.OrganizationID, perms)
 	p.IsPlatformOwner = false
-	p.TeamIDs = s.ownerTeams(ctx, id, cred.OrganizationID)
+	// The owner's active teams scope the token exactly as they scope a session, so
+	// the record-level rule cannot be bypassed by authenticating with a token.
+	if teams, err := rbac.NewService(s.db).TeamIDsForUser(ctx, id, cred.OrganizationID); err == nil {
+		p.TeamIDs = teams
+	}
 	return p, nil
-}
-
-// ownerTeams returns the owner's active team ids in the organization, so
-// record-level "owner or team" rules behave the same for a token as for a session.
-func (s *Service) ownerTeams(ctx context.Context, userID, orgID uuid.UUID) []uuid.UUID {
-	const q = `
-		SELECT tm.team_id FROM team_members tm
-		JOIN teams t ON t.id = tm.team_id
-		WHERE tm.user_id = $1 AND t.organization_id = $2 AND t.archived_at IS NULL`
-	rows, err := s.db.Q(ctx).Query(ctx, q, userID, orgID)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-	var out []uuid.UUID
-	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
-			return nil
-		}
-		out = append(out, id)
-	}
-	return out
 }
 
 // ValidationError describes why an input was refused, per field, in the shape the

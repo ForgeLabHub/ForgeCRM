@@ -393,35 +393,38 @@ func (s *Service) Search(ctx context.Context, p *rbac.Principal, term string, li
 	like := "%" + term + "%"
 
 	type source struct {
-		permission rbac.Permission
-		entityType string
-		sql        string
+		permission       rbac.Permission
+		reachPerm        rbac.Permission
+		ownerColumn      string
+		teamlessReadsAll bool
+		entityType       string
+		sql              string
 	}
 	sources := []source{
-		{rbac.PermAccountsRead, "account", `
+		{rbac.PermAccountsRead, rbac.PermAccountsArchive, "owner_user_id", true, "account", `
 			SELECT id, name, COALESCE(email::text,''), updated_at FROM accounts
 			WHERE organization_id = $1 AND archived_at IS NULL AND (name ILIKE $2 OR COALESCE(email::text,'') ILIKE $2)
 			ORDER BY updated_at DESC LIMIT $3`},
-		{rbac.PermContactsRead, "contact", `
+		{rbac.PermContactsRead, rbac.PermContactsArchive, "owner_user_id", true, "contact", `
 			SELECT id, COALESCE(NULLIF(TRIM(COALESCE(first_name,'') || ' ' || COALESCE(last_name,'')), ''), COALESCE(email::text,'')),
 			       COALESCE(email::text,''), updated_at FROM contacts
 			WHERE organization_id = $1 AND archived_at IS NULL
 			  AND (COALESCE(first_name,'') ILIKE $2 OR COALESCE(last_name,'') ILIKE $2 OR COALESCE(email::text,'') ILIKE $2)
 			ORDER BY updated_at DESC LIMIT $3`},
-		{rbac.PermLeadsRead, "lead", `
+		{rbac.PermLeadsRead, rbac.PermLeadsArchive, "owner_user_id", true, "lead", `
 			SELECT id, COALESCE(NULLIF(title,''), COALESCE(company,'')), COALESCE(email::text,''), updated_at FROM leads
 			WHERE organization_id = $1 AND archived_at IS NULL
 			  AND (title ILIKE $2 OR COALESCE(company,'') ILIKE $2 OR COALESCE(email::text,'') ILIKE $2)
 			ORDER BY updated_at DESC LIMIT $3`},
-		{rbac.PermDealsRead, "deal", `
+		{rbac.PermDealsRead, rbac.PermDealsArchive, "owner_user_id", true, "deal", `
 			SELECT id, title, COALESCE(currency,'') || ' ' || amount::text, updated_at FROM deals
 			WHERE organization_id = $1 AND archived_at IS NULL AND title ILIKE $2
 			ORDER BY updated_at DESC LIMIT $3`},
-		{rbac.PermTicketsRead, "ticket", `
+		{rbac.PermTicketsRead, rbac.PermTicketsAssign, "assignee_user_id", false, "ticket", `
 			SELECT id, subject, COALESCE(status,''), updated_at FROM tickets
 			WHERE organization_id = $1 AND archived_at IS NULL AND subject ILIKE $2
 			ORDER BY updated_at DESC LIMIT $3`},
-		{rbac.PermTasksRead, "task", `
+		{rbac.PermTasksRead, rbac.PermTasksAssign, "assignee_user_id", false, "task", `
 			SELECT id, title, COALESCE(status,''), updated_at FROM tasks
 			WHERE organization_id = $1 AND archived_at IS NULL AND title ILIKE $2
 			ORDER BY updated_at DESC LIMIT $3`},
@@ -432,7 +435,16 @@ func (s *Service) Search(ctx context.Context, p *rbac.Principal, term string, li
 		if !p.Has(src.permission) {
 			continue
 		}
-		rows, err := s.db.Q(ctx).Query(ctx, src.sql, p.OrganizationID, like, limit)
+		// Search obeys the same object-level rule as the list endpoints: a record the
+		// caller cannot list must not be discoverable by searching for its name.
+		sql := src.sql
+		sqlArgs := []any{p.OrganizationID, like, limit}
+		if frag, withArgs := objectOwnerPredicate(p, src.reachPerm, src.ownerColumn, src.teamlessReadsAll, sqlArgs); frag != "" {
+			sql = strings.Replace(sql, "ORDER BY updated_at DESC LIMIT $3",
+				"AND "+frag+" ORDER BY updated_at DESC LIMIT $3", 1)
+			sqlArgs = withArgs
+		}
+		rows, err := s.db.Q(ctx).Query(ctx, sql, sqlArgs...)
 		if err != nil {
 			return nil, fmt.Errorf("search %s: %w", src.entityType, err)
 		}

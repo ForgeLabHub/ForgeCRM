@@ -310,9 +310,11 @@ func (s *Service) ListDeals(ctx context.Context, p *rbac.Principal, q ListQuery)
 			`NOT EXISTS (SELECT 1 FROM activities a WHERE a.deal_id = deals.id AND a.occurred_at >= $%d)`,
 			len(args)))
 	}
-	if !p.Has(rbac.PermDealsArchive) && len(p.TeamIDs) > 0 {
-		args = append(args, p.UserID, p.TeamIDs)
-		where = append(where, fmt.Sprintf("(owner_user_id = $%d OR team_id = ANY($%d))", len(args)-1, len(args)))
+	// Record-level rule: a caller who cannot archive deals only sees the deals they
+	// own or that belong to their teams.
+	if frag, withArgs := objectOwnerPredicate(p, rbac.PermDealsArchive, "owner_user_id", true, args); frag != "" {
+		where = append(where, frag)
+		args = withArgs
 	}
 	whereSQL := strings.Join(where, " AND ")
 	var total int64
@@ -339,10 +341,16 @@ func (s *Service) ListDeals(ctx context.Context, p *rbac.Principal, q ListQuery)
 	return out, total, rows.Err()
 }
 
-// GetDeal loads one deal in scope.
+// GetDeal loads one deal in the caller's object scope: it returns only a deal the
+// caller could also see in a list.
 func (s *Service) GetDeal(ctx context.Context, p *rbac.Principal, id uuid.UUID) (*Deal, error) {
-	const q = `SELECT ` + dealColumns + ` FROM deals WHERE id = $1 AND organization_id = $2`
-	d, err := scanDeal(s.db.Q(ctx).QueryRow(ctx, q, id, p.OrganizationID))
+	where := "id = $1 AND organization_id = $2"
+	args := []any{id, p.OrganizationID}
+	if frag, withArgs := objectOwnerPredicate(p, rbac.PermDealsArchive, "owner_user_id", true, args); frag != "" {
+		where += " AND " + frag
+		args = withArgs
+	}
+	d, err := scanDeal(s.db.Q(ctx).QueryRow(ctx, `SELECT `+dealColumns+` FROM deals WHERE `+where, args...))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}

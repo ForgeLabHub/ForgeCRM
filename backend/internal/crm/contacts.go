@@ -124,9 +124,11 @@ func (s *Service) ListContacts(ctx context.Context, p *rbac.Principal, q ListQue
 				" OR id = (SELECT primary_contact_id FROM deals WHERE id = $%d AND organization_id = $1))",
 			len(args), len(args)))
 	}
-	if !p.Has(rbac.PermContactsArchive) && len(p.TeamIDs) > 0 {
-		args = append(args, p.UserID, p.TeamIDs)
-		where = append(where, fmt.Sprintf("(owner_user_id = $%d OR team_id = ANY($%d))", len(args)-1, len(args)))
+	// Record-level rule: a caller who cannot read all contacts only sees the ones
+	// they own or that belong to their teams.
+	if frag, withArgs := objectOwnerPredicate(p, rbac.PermContactsArchive, "owner_user_id", true, args); frag != "" {
+		where = append(where, frag)
+		args = withArgs
 	}
 
 	whereSQL := strings.Join(where, " AND ")
@@ -154,10 +156,16 @@ func (s *Service) ListContacts(ctx context.Context, p *rbac.Principal, q ListQue
 	return out, total, rows.Err()
 }
 
-// GetContact loads one contact in scope.
+// GetContact loads one contact in the caller's object scope: it returns only a
+// contact the caller could also see in a list.
 func (s *Service) GetContact(ctx context.Context, p *rbac.Principal, id uuid.UUID) (*Contact, error) {
-	const q = `SELECT ` + contactColumns + ` FROM contacts WHERE id = $1 AND organization_id = $2`
-	c, err := scanContact(s.db.Q(ctx).QueryRow(ctx, q, id, p.OrganizationID))
+	where := "id = $1 AND organization_id = $2"
+	args := []any{id, p.OrganizationID}
+	if frag, withArgs := objectOwnerPredicate(p, rbac.PermContactsArchive, "owner_user_id", true, args); frag != "" {
+		where += " AND " + frag
+		args = withArgs
+	}
+	c, err := scanContact(s.db.Q(ctx).QueryRow(ctx, `SELECT `+contactColumns+` FROM contacts WHERE `+where, args...))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -217,16 +225,24 @@ func (s *Service) UpdateContact(ctx context.Context, p *rbac.Principal, id uuid.
 		if err := s.assertAccountInOrg(ctx, p.OrganizationID, in.AccountID); err != nil {
 			return err
 		}
-		const q = `
+		// The object-level rule applies to writes too: a caller who cannot read a
+		// contact must not be able to edit it through a guessed id.
+		where := "id=$1 AND organization_id=$2"
+		args := []any{id, p.OrganizationID, in.AccountID,
+			in.FirstName, in.LastName, in.Email, in.Phone, in.Mobile, in.JobTitle, in.Department,
+			in.IsPrimary, in.OwnerUserID, in.TeamID, in.ExternalSource, in.ExternalID,
+			orEmptyJSON(in.CustomFields)}
+		if frag, withArgs := objectOwnerPredicate(p, rbac.PermContactsArchive, "owner_user_id", true, args); frag != "" {
+			where += " AND " + frag
+			args = withArgs
+		}
+		q := `
 			UPDATE contacts SET account_id=$3, first_name=$4, last_name=$5, email=$6, phone=$7,
 				mobile=$8, job_title=$9, department=$10, is_primary=$11, owner_user_id=$12,
 				team_id=$13, external_source=$14, external_id=$15, custom_fields=$16
-			WHERE id=$1 AND organization_id=$2
+			WHERE ` + where + `
 			RETURNING ` + contactColumns
-		c, err := scanContact(s.db.Q(ctx).QueryRow(ctx, q, id, p.OrganizationID, in.AccountID,
-			in.FirstName, in.LastName, in.Email, in.Phone, in.Mobile, in.JobTitle, in.Department,
-			in.IsPrimary, in.OwnerUserID, in.TeamID, in.ExternalSource, in.ExternalID,
-			orEmptyJSON(in.CustomFields)))
+		c, err := scanContact(s.db.Q(ctx).QueryRow(ctx, q, args...))
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		}
@@ -410,9 +426,11 @@ func (s *Service) ListLeads(ctx context.Context, p *rbac.Principal, q ListQuery)
 		args = append(args, *q.OwnerID)
 		where = append(where, fmt.Sprintf("owner_user_id = $%d", len(args)))
 	}
-	if !p.Has(rbac.PermLeadsArchive) && len(p.TeamIDs) > 0 {
-		args = append(args, p.UserID, p.TeamIDs)
-		where = append(where, fmt.Sprintf("(owner_user_id = $%d OR team_id = ANY($%d))", len(args)-1, len(args)))
+	// Record-level rule: a caller who cannot read all leads only sees the ones they
+	// own or that belong to their teams.
+	if frag, withArgs := objectOwnerPredicate(p, rbac.PermLeadsArchive, "owner_user_id", true, args); frag != "" {
+		where = append(where, frag)
+		args = withArgs
 	}
 	whereSQL := strings.Join(where, " AND ")
 	var total int64
@@ -439,10 +457,16 @@ func (s *Service) ListLeads(ctx context.Context, p *rbac.Principal, q ListQuery)
 	return out, total, rows.Err()
 }
 
-// GetLead loads one lead in scope.
+// GetLead loads one lead in the caller's object scope: it returns only a lead the
+// caller could also see in a list.
 func (s *Service) GetLead(ctx context.Context, p *rbac.Principal, id uuid.UUID) (*Lead, error) {
-	const q = `SELECT ` + leadColumns + ` FROM leads WHERE id = $1 AND organization_id = $2`
-	l, err := scanLead(s.db.Q(ctx).QueryRow(ctx, q, id, p.OrganizationID))
+	where := "id = $1 AND organization_id = $2"
+	args := []any{id, p.OrganizationID}
+	if frag, withArgs := objectOwnerPredicate(p, rbac.PermLeadsArchive, "owner_user_id", true, args); frag != "" {
+		where += " AND " + frag
+		args = withArgs
+	}
+	l, err := scanLead(s.db.Q(ctx).QueryRow(ctx, `SELECT `+leadColumns+` FROM leads WHERE `+where, args...))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -494,16 +518,24 @@ func (s *Service) UpdateLead(ctx context.Context, p *rbac.Principal, id uuid.UUI
 	}
 	var updated *Lead
 	err := s.db.WithTx(ctx, func(ctx context.Context, _ database.Tx) error {
-		const q = `
+		// The object-level rule applies to writes too: a caller who cannot read a
+		// lead must not be able to edit it through a guessed id.
+		where := "id=$1 AND organization_id=$2"
+		args := []any{id, p.OrganizationID, in.Title,
+			in.FirstName, in.LastName, in.Email, in.Phone, in.Company, in.Source, in.Status,
+			in.Score, in.Notes, in.OwnerUserID, in.TeamID, in.ExternalSource, in.ExternalID,
+			orEmptyJSON(in.CustomFields)}
+		if frag, withArgs := objectOwnerPredicate(p, rbac.PermLeadsArchive, "owner_user_id", true, args); frag != "" {
+			where += " AND " + frag
+			args = withArgs
+		}
+		q := `
 			UPDATE leads SET title=$3, first_name=$4, last_name=$5, email=$6, phone=$7,
 				company=$8, source=$9, status=$10, score=$11, notes=$12, owner_user_id=$13,
 				team_id=$14, external_source=$15, external_id=$16, custom_fields=$17
-			WHERE id=$1 AND organization_id=$2
+			WHERE ` + where + `
 			RETURNING ` + leadColumns
-		l, err := scanLead(s.db.Q(ctx).QueryRow(ctx, q, id, p.OrganizationID, in.Title,
-			in.FirstName, in.LastName, in.Email, in.Phone, in.Company, in.Source, in.Status,
-			in.Score, in.Notes, in.OwnerUserID, in.TeamID, in.ExternalSource, in.ExternalID,
-			orEmptyJSON(in.CustomFields)))
+		l, err := scanLead(s.db.Q(ctx).QueryRow(ctx, q, args...))
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		}

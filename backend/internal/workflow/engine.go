@@ -106,6 +106,9 @@ func (e *Engine) principalFor(ctx context.Context, orgID, userID uuid.UUID) (*rb
 	}
 	p := rbac.NewPrincipal(userID, email, name, orgID, perms)
 	p.IsPlatformOwner = isOwner
+	if teams, err := e.rbac.TeamIDsForUser(ctx, userID, orgID); err == nil {
+		p.TeamIDs = teams
+	}
 	return p, nil
 }
 

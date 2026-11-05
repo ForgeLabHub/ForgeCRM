@@ -399,6 +399,34 @@ func (s *Service) EffectivePermissions(ctx context.Context, userID, orgID uuid.U
 	return perms, rows.Err()
 }
 
+// TeamIDsForUser returns the ids of the active teams a user belongs to in an
+// organization. It is the record-level scoping input the CRM ownership rule
+// needs, and the single place every principal builder resolves it from, so a
+// session, an MCP token, a workflow author and an AI agent all see the same
+// records.
+func (s *Service) TeamIDsForUser(ctx context.Context, userID, orgID uuid.UUID) ([]uuid.UUID, error) {
+	const q = `
+		SELECT tm.team_id FROM team_members tm
+		JOIN teams t ON t.id = tm.team_id
+		WHERE tm.user_id = $1 AND t.organization_id = $2 AND t.archived_at IS NULL`
+
+	rows, err := s.db.Q(ctx).Query(ctx, q, userID, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("resolve teams: %w", err)
+	}
+	defer rows.Close()
+
+	var teams []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan team: %w", err)
+		}
+		teams = append(teams, id)
+	}
+	return teams, rows.Err()
+}
+
 // RoleIDsForUser returns the role IDs granted to a user in an organization.
 func (s *Service) RoleIDsForUser(ctx context.Context, userID, orgID uuid.UUID) ([]uuid.UUID, error) {
 	const q = `
