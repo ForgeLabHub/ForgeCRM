@@ -521,7 +521,7 @@ func (s *Service) PipelineReportFor(ctx context.Context, p *rbac.Principal, pipe
 		       COALESCE(sum(d.amount * s.probability / 100.0), 0),
 		       s.is_won, s.is_lost
 		FROM pipeline_stages s
-		LEFT JOIN deals d ON d.stage_id = s.id AND d.archived_at IS NULL AND d.status = 'open'
+		LEFT JOIN deals d ON d.stage_id = s.id AND d.organization_id = s.organization_id AND d.archived_at IS NULL AND d.status = 'open'
 		WHERE s.pipeline_id = $1 AND s.organization_id = $2
 		GROUP BY s.id, s.name, s.position, s.is_won, s.is_lost
 		ORDER BY s.position`

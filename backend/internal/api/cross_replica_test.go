@@ -33,6 +33,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/config"
 	"github.com/geff1778/forgecrm/internal/httpx"
 	"github.com/geff1778/forgecrm/internal/ratelimit"
+	"github.com/geff1778/forgecrm/internal/testdb"
 )
 
 // trustedProxyPeer is an address inside the range the cross-replica harness
@@ -46,9 +47,9 @@ const trustedProxyPeer = "172.18.0.5:40000"
 func newSharedRedisStore(t *testing.T) *ratelimit.RedisStore {
 	t.Helper()
 
-	raw := os.Getenv("FORGECRM_TEST_REDIS_URL")
+	raw := os.Getenv(testdb.RedisURLEnv)
 	if raw == "" {
-		t.Skip("FORGECRM_TEST_REDIS_URL is not set; skipping cross-replica rate-limit tests")
+		t.Skipf("%s is not set; skipping cross-replica rate-limit tests", testdb.RedisURLEnv)
 	}
 
 	u, err := url.Parse(raw)
@@ -91,10 +92,7 @@ func newSharedRedisStore(t *testing.T) *ratelimit.RedisStore {
 func newReplicaPair(t *testing.T, cfg *config.Config) (first, second *harness, store *ratelimit.RedisStore) {
 	t.Helper()
 
-	url := os.Getenv("FORGECRM_TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("FORGECRM_TEST_DATABASE_URL is not set; skipping cross-replica tests")
-	}
+	url := testdb.URL(t)
 
 	store = newSharedRedisStore(t)
 	resetSchema(t, url)
@@ -247,7 +245,7 @@ func TestSharedCountersSurviveAReplicaRestart(t *testing.T) {
 	}
 
 	// A new server over the same Redis stands in for the restarted process.
-	restarted := newHarnessWithStore(t, cfg, store, os.Getenv("FORGECRM_TEST_DATABASE_URL"))
+	restarted := newHarnessWithStore(t, cfg, store, testdb.URL(t))
 
 	if code := login(t, restarted, "203.0.113.55", `{"email":"a@example.test","password":"wrong-password"}`); code != http.StatusTooManyRequests {
 		t.Fatalf("a restarted replica answered %d; the shared counter did not survive the restart", code)
@@ -260,10 +258,7 @@ func TestSharedCountersSurviveAReplicaRestart(t *testing.T) {
 // be served, because turning a degraded counter into an outage is worse than a
 // temporarily unenforced read limit.
 func TestFailModesAreNotInterchangeable(t *testing.T) {
-	url := os.Getenv("FORGECRM_TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("FORGECRM_TEST_DATABASE_URL is not set; skipping cross-replica tests")
-	}
+	url := testdb.URL(t)
 
 	cfg := crossReplicaConfig(2)
 	resetSchema(t, url)

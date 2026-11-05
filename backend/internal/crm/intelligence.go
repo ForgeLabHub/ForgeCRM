@@ -259,11 +259,11 @@ func (s *Service) readOpenDeals(ctx context.Context, p *rbac.Principal, currency
                 SELECT d.id, d.title, round(d.amount * 100)::bigint, d.currency,
                        d.stage_id, COALESCE(s.name, ''),
                        GREATEST(0, EXTRACT(DAY FROM now() - COALESCE(
-                               (SELECT max(a.occurred_at) FROM activities a WHERE a.deal_id = d.id),
+                               (SELECT max(a.occurred_at) FROM activities a WHERE a.deal_id = d.id AND a.organization_id = d.organization_id),
                                d.created_at))::int) AS days_since_activity,
                        (d.expected_close_date IS NOT NULL AND d.expected_close_date < now()::date) AS close_date_passed
                 FROM deals d
-                LEFT JOIN pipeline_stages s ON s.id = d.stage_id
+                LEFT JOIN pipeline_stages s ON s.id = d.stage_id AND s.organization_id = d.organization_id
                 WHERE d.organization_id = $1 AND d.archived_at IS NULL
                   AND d.status = 'open' AND d.currency = $2` + ownership
 	rows, err := s.db.Q(ctx).Query(ctx, q, args...)

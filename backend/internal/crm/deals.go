@@ -374,7 +374,10 @@ func (s *Service) CreateDeal(ctx context.Context, p *rbac.Principal, in DealInpu
 		if err := s.assertStageInOrg(ctx, p.OrganizationID, in.PipelineID, in.StageID); err != nil {
 			return err
 		}
-		if err := s.assertAccountInOrg(ctx, p.OrganizationID, in.AccountID); err != nil {
+		if err := s.assertOptionalRefs(ctx, p.OrganizationID, map[string]*uuid.UUID{
+			"account_id": in.AccountID, "contact_id": in.PrimaryContactID,
+			"team_id": in.TeamID, "owner_user_id": in.OwnerUserID,
+		}); err != nil {
 			return err
 		}
 		const q = `
@@ -430,7 +433,10 @@ func (s *Service) UpdateDeal(ctx context.Context, p *rbac.Principal, id uuid.UUI
 		if err := s.assertStageInOrg(ctx, p.OrganizationID, in.PipelineID, in.StageID); err != nil {
 			return err
 		}
-		if err := s.assertAccountInOrg(ctx, p.OrganizationID, in.AccountID); err != nil {
+		if err := s.assertOptionalRefs(ctx, p.OrganizationID, map[string]*uuid.UUID{
+			"account_id": in.AccountID, "contact_id": in.PrimaryContactID,
+			"team_id": in.TeamID, "owner_user_id": in.OwnerUserID,
+		}); err != nil {
 			return err
 		}
 		if in.DiscountPercent != before.DiscountPercent && !p.Has(rbac.PermDealsApproveDiscount) {

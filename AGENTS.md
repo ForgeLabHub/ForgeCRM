@@ -78,8 +78,10 @@ FORGECRM_TEST_DATABASE_URL='postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm
   go test -tags=integration -count=1 ./...
 ```
 
-`internal/testsupport` удаляет и пересобирает схему `public` на каждом тесте, поэтому он
-должен указывать только на черновую базу.
+`internal/testdb` выводит из `FORGECRM_TEST_DATABASE_URL` приватную базу
+`forgecrm_test_<пакет>_<pid>` для каждого тест-бинарника, поэтому пакеты запускаются
+параллельно и не мешают друг другу сбрасывать схему. Указывайте переменную только на
+черновую базу: пакеты создают и удаляют в ней данные.
 
 Фронтенд — отдельный npm-проект:
 
@@ -108,6 +110,25 @@ FORGECRM_ENV=development FORGECRM_HTTP_PORT=8080 \
 Полный стек: `docker compose up -d --build`. Образ встраивает миграции, поэтому изменение
 схемы требует пересборки, а не просто перезапуска.
 
+## Интеграционные тесты локально
+
+Интеграционные тесты требуют PostgreSQL и (для части тестов) Redis. Чтобы прогон был
+неотличим от CI, есть `scripts/integration-env.sh`: те же образы, что в джобе `backend`
+(`postgres:17-alpine`, `redis:7-alpine`), но на отдельных портах 55432/56379.
+
+```bash
+./scripts/integration-env.sh up
+export FORGECRM_TEST_DATABASE_URL='postgres://forgecrm:forgecrm@127.0.0.1:55432/forgecrm_test?sslmode=disable'
+export FORGECRM_TEST_REDIS_URL='redis://127.0.0.1:56379/1'
+make test-integration TEST_DATABASE_URL="$FORGECRM_TEST_DATABASE_URL"
+./scripts/integration-env.sh down
+```
+
+`internal/testdb` даёт каждому тест-бинарнику приватную базу, поэтому пакеты идут
+параллельно без `-p 1`. `internal/testfixture` (test-only) собирает арендатора, principals
+с резолвнутыми правами и связный граф домена; production-код не может его импортировать —
+это проверяет `internal/archtest`. Подробнее: `docs/quality/TEST_ARCHITECTURE.md`.
+
 ## Что вас укусит
 
 - **Миграции встроены в бинарник.** Новая миграция ничего не делает, пока образ или
@@ -117,7 +138,13 @@ FORGECRM_ENV=development FORGECRM_HTTP_PORT=8080 \
   каталоге, но долго не засевался, что молча блокировало каждую роль не-владельца.
   `TestSeedDataMatchesThePermissionCatalog` теперь это ловит.
 - **API и воркер — отдельные процессы.** Импорт, остающийся `queued`, означает, что воркер
-  не запущен.
+  не запущен. Реальную проводку воркера проверяет
+  `cmd/forgecrm-worker/runtime_integration_test.go`: он собирает бинарник и запускает его
+  процессом, поэтому «зелёный» unit-тест цикла не заменяет эту проверку.
+- **Объявленный job kind должен иметь обработчик.** `TestEveryDeclaredKindIsDispatchedOrReserved`
+  в `internal/jobs` падает, если константа `Kind*` не имеет `case` в диспетчере воркера и
+  не перечислена в `reservedKinds`. Так новый вид задания не может появиться и молча никогда
+  не выполняться.
 - **Не добавляйте `# syntax=docker/dockerfile:1` в корневой `Dockerfile`.** blitz.cloud
   скачивает frontend BuildKit до чтения файла; когда это не удаётся, сборка падает на
   первой строке, и платформа молча переходит на собственный («managed») `Dockerfile`.
@@ -214,7 +241,15 @@ FORGECRM_ENV=development FORGECRM_HTTP_PORT=8080 \
   MCP-сервером. `capabilities_test.go` падает, если любое вводящее в заблуждение имя
   вернётся. `Enabled()` у опциональных сервисов терпит nil-получатель, поэтому подсистема,
   оставленная непостроенной, сообщает «off», а не паникует эндпоинт диагностики.
-
+- **MCP-сервер — не полный MCP-сервер, и подключается он bearer-credential.**
+  Агент не держит сессию, поэтому единственный способ подключиться —
+  `Authorization: Bearer fcmcp_...`, выданный с правом `ai.tools.execute` и узкой
+  областью. Сквозной путь Agent → MCP → RBAC → CRM → Audit проверяется
+  `internal/api/mcp_scenario_integration_test.go`: обнаружение инструментов, чтение,
+  три мутации с `confirm:true`, аудит и отзыв. `account_summary` отдаёт `deals` и
+  `tickets` только при наличии `deals.read`/`tickets.read`; положительный контроль —
+  `TestMCPAccountSummaryIncludesSectionsWhenPermitted`. Отсутствие MCP-сервера в
+  конфигурации агентской сессии — задача интеграции клиента, а не дефект сервера.
 - **Движок workflow вызывает `crm.Service` напрямую, поэтому он обеспечивает грубое
   разрешение сам.** API обеспечивает разрешения в middleware, а реестр MCP обеспечивает их
   в своём слое инструментов; слой сервиса проверяет область тенанта и владение записью, но

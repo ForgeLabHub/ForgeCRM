@@ -402,6 +402,8 @@ func (s *Server) buildRouter() chi.Router {
 				// to the resolved caller, so the middleware runs after the session.
 				r.Use(idempotency.Middleware(s.deps.Idempotency, principalIdentity))
 				r.Get("/me", s.handleMe)
+				r.Get("/appearance", s.handleGetAppearance)
+				r.Put("/appearance", s.withCSRF(s.handlePutAppearance))
 				r.Post("/logout", s.withCSRF(s.handleLogout))
 				r.Get("/sessions", s.handleListSessions)
 				r.Get("/identities", s.handleListMyIdentities)

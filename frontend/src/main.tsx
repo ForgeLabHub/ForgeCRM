@@ -5,13 +5,16 @@ import { BrowserRouter } from 'react-router-dom'
 import { App } from './App'
 import { AuthProvider } from './hooks/useAuth'
 import { I18nProvider } from './i18n'
-import { ThemeProvider } from './theme'
+import { AccountThemeProvider } from './theme/AccountThemeProvider'
 import { WorkspaceProvider } from './workspace/WorkspaceProvider'
 import { ApiError } from './api/client'
 // Self-hosted so the app keeps working offline and in air-gapped installs; the
 // variable axis also gives the fractional weights the tokens ask for (550, 650).
 import '@fontsource-variable/inter'
 import './index.css'
+// The interface experiences: their token sets must land after the base sheet
+// so a :root[data-layout='…'] block wins at equal specificity.
+import './shells/shells.css'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -35,15 +38,15 @@ createRoot(rootElement).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <I18nProvider>
-        <ThemeProvider>
-          <BrowserRouter>
-            <AuthProvider>
+        <BrowserRouter>
+          <AuthProvider>
+            <AccountThemeProvider>
               <WorkspaceProvider>
                 <App />
               </WorkspaceProvider>
-            </AuthProvider>
-          </BrowserRouter>
-        </ThemeProvider>
+            </AccountThemeProvider>
+          </AuthProvider>
+        </BrowserRouter>
       </I18nProvider>
     </QueryClientProvider>
   </StrictMode>,

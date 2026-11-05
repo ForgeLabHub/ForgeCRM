@@ -109,6 +109,25 @@ const (
 	KeyDuePrefix      Key = "due_prefix"
 	KeyOpenTaskWithID Key = "open_task_with_id"
 	KeyTaskLine       Key = "task_line"
+	// Notification settings and unlink.
+	KeyNotifSettings   Key = "notif_settings"
+	KeyNotifOn         Key = "notif_on"
+	KeyNotifOff        Key = "notif_off"
+	KeyNotifAssignment Key = "notif_assignment"
+	KeyNotifDueChanged Key = "notif_due_changed"
+	KeyNotifOverdue    Key = "notif_overdue"
+	KeyNotifCompleted  Key = "notif_completed"
+	KeyUnlinkConfirm   Key = "unlink_confirm"
+	KeyUnlinkDone      Key = "unlink_done"
+	BtnNotifications   Key = "btn_notifications"
+	BtnSettings        Key = "btn_settings"
+	BtnUnlink          Key = "btn_unlink"
+	BtnUnlinkConfirm   Key = "btn_unlink_confirm"
+	BtnUnlinkCancel    Key = "btn_unlink_cancel"
+	BtnNotifAssignment Key = "btn_notif_assignment"
+	BtnNotifDueChanged Key = "btn_notif_due_changed"
+	BtnNotifOverdue    Key = "btn_notif_overdue"
+	BtnNotifCompleted  Key = "btn_notif_completed"
 )
 
 // Catalog maps a key to its translation per locale.

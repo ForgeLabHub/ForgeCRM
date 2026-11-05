@@ -124,15 +124,17 @@ describe('locale', () => {
     // names and literals that have no translation: brands, protocol and format
     // acronyms, and the tokens a user must type verbatim.
     const allowed = new Set([
-      // Brands and products.
-      'ForgeCRM', 'Telegram', 'MinIO', 'OpenID',
+      // Brands and products — including the interfaces an experience pattern is
+      // named after; those are attributions, not prose awaiting translation.
+      'ForgeCRM', 'Telegram', 'MinIO', 'OpenID', 'Salesforce', 'Lightning',
+      'HubSpot', 'Linear',
       // Protocols, formats and standards.
       'OIDC', 'OAuth', 'SSO', 'API', 'URL', 'UUID', 'JSON', 'JSONL', 'HTML',
       'HTTP', 'HTTPS', 'SQL', 'RBAC', 'CRM', 'SDK', 'CSV', 'TSV', 'XLSX', 'XML',
       'SMTP', 'S3', 'MCP', 'AI', 'MAPE', 'SSRF', 'HMAC', 'PKCE', 'Webhook',
       'Webhooks', 'Cookie',
       // Literals the interface shows but a translator must not rewrite.
-      'cron', 'Cron', 'steps',
+      'cron', 'Cron', 'steps', 'Ctrl',
       // A payload path is an identifier a user types verbatim, not prose.
       'payload', 'priority',
     ])

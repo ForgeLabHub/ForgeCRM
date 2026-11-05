@@ -5,6 +5,7 @@
 //
 // forgecrm recipes              list the recipe catalog
 // forgecrm scaffold <recipe>    generate a project from a recipe
+// forgecrm appearance           inspect appearance defaults using supplied inputs
 //
 // The construction itself lives in internal/constructor; this command is only the
 // argument parsing and the terminal output.
@@ -31,6 +32,8 @@ func main() {
 		os.Exit(runList(os.Args[2:]))
 	case "scaffold", "generate":
 		os.Exit(runScaffold(os.Args[2:]))
+	case "appearance":
+		os.Exit(runAppearance(os.Args[2:], os.Stdout, os.Stderr))
 	case "help", "-h", "--help":
 		usage()
 	default:
@@ -47,7 +50,10 @@ Usage:
   forgecrm recipes [--json]            list the recipe catalog
   forgecrm scaffold <recipe> --output <dir>
                                        generate a project into an empty directory
+  forgecrm appearance [options]        inspect a simulated appearance decision
 
+Use forgecrm appearance --help for diagnostic options. It does not read or save
+account settings or change permissions.
 A generated project imports no ForgeCRM package and needs no ForgeCRM service.
 `)
 }

@@ -27,6 +27,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/database"
 	"github.com/geff1778/forgecrm/internal/migrate"
 	"github.com/geff1778/forgecrm/internal/secrets"
+	"github.com/geff1778/forgecrm/internal/testdb"
 )
 
 const goodPassword = "correct-horse-battery-9"
@@ -40,17 +41,10 @@ func quietLog() *slog.Logger {
 func freshDB(t *testing.T) *database.DB {
 	t.Helper()
 
-	url := os.Getenv("FORGECRM_TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("FORGECRM_TEST_DATABASE_URL is not set; skipping integration test")
-	}
+	url := testdb.URL(t)
 
 	ctx := context.Background()
-	db, err := database.Connect(ctx, url)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(db.Close)
+	db := testdb.Connect(t)
 
 	if _, err := db.Pool().Exec(ctx, `DROP SCHEMA public CASCADE; CREATE SCHEMA public;`); err != nil {
 		t.Fatalf("reset schema: %v", err)

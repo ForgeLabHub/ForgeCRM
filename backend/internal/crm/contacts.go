@@ -182,7 +182,9 @@ func (s *Service) CreateContact(ctx context.Context, p *rbac.Principal, in Conta
 	}
 	var created *Contact
 	err := s.db.WithTx(ctx, func(ctx context.Context, _ database.Tx) error {
-		if err := s.assertAccountInOrg(ctx, p.OrganizationID, in.AccountID); err != nil {
+		if err := s.assertOptionalRefs(ctx, p.OrganizationID, map[string]*uuid.UUID{
+			"account_id": in.AccountID, "team_id": in.TeamID, "owner_user_id": in.OwnerUserID,
+		}); err != nil {
 			return err
 		}
 		const q = `
@@ -222,7 +224,9 @@ func (s *Service) UpdateContact(ctx context.Context, p *rbac.Principal, id uuid.
 	}
 	var updated *Contact
 	err := s.db.WithTx(ctx, func(ctx context.Context, _ database.Tx) error {
-		if err := s.assertAccountInOrg(ctx, p.OrganizationID, in.AccountID); err != nil {
+		if err := s.assertOptionalRefs(ctx, p.OrganizationID, map[string]*uuid.UUID{
+			"account_id": in.AccountID, "team_id": in.TeamID, "owner_user_id": in.OwnerUserID,
+		}); err != nil {
 			return err
 		}
 		// The object-level rule applies to writes too: a caller who cannot read a
@@ -287,21 +291,61 @@ func (s *Service) ArchiveContact(ctx context.Context, p *rbac.Principal, id uuid
 	})
 }
 
-// assertAccountInOrg rejects a reference to an account from another organization.
-// This closes the "guess an ID" path: a foreign key alone would accept the row,
-// because the FK checks existence, not tenancy.
-func (s *Service) assertAccountInOrg(ctx context.Context, orgID uuid.UUID, accountID *uuid.UUID) error {
-	if accountID == nil {
+// refTables maps a reference field to the table its id must exist in. A mutation
+// that names one of these fields must resolve it through assertRefInOrg, because
+// the foreign key only proves the row exists somewhere — not that it belongs to
+// the caller's organization. Without this check a caller in one tenant can store
+// a reference to another tenant's record, and every later read that dereferences
+// the reference (a join, a risk signal, an export) then crosses the boundary.
+var refTables = map[string]string{
+	"account_id":       "accounts",
+	"contact_id":       "contacts",
+	"deal_id":          "deals",
+	"ticket_id":        "tickets",
+	"team_id":          "teams",
+	"assignee_user_id": "users",
+	"owner_user_id":    "users",
+}
+
+// assertRefInOrg returns a 422 unless the named row exists in the caller's
+// organization. user_id is special-cased: users are not org-scoped themselves,
+// so the check is membership rather than a column on the row.
+func (s *Service) assertRefInOrg(ctx context.Context, orgID uuid.UUID, field, table string, id uuid.UUID) error {
+	if id == uuid.Nil {
 		return nil
 	}
-	const q = `SELECT 1 FROM accounts WHERE id = $1 AND organization_id = $2`
+	var q string
+	if table == "users" {
+		q = `SELECT 1 FROM memberships WHERE user_id = $1 AND organization_id = $2 AND status = 'active'`
+	} else {
+		q = `SELECT 1 FROM ` + table + ` WHERE id = $1 AND organization_id = $2`
+	}
 	var one int
-	err := s.db.Q(ctx).QueryRow(ctx, q, *accountID, orgID).Scan(&one)
+	err := s.db.Q(ctx).QueryRow(ctx, q, id, orgID).Scan(&one)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return httpx.NewError(422, httpx.CodeValidation, "account_id does not belong to this organization")
+		return httpx.NewError(422, httpx.CodeValidation, field+" does not belong to this organization")
 	}
 	if err != nil {
-		return fmt.Errorf("check account scope: %w", err)
+		return fmt.Errorf("check %s scope: %w", field, err)
+	}
+	return nil
+}
+
+// assertOptionalRefs checks every non-nil reference field in one pass. It is the
+// single call a mutation makes so a newly added reference column cannot be
+// forgotten: the map of field -> value is built next to the input it validates.
+func (s *Service) assertOptionalRefs(ctx context.Context, orgID uuid.UUID, refs map[string]*uuid.UUID) error {
+	for field, id := range refs {
+		if id == nil {
+			continue
+		}
+		table, ok := refTables[field]
+		if !ok {
+			return fmt.Errorf("no reference table registered for %s", field)
+		}
+		if err := s.assertRefInOrg(ctx, orgID, field, table, *id); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -483,6 +527,11 @@ func (s *Service) CreateLead(ctx context.Context, p *rbac.Principal, in LeadInpu
 	}
 	var created *Lead
 	err := s.db.WithTx(ctx, func(ctx context.Context, _ database.Tx) error {
+		if err := s.assertOptionalRefs(ctx, p.OrganizationID, map[string]*uuid.UUID{
+			"team_id": in.TeamID, "owner_user_id": in.OwnerUserID,
+		}); err != nil {
+			return err
+		}
 		const q = `
 			INSERT INTO leads (organization_id, title, first_name, last_name, email, phone,
 				company, source, status, score, notes, owner_user_id, team_id,
@@ -518,6 +567,11 @@ func (s *Service) UpdateLead(ctx context.Context, p *rbac.Principal, id uuid.UUI
 	}
 	var updated *Lead
 	err := s.db.WithTx(ctx, func(ctx context.Context, _ database.Tx) error {
+		if err := s.assertOptionalRefs(ctx, p.OrganizationID, map[string]*uuid.UUID{
+			"team_id": in.TeamID, "owner_user_id": in.OwnerUserID,
+		}); err != nil {
+			return err
+		}
 		// The object-level rule applies to writes too: a caller who cannot read a
 		// lead must not be able to edit it through a guessed id.
 		where := "id=$1 AND organization_id=$2"

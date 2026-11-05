@@ -12,7 +12,6 @@ import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const srcDir = resolve(__dirname, '..')
-const cssPath = join(srcDir, 'index.css')
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
@@ -22,8 +21,15 @@ function walk(dir: string): string[] {
   })
 }
 
-const css = readFileSync(cssPath, 'utf8')
-const defined = new Set(css.match(/--[a-z0-9-]+(?=\s*:)/g) ?? [])
+// Tokens live in every stylesheet, not only the base one: the base palette is
+// in index.css and each interface experience declares its own token set in
+// shells/shells.css. A definition anywhere counts, a reference anywhere must
+// resolve.
+const defined = new Set(
+  walk(srcDir).flatMap((file) =>
+    file.endsWith('.css') ? readFileSync(file, 'utf8').match(/--[a-z0-9-]+(?=\s*:)/g) ?? [] : [],
+  ),
+)
 
 describe('design tokens', () => {
   it('defines every custom property a source file references', () => {

@@ -6,24 +6,27 @@
  * looking at rather than a settings preview elsewhere. Preview temporarily shows
  * a style without committing it, and stops (or is left) on navigation.
  *
- * Personal settings live in localStorage, not the server: they describe a device
- * and a person's taste, not shared CRM data, and the application has no user
- * preferences endpoint. Nothing here grants access — every page behind these
- * settings still enforces its permission on the server.
+ * Signed-in settings are saved to the account; preview never writes to the server.
+ * Appearance does not grant access to any CRM data or operation.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Alert, Card, PageHeader } from '../components/ui'
 import { useT } from '../i18n'
 import { useTheme } from '../theme'
 import {
   ACCENTS,
   DENSITIES,
-  SELECTABLE_STYLES,
+  SELECTABLE_LAYOUTS,
+  THEME_STYLES,
   STYLE_SWATCH,
   accentLabelKey,
   densityLabelKey,
+  layoutDescriptionKey,
+  layoutInspiredKey,
+  layoutLabelKey,
   styleDescriptionKey,
   styleLabelKey,
+  type Layout,
   type ThemeStyle,
 } from '../theme/themes'
 
@@ -46,18 +49,72 @@ function StyleThumbnail({ style }: { style: ThemeStyle }) {
   )
 }
 
+/**
+ * A miniature rendering of each experience's anatomy — rail, bar, tiles,
+ * canvas — drawn in CSS rather than screenshotted, so it can never drift from
+ * the shell it advertises into the past.
+ */
+function LayoutThumbnail({ layout }: { layout: Layout }) {
+  return (
+    <span className={`layout-thumb layout-thumb--${layout}`} aria-hidden="true">
+      <span className="lt-a" />
+      <span className="lt-b" />
+      <span className="lt-c">
+        <i />
+        <i />
+        <i />
+      </span>
+    </span>
+  )
+}
+
+/**
+ * The experience picker: one card per interface, applied on click. Unlike the
+ * style cards there is no preview step — an experience is the frame itself, so
+ * the honest preview is simply rendering it.
+ */
+function LayoutPicker() {
+  const t = useT()
+  const { layout, setLayout } = useTheme()
+  return (
+    <ul className="layout-grid">
+      {SELECTABLE_LAYOUTS.map((option) => (
+        <li key={option}>
+          <button
+            type="button"
+            className={option === layout ? 'layout-card layout-card--active' : 'layout-card'}
+            aria-pressed={option === layout}
+            aria-current={option === layout ? 'true' : undefined}
+            onClick={() => void setLayout(option)}
+          >
+            <LayoutThumbnail layout={option} />
+            <span className="layout-card__name">
+              {t(layoutLabelKey(option))}
+              {option === layout ? <span className="badge badge--accent">{t('appearance.current')}</span> : null}
+            </span>
+            <span className="layout-card__inspired">{t(layoutInspiredKey(option))}</span>
+            <span className="layout-card__desc">{t(layoutDescriptionKey(option))}</span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 export function AppearancePage() {
   const t = useT()
-  const { style, setStyle, accent, setAccent, density, setDensity, resetAppearance } = useTheme()
+  const { style, setStyle, accent, setAccent, density, setDensity, resetAppearance, saving, syncError, automatic, ready } = useTheme()
   const [preview, setPreview] = useState<ThemeStyle | null>(null)
   const [resetDone, setResetDone] = useState(false)
+  const committedStyle = useRef(style)
+  committedStyle.current = style
 
   // A preview is temporary by design: leaving the page (or unmounting) drops it
   // so the committed style is what the rest of the app returns to.
   useEffect(() => {
     if (preview === null) return
     document.documentElement.setAttribute('data-style', preview)
-    return () => document.documentElement.setAttribute('data-style', style)
+    return () => document.documentElement.setAttribute('data-style', committedStyle.current)
   }, [preview, style])
 
   const shown = preview ?? style
@@ -67,12 +124,25 @@ export function AppearancePage() {
       <PageHeader title={t('appearance.title')} meta={t('appearance.meta')} />
 
       <div className="stack">
+        {syncError ? <Alert tone="error">{t('appearance.saveError')}</Alert> : null}
+        {saving ? <p role="status">{t('appearance.saving')}</p> : null}
+
+        <Card title={t('appearance.layoutsHeading')}>
+          <p className="text-muted text-sm" style={{ marginBottom: 'var(--space-4)' }}>
+            {t('appearance.layoutsHint')}
+          </p>
+          <LayoutPicker />
+          <p className="text-muted text-sm" style={{ marginTop: 'var(--space-3)' }}>
+            {t('appearance.layoutDeviceNote')}
+          </p>
+        </Card>
+
         <Card title={t('appearance.stylesHeading')}>
           <p className="text-muted text-sm" style={{ marginBottom: 'var(--space-4)' }}>
             {t('appearance.stylesHint')}
           </p>
           <ul className="style-grid">
-            {SELECTABLE_STYLES.map((option) => {
+            {THEME_STYLES.map((option) => {
               const active = option === shown
               return (
                 <li key={option} className="style-grid__item">
@@ -95,6 +165,7 @@ export function AppearancePage() {
                         type="button"
                         className="btn btn--secondary btn--sm"
                         aria-pressed={preview === option}
+                        disabled={saving || !ready}
                         onClick={() => setPreview(preview === option ? null : option)}
                       >
                         {preview === option ? t('appearance.stopPreview') : t('appearance.preview')}
@@ -102,10 +173,9 @@ export function AppearancePage() {
                       <button
                         type="button"
                         className="btn btn--primary btn--sm"
-                        disabled={option === style}
+                        disabled={saving || !ready || (option === style && !automatic)}
                         onClick={() => {
-                          setStyle(option)
-                          setPreview(null)
+                          void setStyle(option).then(() => setPreview(null))
                         }}
                       >
                         {t('appearance.apply')}
@@ -129,7 +199,8 @@ export function AppearancePage() {
                 type="button"
                 className={option === accent ? 'swatch swatch--active' : 'swatch'}
                 aria-pressed={option === accent}
-                onClick={() => setAccent(option)}
+                disabled={saving || !ready}
+                onClick={() => void setAccent(option)}
               >
                 <span className={`swatch__dot swatch__dot--${option}`} aria-hidden="true" />
                 <span>{t(accentLabelKey(option))}</span>
@@ -149,7 +220,8 @@ export function AppearancePage() {
                 type="button"
                 className={option === density ? 'segmented__item segmented__item--active' : 'segmented__item'}
                 aria-pressed={option === density}
-                onClick={() => setDensity(option)}
+                disabled={saving || !ready}
+                onClick={() => void setDensity(option)}
               >
                 {t(densityLabelKey(option))}
               </button>
@@ -161,10 +233,13 @@ export function AppearancePage() {
           <button
             type="button"
             className="btn btn--secondary btn--sm"
+            disabled={saving || !ready}
             onClick={() => {
-              setPreview(null)
-              resetAppearance()
-              setResetDone(true)
+              setResetDone(false)
+              void resetAppearance().then((success) => {
+                setPreview(null)
+                if (success) setResetDone(true)
+              })
             }}
           >
             {t('appearance.reset')}

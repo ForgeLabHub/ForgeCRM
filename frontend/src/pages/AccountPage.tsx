@@ -69,6 +69,8 @@ export function AccountPage() {
             </dd>
             <dt>{t('telegram.title')}</dt>
             <dd><Link to="/admin/telegram">{t('telegram.linkAccount')}</Link></dd>
+            <dt>{t('appearance.title')}</dt>
+            <dd><Link to="/appearance">{t('appearance.title')}</Link></dd>
             <dt>{t('profile.teams')}</dt>
             <dd>
               {session?.teams.length ? (

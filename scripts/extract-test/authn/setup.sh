@@ -29,6 +29,10 @@ extract_pkg "$WORK" httpx "httpx" "example.com/authn-extracted/httpx"
 extract_pkg "$WORK" tracectx "tracectx" "example.com/authn-extracted/tracectx"
 extract_pkg "$WORK" logging "logging" "example.com/authn-extracted/logging"
 extract_pkg "$WORK" ratelimit "ratelimit" "example.com/authn-extracted/ratelimit"
+# testdb is the test-only helper the authn integration tests import for an
+# isolated database. It is a dependency of the copied test files, so it travels
+# with them; its own dependencies (database, migrate) are already extracted.
+extract_pkg "$WORK" testdb "testdb" "example.com/authn-extracted/testdb"
 install_module_files "$WORK" "$HERE"
 # The migrations package embeds its SQL, so the copy must carry it.
 extract_sql "$WORK" migrations "migrations"
@@ -44,6 +48,7 @@ rewrite_import "$WORK" "github.com/geff1778/forgecrm/internal/database" "example
 rewrite_import "$WORK" "github.com/geff1778/forgecrm/internal/httpx" "example.com/authn-extracted/httpx"
 rewrite_import "$WORK" "github.com/geff1778/forgecrm/internal/logging" "example.com/authn-extracted/logging"
 rewrite_import "$WORK" "github.com/geff1778/forgecrm/internal/ratelimit" "example.com/authn-extracted/ratelimit"
+rewrite_import "$WORK" "github.com/geff1778/forgecrm/internal/testdb" "example.com/authn-extracted/testdb"
 
 step "verify: authn stands alone"
 assert_no_monolith_import "$WORK"

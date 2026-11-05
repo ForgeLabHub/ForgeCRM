@@ -18,7 +18,10 @@ var english = map[Key]string{
 		"• /tasks — your open tasks\n" +
 		"• /overdue — your overdue tasks\n" +
 		"• /profile — your linked account\n" +
+		"• /notifications — your recent notifications\n" +
+		"• /settings — choose which notifications you get\n" +
 		"• /language — change the language\n" +
+		"• /unlink — unlink this account\n" +
 		"• /help — this help\n\n" +
 		"To link your account: open ForgeCRM → Settings → Telegram, generate a code and send /link <code>.\n" +
 		"To get notifications: link your account and keep notifications on in ForgeCRM.\n" +
@@ -62,4 +65,22 @@ var english = map[Key]string{
 	KeyDuePrefix:          "due %s",
 	KeyOpenTaskWithID:     "Open a task with /task followed by its ID.",
 	KeyTaskLine:           "%s — %s",
+	KeyNotifSettings:      "Notification settings — tap a type to turn it on or off:",
+	KeyNotifOn:            "On",
+	KeyNotifOff:           "Off",
+	KeyNotifAssignment:    "Assignment",
+	KeyNotifDueChanged:    "Due date changed",
+	KeyNotifOverdue:       "Overdue",
+	KeyNotifCompleted:     "Completed",
+	KeyUnlinkConfirm:      "Unlink this Telegram account from ForgeCRM? You will stop receiving notifications here.",
+	KeyUnlinkDone:         "Unlinked. You can link again any time with /link <code>.",
+	BtnNotifications:      "🔔 Notifications",
+	BtnSettings:           "⚙️ Settings",
+	BtnUnlink:             "🔗 Unlink",
+	BtnUnlinkConfirm:      "✅ Unlink",
+	BtnUnlinkCancel:       "⬅️ Cancel",
+	BtnNotifAssignment:    "Assignment",
+	BtnNotifDueChanged:    "Due date changed",
+	BtnNotifOverdue:       "Overdue",
+	BtnNotifCompleted:     "Completed",
 }

@@ -34,6 +34,7 @@ func containsAll(haystack string, needles ...string) bool {
 // credHarness is a tenant with an administrator who can manage credentials.
 type credHarness struct {
 	*harness
+	org   uuid.UUID
 	admin *actor
 }
 
@@ -43,7 +44,7 @@ func newCredHarness(t *testing.T) *credHarness {
 	org := h.seedOrganization("Credential Co")
 	userID := h.seedUser("admin@credential.test", "correct-horse-battery", "Admin")
 	h.joinOrganization(userID, org, "platform_admin")
-	return &credHarness{harness: h, admin: h.login("admin@credential.test", "correct-horse-battery")}
+	return &credHarness{harness: h, org: org, admin: h.login("admin@credential.test", "correct-horse-battery")}
 }
 
 // mint creates a credential through the API and returns the plaintext token.

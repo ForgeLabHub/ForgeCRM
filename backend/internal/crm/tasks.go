@@ -204,10 +204,11 @@ func (s *Service) CreateTask(ctx context.Context, p *rbac.Principal, in TaskInpu
 	}
 	var created *Task
 	err := s.db.WithTx(ctx, func(ctx context.Context, _ database.Tx) error {
-		if in.AccountID != nil {
-			if err := s.assertAccountInOrg(ctx, p.OrganizationID, in.AccountID); err != nil {
-				return err
-			}
+		if err := s.assertOptionalRefs(ctx, p.OrganizationID, map[string]*uuid.UUID{
+			"account_id": in.AccountID, "contact_id": in.ContactID, "deal_id": in.DealID,
+			"ticket_id": in.TicketID, "team_id": in.TeamID, "assignee_user_id": in.AssigneeUserID,
+		}); err != nil {
+			return err
 		}
 		const q = `
 			INSERT INTO tasks (organization_id, title, description, status, priority, due_at,
@@ -263,6 +264,12 @@ func (s *Service) UpdateTask(ctx context.Context, p *rbac.Principal, id uuid.UUI
 		}
 		before, err := s.GetTask(ctx, p, id)
 		if err != nil {
+			return err
+		}
+		if err := s.assertOptionalRefs(ctx, p.OrganizationID, map[string]*uuid.UUID{
+			"account_id": in.AccountID, "contact_id": in.ContactID, "deal_id": in.DealID,
+			"ticket_id": in.TicketID, "team_id": in.TeamID, "assignee_user_id": in.AssigneeUserID,
+		}); err != nil {
 			return err
 		}
 		const q = `
@@ -472,6 +479,12 @@ func (s *Service) CreateActivity(ctx context.Context, p *rbac.Principal, in Acti
 	}
 	var created *Activity
 	err := s.db.WithTx(ctx, func(ctx context.Context, _ database.Tx) error {
+		if err := s.assertOptionalRefs(ctx, p.OrganizationID, map[string]*uuid.UUID{
+			"account_id": in.AccountID, "contact_id": in.ContactID,
+			"deal_id": in.DealID, "ticket_id": in.TicketID,
+		}); err != nil {
+			return err
+		}
 		occurred := time.Now()
 		if in.OccurredAt != nil {
 			occurred = *in.OccurredAt
@@ -677,10 +690,11 @@ func (s *Service) CreateTicket(ctx context.Context, p *rbac.Principal, in Ticket
 	}
 	var created *Ticket
 	err := s.db.WithTx(ctx, func(ctx context.Context, _ database.Tx) error {
-		if in.AccountID != nil {
-			if err := s.assertAccountInOrg(ctx, p.OrganizationID, in.AccountID); err != nil {
-				return err
-			}
+		if err := s.assertOptionalRefs(ctx, p.OrganizationID, map[string]*uuid.UUID{
+			"account_id": in.AccountID, "contact_id": in.ContactID,
+			"team_id": in.TeamID, "assignee_user_id": in.AssigneeUserID,
+		}); err != nil {
+			return err
 		}
 
 		// Resolve an SLA policy: an explicit one, or the one matching priority.
@@ -748,6 +762,12 @@ func (s *Service) UpdateTicket(ctx context.Context, p *rbac.Principal, id uuid.U
 	}
 	var updated *Ticket
 	err := s.db.WithTx(ctx, func(ctx context.Context, _ database.Tx) error {
+		if err := s.assertOptionalRefs(ctx, p.OrganizationID, map[string]*uuid.UUID{
+			"account_id": in.AccountID, "contact_id": in.ContactID,
+			"team_id": in.TeamID, "assignee_user_id": in.AssigneeUserID,
+		}); err != nil {
+			return err
+		}
 		// The object-level rule applies to writes too: a caller who cannot read a
 		// ticket must not be able to edit it through a guessed id.
 		where := "id=$1 AND organization_id=$2"

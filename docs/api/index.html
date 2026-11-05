@@ -105,6 +105,8 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 </ul>
 <div class="nav-group" data-group>authentication</div>
 <ul class="nav-list">
+<li data-op><a href="#op-get-api-v1-auth-appearance"><span class="m m-get">GET</span><span class="p">/api/v1/auth/appearance</span></a></li>
+<li data-op><a href="#op-put-api-v1-auth-appearance"><span class="m m-put">PUT</span><span class="p">/api/v1/auth/appearance</span></a></li>
 <li data-op><a href="#op-get-api-v1-auth-identities"><span class="m m-get">GET</span><span class="p">/api/v1/auth/identities</span></a></li>
 <li data-op><a href="#op-post-api-v1-auth-identities-link"><span class="m m-post">POST</span><span class="p">/api/v1/auth/identities/link</span></a></li>
 <li data-op><a href="#op-delete-api-v1-auth-identities-id"><span class="m m-delete">DELETE</span><span class="p">/api/v1/auth/identities/{id}</span></a></li>
@@ -352,6 +354,8 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <li data-op><a href="#schema-aistreamchatrequest">AiStreamChatRequest</a></li>
 <li data-op><a href="#schema-analysisresult">AnalysisResult</a></li>
 <li data-op><a href="#schema-anonymousobject">AnonymousObject</a></li>
+<li data-op><a href="#schema-appearanceinput">AppearanceInput</a></li>
+<li data-op><a href="#schema-appearanceresponse">AppearanceResponse</a></li>
 <li data-op><a href="#schema-assignrolerequest">AssignRoleRequest</a></li>
 <li data-op><a href="#schema-attachtagrequest">AttachTagRequest</a></li>
 <li data-op><a href="#schema-baseline">Baseline</a></li>
@@ -1654,6 +1658,70 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <section class="tag" id="tag-authentication">
 <h2>authentication</h2>
 <p class="tag-desc">Sign-in, session management, password recovery and second factors.</p>
+<article class="op" id="op-get-api-v1-auth-appearance" data-op>
+<h3><span class="m m-get">GET</span> <code class="path">/api/v1/auth/appearance</code></h3>
+<p class="summary">The caller&#39;s own appearance preferences and role-derived default.</p>
+<div class="op-desc"><p>The caller&#39;s own appearance preferences and role-derived default.</p>
+</div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>limit</code></td><td>query</td><td>integer — 1..200</td><td>no</td><td>Page size. Values above the server maximum are clamped, not rejected.</td></tr>
+<tr><td><code>offset</code></td><td>query</td><td>integer — ≥ 0</td><td>no</td><td></td></tr>
+<tr><td><code>q</code></td><td>query</td><td>string</td><td>no</td><td>Free-text filter.</td></tr>
+<tr><td><code>sort</code></td><td>query</td><td>string</td><td>no</td><td>Field to sort by. An unknown field is rejected.</td></tr>
+<tr><td><code>order</code></td><td>query</td><td>string — one of asc, desc</td><td>no</td><td></td></tr>
+</tbody></table>
+<h4>Responses</h4>
+<div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success.</div><p class="ref">See <a href="#schema-appearanceresponse"><code>AppearanceResponse</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">400</span> The request was malformed: bad JSON, an unknown field, or a missing required parameter.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">401</span> No valid session, or the session has expired. Sign in again.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">403</span> Authenticated, but the caller lacks the required permission.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">404</span> No such resource, or none visible to the caller&#39;s organization.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">409</span> The request conflicts with current state, such as a duplicate external identifier.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">422</span> A field failed validation. `error.details` names each field.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">429</span> Too many requests. Retry after the interval in `Retry-After`.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-server">500</span> Unexpected failure. The detail is deliberately generic; the cause is in the server log.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+</article>
+<article class="op" id="op-put-api-v1-auth-appearance" data-op>
+<h3><span class="m m-put">PUT</span> <code class="path">/api/v1/auth/appearance</code></h3>
+<p class="summary">Replace the caller&#39;s appearance preferences; a null or absent style selects the role-derived default.</p>
+<div class="op-desc"><p>Replace the caller&#39;s appearance preferences; a null or absent style selects the role-derived default.</p>
+</div>
+<h4>Parameters</h4>
+<table class="params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>Makes a mutating request replayable. A repeat with the same key returns the first result (marked with the `Idempotent-Replay` header) instead of performing the operation again. The key is scoped to the caller and the operation. A concurrent request with the same key is refused with 409.</td></tr>
+</tbody></table>
+<h4>Request body <span class="req">required</span></h4>
+<p class="ref">See <a href="#schema-appearanceinput"><code>AppearanceInput</code></a></p>
+<h4>Responses</h4>
+<div class="resp"><div class="resp-head"><span class="code c-ok">200</span> Success.</div><p class="ref">See <a href="#schema-appearanceresponse"><code>AppearanceResponse</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">400</span> The request was malformed: bad JSON, an unknown field, or a missing required parameter.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">401</span> No valid session, or the session has expired. Sign in again.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">403</span> Authenticated, but the caller lacks the required permission.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">404</span> No such resource, or none visible to the caller&#39;s organization.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">409</span> The request conflicts with current state, such as a duplicate external identifier.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">422</span> A field failed validation. `error.details` names each field.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-client">429</span> Too many requests. Retry after the interval in `Retry-After`.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+<div class="resp"><div class="resp-head"><span class="code c-server">500</span> Unexpected failure. The detail is deliberately generic; the cause is in the server log.</div><p class="ref">See <a href="#schema-problem"><code>Problem</code></a></p>
+</div>
+</article>
 <article class="op" id="op-get-api-v1-auth-identities" data-op>
 <h3><span class="m m-get">GET</span> <code class="path">/api/v1/auth/identities</code></h3>
 <p class="summary">The caller&#39;s own linked single sign-on identities.</p>
@@ -8314,6 +8382,27 @@ table.params td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-ali
 <tr><td><code>sheet_name</code></td><td>string</td><td></td></tr>
 <tr><td><code>skip_rows</code></td><td>integer</td><td></td></tr>
 <tr><td><code>xml_row_element</code></td><td>string</td><td></td></tr>
+</tbody></table>
+</article>
+<article class="op schema" id="schema-appearanceinput" data-op>
+<h3><code>AppearanceInput</code></h3>
+<table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>accent</code> <span class="req">required</span></td><td>string</td><td></td></tr>
+<tr><td><code>density</code> <span class="req">required</span></td><td>string</td><td></td></tr>
+<tr><td><code>mode</code> <span class="req">required</span></td><td>string</td><td></td></tr>
+<tr><td><code>style</code></td><td>string, nullable</td><td></td></tr>
+</tbody></table>
+</article>
+<article class="op schema" id="schema-appearanceresponse" data-op>
+<h3><code>AppearanceResponse</code></h3>
+<table class="params schema-props"><thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>accent</code> <span class="req">required</span></td><td>string</td><td></td></tr>
+<tr><td><code>default_style</code> <span class="req">required</span></td><td>string</td><td></td></tr>
+<tr><td><code>density</code> <span class="req">required</span></td><td>string</td><td></td></tr>
+<tr><td><code>effective_style</code> <span class="req">required</span></td><td>string</td><td></td></tr>
+<tr><td><code>mode</code> <span class="req">required</span></td><td>string</td><td></td></tr>
+<tr><td><code>profile</code> <span class="req">required</span></td><td>string</td><td></td></tr>
+<tr><td><code>style</code> <span class="req">required</span></td><td>string, nullable</td><td></td></tr>
 </tbody></table>
 </article>
 <article class="op schema" id="schema-assignrolerequest" data-op>
