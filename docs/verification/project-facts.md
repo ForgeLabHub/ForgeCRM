@@ -90,9 +90,9 @@ openapi.json генерируется из живого роутера (`cmd/ope
 
 | Метрика | Значение | Определение |
 |---|---|---|
-| Файлы src (.ts/.tsx) | **136** | frontend/src/**, включая тестовые |
-| Тестовые файлы src | **44** | *.test.ts(x)/.spec.ts(x) в frontend/src |
-| Объявления it()/test() в src | **285** | запускаемые кейсы vitest; test.describe вычитается |
+| Файлы src (.ts/.tsx) | **143** | frontend/src/**, включая тестовые |
+| Тестовые файлы src | **45** | *.test.ts(x)/.spec.ts(x) в frontend/src |
+| Объявления it()/test() в src | **292** | запускаемые кейсы vitest; test.describe вычитается |
 | Файлы страниц | **39** | компоненты в frontend/src/pages (без admin/, без тестов) |
 | Тесты страниц | **21** | *.test.tsx рядом со страницами |
 | Маршрутов <Route path> | **47** | объявления в frontend/src/App.tsx (регистр маршрутизации SPA) |
