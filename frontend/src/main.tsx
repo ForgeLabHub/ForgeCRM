@@ -12,6 +12,9 @@ import { ApiError } from './api/client'
 // variable axis also gives the fractional weights the tokens ask for (550, 650).
 import '@fontsource-variable/inter'
 import './index.css'
+// The interface experiences: their token sets must land after the base sheet
+// so a :root[data-layout='…'] block wins at equal specificity.
+import './shells/shells.css'
 
 const queryClient = new QueryClient({
   defaultOptions: {

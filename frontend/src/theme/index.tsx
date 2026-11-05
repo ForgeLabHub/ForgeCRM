@@ -17,20 +17,24 @@ import {
   ACCENT_STORAGE_KEY,
   DEFAULT_ACCENT,
   DEFAULT_DENSITY,
+  DEFAULT_LAYOUT,
   DEFAULT_STYLE,
   DENSITY_STORAGE_KEY,
+  LAYOUT_STORAGE_KEY,
   STYLE_STORAGE_KEY,
   isAccent,
   isDensity,
+  isLayout,
   isThemeStyle,
   type Accent,
   type Density,
+  type Layout,
   type ThemeStyle,
 } from './themes'
 import { appearanceApi, type AppearanceInput, type AppearanceResponse } from '../api/appearance'
 
-export { THEME_STYLES, SELECTABLE_STYLES, ACCENTS, DENSITIES, DEFAULT_STYLE } from './themes'
-export type { ThemeStyle, Accent, Density } from './themes'
+export { THEME_STYLES, SELECTABLE_STYLES, ACCENTS, DENSITIES, DEFAULT_STYLE, LAYOUTS, SELECTABLE_LAYOUTS, DEFAULT_LAYOUT } from './themes'
+export type { ThemeStyle, Accent, Density, Layout } from './themes'
 
 export const THEME_MODES = ['light', 'dark', 'system'] as const
 export type ThemeMode = (typeof THEME_MODES)[number]
@@ -53,6 +57,14 @@ interface ThemeValue {
   /** The active layout density. */
   density: Density
   setDensity: (density: Density) => Promise<boolean>
+  /**
+   * The interface experience: which shell the whole app renders inside.
+   * Unlike the other preferences it is a device setting — it is stored locally
+   * and applied instantly, never written to the account, so a shared account
+   * cannot redraw a colleague's screen mid-session.
+   */
+  layout: Layout
+  setLayout: (layout: Layout) => Promise<boolean>
   /** Reset style, accent and density to their defaults. */
   resetAppearance: () => Promise<boolean>
   ready: boolean
@@ -100,6 +112,10 @@ export function resolveInitialDensity(): Density {
   return readStored(DENSITY_STORAGE_KEY, DEFAULT_DENSITY, isDensity)
 }
 
+export function resolveInitialLayout(): Layout {
+  return readStored(LAYOUT_STORAGE_KEY, DEFAULT_LAYOUT, isLayout)
+}
+
 /** Resolves a mode to the concrete theme, consulting the system when needed. */
 export function resolveTheme(mode: ThemeMode, prefersDark: boolean): ResolvedTheme {
   if (mode === 'system') return prefersDark ? 'dark' : 'light'
@@ -128,6 +144,15 @@ export function applyDensity(density: Density): void {
   document.documentElement.setAttribute('data-density', density)
 }
 
+/**
+ * Writes the experience to <html>. The stylesheet keys whole token sets and
+ * shell chrome off the attribute, and it is applied before paint so the frame
+ * never renders one interface and then swaps it for another.
+ */
+export function applyLayout(layout: Layout): void {
+  document.documentElement.setAttribute('data-layout', layout)
+}
+
 function persist(key: string, value: string): void {
   try {
     window.localStorage.setItem(key, value)
@@ -145,6 +170,8 @@ export function ThemeProvider({ children, account }: { children: ReactNode; acco
   const [style, setStyleState] = useState<ThemeStyle>(() => account ? DEFAULT_STYLE : resolveInitialStyle())
   const [accent, setAccentState] = useState<Accent>(() => account ? DEFAULT_ACCENT : resolveInitialAccent())
   const [density, setDensityState] = useState<Density>(() => account ? DEFAULT_DENSITY : resolveInitialDensity())
+  // The layout never comes from the server: it is a per-device choice.
+  const [layout, setLayoutState] = useState<Layout>(() => resolveInitialLayout())
   const [prefersDark, setPrefersDark] = useState(() =>
     typeof window !== 'undefined' && window.matchMedia
       ? window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -232,6 +259,7 @@ export function ThemeProvider({ children, account }: { children: ReactNode; acco
   useLayoutEffect(() => { applyStyle(shownStyle) }, [shownStyle])
   useLayoutEffect(() => { applyAccent(shownAccent) }, [shownAccent])
   useLayoutEffect(() => { applyDensity(shownDensity) }, [shownDensity])
+  useLayoutEffect(() => { applyLayout(layout) }, [layout])
 
   const save = useCallback(async (patch: Partial<AppearanceInput>): Promise<boolean> => {
     if (!currentKey || loadedKey !== currentKey || busy.current === generation.current.value) return false
@@ -278,6 +306,13 @@ export function ThemeProvider({ children, account }: { children: ReactNode; acco
     persist(DENSITY_STORAGE_KEY, next)
     return true
   }, [currentKey, save])
+  // Applied synchronously, storage first: the shell re-renders on the state
+  // change, and a reload restores the choice without asking the server.
+  const setLayout = useCallback(async (next: Layout) => {
+    setLayoutState(next)
+    persist(LAYOUT_STORAGE_KEY, next)
+    return true
+  }, [])
   const resetAppearance = useCallback(async () => {
     if (currentKey) return save({ style: null, accent: DEFAULT_ACCENT, density: DEFAULT_DENSITY })
     setStyleState(DEFAULT_STYLE)
@@ -292,8 +327,9 @@ export function ThemeProvider({ children, account }: { children: ReactNode; acco
   const ready = !currentKey || loadedKey === currentKey
   const value = useMemo<ThemeValue>(
     () => ({ mode, resolved, setMode, style: shownStyle, setStyle, accent: shownAccent, setAccent, density: shownDensity, setDensity,
+      layout, setLayout,
       resetAppearance, ready, automatic, saving, syncError, loadError, retry }),
-    [mode, resolved, setMode, shownStyle, setStyle, shownAccent, setAccent, shownDensity, setDensity, resetAppearance, ready, automatic, saving, syncError, loadError, retry],
+    [mode, resolved, setMode, shownStyle, setStyle, shownAccent, setAccent, shownDensity, setDensity, layout, setLayout, resetAppearance, ready, automatic, saving, syncError, loadError, retry],
   )
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
 }
