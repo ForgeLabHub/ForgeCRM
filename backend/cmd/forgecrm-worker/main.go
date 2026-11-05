@@ -912,6 +912,17 @@ func runMaintenanceLoop(ctx context.Context, log *slog.Logger, queue *jobs.Queue
 }
 
 func runRequeueLoop(ctx context.Context, log *slog.Logger, queue *jobs.Queue) {
+	// Recover once at start, not only on the first tick: a worker that restarts
+	// after a crash is the natural moment to reclaim the jobs the crashed worker
+	// left 'running', and waiting a full tick to do it leaves them stranded for
+	// that window for no reason. The outbox and delivery loops already recover at
+	// startup; this brings the job loop in line with them.
+	if n, err := queue.RequeueStale(ctx, 15*time.Minute); err != nil {
+		log.Warn("could not requeue stale jobs at startup", "error", err)
+	} else if n > 0 {
+		log.Info("requeued stale jobs", "count", n)
+	}
+
 	// A job whose worker died is returned to the queue after this window.
 	ticker := time.NewTicker(2 * time.Minute)
 	defer ticker.Stop()
