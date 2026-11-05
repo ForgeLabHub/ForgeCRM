@@ -233,6 +233,43 @@ check "worker starts once the schema is ready" "yes" "${worker_ready}"
 if [[ "${worker_ready}" != "yes" ]]; then
   docker logs "${worker}" 2>&1 | tail -10 | sed 's/^/    /'
 fi
+
+# Starting is not the same as working. The worker is the second binary in the
+# image and the one that drains the job queue; a deployment where it starts and
+# then executes nothing looks healthy from the outside. So enqueue a real job
+# through the same table the API writes to and require the worker, running from
+# the real entrypoint dispatch, to run it to completion. This is the gap the
+# unit tests cannot see: they call the loop directly, not the shipped artefact.
+# A bare `INSERT ... RETURNING` makes psql also print the `INSERT 0 1` command
+# tag, which the whitespace strip below would glue onto the id and turn into a
+# value no `WHERE id = ...` matches. Wrapping it in a CTE makes the statement a
+# SELECT, whose only output is the id.
+job_id="$(docker exec "${pg}" psql -U forgecrm -d forgecrm -tAc \
+  "WITH ins AS (
+     INSERT INTO jobs (kind, payload, max_attempts, run_after)
+     VALUES ('maintenance.import_temp', '{}'::jsonb, 3, now()) RETURNING id
+   ) SELECT id FROM ins" 2>/dev/null | tr -d '[:space:]')"
+check "worker: a job was enqueued" "yes" "$([[ -n "${job_id}" ]] && echo yes || echo no)"
+
+job_status=""
+for i in $(seq 1 30); do
+  job_status="$(docker exec "${pg}" psql -U forgecrm -d forgecrm -tAc \
+    "SELECT status FROM jobs WHERE id = '${job_id}'" 2>/dev/null | tr -d '[:space:]')"
+  [[ "${job_status}" == "succeeded" || "${job_status}" == "failed" ]] && break
+  sleep 1
+done
+check "worker executes an enqueued job" "succeeded" "${job_status}"
+if [[ "${job_status}" != "succeeded" ]]; then
+  echo "  worker log tail:"
+  docker logs "${worker}" 2>&1 | tail -15 | sed 's/^/    /'
+fi
+
+# The worker must record liveness, or `workers_alive` cannot see it and an
+# operator cannot tell a running worker from a dead one.
+beats="$(docker exec "${pg}" psql -U forgecrm -d forgecrm -tAc \
+  "SELECT count(*) FROM worker_heartbeats WHERE role = 'worker'" 2>/dev/null | tr -d '[:space:]')"
+check "worker records a liveness heartbeat" "yes" "$([[ "${beats:-0}" -ge 1 ]] && echo yes || echo no)"
+
 docker rm -f "${worker}" >/dev/null 2>&1
 
 # --- 5. Full authentication round trip --------------------------------------

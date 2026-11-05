@@ -22,7 +22,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -33,6 +32,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/geff1778/forgecrm/internal/ratelimit"
+	"github.com/geff1778/forgecrm/internal/testdb"
 )
 
 // ---------------------------------------------------------------------------
@@ -261,14 +261,11 @@ func (h *harness) completeSignIn(state, code string) *httptest.ResponseRecorder 
 	return rec
 }
 
-// dbURL reads the test database URL, skipping when it is unset.
+// dbURL reads this package's private test database URL, skipping when no server
+// is configured.
 func dbURL(t *testing.T) string {
 	t.Helper()
-	u := strings.TrimSpace(os.Getenv("FORGECRM_TEST_DATABASE_URL"))
-	if u == "" {
-		t.Skip("FORGECRM_TEST_DATABASE_URL is not set; skipping integration test")
-	}
-	return u
+	return testdb.URL(t)
 }
 
 // ---------------------------------------------------------------------------

@@ -23,6 +23,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/migrate"
 	"github.com/geff1778/forgecrm/internal/outbox"
 	"github.com/geff1778/forgecrm/internal/secrets"
+	"github.com/geff1778/forgecrm/internal/testdb"
 )
 
 // TestOutboxClaimIsExclusive is the core regression: two drains claiming at the
@@ -505,7 +506,7 @@ func TestDeadDeliveryIsSwept(t *testing.T) {
 // TestSecretsEnvIsNotRequired keeps the suite runnable in CI, where the platform
 // secret is absent; the keyring tests above use an explicit key.
 func TestSecretsEnvIsNotRequired(t *testing.T) {
-	if os.Getenv("FORGECRM_TEST_DATABASE_URL") == "" {
+	if os.Getenv(testdb.URLEnv) == "" {
 		t.Skip("integration tests need a database")
 	}
 }
@@ -647,7 +648,7 @@ func TestWebhookDispatchMigrationRollsBack(t *testing.T) {
 	freshSchema(t, db)
 
 	ctx := context.Background()
-	url := os.Getenv("FORGECRM_TEST_DATABASE_URL")
+	url := testdb.URL(t)
 
 	// The forward migration must have created the objects it promises.
 	assertExists := func(desc, query string, want bool) {

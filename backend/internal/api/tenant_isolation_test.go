@@ -37,6 +37,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/ratelimit"
 	"github.com/geff1778/forgecrm/internal/rbac"
 	"github.com/geff1778/forgecrm/internal/secrets"
+	"github.com/geff1778/forgecrm/internal/testdb"
 	"github.com/geff1778/forgecrm/internal/wiring"
 )
 
@@ -64,11 +65,7 @@ type harness struct {
 func newHarness(t testing.TB) *harness {
 	t.Helper()
 
-	url := os.Getenv("FORGECRM_TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("FORGECRM_TEST_DATABASE_URL is not set; skipping integration test")
-	}
-
+	url := testdb.URL(t)
 	resetSchema(t, url)
 	return newHarnessWithStore(t, testConfig(t), ratelimit.NewMemoryStore(), url)
 }
@@ -81,11 +78,7 @@ func newHarness(t testing.TB) *harness {
 func newHarnessWithConfig(t testing.TB, cfg *config.Config) *harness {
 	t.Helper()
 
-	url := os.Getenv("FORGECRM_TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("FORGECRM_TEST_DATABASE_URL is not set; skipping integration test")
-	}
-
+	url := testdb.URL(t)
 	resetSchema(t, url)
 	return newHarnessWithStore(t, cfg, ratelimit.NewMemoryStore(), url)
 }

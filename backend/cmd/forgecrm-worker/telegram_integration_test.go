@@ -8,7 +8,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -21,12 +20,12 @@ import (
 	"github.com/geff1778/forgecrm/internal/audit"
 	"github.com/geff1778/forgecrm/internal/config"
 	"github.com/geff1778/forgecrm/internal/crm"
-	"github.com/geff1778/forgecrm/internal/database"
 	"github.com/geff1778/forgecrm/internal/jobs"
 	"github.com/geff1778/forgecrm/internal/migrate"
 	"github.com/geff1778/forgecrm/internal/notify"
 	"github.com/geff1778/forgecrm/internal/outbox"
 	"github.com/geff1778/forgecrm/internal/rbac"
+	"github.com/geff1778/forgecrm/internal/testdb"
 )
 
 type taskTelegramMock struct {
@@ -62,20 +61,12 @@ func (m *taskTelegramMock) RoundTrip(r *http.Request) (*http.Response, error) {
 }
 
 func TestTelegramWorkerPostgres(t *testing.T) {
-	raw := os.Getenv("FORGECRM_TEST_DATABASE_URL")
-	if raw == "" {
+	if os.Getenv(testdb.URLEnv) == "" {
 		t.Skip("requires disposable PostgreSQL")
 	}
-	u, err := url.Parse(raw)
-	if err != nil || !strings.HasSuffix(strings.ToLower(u.Path), "_test") {
-		t.Fatal("refusing to reset non-test database")
-	}
 	ctx := context.Background()
-	db, err := database.Connect(ctx, raw)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := testdb.Connect(t)
+	raw := testdb.URL(t)
 	if _, err := db.Pool().Exec(ctx, `DROP SCHEMA public CASCADE; CREATE SCHEMA public`); err != nil {
 		t.Fatal(err)
 	}

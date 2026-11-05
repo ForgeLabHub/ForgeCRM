@@ -5,7 +5,6 @@ package testsupport
 import (
 	"context"
 	"log/slog"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +12,7 @@ import (
 	"github.com/geff1778/forgecrm/internal/bootstrap"
 	"github.com/geff1778/forgecrm/internal/database"
 	"github.com/geff1778/forgecrm/internal/migrate"
+	"github.com/geff1778/forgecrm/internal/testdb"
 )
 
 // This file covers the failure this change set is about: a database that is
@@ -68,7 +68,7 @@ func TestMigrateUpReportsVersionAndIsIdempotent(t *testing.T) {
 		t.Fatalf("reset the schema: %v", err)
 	}
 
-	first, err := migrate.Up(os.Getenv("FORGECRM_TEST_DATABASE_URL"), slog.Default())
+	first, err := migrate.Up(testdb.URL(t), slog.Default())
 	if err != nil {
 		t.Fatalf("first migration run: %v", err)
 	}
@@ -76,7 +76,7 @@ func TestMigrateUpReportsVersionAndIsIdempotent(t *testing.T) {
 		t.Fatal("the first migration run applied nothing on an empty database")
 	}
 
-	second, err := migrate.Up(os.Getenv("FORGECRM_TEST_DATABASE_URL"), slog.Default())
+	second, err := migrate.Up(testdb.URL(t), slog.Default())
 	if err != nil {
 		t.Fatalf("second migration run: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestMigrateUpReportsVersionAndIsIdempotent(t *testing.T) {
 		t.Fatalf("the second migration run applied %d migrations, want 0", second)
 	}
 
-	state, err := migrate.Status(os.Getenv("FORGECRM_TEST_DATABASE_URL"))
+	state, err := migrate.Status(testdb.URL(t))
 	if err != nil {
 		t.Fatalf("read schema status: %v", err)
 	}
@@ -303,7 +303,7 @@ func TestWaitForSchemaReturnsWhenTheSchemaArrives(t *testing.T) {
 	done := make(chan error, 1)
 	go func() {
 		time.Sleep(300 * time.Millisecond)
-		_, err := migrate.Up(os.Getenv("FORGECRM_TEST_DATABASE_URL"), slog.Default())
+		_, err := migrate.Up(testdb.URL(t), slog.Default())
 		done <- err
 	}()
 

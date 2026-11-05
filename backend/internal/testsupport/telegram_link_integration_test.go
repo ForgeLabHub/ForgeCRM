@@ -5,38 +5,24 @@ package testsupport
 import (
 	"context"
 	"log/slog"
-	"net/url"
-	"os"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 
 	"github.com/geff1778/forgecrm/internal/audit"
 	"github.com/geff1778/forgecrm/internal/config"
-	"github.com/geff1778/forgecrm/internal/database"
 	"github.com/geff1778/forgecrm/internal/migrate"
 	"github.com/geff1778/forgecrm/internal/notify"
 	"github.com/geff1778/forgecrm/internal/rbac"
 	"github.com/geff1778/forgecrm/internal/secrets"
+	"github.com/geff1778/forgecrm/internal/testdb"
 	"github.com/google/uuid"
 )
 
 func TestTelegramLinkPostgres(t *testing.T) {
-	raw := os.Getenv("FORGECRM_TEST_DATABASE_URL")
-	if raw == "" {
-		t.Skip("requires a disposable PostgreSQL test database")
-	}
-	parsed, err := url.Parse(raw)
-	if err != nil || !strings.HasSuffix(strings.ToLower(parsed.Path), "_test") {
-		t.Fatal("refusing to reset a database without test in its name")
-	}
 	ctx := context.Background()
-	db, err := database.Connect(ctx, raw)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := testdb.Connect(t)
+	raw := testdb.URL(t)
 	if _, err := db.Pool().Exec(ctx, `DROP SCHEMA public CASCADE; CREATE SCHEMA public`); err != nil {
 		t.Fatal(err)
 	}
@@ -154,20 +140,9 @@ func TestTelegramLinkPostgres(t *testing.T) {
 // Even distinct outstanding challenges for one CRM user must not create two
 // active Telegram links when redeemed in parallel.
 func TestTelegramMultipleCodesConcurrentPostgres(t *testing.T) {
-	raw := os.Getenv("FORGECRM_TEST_DATABASE_URL")
-	if raw == "" {
-		t.Skip("requires a disposable PostgreSQL test database")
-	}
-	parsed, err := url.Parse(raw)
-	if err != nil || !strings.HasSuffix(strings.ToLower(parsed.Path), "_test") {
-		t.Fatal("refusing to reset a database without _test suffix")
-	}
 	ctx := context.Background()
-	db, err := database.Connect(ctx, raw)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := testdb.Connect(t)
+	raw := testdb.URL(t)
 	if _, err := db.Pool().Exec(ctx, `DROP SCHEMA public CASCADE; CREATE SCHEMA public`); err != nil {
 		t.Fatal(err)
 	}

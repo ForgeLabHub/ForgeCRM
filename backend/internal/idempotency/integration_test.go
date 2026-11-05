@@ -8,7 +8,6 @@ package idempotency
 
 import (
 	"context"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -17,20 +16,12 @@ import (
 
 	"github.com/geff1778/forgecrm/internal/database"
 	"github.com/geff1778/forgecrm/internal/migrate"
+	"github.com/geff1778/forgecrm/internal/testdb"
 )
 
 func connectOrSkip(t *testing.T) *database.DB {
 	t.Helper()
-	url := os.Getenv("FORGECRM_TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("FORGECRM_TEST_DATABASE_URL is not set; skipping integration test")
-	}
-	db, err := database.Connect(context.Background(), url)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(db.Close)
-	return db
+	return testdb.Connect(t)
 }
 
 func freshSchema(t *testing.T, db *database.DB) {
@@ -39,7 +30,7 @@ func freshSchema(t *testing.T, db *database.DB) {
 	if _, err := db.Pool().Exec(ctx, `DROP SCHEMA public CASCADE; CREATE SCHEMA public;`); err != nil {
 		t.Fatalf("reset schema: %v", err)
 	}
-	if _, err := migrate.Up(os.Getenv("FORGECRM_TEST_DATABASE_URL"), slog.Default()); err != nil {
+	if _, err := migrate.Up(testdb.URL(t), slog.Default()); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 }

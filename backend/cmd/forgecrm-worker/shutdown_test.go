@@ -11,7 +11,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -19,34 +18,27 @@ import (
 	"github.com/geff1778/forgecrm/internal/database"
 	"github.com/geff1778/forgecrm/internal/jobs"
 	"github.com/geff1778/forgecrm/internal/migrate"
+	"github.com/geff1778/forgecrm/internal/testdb"
 	"github.com/geff1778/forgecrm/internal/tracectx"
 )
 
-// connectOrSkip returns a pool for the test database, or skips when unset so the
-// default build stays green.
+// connectOrSkip returns a pool for this package's private test database, or
+// skips when no server is configured so the default build stays green.
 func connectOrSkip(t *testing.T) *database.DB {
 	t.Helper()
-	url := os.Getenv("FORGECRM_TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("FORGECRM_TEST_DATABASE_URL is not set; skipping integration test")
-	}
-	db, err := database.Connect(context.Background(), url)
-	if err != nil {
-		t.Fatalf("connect to the test database: %v", err)
-	}
-	t.Cleanup(db.Close)
-	return db
+	return testdb.Connect(t)
 }
 
 // freshSchema drops and rebuilds the public schema so the test starts from a
-// known state.
+// known state. It resets this package's own database, which no other test
+// binary shares, so the reset cannot race another package's setup.
 func freshSchema(t *testing.T, db *database.DB) {
 	t.Helper()
 	ctx := context.Background()
 	if _, err := db.Pool().Exec(ctx, `DROP SCHEMA public CASCADE; CREATE SCHEMA public;`); err != nil {
 		t.Fatalf("reset the schema: %v", err)
 	}
-	if _, err := migrate.Up(os.Getenv("FORGECRM_TEST_DATABASE_URL"), slog.Default()); err != nil {
+	if _, err := migrate.Up(testdb.URL(t), slog.Default()); err != nil {
 		t.Fatalf("apply migrations: %v", err)
 	}
 }

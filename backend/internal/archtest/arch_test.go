@@ -91,19 +91,35 @@ func TestNoPackageImportsAPI(t *testing.T) {
 // TestProductionPackagesDoNotImportTestsupport keeps test scaffolding out of the
 // binaries.
 //
-// `testsupport` opens a database and applies migrations. If a production package
-// imported it, a running service would carry migration code and could be asked to
-// migrate a database it does not own.
+// `testsupport` opens a database and applies migrations, `testdb` provisions a
+// throwaway database per test binary, and `testfixture` inserts tenant and domain
+// rows. If a production package imported any of them, a running service would
+// carry migration code and could be asked to migrate a database it does not own,
+// and test data would reach production.
 func TestProductionPackagesDoNotImportTestsupport(t *testing.T) {
 	graph := loadGraph(t)
 
+	// isTestOnly reports whether a fully-qualified import path names one of the
+	// test-only packages.
+	isTestOnly := func(importPath string) bool {
+		for _, pkg := range []string{"/internal/testsupport", "/internal/testdb", "/internal/testfixture"} {
+			if strings.HasSuffix(importPath, pkg) {
+				return true
+			}
+		}
+		return false
+	}
+
 	for path, p := range graph {
-		if strings.Contains(path, "/internal/testsupport") {
+		// The rule is about production code. A test-only package may build on
+		// another test-only package — testfixture uses testdb to provision its
+		// database — because neither is ever linked into a binary.
+		if isTestOnly(path) {
 			continue
 		}
 		for _, imp := range p.Imports {
-			if strings.HasSuffix(imp, "/internal/testsupport") {
-				t.Errorf("%s imports testsupport, which is test-only support", path)
+			if isTestOnly(imp) {
+				t.Errorf("%s imports %s, which is test-only support", path, strings.TrimPrefix(imp, modulePath+"internal/"))
 			}
 		}
 	}
@@ -557,7 +573,15 @@ func TestEveryInternalPackageIsReachableFromACommand(t *testing.T) {
 	//
 	// deploycheck is likewise test-only: it reads the deployment descriptors
 	// (render.yaml and friends) and asserts invariants, so no binary imports it.
-	skip := map[string]bool{"migrations": true, "archtest": true, "deploycheck": true}
+	//
+	// testdb is test-only too: it provisions a private database for each test
+	// binary, and production code must not import it (see
+	// TestProductionPackagesDoNotImportTestsupport for the same rule on its
+	// sibling, testsupport).
+	//
+	// testfixture is test-only for the same reason: it inserts tenant and domain
+	// rows, so no binary may import it.
+	skip := map[string]bool{"migrations": true, "archtest": true, "deploycheck": true, "testdb": true, "testfixture": true}
 
 	for path := range graph {
 		internal := internalPkg(path)

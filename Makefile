@@ -26,6 +26,10 @@ BIN_DIR         := bin
 API_BIN         := $(BIN_DIR)/forgecrm-api
 WORKER_BIN      := $(BIN_DIR)/forgecrm-worker
 TEST_DATABASE_URL ?= postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_test?sslmode=disable
+# Redis нужен распределённому лимитеру и тестам кросс-репличности. Раньше эти
+# тесты молча пропускались без него; теперь integration-прогон их требует, потому
+# что «зелёный прогон, который ничего не выполнил» — это ложный зелёный.
+TEST_REDIS_URL ?= redis://127.0.0.1:6379/1
 # Бенчмарки засевают базу и сбрасывают схему, поэтому идут в отдельную БД.
 BENCH_DATABASE_URL ?= postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_bench?sslmode=disable
 BLITZ_VERIFY_IMAGE ?= forgecrm-blitz-verify:latest
@@ -122,10 +126,12 @@ forge-check: ## Проверить, что команды forge.sh работа�
 ## --- Уровень C: интеграционная среда --------------------------------------
 
 test-integration: ## Тесты против реального PostgreSQL (нужен запущенный compose)
-	# -p 1 обязателен: интеграционные пакеты делят одну схему и сбрасывают её,
-	# поэтому параллельный запуск пакетов ломает друг другу базу.
+	# Каждый пакет через internal/testdb заводит собственную базу
+	# (forgecrm_test_<пакет>_<pid>) на основе TEST_DATABASE_URL, поэтому пакеты
+	# больше не делят одну схему и запускаются параллельно без -p 1.
 	cd $(BACKEND_DIR) && FORGECRM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' \
-	  go test -tags=integration -count=1 -p 1 ./...
+	  FORGECRM_TEST_REDIS_URL='$(TEST_REDIS_URL)' \
+	  go test -tags=integration -count=1 ./...
 
 test-bench: ## Перф-базовая линия (нужна отдельная черновая БД; см. docs/performance/baseline.md)
 	# Бенчмарки сбрасывают схему и засевают десятки тысяч строк, поэтому идут
