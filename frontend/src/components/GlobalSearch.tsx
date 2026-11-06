@@ -15,12 +15,12 @@ import type { SearchResult } from '../types/api'
  * is stated here so the omission is visible rather than discovered by clicking.
  */
 const DESTINATIONS: Record<string, (id: string) => string> = {
-  account: (id) => `/accounts/${id}`,
-  contact: (id) => `/contacts/${id}`,
-  deal: (id) => `/deals/${id}`,
-  lead: () => '/leads',
-  ticket: (id) => `/tickets/${id}`,
-  task: (id) => `/tasks/${id}`,
+  account: (id) => `/app/accounts/${id}`,
+  contact: (id) => `/app/contacts/${id}`,
+  deal: (id) => `/app/deals/${id}`,
+  lead: () => '/app/leads',
+  ticket: (id) => `/app/tickets/${id}`,
+  task: (id) => `/app/tasks/${id}`,
 }
 
 const TYPE_LABEL_KEYS = {

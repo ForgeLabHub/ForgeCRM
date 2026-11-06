@@ -122,15 +122,15 @@ interface QuickAction {
 }
 
 const QUICK_ACTIONS: QuickAction[] = [
-  { to: '/accounts', labelKey: 'nav.accounts', permission: 'accounts.read', icon: <IconBuilding size={16} /> },
-  { to: '/contacts', labelKey: 'nav.contacts', permission: 'contacts.read', icon: <IconUsers size={16} /> },
-  { to: '/leads', labelKey: 'nav.leads', permission: 'leads.read', icon: <IconTarget size={16} /> },
-  { to: '/deals', labelKey: 'nav.deals', permission: 'deals.read', icon: <IconKanban size={16} /> },
-  { to: '/tasks', labelKey: 'nav.tasks', permission: 'tasks.read', icon: <IconCheckSquare size={16} /> },
-  { to: '/tickets', labelKey: 'nav.support', permission: 'tickets.read', icon: <IconLifeBuoy size={16} /> },
-  { to: '/reports', labelKey: 'nav.reports', permission: 'reports.read', icon: <IconChart size={16} /> },
-  { to: '/workflows', labelKey: 'nav.workflows', permission: 'workflows.read', icon: <IconWorkflow size={16} /> },
-  { to: '/imports', labelKey: 'nav.importCenter', permission: 'imports.read', icon: <IconInbox size={16} /> },
+  { to: '/app/accounts', labelKey: 'nav.accounts', permission: 'accounts.read', icon: <IconBuilding size={16} /> },
+  { to: '/app/contacts', labelKey: 'nav.contacts', permission: 'contacts.read', icon: <IconUsers size={16} /> },
+  { to: '/app/leads', labelKey: 'nav.leads', permission: 'leads.read', icon: <IconTarget size={16} /> },
+  { to: '/app/deals', labelKey: 'nav.deals', permission: 'deals.read', icon: <IconKanban size={16} /> },
+  { to: '/app/tasks', labelKey: 'nav.tasks', permission: 'tasks.read', icon: <IconCheckSquare size={16} /> },
+  { to: '/app/tickets', labelKey: 'nav.support', permission: 'tickets.read', icon: <IconLifeBuoy size={16} /> },
+  { to: '/app/reports', labelKey: 'nav.reports', permission: 'reports.read', icon: <IconChart size={16} /> },
+  { to: '/app/workflows', labelKey: 'nav.workflows', permission: 'workflows.read', icon: <IconWorkflow size={16} /> },
+  { to: '/app/imports', labelKey: 'nav.importCenter', permission: 'imports.read', icon: <IconInbox size={16} /> },
 ]
 
 export function OverviewPage() {
@@ -154,12 +154,12 @@ export function OverviewPage() {
   // user may only read are listed separately so the two are never confused.
   const createActions = (
     [
-      { to: '/accounts?new=1', labelKey: 'overview.actionNewAccount', icon: <IconBuilding size={16} />, permission: 'accounts.create' },
-      { to: '/deals?new=1', labelKey: 'overview.actionNewDeal', icon: <IconKanban size={16} />, permission: 'deals.create' },
-      { to: '/tasks?new=1', labelKey: 'overview.actionNewTask', icon: <IconCheckSquare size={16} />, permission: 'tasks.create' },
-      { to: '/tickets?new=1', labelKey: 'overview.actionNewTicket', icon: <IconLifeBuoy size={16} />, permission: 'tickets.create' },
-      { to: '/reports', labelKey: 'overview.actionReports', icon: <IconChart size={16} />, permission: 'reports.read' },
-      { to: '/workflows', labelKey: 'overview.actionWorkflows', icon: <IconWorkflow size={16} />, permission: 'workflows.read' },
+      { to: '/app/accounts?new=1', labelKey: 'overview.actionNewAccount', icon: <IconBuilding size={16} />, permission: 'accounts.create' },
+      { to: '/app/deals?new=1', labelKey: 'overview.actionNewDeal', icon: <IconKanban size={16} />, permission: 'deals.create' },
+      { to: '/app/tasks?new=1', labelKey: 'overview.actionNewTask', icon: <IconCheckSquare size={16} />, permission: 'tasks.create' },
+      { to: '/app/tickets?new=1', labelKey: 'overview.actionNewTicket', icon: <IconLifeBuoy size={16} />, permission: 'tickets.create' },
+      { to: '/app/reports', labelKey: 'overview.actionReports', icon: <IconChart size={16} />, permission: 'reports.read' },
+      { to: '/app/workflows', labelKey: 'overview.actionWorkflows', icon: <IconWorkflow size={16} />, permission: 'workflows.read' },
     ] as QuickAction[]
   ).filter((action) => can(action.permission))
 
@@ -205,7 +205,7 @@ export function OverviewPage() {
           <MetricTile
             label={t('overview.statAccounts')}
             queryKey="accounts"
-            link="/accounts"
+            link="/app/accounts"
             icon={<IconBuilding size={16} />}
             fetchCount={async () => (await accountsApi.list({ limit: 1 })).total}
           />
@@ -214,7 +214,7 @@ export function OverviewPage() {
           <MetricTile
             label={t('overview.statOpenDeals')}
             queryKey="deals-open"
-            link="/deals"
+            link="/app/deals"
             icon={<IconKanban size={16} />}
             hint={t('overview.statOpenDealsHint')}
             fetchCount={async () => (await dealsApi.list({ limit: 1, status: 'open' })).total}
@@ -224,7 +224,7 @@ export function OverviewPage() {
           <MetricTile
             label={t('overview.statLeads')}
             queryKey="leads"
-            link="/leads"
+            link="/app/leads"
             icon={<IconTarget size={16} />}
             fetchCount={async () => (await leadsApi.list({ limit: 1 })).total}
           />
@@ -233,7 +233,7 @@ export function OverviewPage() {
           <MetricTile
             label={t('overview.statOpenTasks')}
             queryKey="tasks-open"
-            link="/tasks"
+            link="/app/tasks"
             icon={<IconCheckSquare size={16} />}
             fetchCount={async () => (await tasksApi.list({ limit: 1, status: 'open' })).total}
           />
@@ -242,7 +242,7 @@ export function OverviewPage() {
           <MetricTile
             label={t('overview.statOpenTickets')}
             queryKey="tickets-open"
-            link="/tickets"
+            link="/app/tickets"
             icon={<IconLifeBuoy size={16} />}
             fetchCount={async () => (await ticketsApi.list({ limit: 1, status: 'open' })).total}
           />
@@ -271,7 +271,7 @@ export function OverviewPage() {
           <Card
             title={t('overview.openTasks')}
             actions={
-              <Link to="/tasks" className="btn btn--ghost btn--sm">
+              <Link to="/app/tasks" className="btn btn--ghost btn--sm">
                 {t('overview.viewAll')}
               </Link>
             }
@@ -281,7 +281,7 @@ export function OverviewPage() {
             ) : recentTasks.data?.items.length ? (
               <div>
                 {recentTasks.data.items.map((task) => (
-                  <Link key={task.id} to={`/tasks/${task.id}`} className="attention-item">
+                  <Link key={task.id} to={`/app/tasks/${task.id}`} className="attention-item">
                     <div style={{ minWidth: 0 }}>
                       <div className="truncate attention-item__title">{task.title}</div>
                       <div className="attention-item__meta">
@@ -302,7 +302,7 @@ export function OverviewPage() {
           <Card
             title={t('overview.openSupportTickets')}
             actions={
-              <Link to="/tickets" className="btn btn--ghost btn--sm">
+              <Link to="/app/tickets" className="btn btn--ghost btn--sm">
                 {t('overview.viewAll')}
               </Link>
             }
@@ -312,7 +312,7 @@ export function OverviewPage() {
             ) : openTickets.data?.items.length ? (
               <div>
                 {openTickets.data.items.map((ticket) => (
-                  <Link key={ticket.id} to={`/tickets/${ticket.id}`} className="attention-item">
+                  <Link key={ticket.id} to={`/app/tickets/${ticket.id}`} className="attention-item">
                     <div style={{ minWidth: 0 }}>
                       <div className="truncate attention-item__title">{ticket.subject}</div>
                       <div className="attention-item__meta">

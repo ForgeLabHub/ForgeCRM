@@ -14,7 +14,7 @@ export function ForbiddenPage({ permission }: { permission?: string }) {
             : t('errors.forbiddenNoPermission')
         }
         action={
-          <Link to="/" className="btn btn--secondary">
+          <Link to="/app" className="btn btn--secondary">
             {t('errors.backToOverview')}
           </Link>
         }
@@ -31,7 +31,7 @@ export function NotFoundPage() {
         title={t('errors.notFoundTitle')}
         text={t('errors.notFoundText')}
         action={
-          <Link to="/" className="btn btn--secondary">
+          <Link to="/app" className="btn btn--secondary">
             {t('errors.backToOverview')}
           </Link>
         }

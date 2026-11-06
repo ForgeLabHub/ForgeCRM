@@ -132,7 +132,7 @@ export function DealsPage() {
           fetchPage={(params) => dealsApi.list({ ...params, status: statusFilter || undefined })}
           columns={columns(t)}
           rowKey={(row) => row.id}
-          onRowClick={(row) => navigate(`/deals/${row.id}`)}
+          onRowClick={(row) => navigate(`/app/deals/${row.id}`)}
           emptyTitle={t('deals.emptyTitle')}
           emptyText={t('deals.emptyText')}
           searchable
@@ -176,7 +176,7 @@ export function DealsPage() {
           }
         />
       ) : (
-        <PipelineBoard onOpen={(deal) => navigate(`/deals/${deal.id}`)} />
+        <PipelineBoard onOpen={(deal) => navigate(`/app/deals/${deal.id}`)} />
       )}
 
       <DealFormDialog
@@ -184,7 +184,7 @@ export function DealsPage() {
         onClose={() => setCreating(false)}
         onSaved={(deal) => {
           setCreating(false)
-          navigate(`/deals/${deal.id}`)
+          navigate(`/app/deals/${deal.id}`)
         }}
       />
     </>
@@ -608,7 +608,7 @@ export function DealDetailPage() {
     mutationFn: () => dealsApi.archive(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['deals'] })
-      navigate('/deals')
+      navigate('/app/deals')
     },
     onError: (error) => {
       setArchiving(false)
@@ -643,7 +643,7 @@ export function DealDetailPage() {
     <>
       <PageHeader
         title={data.title}
-        breadcrumb={[{ label: t('nav.deals'), to: '/deals' }]}
+        breadcrumb={[{ label: t('nav.deals'), to: '/app/deals' }]}
         meta={
           <>
             {formatMoney(data.amount, data.currency)} · {t('common.updated')}{' '}
@@ -705,7 +705,7 @@ export function DealDetailPage() {
             <dt>{t('deals.accountField')}</dt>
             <dd>
               {data.account_id ? (
-                <Link to={`/accounts/${data.account_id}`}>{t('deals.viewAccount')}</Link>
+                <Link to={`/app/accounts/${data.account_id}`}>{t('deals.viewAccount')}</Link>
               ) : (
                 <span className="text-subtle">{t('common.notLinked')}</span>
               )}

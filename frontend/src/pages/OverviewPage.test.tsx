@@ -116,7 +116,7 @@ function renderOverview() {
   })
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={['/']}>
+      <MemoryRouter initialEntries={['/app']}>
         <I18nProvider>
           <AuthProvider>
             <OverviewPage />
@@ -152,9 +152,9 @@ describe('OverviewPage', () => {
     renderOverview()
 
     const task = await screen.findByText('Call the lead')
-    expect(task.closest('a')).toHaveAttribute('href', '/tasks/t1')
+    expect(task.closest('a')).toHaveAttribute('href', '/app/tasks/t1')
     const ticket = screen.getByText('Printer on fire')
-    expect(ticket.closest('a')).toHaveAttribute('href', '/tickets/k1')
+    expect(ticket.closest('a')).toHaveAttribute('href', '/app/tickets/k1')
   })
 
   it('offers quick actions for the pages the user may open', async () => {
@@ -162,7 +162,7 @@ describe('OverviewPage', () => {
     renderOverview()
 
     expect(await screen.findByText('Quick actions')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Workflows/ })).toHaveAttribute('href', '/workflows')
+    expect(screen.getByRole('link', { name: /Workflows/ })).toHaveAttribute('href', '/app/workflows')
   })
 
   it('offers the create actions to a user who may create records', async () => {

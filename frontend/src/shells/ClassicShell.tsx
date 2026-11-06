@@ -99,7 +99,7 @@ export function ClassicShell() {
         inert={drawerLayout && !menuOpen ? true : undefined}
         tabIndex={-1}
       >
-        <Link to="/" className="sidebar__brand" onClick={() => setMenuOpen(false)}>
+        <Link to="/app" className="sidebar__brand" onClick={() => setMenuOpen(false)}>
           <Avatar name="ForgeCRM" size="md" />
           <span className="sidebar__brand-text">
             <span>{t('brand.name')}</span>

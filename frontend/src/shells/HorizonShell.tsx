@@ -138,7 +138,7 @@ export function HorizonShell() {
           </button>
         ) : null}
 
-        <Link to="/" className="horizon-brand">
+        <Link to="/app" className="horizon-brand">
           <span className="horizon-brand__mark" aria-hidden="true">F</span>
           <span className="horizon-brand__name">{t('brand.name')}</span>
         </Link>

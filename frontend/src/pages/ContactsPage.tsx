@@ -80,7 +80,7 @@ export function ContactsPage() {
         fetchPage={(params) => contactsApi.list(params)}
         columns={columns(t)}
         rowKey={(row) => row.id}
-        onRowClick={(row) => navigate(`/contacts/${row.id}`)}
+        onRowClick={(row) => navigate(`/app/contacts/${row.id}`)}
         emptyTitle={t('contacts.emptyTitle')}
         emptyText={t('contacts.emptyText')}
         searchable
@@ -110,7 +110,7 @@ export function ContactsPage() {
         onClose={() => setCreating(false)}
         onSaved={(contact) => {
           setCreating(false)
-          navigate(`/contacts/${contact.id}`)
+          navigate(`/app/contacts/${contact.id}`)
         }}
       />
     </>
@@ -328,7 +328,7 @@ export function ContactDetailPage() {
     mutationFn: () => contactsApi.archive(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['contacts'] })
-      navigate('/contacts')
+      navigate('/app/contacts')
     },
     onError: (error) => {
       setArchiving(false)
@@ -363,7 +363,7 @@ export function ContactDetailPage() {
     <>
       <PageHeader
         title={fullName(data, t('contacts.unnamed'))}
-        breadcrumb={[{ label: t('nav.contacts'), to: '/contacts' }]}
+        breadcrumb={[{ label: t('nav.contacts'), to: '/app/contacts' }]}
         meta={
           <>
             {data.job_title ? <>{data.job_title} · </> : null}
@@ -405,7 +405,7 @@ export function ContactDetailPage() {
           <dt>{t('contacts.accountField')}</dt>
           <dd>
             {data.account_id ? (
-              <Link to={`/accounts/${data.account_id}`}>{t('contacts.viewAccount')}</Link>
+              <Link to={`/app/accounts/${data.account_id}`}>{t('contacts.viewAccount')}</Link>
             ) : (
               <span className="text-subtle">{t('common.notLinked')}</span>
             )}

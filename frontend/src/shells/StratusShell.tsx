@@ -33,7 +33,7 @@ import {
 import { IconMenu, IconSearch } from '../components/icons'
 
 /** Quick actions pinned to the utility bar, in priority order. */
-const UTILITY_ROUTES = ['/notifications', '/tasks', '/ai', '/approvals']
+const UTILITY_ROUTES = ['/app/notifications', '/app/tasks', '/app/ai', '/app/approvals']
 
 /** The waffle: a 3×3 dot grid, the cloud-suite convention for "everything". */
 function LauncherGlyph() {
@@ -163,7 +163,7 @@ export function StratusShell() {
 
           <div className="stratus-brand">
             <span className="stratus-brand__cloud" aria-hidden="true" />
-            <NavLink to="/" className="stratus-brand__name">{t('brand.name')}</NavLink>
+            <NavLink to="/app" end className="stratus-brand__name">{t('brand.name')}</NavLink>
           </div>
 
           {/* The workspace menu rides in the header like the app menu in a

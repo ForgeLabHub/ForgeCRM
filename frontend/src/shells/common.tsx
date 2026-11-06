@@ -18,7 +18,7 @@ import { useGlobalSearchShortcut } from '../hooks/useGlobalSearch'
 import { useI18n, type TranslationKey } from '../i18n'
 import { useTheme, THEME_MODES, type ThemeMode } from '../theme'
 import { useWorkspace } from '../workspace/WorkspaceProvider'
-import { NAV_ENTRIES, NAV_GROUPS, navEntryFor, type NavEntry } from '../navigation'
+import { APP_HOME, NAV_ENTRIES, NAV_GROUPS, navEntryFor, type NavEntry } from '../navigation'
 import { WORKSPACE_DEFINITIONS, workspaceDefinition } from '../workspaces'
 import { Avatar, Skeleton } from '../components/ui'
 import {
@@ -140,7 +140,7 @@ export function useAllowedEntries(): NavEntry[] {
 }
 
 /**
- * The nav entry the current location belongs to. Detail pages (`/accounts/42`)
+ * The nav entry the current location belongs to. Detail pages (`/app/accounts/42`)
  * resolve to their list entry by longest prefix, so every shell can name the
  * current section without each route declaring a breadcrumb.
  */
@@ -151,12 +151,12 @@ export function useCurrentEntry(): NavEntry | undefined {
     if (exact) return exact
     let best: NavEntry | undefined
     for (const entry of NAV_ENTRIES) {
-      if (entry.to === '/') continue
+      if (entry.to === APP_HOME) continue
       if (pathname.startsWith(`${entry.to}/`) && (best?.to.length ?? 0) < entry.to.length) {
         best = entry
       }
     }
-    return best ?? (pathname === '/' ? navEntryFor('/') : undefined)
+    return best ?? (pathname === APP_HOME ? navEntryFor(APP_HOME) : undefined)
   }, [pathname])
 }
 
@@ -245,12 +245,12 @@ export function AccountMenu({ avatarOnly = false }: { avatarOnly?: boolean }) {
           {syncError ? <p role="alert" className="text-sm">{t('appearance.saveError')}</p> : null}
           <div className="menu__separator" />
 
-          <Link to="/account" className="menu__item" onClick={() => setOpen(false)}>
+          <Link to="/app/account" className="menu__item" onClick={() => setOpen(false)}>
             <IconUser size={16} />
             {t('nav.account')}
           </Link>
 
-          <Link to="/appearance" className="menu__item" onClick={() => setOpen(false)}>
+          <Link to="/app/appearance" className="menu__item" onClick={() => setOpen(false)}>
             <IconSliders size={16} />
             {t('nav.appearance')}
           </Link>

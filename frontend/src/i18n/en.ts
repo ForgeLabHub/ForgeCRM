@@ -1837,6 +1837,14 @@ export const en = {
       task: 'Task',
     },
   },
+  site: {
+    variant: {
+      label: 'How the site is laid out',
+      note: 'Changes the page layout, not the colour theme. The choice is remembered on this device.',
+      toggle: 'Choose the site layout',
+      toggleShort: 'Layout',
+    },
+  },
 }
 
 export type Dictionary = typeof en

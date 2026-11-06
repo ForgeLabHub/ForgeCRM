@@ -114,7 +114,7 @@ export function SlateShell() {
             </button>
           ) : null}
           <span className="slate-top__crumb truncate">
-            <Link to="/" className="slate-top__crumb-home">{t('brand.name')}</Link>
+            <Link to="/app" className="slate-top__crumb-home">{t('brand.name')}</Link>
             <span className="slate-top__crumb-sep" aria-hidden="true">/</span>
             <span aria-current="page">{current ? t(current.labelKey) : t('nav.overview')}</span>
           </span>

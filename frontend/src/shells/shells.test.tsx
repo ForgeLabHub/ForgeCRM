@@ -59,11 +59,11 @@ function renderShell(layout?: string) {
     <QueryClientProvider client={queryClient}>
       <I18nProvider>
         <ThemeProvider>
-          <MemoryRouter initialEntries={['/']}>
+          <MemoryRouter initialEntries={['/app']}>
             <AuthProvider>
               <WorkspaceProvider>
                 <Routes>
-                  <Route path="/" element={<AppShell />}>
+                  <Route path="/app" element={<AppShell />}>
                     <Route index element={<div>Overview</div>} />
                   </Route>
                 </Routes>

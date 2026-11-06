@@ -125,7 +125,7 @@ test.describe('visual: workspace', () => {
     await setVisualAppearance(page)
     const name = `Visual Corp ${RUN_ID}`
     await createAccount(page, name)
-    await page.goto('/accounts')
+    await page.goto('/app/accounts')
     // Filter to the one row this run created so the table body is deterministic
     // regardless of how much data earlier runs left behind.
     await page.getByPlaceholder(/search/i).fill(name)
@@ -148,7 +148,7 @@ test.describe('visual: workspace', () => {
     const name = `Visual Corp ${RUN_ID}`
     await createAccount(page, name)
     await page.setViewportSize({ width: 390, height: 844 })
-    await page.goto('/accounts')
+    await page.goto('/app/accounts')
     await page.getByPlaceholder(/search/i).fill(name)
     await ready(page, page.getByRole('table'))
     // The responsive spec proves no horizontal overflow numerically; this
@@ -165,7 +165,7 @@ test.describe('visual: workspace', () => {
   test('the create-account dialog', async ({ page }) => {
     await signIn(page)
     await setVisualAppearance(page)
-    await page.goto('/accounts')
+    await page.goto('/app/accounts')
     // The scrim is translucent, so whatever sits behind it is part of the
     // image. Filter to a fixed term that matches nothing first, so the
     // background is the deterministic empty state (and the search box shows a
@@ -184,7 +184,7 @@ test.describe('visual: workspace', () => {
   test('the reports stat tiles and pipeline table', async ({ page }) => {
     await signIn(page)
     await setVisualAppearance(page)
-    await page.goto('/reports')
+    await page.goto('/app/reports')
     await ready(page, page.getByRole('heading', { name: 'Reports' }))
     await expect(page).toHaveScreenshot('reports-desktop-light-en.png', {
       mask: dynamic(page),

@@ -15,6 +15,9 @@ import './index.css'
 // The interface experiences: their token sets must land after the base sheet
 // so a :root[data-layout='…'] block wins at equal specificity.
 import './shells/shells.css'
+// The public site. It reads the same tokens the shells define, so the marketing
+// pages follow the visitor's palette without a second theme system.
+import './site/site.css'
 
 const queryClient = new QueryClient({
   defaultOptions: {

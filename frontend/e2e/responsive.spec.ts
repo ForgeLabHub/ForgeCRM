@@ -41,41 +41,41 @@ const VIEWPORTS: ReadonlyArray<readonly [string, { width: number; height: number
 
 /** Every route that renders real content for the bootstrap owner. */
 const ROUTES = [
-  '/',
-  '/accounts',
-  '/contacts',
-  '/leads',
-  '/deals',
-  '/tasks',
-  '/tickets',
-  '/reports',
-  '/imports',
-  '/migrations',
-  '/integrations',
-  '/webhooks',
-  '/events',
-  '/workflows',
-  '/simulation',
-  '/forecast',
-  '/risk',
-  '/jobs',
-  '/ai',
-  '/approvals',
-  '/notifications',
-  '/admin/users',
-  '/admin/roles',
-  '/admin/organizations',
-  '/admin/teams',
-  '/admin/audit',
-  '/admin/consent',
-  '/admin/security',
-  '/admin/diagnostics',
-  '/admin/email',
-  '/admin/telegram',
-  '/admin/sso',
-  '/admin/mcp-credentials',
-  '/admin/configuration',
-  '/account',
+  '/app',
+  '/app/accounts',
+  '/app/contacts',
+  '/app/leads',
+  '/app/deals',
+  '/app/tasks',
+  '/app/tickets',
+  '/app/reports',
+  '/app/imports',
+  '/app/migrations',
+  '/app/integrations',
+  '/app/webhooks',
+  '/app/events',
+  '/app/workflows',
+  '/app/simulation',
+  '/app/forecast',
+  '/app/risk',
+  '/app/jobs',
+  '/app/ai',
+  '/app/approvals',
+  '/app/notifications',
+  '/app/admin/users',
+  '/app/admin/roles',
+  '/app/admin/organizations',
+  '/app/admin/teams',
+  '/app/admin/audit',
+  '/app/admin/consent',
+  '/app/admin/security',
+  '/app/admin/diagnostics',
+  '/app/admin/email',
+  '/app/admin/telegram',
+  '/app/admin/sso',
+  '/app/admin/mcp-credentials',
+  '/app/admin/configuration',
+  '/app/account',
 ] as const
 
 async function horizontalOverflow(page: import('@playwright/test').Page): Promise<number> {
@@ -139,7 +139,7 @@ test.describe('responsive layout', () => {
   test('the sidebar is an off-canvas drawer that opens and closes on a phone', async ({
     authedPage: page,
   }) => {
-    await page.goto('/')
+    await page.goto('/app')
     await settle(page)
 
     const sidebar = page.locator('.sidebar')
@@ -168,7 +168,7 @@ test.describe('responsive layout', () => {
   })
 
   test('drawer traps keyboard focus, closes with Escape and restores focus', async ({ authedPage: page }) => {
-    await page.goto('/')
+    await page.goto('/app')
     const drawer = page.locator('.sidebar')
     const toggle = page.locator('.sidebar-toggle')
     await expect(drawer).toHaveAttribute('inert', '')
@@ -187,7 +187,7 @@ test.describe('responsive layout', () => {
   })
 
   test('a resize or global search does not leave the drawer modal open', async ({ authedPage: page }) => {
-    await page.goto('/')
+    await page.goto('/app')
     const drawer = page.locator('.sidebar')
     const toggle = page.locator('.sidebar-toggle')
     await toggle.click()
@@ -203,7 +203,7 @@ test.describe('responsive layout', () => {
 
   test('phone forms and dialog actions remain usable on a small screen', async ({ authedPage: page }) => {
     await page.setViewportSize(SMALL_PHONE)
-    await page.goto('/accounts')
+    await page.goto('/app/accounts')
     await page.getByRole('button', { name: 'New account' }).click()
     const dialog = page.getByRole('dialog')
     const input = dialog.locator('#account-name')
@@ -222,7 +222,7 @@ test.describe('responsive layout', () => {
     // stack into cards and each cell is labelled from its column header, so the
     // page never widens and no column is hidden off-screen.
     await createAccount(page, `Responsive ${RUN_ID}`)
-    await page.goto('/accounts')
+    await page.goto('/app/accounts')
     await expect(page.getByRole('table')).toBeVisible({ timeout: 15_000 })
 
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1)
@@ -237,7 +237,7 @@ test.describe('responsive layout', () => {
     authedPage: page,
   }) => {
     await createAccount(page, `Responsive ${RUN_ID}`)
-    await page.goto('/accounts')
+    await page.goto('/app/accounts')
     await expect(page.getByRole('table')).toBeVisible({ timeout: 15_000 })
 
     const wrapper = page.locator('.table-wrap').first()
