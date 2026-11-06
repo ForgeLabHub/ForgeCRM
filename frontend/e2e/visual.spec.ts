@@ -25,6 +25,28 @@ async function ready(page: Page, marker: Locator) {
   await expect(page.locator('[aria-busy="true"]')).toHaveCount(0)
 }
 
+/**
+ * Filters the accounts list and waits for the filtered response to land.
+ *
+ * The list keeps the previous page on screen while the next one loads
+ * (`keepPreviousData`), and the table is still rendered in that window, so
+ * neither the table's presence nor the absence of `aria-busy` proves the
+ * filtered rows have arrived. Without this wait a screenshot can capture the
+ * unfiltered rows the search is about to replace — a layout that then diffs
+ * against a baseline taken from the settled page.
+ */
+async function searchAccounts(page: Page, name: string) {
+  const filtered = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' &&
+      response.url().includes('/api/v1/accounts') &&
+      new URL(response.url()).searchParams.get('q') === name &&
+      response.ok(),
+  )
+  await page.getByPlaceholder(/search/i).fill(name)
+  await filtered
+}
+
 /** Dynamic content that must never be part of a comparison. */
 function dynamic(page: Page): Locator[] {
   return [
@@ -128,7 +150,7 @@ test.describe('visual: workspace', () => {
     await page.goto('/app/accounts')
     // Filter to the one row this run created so the table body is deterministic
     // regardless of how much data earlier runs left behind.
-    await page.getByPlaceholder(/search/i).fill(name)
+    await searchAccounts(page, name)
     await ready(page, page.getByRole('table'))
     await expect(page.getByRole('cell', { name })).toBeVisible()
     await expect(page).toHaveScreenshot('accounts-table-desktop-light-en.png', {
@@ -149,8 +171,12 @@ test.describe('visual: workspace', () => {
     await createAccount(page, name)
     await page.setViewportSize({ width: 390, height: 844 })
     await page.goto('/app/accounts')
-    await page.getByPlaceholder(/search/i).fill(name)
+    await searchAccounts(page, name)
     await ready(page, page.getByRole('table'))
+    // The stacked layout keeps the row label in the first cell; waiting for it
+    // proves the filtered card is on screen, not the unfiltered rows the search
+    // replaced.
+    await expect(page.getByRole('cell', { name })).toBeVisible()
     // The responsive spec proves no horizontal overflow numerically; this
     // proves the labelled-card layout renders in the right shape.
     await expect(page).toHaveScreenshot('accounts-cards-mobile-light-en.png', {
