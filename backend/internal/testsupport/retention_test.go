@@ -1040,6 +1040,70 @@ func TestRetentionSweepIndexesExist(t *testing.T) {
 	}
 }
 
+// TestEverySweepPolicyHasALeadingIndex asserts that every sweepable policy has an
+// index whose first column is the policy's time column.
+//
+// The mission requires that a retention sweep not scan the whole table. The sweep
+// builds `WHERE <time> < cutoff AND <status predicate>` with no organization
+// filter, so an index that leads with anything else — or with no column at all —
+// leaves the planner a sequential scan of a table that only ever grows. The
+// enumerated guard above names the indexes an author remembered to add; this one
+// derives the requirement from the registry, so a policy added later without a
+// supporting index fails here instead of silently degrading a deployment.
+//
+// The guard is structural, not a query plan: it proves an index exists whose first
+// key column is the sweep column, which is the condition under which the planner
+// can use it at all. It deliberately does not assert the planner chooses it, which
+// would depend on table statistics.
+func TestEverySweepPolicyHasALeadingIndex(t *testing.T) {
+	db := connectOrSkip(t)
+	freshSchema(t, db)
+
+	ctx := context.Background()
+	for _, p := range retention.Policies() {
+		if p.Protected || p.AppendOnly {
+			// An append-only table is never swept, and a protected one runs only
+			// under the allow-audit switch; neither is the always-on path this guard
+			// is about.
+			continue
+		}
+		var leading []string
+		rows, err := db.Pool().Query(ctx, `
+			SELECT a.attname
+			FROM pg_index i
+			JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = i.indkey[0]
+			WHERE i.indrelid = $1::regclass AND i.indnkeyatts > 0`, p.Table)
+		if err != nil {
+			t.Fatalf("list leading index columns for %s: %v", p.Table, err)
+		}
+		for rows.Next() {
+			var col string
+			if err := rows.Scan(&col); err != nil {
+				rows.Close()
+				t.Fatalf("scan leading column for %s: %v", p.Table, err)
+			}
+			leading = append(leading, col)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			t.Fatalf("iterate leading columns for %s: %v", p.Table, err)
+		}
+
+		found := false
+		for _, col := range leading {
+			if col == p.TimeColumn {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("retention policy %q sweeps %s on %s, but no index leads with that column "+
+				"(leading columns seen: %v); the sweep would scan the whole table",
+				p.Key, p.Table, p.TimeColumn, leading)
+		}
+	}
+}
+
 // TestRetentionSweepsSettledTelegramUpdateReceipts covers the anti-replay ledger
 // for incoming Telegram updates. A settled receipt past the window is removed; a
 // settled receipt inside the window and a receipt whose reply has not yet been
