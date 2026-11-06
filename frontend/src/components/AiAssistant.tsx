@@ -6,7 +6,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useT } from '../i18n'
 import './AiAssistant.css'
 
-/** The existing chat endpoint is a single completion, not an agent runtime. */
+/** One request can read authorized data or create an approval-gated proposal. */
 export function AiAssistantChat() {
   const t = useT()
   const { can } = useAuth()

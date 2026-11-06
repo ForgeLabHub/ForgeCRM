@@ -24,7 +24,8 @@ export async function askAssistant(question: string, can: (permission: string) =
   })
   let plan: Plan
   try {
-    const parsed: unknown = JSON.parse(response.content)
+    const json = response.content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')
+    const parsed: unknown = JSON.parse(json)
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error()
     const candidate = parsed as Record<string, unknown>
     if (typeof candidate.tool !== 'string' || !candidate.arguments || typeof candidate.arguments !== 'object' || Array.isArray(candidate.arguments)) throw new Error()
