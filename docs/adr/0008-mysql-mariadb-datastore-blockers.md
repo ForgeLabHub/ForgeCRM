@@ -13,21 +13,23 @@
 PostgreSQL и сколько из этого — движок хранения, а не запросы?»
 
 Этот ADR отвечает на это из кода, а не из намерения. Приведённые ниже числа были
-получены через `grep` по не-тестовым исходникам Go и встроенным миграциям на
-коммите `4fafe6a`, и они воспроизводимы:
+получены через `grep` по не-тестовым исходникам Go и встроенным миграциям. Они
+воспроизводимы и переизмерены на коммите `907b2b6`; числа в скобках — исходное
+измерение на `4fafe6a`, когда ADR был написан, и они растут вместе с платформой,
+то есть оценка усилий со временем только ухудшается:
 
 ```bash
 cd backend
-grep -rl "jackc/pgx\|jackc/pgconn" --include=*.go internal cmd | grep -v _test | wc -l   # 19
-grep -ro "RETURNING"   --include=*.go internal cmd | grep -v _test | wc -l               # 64
-grep -ro "ON CONFLICT" --include=*.go internal cmd | grep -v _test | wc -l               # 21
-grep -ro "SKIP LOCKED" --include=*.go internal cmd | grep -v _test | wc -l               #  8
-grep -ro "ILIKE"       --include=*.go internal cmd | grep -v _test | wc -l               # 26
-grep -ro "::interval"  --include=*.go internal cmd | grep -v _test | wc -l               #  7
-grep -ro "pg_advisory" --include=*.go internal cmd | grep -v _test | wc -l               #  1
-ls internal/migrations/*.up.sql | wc -l                                                   # 16
-grep -rl "gen_random_uuid" internal/migrations/*.up.sql | wc -l                          #  6
-grep -rl "plpgsql\|CREATE TRIGGER" internal/migrations/*.up.sql | wc -l                   #  6
+grep -rl "jackc/pgx\|jackc/pgconn" --include=*.go internal cmd | grep -v _test | wc -l   # 24  (было 19)
+grep -ro "RETURNING"   --include=*.go internal cmd | grep -v _test | wc -l               # 91  (было 64)
+grep -ro "ON CONFLICT" --include=*.go internal cmd | grep -v _test | wc -l               # 34  (было 21)
+grep -ro "SKIP LOCKED" --include=*.go internal cmd | grep -v _test | wc -l               # 10  (было  8)
+grep -ro "ILIKE"       --include=*.go internal cmd | grep -v _test | wc -l               # 27  (было 26)
+grep -ro "::interval"  --include=*.go internal cmd | grep -v _test | wc -l               # 12  (было  7)
+grep -ro "pg_advisory" --include=*.go internal cmd | grep -v _test | wc -l               #  6  (было  1)
+ls internal/migrations/*.up.sql | wc -l                                                   # 37  (было 16)
+grep -rl "gen_random_uuid" internal/migrations/*.up.sql | wc -l                          # 14  (было  6)
+grep -rl "plpgsql\|CREATE TRIGGER" internal/migrations/*.up.sql | wc -l                   # 15  (было  6)
 ```
 
 ## Решение
@@ -43,7 +45,7 @@ MySQL/MariaDB в этом цикле не реализуется, а напра�
 ### Блокер 1 — драйвер, а не диалект
 
 `internal/database` оборачивает `*pgxpool.Pool` напрямую (`database.go`), а тип
-`Tx` — это `pgx.Tx`. Девятнадцать не-тестовых файлов импортируют `jackc/pgx` или
+`Tx` — это `pgx.Tx`. Двадцать четыре не-тестовых файла импортируют `jackc/pgx` или
 `jackc/pgconn`, и некоторые из них делают больше, чем просто передают соединение:
 
 - `internal/crm/search.go` и `internal/crm/crm.go` сканируют через `pgx.Row`.
@@ -67,31 +69,32 @@ MySQL/MariaDB в этом цикле не реализуется, а напра�
 
 | Идиома | Использований | Эквивалент в MySQL/MariaDB | Цена |
 |---|---|---|---|
-| `INSERT ... RETURNING` | 64 | нет (MariaDB 10.5+ имеет `RETURNING` для `INSERT`, но не для `UPDATE`/`DELETE`; в MySQL нет вовсе) | Каждый insert/update, возвращающий строку, становится insert-then-select внутри той же транзакции и требует стратегии сгенерированного ключа или last-insert-id для каждой таблицы |
-| `ON CONFLICT ... DO UPDATE/NOTHING` | 21 | `INSERT ... ON DUPLICATE KEY UPDATE` / `INSERT IGNORE` | Другая семантика: `ON DUPLICATE KEY UPDATE` срабатывает на *любом* уникальном ключе, а не на названном, а `INSERT IGNORE` глотает каждую ошибку, а не только конфликт. Каждому месту вызова нужен свой перевод и тест |
-| `FOR UPDATE SKIP LOCKED` | 8 | MySQL 8.0+ и MariaDB 10.6+ поддерживают | Это фундамент корректности очереди (`jobs.Claim`, `ClaimDelivery`). Работает, но минимальные версии становятся жёстким порогом, и каждый запрос заявки нуждается в варианте для MariaDB |
-| `ILIKE` | 26 | `LIKE` с регистронезависимой коллацией или `LOWER()` | Зависит от коллации; поведение поиска молча менялось бы вместе с коллацией по умолчанию на сервере |
-| `now() - $1::interval` | 7 | `DATE_SUB(now(), INTERVAL ? SECOND)` | Привязка параметров различается; арифметика аренды и повторов размазана по коду очереди и доставки |
-| `pg_advisory_xact_lock` | 1 | `GET_LOCK`/`RELEASE_LOCK`, с областью сессии | Дедупликация `EnqueuePeriodic` зависит от блокировки *с областью транзакции*; эквивалент в MySQL имеет область сессии и требует явного освобождения, что является другим режимом отказа |
+| `INSERT ... RETURNING` | 91 | нет (MariaDB 10.5+ имеет `RETURNING` для `INSERT`, но не для `UPDATE`/`DELETE`; в MySQL нет вовсе) | Каждый insert/update, возвращающий строку, становится insert-then-select внутри той же транзакции и требует стратегии сгенерированного ключа или last-insert-id для каждой таблицы |
+| `ON CONFLICT ... DO UPDATE/NOTHING` | 34 | `INSERT ... ON DUPLICATE KEY UPDATE` / `INSERT IGNORE` | Другая семантика: `ON DUPLICATE KEY UPDATE` срабатывает на *любом* уникальном ключе, а не на названном, а `INSERT IGNORE` глотает каждую ошибку, а не только конфликт. Каждому месту вызова нужен свой перевод и тест |
+| `FOR UPDATE SKIP LOCKED` | 10 | MySQL 8.0+ и MariaDB 10.6+ поддерживают | Это фундамент корректности очереди (`jobs.Claim`, `ClaimDelivery`). Работает, но минимальные версии становятся жёстким порогом, и каждый запрос заявки нуждается в варианте для MariaDB |
+| `ILIKE` | 27 | `LIKE` с регистронезависимой коллацией или `LOWER()` | Зависит от коллации; поведение поиска молча менялось бы вместе с коллацией по умолчанию на сервере |
+| `now() - $1::interval` | 12 | `DATE_SUB(now(), INTERVAL ? SECOND)` | Привязка параметров различается; арифметика аренды и повторов размазана по коду очереди и доставки |
+| `pg_advisory_xact_lock` | 6 | `GET_LOCK`/`RELEASE_LOCK`, с областью сессии | Дедупликация `EnqueuePeriodic` и сериализация цепочки аудита зависят от блокировки *с областью транзакции*; эквивалент в MySQL имеет область сессии и требует явного освобождения, что является другим режимом отказа |
 
 ### Блокер 3 — схема и миграции
 
-16 миграций — это DDL для PostgreSQL, и они встроены в бинарник. Они используют:
+37 миграций — это DDL для PostgreSQL, и они встроены в бинарник. Они используют:
 
-- `gen_random_uuid()` как значение по умолчанию в шести миграциях — MySQL
+- `gen_random_uuid()` как значение по умолчанию в четырнадцати миграциях — MySQL
   потребовал бы `UUID()` (MariaDB) или генерацию на стороне приложения (в MySQL
   нет значения по умолчанию `UUID` во всех версиях), а также выбор представления
   `CHAR(36)`/`BINARY(16)`, что меняет каждый столбец UUID и размер индексов.
-- `CREATE TRIGGER` с `plpgsql` в шести миграциях — в частности, триггер аудита
+- `CREATE TRIGGER` с `plpgsql` в пятнадцати миграциях — в частности, триггер аудита
   «только добавление». В MariaDB нет `plpgsql`; триггер нужно переписать на её
   диалекте и заново проверить, потому что «журнал аудита нельзя удалить» — это
   свойство безопасности, а не удобство.
-- Частичные индексы (`CREATE INDEX ... WHERE`) в четырёх миграциях — не
+- Частичные индексы (`CREATE INDEX ... WHERE`) в пяти миграциях — не
   поддерживаются в MySQL, поэтому каждый становится функциональным или полным
   индексом плюс изменение запроса.
-- Столбцы `jsonb` в семи миграциях — `JSON` в MySQL/MariaDB, с другими операторами
-  (`->>` против `JSON_EXTRACT`), другим индексированием и без равенства `jsonb`.
-- Столбцы-массивы (`uuid[]`, `text[]`) в пяти миграциях — в MySQL нет типа-массива;
+- Столбцы `jsonb` в двенадцати миграциях — `JSON` в MySQL/MariaDB, с другими
+  операторами (`->>` против `JSON_EXTRACT`), другим индексированием и без равенства
+  `jsonb`.
+- Столбцы-массивы (`uuid[]`, `text[]`) в четырёх миграциях — в MySQL нет типа-массива;
   каждый становится таблицей соединения или JSON-массивом, что является изменением
   модели данных.
 
