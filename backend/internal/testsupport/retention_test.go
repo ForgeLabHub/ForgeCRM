@@ -4,6 +4,7 @@ package testsupport
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -1077,5 +1078,123 @@ VALUES ('old:finished',   now() - interval '100 days', now() - interval '100 day
 	}
 	if inFlight != 1 {
 		t.Fatalf("an unfinished delivery receipt was swept; a redelivered event could send twice")
+	}
+}
+
+// TestRetentionSurvivesAConcurrentSweep runs two sweeps of the same backlog at
+// once. The delete is a set operation over the window, not a cursor, so two
+// runners must remove each eligible row exactly once between them, neither may
+// fail, and no eligible row may survive. This is what makes a sweep safe on a
+// timer that can overlap a manual run.
+func TestRetentionSurvivesAConcurrentSweep(t *testing.T) {
+	db := connectOrSkip(t)
+	freshSchema(t, db)
+
+	ctx := context.Background()
+	org := retentionOrg(t, db, "retention-concurrent")
+
+	// More rows than one batch (5000), so the two runners have to interleave
+	// rather than each finishing in a single statement.
+	const rows = 6000
+	if _, err := db.Pool().Exec(ctx, `
+INSERT INTO jobs (organization_id, kind, status, finished_at)
+SELECT $1, 'import.execute', 'succeeded', now() - interval '40 days'
+FROM generate_series(1, $2)`, org, rows); err != nil {
+		t.Fatalf("insert jobs: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	results := make(chan []retention.Result, 2)
+	errs := make(chan error, 2)
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// A nil audit logger keeps the test on the property under test — the
+			// concurrent delete — rather than the audit writer, which the worker
+			// serialises behind the periodic-enqueue lock anyway.
+			runner := retention.New(db, nil, nil, retention.Options{Enabled: true, Delete: true})
+			res, err := runner.Run(ctx)
+			results <- res
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(results)
+	close(errs)
+
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("a concurrent sweep returned an error: %v", err)
+		}
+	}
+	var total int64
+	for res := range results {
+		total += deletedFor(res, "jobs_finished")
+	}
+	if total != rows {
+		t.Fatalf("the two sweeps deleted %d rows between them, want %d (a row was removed twice or lost)", total, rows)
+	}
+	if got := countJobs(t, db); got != 0 {
+		t.Fatalf("jobs table holds %d rows after two concurrent sweeps, want 0", got)
+	}
+}
+
+// TestRetentionReportsAPolicyFailureAndRecovers breaks exactly one policy and
+// asserts three things: the failure is reported against that policy instead of
+// aborting the run, the other policies still sweep, and a later run succeeds once
+// the cause is gone. A sweep that stopped at the first broken table would leave
+// every other table unswept, and a failure that only reached the log would be
+// invisible to an operator reading the per-policy report.
+func TestRetentionReportsAPolicyFailureAndRecovers(t *testing.T) {
+	db := connectOrSkip(t)
+	freshSchema(t, db)
+
+	ctx := context.Background()
+	org := retentionOrg(t, db, "retention-recover")
+
+	// One eligible row for each of two independent policies.
+	insertOldJob(t, db, org, "succeeded", time.Now().Add(-40*24*time.Hour))
+	if _, err := db.Pool().Exec(ctx, `
+INSERT INTO app_logs (level, message, created_at)
+VALUES ('info', 'old log', now() - interval '20 days')`); err != nil {
+		t.Fatalf("insert app log: %v", err)
+	}
+
+	// Break one policy only: its table disappears from under the sweep. The other
+	// policies are untouched.
+	if _, err := db.Pool().Exec(ctx, `ALTER TABLE app_logs RENAME TO app_logs_hidden`); err != nil {
+		t.Fatalf("hide app_logs: %v", err)
+	}
+
+	runner := retention.New(db, audit.New(db), nil, retention.Options{Enabled: true, Delete: true})
+	results, err := runner.Run(ctx)
+	if err != nil {
+		t.Fatalf("a per-policy failure aborted the whole run: %v", err)
+	}
+	if res := resultFor(results, "app_logs"); res.Error == "" {
+		t.Fatal("the broken policy reported no error")
+	}
+	if res := resultFor(results, "jobs_finished"); res.Deleted != 1 {
+		t.Fatalf("jobs_finished deleted %d rows while another policy was broken, want 1", res.Deleted)
+	}
+	if got := countJobs(t, db); got != 0 {
+		t.Fatalf("jobs table holds %d rows, want the eligible row removed despite the other failure", got)
+	}
+
+	// Restore the table; the next run must sweep it and report no error.
+	if _, err := db.Pool().Exec(ctx, `ALTER TABLE app_logs_hidden RENAME TO app_logs`); err != nil {
+		t.Fatalf("restore app_logs: %v", err)
+	}
+	second, err := runner.Run(ctx)
+	if err != nil {
+		t.Fatalf("the recovery run returned an error: %v", err)
+	}
+	res := resultFor(second, "app_logs")
+	if res.Error != "" {
+		t.Fatalf("the recovered policy still failed: %s", res.Error)
+	}
+	if res.Deleted != 1 {
+		t.Fatalf("the recovered policy deleted %d rows, want 1", res.Deleted)
 	}
 }
