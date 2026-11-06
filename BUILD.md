@@ -8,7 +8,7 @@
 | Инструмент | Версия | Источник истины |
 | --- | --- | --- |
 | Go | `1.26.10` | `backend/go.mod`, `GO_VERSION` в `ci.yml`, `scripts/doctor.sh` |
-| Node.js | `22.x` | `ci.yml` |
+| Node.js | `22.12.0` или новее в ветке `22.x` | `frontend/package.json` (Vitest), `ci.yml` |
 | npm-зависимости | lockfile | `frontend/package-lock.json` (`npm ci`) |
 | PostgreSQL | `17-alpine` | `docker-compose.yml`, сервис в `ci.yml` |
 | Redis | `7-alpine` | `docker-compose.yml` (опционален для продукта) |

@@ -9,7 +9,7 @@
  * interface has no detail page for.
  */
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -59,6 +59,32 @@ describe('GlobalSearch', () => {
     await new Promise((resolve) => setTimeout(resolve, 350))
     expect(fetchMock).not.toHaveBeenCalled()
     expect(screen.getByText(/at least two characters/i)).toBeDefined()
+  })
+
+  it('does not open a stale result while the input is waiting for debounce', async () => {
+    renderSearch(() => json({ items: [{ entity_type: 'account', id: 'acc-1', title: 'Acme Ltd' }] }))
+    const user = userEvent.setup()
+    const input = screen.getByRole('combobox')
+    await user.type(input, 'ac')
+    await screen.findByText('Acme Ltd')
+
+    fireEvent.change(input, { target: { value: 'different' } })
+    expect(screen.queryByText('Acme Ltd')).toBeNull()
+    expect(input).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(screen.queryByText('Account detail page')).toBeNull()
+  })
+
+  it('keeps the first result selectable after pressing ArrowDown on an empty list', async () => {
+    renderSearch(() => json({ items: [{ entity_type: 'account', id: 'acc-1', title: 'Acme Ltd' }] }))
+    const user = userEvent.setup()
+    const input = screen.getByRole('combobox')
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    await user.type(input, 'ac')
+    await screen.findByText('Acme Ltd')
+    expect(input).toHaveAttribute('aria-activedescendant', 'search-result-0')
+    await user.keyboard('{Enter}')
+    await screen.findByText('Account detail page')
   })
 
   it('lists what the server returned', async () => {
