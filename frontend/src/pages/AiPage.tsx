@@ -3,6 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { aiApi, mcpApi } from '../api/ai'
 import type { MCPTool } from '../api/ai'
 import { errorMessage } from '../api/client'
+import { AiAssistantChat } from '../components/AiAssistant'
 import { useAuth } from '../hooks/useAuth'
 import { useT } from '../i18n'
 import {
@@ -18,7 +19,7 @@ import {
 } from '../components/ui'
 
 export function AiPage() {
-  const { can } = useAuth()
+  const { can, session } = useAuth()
   const t = useT()
 
   const status = useQuery({ queryKey: ['ai', 'status'], queryFn: () => aiApi.status() })
@@ -32,6 +33,9 @@ export function AiPage() {
       <PageHeader title={t('ai.title')} meta={t('ai.meta')} />
 
       <div className="stack">
+        <Card title={t('assistant.title')}>
+          <AiAssistantChat key={`${session?.organization.id}:${session?.user.id}`} />
+        </Card>
         <Card title={t('ai.provider')}>
           {status.isLoading ? (
             <p className="text-muted">{t('ai.checking')}</p>

@@ -1,6 +1,7 @@
 import { lazy, type ReactNode } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AppShell } from './components/AppShell'
+import { AiAssistantLauncher } from './components/AiAssistant'
 import { useAuth } from './hooks/useAuth'
 import { LoginPage } from './pages/LoginPage'
 import { OverviewPage } from './pages/OverviewPage'
@@ -102,6 +103,7 @@ function SignedIn({ children }: { children: ReactNode }) {
  */
 export function App() {
   return (
+    <>
     <Routes>
       {/* The public site. Its routes are unprefixed and end in the catch-all,
           so an unknown URL anywhere outside /app lands on the site's 404. */}
@@ -458,5 +460,7 @@ export function App() {
           <Route path="/app/*" element={<NotFoundPage />} />
         </Route>
     </Routes>
+    <AiAssistantLauncher />
+    </>
   )
 }

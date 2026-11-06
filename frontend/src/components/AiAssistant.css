@@ -1,0 +1,17 @@
+.assistant-launcher { position: fixed; right: 1rem; bottom: 1rem; z-index: 45; display: flex; align-items: flex-end; flex-direction: column; gap: .65rem; }
+/* The public site already has a layout switcher in the bottom-right corner. */
+.site ~ .assistant-launcher { bottom: 5rem; }
+.assistant-launcher__button { border: 0; border-radius: 999px; padding: .8rem 1.15rem; background: #5145cd; color: #fff; font: inherit; font-weight: 700; cursor: pointer; box-shadow: 0 5px 22px #0004; }
+.assistant-launcher__panel { width: min(390px, calc(100vw - 2rem)); max-height: min(600px, calc(100dvh - 6rem)); overflow-y: auto; background: var(--color-surface, #fff); color: var(--color-text, #171717); border: 1px solid var(--color-border, #ddd); border-radius: 16px; box-shadow: 0 12px 40px #0004; }
+.assistant-launcher__header { display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-bottom: 1px solid var(--color-border, #ddd); }
+.assistant-launcher__header button { border: 0; background: transparent; color: inherit; font-size: 1.5rem; cursor: pointer; }
+.assistant-launcher__login { padding: 1rem; }
+.assistant-chat { padding: 1rem; display: grid; gap: .8rem; }
+.assistant-chat__hint { font-size: .875rem; margin: 0; color: var(--color-text-muted, #555); }
+.assistant-chat__form { display: grid; gap: .5rem; }
+.assistant-chat__form textarea { width: 100%; resize: vertical; min-height: 5rem; font: inherit; }
+.assistant-chat__actions, .assistant-chat__links { display: flex; flex-wrap: wrap; gap: .75rem; }
+.assistant-chat__answer { overflow-wrap: anywhere; white-space: pre-wrap; max-height: 18rem; overflow-y: auto; }
+.assistant-chat__answer p { margin: .5rem 0 0; }
+.assistant-chat__error { color: var(--color-danger, #b42318); }
+@media (max-width: 480px) { .assistant-launcher { right: .75rem; bottom: .75rem; } }

@@ -1,12 +1,19 @@
 package api
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 
 	"github.com/geff1778/forgecrm/internal/agent"
+	"github.com/geff1778/forgecrm/internal/ai"
+	"github.com/geff1778/forgecrm/internal/database"
 	"github.com/geff1778/forgecrm/internal/httpx"
 	"github.com/geff1778/forgecrm/internal/rbac"
 )
@@ -72,9 +79,11 @@ func (s *Server) handleGetAgentRun(w http.ResponseWriter, r *http.Request) {
 }
 
 type startAgentRunRequest struct {
-	Goal         string `json:"goal"`
-	BudgetTokens int    `json:"budget_tokens"`
-	ActionCap    int    `json:"action_cap"`
+	Goal         string         `json:"goal"`
+	BudgetTokens int            `json:"budget_tokens"`
+	ActionCap    int            `json:"action_cap"`
+	ToolName     string         `json:"tool_name,omitempty"`
+	Arguments    map[string]any `json:"arguments,omitempty"`
 }
 
 // handleStartAgentRun opens a run. The goal is stored as data, never interpreted
@@ -98,12 +107,80 @@ func (s *Server) handleStartAgentRun(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, httpx.ValidationError(map[string]string{"budget_tokens": "must be greater than zero"}))
 		return
 	}
-	run, err := s.deps.Agent.StartRun(r.Context(), p.OrganizationID, p.UserID, req.Goal, req.BudgetTokens, req.ActionCap)
+	if req.ToolName == "" {
+		run, err := s.deps.Agent.StartRun(r.Context(), p.OrganizationID, p.UserID, req.Goal, req.BudgetTokens, req.ActionCap)
+		if err != nil {
+			s.respondDomainError(w, r, err)
+			return
+		}
+		httpx.WriteJSONStatus(w, http.StatusCreated, run)
+		return
+	}
+	// Only explicit, known write tools may be proposed by this route. The model
+	// supplies neither the risk tier nor the identity, and it can never approve.
+	switch req.ToolName {
+	case "create_task", "create_ticket", "update_deal_stage":
+	default:
+		httpx.WriteError(w, r, httpx.ValidationError(map[string]string{"tool_name": "unsupported agent action"}))
+		return
+	}
+	tool, ok := s.deps.Tools.Get(req.ToolName)
+	if !ok || !tool.Dangerous || ai.RiskTier(req.ToolName) != agent.TierConfirm {
+		httpx.WriteError(w, r, httpx.ValidationError(map[string]string{"tool_name": "unsupported agent action"}))
+		return
+	}
+	if !p.Has(tool.Permission) {
+		httpx.WriteError(w, r, httpx.NewError(http.StatusForbidden, httpx.CodeForbidden, "the action requires a permission you do not hold"))
+		return
+	}
+	properties, _ := tool.InputSchema["properties"].(map[string]any)
+	for key, value := range req.Arguments {
+		if _, ok := properties[key]; !ok || key == "confirm" {
+			httpx.WriteError(w, r, httpx.ValidationError(map[string]string{"arguments": "unsupported argument"}))
+			return
+		}
+		// All allowlisted write-tool fields are strings; reject nested objects and
+		// other model output instead of silently coercing or ignoring it.
+		if _, ok := value.(string); !ok {
+			httpx.WriteError(w, r, httpx.ValidationError(map[string]string{"arguments": "all arguments must be strings"}))
+			return
+		}
+	}
+	required, _ := tool.InputSchema["required"].([]string)
+	for _, key := range required {
+		value, _ := req.Arguments[key].(string)
+		if strings.TrimSpace(value) == "" {
+			httpx.WriteError(w, r, httpx.ValidationError(map[string]string{"arguments": "missing required argument: " + key}))
+			return
+		}
+	}
+	encoded, err := json.Marshal(req.Arguments)
+	if err != nil || len(encoded) > 16000 || strings.TrimSpace(req.Goal) == "" {
+		httpx.WriteError(w, r, httpx.ValidationError(map[string]string{"arguments": "invalid or too large"}))
+		return
+	}
+	var run *agent.Run
+	var action *agent.Action
+	// Keep run creation and proposal insertion atomic. Neither step executes a tool.
+	err = s.deps.DB.WithTx(r.Context(), func(ctx context.Context, _ database.Tx) error {
+		var err error
+		run, err = s.deps.Agent.StartRun(ctx, p.OrganizationID, p.UserID, req.Goal, req.BudgetTokens, 1)
+		if err != nil {
+			return err
+		}
+		action, err = s.deps.Agent.Propose(ctx, agent.Proposal{
+			RunID: run.ID, OrganizationID: p.OrganizationID, ToolName: tool.Name,
+			Arguments: req.Arguments, RiskTier: ai.RiskTier(tool.Name),
+			Summary:        fmt.Sprintf("%s\nArguments: %s", tool.Description, encoded),
+			IdempotencyKey: uuid.NewString(),
+		})
+		return err
+	})
 	if err != nil {
 		s.respondDomainError(w, r, err)
 		return
 	}
-	httpx.WriteJSONStatus(w, http.StatusCreated, run)
+	httpx.WriteJSONStatus(w, http.StatusCreated, map[string]any{"run": run, "action": action})
 }
 
 func (s *Server) handleCancelAgentRun(w http.ResponseWriter, r *http.Request) {
