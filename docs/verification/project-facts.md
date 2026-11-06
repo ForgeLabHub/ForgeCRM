@@ -39,7 +39,7 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 код изменился, а документ не перегенерировали.
 
 <!-- FACTS:AUTO BEGIN — генерируется backend/cmd/facts-gen, не редактировать вручную -->
-<!-- измерено на HEAD `43ac2df9b7b0ddebc5777a144bff83583aedd5a0` -->
+<!-- измерено на HEAD `f6e1320214805b99225a4301a7d883fea541ef4b` -->
 
 ## Backend / Architecture
 
@@ -97,8 +97,8 @@ openapi.json генерируется из живого роутера (`cmd/ope
 | Тесты страниц | **21** | *.test.tsx рядом со страницами |
 | Маршрутов <Route path> | **57** | объявления в frontend/src/App.tsx (регистр маршрутизации SPA) |
 | Уникальных путей маршрутов | **57** | различающиеся path по всем <Routes>-деревьям App.tsx; повторения внутри одного дерева запрещены (гейт route_paths_unique) |
-| E2E спецификации | **5** | *.spec.ts в frontend/e2e |
-| E2E тесты | **71** | объявления test() Playwright; test.describe вычитается |
+| E2E спецификации | **8** | *.spec.ts в frontend/e2e |
+| E2E тесты | **82** | объявления test() Playwright; test.describe вычитается |
 
 ## CI/CD
 
