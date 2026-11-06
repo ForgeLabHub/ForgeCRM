@@ -131,6 +131,11 @@ test.describe('visual: workspace', () => {
     await page.getByPlaceholder(/search/i).fill(name)
     await ready(page, page.getByRole('table'))
     await expect(page.getByRole('cell', { name })).toBeVisible()
+    // The search matches on substring, so assert the filter really narrowed to
+    // this run's one row. A name shared with another test would match two rows
+    // and the extra row changes the table height, which surfaces as an opaque
+    // pixel diff; fail here with the cause instead.
+    await expect(page.locator('tbody tr')).toHaveCount(1)
     await expect(page).toHaveScreenshot('accounts-table-desktop-light-en.png', {
       // Mask the run-specific name in the row and in the search box, not the
       // table chrome.
@@ -145,12 +150,21 @@ test.describe('visual: workspace', () => {
   test('the accounts table stacked into cards on a phone', async ({ page }) => {
     await signIn(page)
     await setVisualAppearance(page)
-    const name = `Visual Corp ${RUN_ID}`
+    // The name must not share a substring with the name the table test above
+    // creates. The search box matches on substring, so a name that is a
+    // superstring of the other test's name makes this test find two rows and
+    // the card count then depends on whether the other test ran first — which
+    // is why the baseline used to pass in the suite and fail when this test
+    // ran alone.
+    const name = `Visual Cards ${RUN_ID}`
     await createAccount(page, name)
     await page.setViewportSize({ width: 390, height: 844 })
     await page.goto('/app/accounts')
     await page.getByPlaceholder(/search/i).fill(name)
     await ready(page, page.getByRole('table'))
+    // Same guard as the table test: the mobile baseline is a single card, so a
+    // second row would silently change the image. Assert the cause here.
+    await expect(page.locator('tbody tr')).toHaveCount(1)
     // The responsive spec proves no horizontal overflow numerically; this
     // proves the labelled-card layout renders in the right shape.
     await expect(page).toHaveScreenshot('accounts-cards-mobile-light-en.png', {
