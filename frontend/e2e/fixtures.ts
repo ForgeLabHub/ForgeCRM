@@ -71,6 +71,45 @@ export async function createContact(page: Page, firstName: string) {
   return { name: firstName, id: match.id }
 }
 
+/**
+ * Provisions a real account holding a single named role and returns its
+ * credentials, so a test can sign in as a *limited* principal.
+ *
+ * The account is created through the API rather than the Users page: the RBAC
+ * surface is what this helper is for, so it must not depend on the invite form.
+ * The flow is the real one — invite, then complete the password reset with the
+ * token the server issues in development — so the account is indistinguishable
+ * from one an administrator created.
+ */
+export async function createLimitedUser(
+  page: Page,
+  roleKey = 'readonly_auditor',
+): Promise<{ email: string; password: string }> {
+  const password = 'E2E-Limited-Passw0rd-2026!'
+  const email = `e2e-limited-${RUN_ID}-${Math.random().toString(36).slice(2, 6)}@forgecrm.test`
+
+  const me = await page.request.get('/api/v1/auth/me')
+  if (!me.ok()) throw new Error(`could not read the session: HTTP ${me.status()}`)
+  const { csrf_token } = await me.json()
+
+  const invite = await page.request.post('/api/v1/users', {
+    headers: { 'X-CSRF-Token': csrf_token },
+    data: { email, display_name: 'E2E Limited', role_key: roleKey },
+  })
+  if (invite.status() !== 201) {
+    throw new Error(`invite failed: HTTP ${invite.status()} ${await invite.text()}`)
+  }
+  const { reset_token } = await invite.json()
+  if (!reset_token) throw new Error('the invite response carried no reset token')
+
+  const reset = await page.request.post('/api/v1/auth/password/reset', {
+    data: { token: reset_token, new_password: password },
+  })
+  if (!reset.ok()) throw new Error(`password reset failed: HTTP ${reset.status()}`)
+
+  return { email, password }
+}
+
 export const test = base.extend<{ authedPage: Page }>({
   // A page that is already signed in, for tests that are not about login.
   // The second parameter is named `provide` rather than Playwright's usual
