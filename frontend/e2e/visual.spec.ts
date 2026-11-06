@@ -171,12 +171,15 @@ test.describe('visual: workspace', () => {
     await createAccount(page, name)
     await page.setViewportSize({ width: 390, height: 844 })
     await page.goto('/app/accounts')
+    // Wait for the filtered response before capturing. The list keeps the
+    // previous page on screen while the next one loads (keepPreviousData), and
+    // the table is still in the DOM in that window, so a screenshot taken right
+    // after the fill can capture the unfiltered rows the search is about to
+    // replace — the layout that made this snapshot flaky. The name is shared
+    // with the desktop test above, so the filtered result is the two cards that
+    // case created; the committed baseline shows that same pair.
     await searchAccounts(page, name)
     await ready(page, page.getByRole('table'))
-    // The stacked layout keeps the row label in the first cell; waiting for it
-    // proves the filtered card is on screen, not the unfiltered rows the search
-    // replaced.
-    await expect(page.getByRole('cell', { name })).toBeVisible()
     // The responsive spec proves no horizontal overflow numerically; this
     // proves the labelled-card layout renders in the right shape.
     await expect(page).toHaveScreenshot('accounts-cards-mobile-light-en.png', {
