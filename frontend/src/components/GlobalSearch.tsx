@@ -60,6 +60,9 @@ export function GlobalSearch({ onClose }: { onClose?: () => void }) {
   }, [term])
 
   const enabled = debounced.length >= 2
+  // Results belong to the debounced query, not necessarily the text currently
+  // visible in the input. Never let an old result be selected during the delay.
+  const queryIsCurrent = term.trim() === debounced
   const results = useQuery({
     queryKey: ['search', debounced],
     queryFn: () => searchApi.search(debounced, 20),
@@ -68,11 +71,12 @@ export function GlobalSearch({ onClose }: { onClose?: () => void }) {
   })
 
   const items = useMemo(() => results.data?.items ?? [], [results.data])
+  const activeIndex = Math.min(active, Math.max(0, items.length - 1))
 
   // A listbox may contain only options. The hint, loading, error and empty states
   // are plain text, so the listbox role is attached only when there are options to
   // hold; otherwise the container is an ordinary div and the text is just text.
-  const hasOptions = enabled && !results.isLoading && !results.isError && items.length > 0
+  const hasOptions = enabled && queryIsCurrent && !results.isLoading && !results.isError && items.length > 0
 
   useEffect(() => {
     setActive(0)
@@ -86,14 +90,14 @@ export function GlobalSearch({ onClose }: { onClose?: () => void }) {
   }
 
   function onKeyDown(event: React.KeyboardEvent) {
-    if (event.key === 'ArrowDown') {
+    if (event.key === 'ArrowDown' && hasOptions) {
       event.preventDefault()
       setActive((current) => Math.min(current + 1, items.length - 1))
-    } else if (event.key === 'ArrowUp') {
+    } else if (event.key === 'ArrowUp' && hasOptions) {
       event.preventDefault()
       setActive((current) => Math.max(current - 1, 0))
-    } else if (event.key === 'Enter') {
-      const chosen = items[active]
+    } else if (event.key === 'Enter' && hasOptions) {
+      const chosen = items[activeIndex]
       if (chosen) {
         event.preventDefault()
         open(chosen)
@@ -116,10 +120,10 @@ export function GlobalSearch({ onClose }: { onClose?: () => void }) {
               value={term}
               onChange={(event) => setTerm(event.target.value)}
               onKeyDown={onKeyDown}
-              aria-controls="global-search-results"
-              aria-activedescendant={items[active] ? `search-result-${active}` : undefined}
+              aria-controls={hasOptions ? 'global-search-results' : undefined}
+              aria-activedescendant={hasOptions ? `search-result-${activeIndex}` : undefined}
               role="combobox"
-              aria-expanded={enabled}
+              aria-expanded={hasOptions}
             />
           </label>
         </div>
@@ -129,11 +133,11 @@ export function GlobalSearch({ onClose }: { onClose?: () => void }) {
           role={hasOptions ? 'listbox' : undefined}
           className="search-palette__results"
         >
-          {!enabled ? (
+          {term.trim().length < 2 ? (
             <p className="text-muted text-sm" style={{ padding: 'var(--space-4)' }}>
               {t('search.typeHint')} {t('search.permissionHint')}
             </p>
-          ) : results.isLoading ? (
+          ) : !queryIsCurrent || results.isLoading ? (
             <p className="text-muted text-sm" style={{ padding: 'var(--space-4)' }}>
               {t('search.searching')}
             </p>
@@ -151,12 +155,12 @@ export function GlobalSearch({ onClose }: { onClose?: () => void }) {
                 key={`${result.entity_type}-${result.id}`}
                 id={`search-result-${index}`}
                 role="option"
-                aria-selected={index === active}
+                aria-selected={index === activeIndex}
                 type="button"
                 onMouseEnter={() => setActive(index)}
                 onClick={() => open(result)}
                 className="search-palette__result"
-                data-active={index === active}
+                data-active={index === activeIndex}
               >
                 <span className="text-subtle text-sm" style={{ marginRight: 8 }}>
                   {result.entity_type in TYPE_LABEL_KEYS
