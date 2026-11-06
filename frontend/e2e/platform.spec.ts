@@ -876,7 +876,7 @@ test.describe('consent', () => {
     authedPage: page,
   }) => {
     const contact = await createContact(page, `E2E Consent ${RUN_ID}`)
-    await page.goto(`/contacts/${contact.id}`)
+    await page.goto(`/app/contacts/${contact.id}`)
 
     // With nothing on record the panel says so: silence is not permission.
     await expect(page.getByText(/No consent on record/i)).toBeVisible()
