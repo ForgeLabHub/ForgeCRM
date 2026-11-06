@@ -17,6 +17,7 @@ func main() {
 	check := flag.Bool("check", false, "fail if project-facts.md is out of date or data is inconsistent")
 	write := flag.Bool("write", false, "update the FACTS:AUTO block in docs/verification/project-facts.md in place, preserving human prose")
 	out := flag.String("out", "", "write JSON metrics to this file instead of stdout")
+	commit := flag.String("commit", "", "commit SHA to stamp in the generated block; defaults to git rev-parse HEAD")
 	flag.Parse()
 
 	rep, err := Compute(*repo)
@@ -54,7 +55,7 @@ func main() {
 		return
 	}
 
-	md := RenderMarkdown(rep, commitFromEnv())
+	md := RenderMarkdown(rep, commitStamp(*commit))
 	if *check {
 		path := filepath.Join(*repo, "docs/verification/project-facts.md")
 		cur, err := os.ReadFile(path)
@@ -91,12 +92,16 @@ func main() {
 	fmt.Print(md)
 }
 
-// commitFromEnv reports the commit the facts describe. CI passes the checked-out
-// SHA via FACTS_COMMIT so the stamp inside the auto block is verifiable; locally
-// we shell out to git rev-parse HEAD. If neither works the stamp is explicit.
-func commitFromEnv() string {
-	if c := os.Getenv("FACTS_COMMIT"); c != "" {
-		return c
+// commitStamp reports the commit the facts describe. The -commit flag carries it
+// when a caller knows the revision (CI passes the checked-out SHA); otherwise we
+// shell out to git rev-parse HEAD. If neither works the stamp is explicit. It
+// deliberately does not read an environment variable: the deployment host scans
+// the repository for os.Getenv calls and reports every name it does not recognise
+// as a setting the app is waiting for, so a build-time stamp must not look like
+// runtime configuration.
+func commitStamp(flagValue string) string {
+	if flagValue != "" {
+		return flagValue
 	}
 	if c, err := exec.Command("git", "rev-parse", "HEAD").Output(); err == nil {
 		return strings.TrimSpace(string(c))

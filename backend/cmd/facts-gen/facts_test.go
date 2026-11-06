@@ -60,6 +60,15 @@ func TestComputeOnRealRepo(t *testing.T) {
 	}
 }
 
+func TestCommitStampPrefersFlag(t *testing.T) {
+	// The stamp must come from the flag when one is given, so CI can pin it to
+	// the checked-out SHA without any environment variable. It must not depend on
+	// git being present, which is why the flag wins outright.
+	if got := commitStamp("abc123"); got != "abc123" {
+		t.Errorf("commitStamp(flag) = %q, want the flag value", got)
+	}
+}
+
 func TestDeterministicRendering(t *testing.T) {
 	repo := findRepoRoot(t)
 	r1, err := Compute(repo)

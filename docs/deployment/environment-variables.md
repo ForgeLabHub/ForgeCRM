@@ -188,8 +188,11 @@ The platform runs fully without a model provider. `ollama` keeps prompts local.
 
 OpenRouter (`https://openrouter.ai`) is a hosted gateway to many models and speaks
 the OpenAI chat-completions protocol, so it uses the settings above with
-`FORGECRM_AI_PROVIDER=openrouter`. Only the API key is required; the base URL and
-model default to `https://openrouter.ai/api/v1` and `google/gemma-2-9b-it:free`.
+`FORGECRM_AI_PROVIDER=openrouter`. Only the API key is required; the base URL
+defaults to `https://openrouter.ai/api/v1`. There is no default model: set
+`FORGECRM_AI_MODEL` to a model id that currently exists, because OpenRouter's
+free tier rotates and an id copied from an old guide may have been withdrawn
+(`curl https://openrouter.ai/api/v1/models` lists the live ids).
 The conventional `OPENROUTER_API_KEY`, `LLM_MODEL` and `LLM_BASE_URL` names are
 accepted as aliases when the matching `FORGECRM_AI_*` name is unset, and setting
 `OPENROUTER_API_KEY` alone selects `provider=openrouter`. The `FORGECRM_AI_*` name
@@ -202,7 +205,7 @@ attribution headers OpenRouter shows in its dashboard; they are sent only when s
 FORGECRM_AI_ENABLED=true
 FORGECRM_AI_PROVIDER=openrouter
 FORGECRM_AI_API_KEY=sk-or-...
-FORGECRM_AI_MODEL=google/gemma-2-9b-it:free
+FORGECRM_AI_MODEL=google/gemma-4-31b-it:free
 ```
 
 Check the connection without touching CRM data:
@@ -258,11 +261,12 @@ capabilities endpoint reports `storage: false` so the UI hides uploads.
 ## Tooling (not runtime)
 
 Read by the documentation generator (`cmd/facts-gen`) and the CI job that runs
-it. They never affect a running API or worker.
+it. They never affect a running API or worker. The generator takes the commit to
+stamp as the `-commit` flag, not an environment variable, so a build-time stamp
+cannot be mistaken for runtime configuration.
 
 | Name | Component | Required | Default | Description | Example | Secret | Production |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `FACTS_COMMIT` | Tooling (facts-gen) | no | none | Commit SHA stamped into the generated `FACTS:AUTO` block of `docs/verification/project-facts.md`, so the recorded numbers are traceable to a revision. CI sets it to the checked-out SHA. | `a1b2c3d` | no | no |
 | `FACTS_REPO` | Tooling (facts-gen tests) | no | working directory | Repository root the facts generator walks. Set only when the generator runs outside the repository (the test suite sets it). | `/src` | no | no |
 
 ## Test-only
@@ -328,9 +332,12 @@ wrong, naming the variable but never its value:
   guide explains the Blueprint copies the former into `FORGECRM_BASE_URL`.
 - `FORGECRM_ROLE` was added when the image entrypoint became a dispatcher; it is
   documented under Core and in the Compose and blitz.cloud guides.
-- `FACTS_COMMIT` and `FACTS_REPO`, read by the `facts-gen` tool and its test, were
-  undocumented. They are listed under Tooling (not runtime), which keeps them
-  distinct from settings that affect a running service.
+- `FACTS_COMMIT` was read by the `facts-gen` tool and, because it is not a
+  `FORGECRM_*` name, a deployment host that scans the repository for `os.Getenv`
+  calls reported it as a setting the app was waiting for — even though the
+  generator never runs in the API or worker image. The stamp is now the `-commit`
+  flag (CI passes the checked-out SHA), so no environment variable is read.
+  `FACTS_REPO` remains, and is set only by the test suite.
 - `FORGECRM_VERSION` and `FORGECRM_COMMIT` were listed twice, once as runtime
   fallbacks and once as build arguments with a different default. They are one
   variable each; the Core table now carries the single, correct default.
