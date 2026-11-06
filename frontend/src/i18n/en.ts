@@ -1104,6 +1104,14 @@ export const en = {
     assumptions: 'Assumptions',
     warnings: 'Warnings',
   },
+  assistant: {
+    title: 'AI assistant', close: 'Close assistant', loginHint: 'Sign in to use the assistant.', login: 'Sign in',
+    limits: 'Each question is independent. General chat cannot access or change CRM records; verify its answers. Never send secrets or sensitive data.',
+    noPermission: 'Your account does not have permission to use AI chat.', question: 'Your question', placeholder: 'Ask a question…',
+    send: 'Send', working: 'Answering…', stop: 'Stop', answer: 'Answer', incomplete: 'The response was interrupted before completion.',
+    openPage: 'AI tools and settings', approvals: 'Review approvals',
+    crmMode: 'Read CRM data', crmHint: 'Uses one permitted read-only CRM tool. Your question is sent to the AI provider; the CRM result is displayed here without sending it to the model. This cannot make changes.',
+  },
   ai: {
     title: 'AI & MCP',
     meta: 'The optional AI layer and the tools it may call. Both work with the same permissions as the API.',
