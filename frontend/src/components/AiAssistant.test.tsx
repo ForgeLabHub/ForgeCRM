@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { I18nProvider } from '../i18n'
 import { api } from '../api/client'
+import * as assistant from '../api/assistantCrm'
 import { AiAssistantChat, AiAssistantLauncher } from './AiAssistant'
 
 const auth = vi.hoisted(() => ({ status: 'authenticated', permissions: ['ai.read', 'ai.tools.execute', 'approvals.read'] }))
@@ -21,25 +22,28 @@ afterEach(() => {
 describe('AI assistant', () => {
   it('invites anonymous visitors to sign in without calling AI', async () => {
     auth.status = 'anonymous'
-    const stream = vi.spyOn(api, 'stream')
+    const request = vi.spyOn(api, 'request')
     mount(<AiAssistantLauncher />)
     await userEvent.click(screen.getByRole('button', { name: /AI assistant/i }))
     expect(screen.getByRole('link', { name: /sign in/i })).toHaveAttribute('href', '/login')
-    expect(stream).not.toHaveBeenCalled()
+    expect(request).not.toHaveBeenCalled()
   })
 
-  it('streams a response and links to approvals without claiming CRM access', async () => {
-    const stream = vi.spyOn(api, 'stream').mockImplementation(async (_path, _body, onEvent) => {
-      onEvent({ event: 'delta', data: { text: 'Hello' } })
-      onEvent({ event: 'done', data: {} })
-    })
+  it('answers and explains that permitted CRM data may be sent to the provider', async () => {
+    vi.spyOn(assistant, 'askAssistant').mockResolvedValue({ kind: 'answer', text: 'Hello' })
     mount(<AiAssistantChat />)
     await userEvent.type(screen.getByLabelText('Your question'), 'Hello')
     await userEvent.click(screen.getByRole('button', { name: 'Send' }))
     expect(await screen.findByText('Hello', { selector: '.assistant-chat__answer p' })).toBeInTheDocument()
-    expect(screen.getByText(/cannot access or change CRM records/i)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Review approvals' })).toHaveAttribute('href', '/app/approvals')
-    expect(stream).toHaveBeenCalledWith('/api/v1/ai/stream/chat', expect.objectContaining({ prompt: 'Hello' }), expect.any(Function), expect.any(AbortSignal))
+    expect(screen.getByText(/may be sent to the configured AI provider/i)).toBeInTheDocument()
+  })
+
+  it('states that proposed actions have not yet executed', async () => {
+    vi.spyOn(assistant, 'askAssistant').mockResolvedValue({ kind: 'proposal', actionId: 'a1' })
+    mount(<AiAssistantChat />)
+    await userEvent.type(screen.getByLabelText('Your question'), 'Create task')
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }))
+    expect(await screen.findByRole('status')).toHaveTextContent(/has not been executed/i)
   })
 
   it('does not permit requests without the execute permission', () => {
@@ -47,15 +51,5 @@ describe('AI assistant', () => {
     mount(<AiAssistantChat />)
     expect(screen.getByText(/does not have permission/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Send' })).not.toBeInTheDocument()
-  })
-
-  it('reports an incomplete stream instead of treating it as a complete answer', async () => {
-    vi.spyOn(api, 'stream').mockImplementation(async (_path, _body, onEvent) => {
-      onEvent({ event: 'delta', data: { text: 'Partial' } })
-    })
-    mount(<AiAssistantChat />)
-    await userEvent.type(screen.getByLabelText('Your question'), 'Hello')
-    await userEvent.click(screen.getByRole('button', { name: 'Send' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent(/interrupted/i)
   })
 })

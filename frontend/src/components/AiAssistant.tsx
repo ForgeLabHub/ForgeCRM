@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { api, errorMessage } from '../api/client'
-import { readCrm } from '../api/assistantCrm'
+import { errorMessage } from '../api/client'
+import { askAssistant } from '../api/assistantCrm'
 import { useAuth } from '../hooks/useAuth'
 import { useT } from '../i18n'
 import './AiAssistant.css'
@@ -13,7 +13,7 @@ export function AiAssistantChat() {
   const questionId = useId()
   const [prompt, setPrompt] = useState('')
   const [answer, setAnswer] = useState('')
-  const [crmMode, setCrmMode] = useState(false)
+  const [proposal, setProposal] = useState(false)
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
   const controller = useRef<AbortController | null>(null)
@@ -27,25 +27,14 @@ export function AiAssistantChat() {
     controller.current = request
     setPending(true)
     setAnswer('')
+    setProposal(false)
     setError('')
-    let done = false
     try {
-      if (crmMode) {
-        if (!can('ai.read')) throw new Error(t('assistant.noPermission'))
-        const result = await readCrm(question, can, request.signal)
-        if (!request.signal.aborted) setAnswer(`${result.tool}\n${JSON.stringify(result.result, null, 2)}`)
-        return
+      const result = await askAssistant(question, can, request.signal)
+      if (!request.signal.aborted) {
+        if (result.kind === 'proposal') setProposal(true)
+        else setAnswer(result.text)
       }
-      await api.stream('/api/v1/ai/stream/chat', {
-        prompt: question,
-        system: 'You are a helpful ForgeCRM assistant. You have no access to CRM records or tools in this chat. Never claim that you read or changed CRM data, or that an action was executed. Respond in the language of the user.',
-      }, (event) => {
-        if (event.event === 'delta' && typeof event.data === 'object' && event.data !== null && 'text' in event.data && typeof event.data.text === 'string') {
-          setAnswer((previous) => previous + (event.data as { text: string }).text)
-        }
-        if (event.event === 'done') done = true
-      }, request.signal)
-      if (!done && !request.signal.aborted) setError(t('assistant.incomplete'))
     } catch (err) {
       if (!request.signal.aborted) setError(errorMessage(err))
     } finally {
@@ -61,8 +50,6 @@ export function AiAssistantChat() {
       <p className="assistant-chat__hint">{t('assistant.limits')}</p>
       {!can('ai.tools.execute') ? <p role="status">{t('assistant.noPermission')}</p> : (
         <form onSubmit={submit} className="assistant-chat__form">
-          {can('ai.read') ? <label><input type="checkbox" checked={crmMode} onChange={(event) => setCrmMode(event.target.checked)} disabled={pending} /> {t('assistant.crmMode')}</label> : null}
-          {crmMode && can('ai.read') ? <p className="assistant-chat__hint">{t('assistant.crmHint')}</p> : null}
           <label htmlFor={questionId}>{t('assistant.question')}</label>
           <textarea id={questionId} value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={4000} rows={3} placeholder={t('assistant.placeholder')} disabled={pending} />
           <div className="assistant-chat__actions">
@@ -72,6 +59,7 @@ export function AiAssistantChat() {
         </form>
       )}
       {error ? <p role="alert" className="assistant-chat__error">{error}</p> : null}
+      {proposal ? <p role="status">{t('assistant.proposed')} <Link to="/app/approvals">{t('assistant.approvals')}</Link></p> : null}
       {answer ? <div className="assistant-chat__answer" aria-live="polite"><strong>{t('assistant.answer')}</strong><p>{answer}</p></div> : null}
       <div className="assistant-chat__links">
         {can('ai.read') ? <Link to="/app/ai">{t('assistant.openPage')}</Link> : null}

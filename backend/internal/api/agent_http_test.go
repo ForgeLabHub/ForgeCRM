@@ -3,6 +3,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"testing"
@@ -527,5 +528,95 @@ func TestExpiredDecisionOverHTTPCommitsTheExpiry(t *testing.T) {
 	// The run whose only proposal expired must not be left waiting.
 	if got := h.runStatus(runID); got != agent.RunFailed {
 		t.Fatalf("run status = %q, want %q", got, agent.RunFailed)
+	}
+}
+
+// A model-proposed write creates only a reviewable action, never a task. The
+// decision binds to the displayed hash and the executor rechecks permissions.
+func TestAgentProposedTaskNeedsApproval(t *testing.T) {
+	h := newHarness(t)
+	org := h.seedOrganization("Proposed task")
+	userID := h.seedUser("proposal-sales@example.test", "Agent-Sales-2026!", "Sales Manager")
+	h.joinOrganization(userID, org, "sales_manager")
+	user := h.login("proposal-sales@example.test", "Agent-Sales-2026!")
+	if !h.hasPermission(user, rbac.PermAgentRun) || !h.hasPermission(user, rbac.PermTasksCreate) || !h.hasPermission(user, rbac.PermApprovalsDecide) {
+		t.Fatal("fixture is missing required rights")
+	}
+	body := `{"goal":"create a task","budget_tokens":2048,"tool_name":"create_task","arguments":{"title":"Follow up"}}`
+	rec := h.do(user, http.MethodPost, "/api/v1/agent/runs", body)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("proposal: %d %s", rec.Code, rec.Body.String())
+	}
+	var response struct {
+		Action agent.Action `json:"action"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Action.Status != agent.ActionProposed || response.Action.RiskTier != agent.TierConfirm {
+		t.Fatalf("unexpected proposal: %+v", response.Action)
+	}
+	count := func() int {
+		var n int
+		if err := h.pool().QueryRow(context.Background(), `SELECT count(*) FROM tasks WHERE organization_id=$1 AND title='Follow up'`, org).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if count() != 0 {
+		t.Fatal("proposal executed before approval")
+	}
+	decision := `{"approve":true,"arguments_hash":"` + response.Action.ArgumentsHash + `"}`
+	rec = h.do(user, http.MethodPost, "/api/v1/agent/actions/"+response.Action.ID.String()+"/decide", decision)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("decide: %d %s", rec.Code, rec.Body.String())
+	}
+	if count() != 1 {
+		t.Fatal("approved task was not created exactly once")
+	}
+	rec = h.do(user, http.MethodPost, "/api/v1/agent/actions/"+response.Action.ID.String()+"/decide", decision)
+	if rec.Code == http.StatusOK || count() != 1 {
+		t.Fatal("replayed decision executed twice")
+	}
+}
+
+func TestAgentProposalRejectsUnsafeArguments(t *testing.T) {
+	h := newHarness(t)
+	org := h.seedOrganization("Proposal restrictions")
+	userID := h.seedUser("proposal-invalid@example.test", "Agent-Sales-2026!", "Sales Manager")
+	h.joinOrganization(userID, org, "sales_manager")
+	user := h.login("proposal-invalid@example.test", "Agent-Sales-2026!")
+	for _, body := range []string{
+		`{"goal":"bad","budget_tokens":2048,"tool_name":"create_task","arguments":{"title":"bad","confirm":true}}`,
+		`{"goal":"bad","budget_tokens":2048,"tool_name":"search_accounts","arguments":{"query":"ab"}}`,
+		`{"goal":"bad","budget_tokens":2048,"tool_name":"unknown","arguments":{}}`,
+	} {
+		rec := h.do(user, http.MethodPost, "/api/v1/agent/runs", body)
+		if rec.Code != http.StatusUnprocessableEntity && rec.Code != http.StatusBadRequest {
+			t.Fatalf("invalid proposal status %d: %s", rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestAgentProposalChecksToolPermission(t *testing.T) {
+	h := newHarness(t)
+	org := h.seedOrganization("Proposal permission")
+	userID := h.seedUser("proposal-denied@example.test", "Agent-Sales-2026!", "Sales Manager")
+	h.joinOrganization(userID, org, "sales_manager")
+	user := h.login("proposal-denied@example.test", "Agent-Sales-2026!")
+	if !h.hasPermission(user, rbac.PermAgentRun) || h.hasPermission(user, rbac.PermTicketsCreate) {
+		t.Fatal("fixture must allow agent.run and deny tickets.create")
+	}
+	body := `{"goal":"create ticket","budget_tokens":2048,"tool_name":"create_ticket","arguments":{"subject":"Not permitted"}}`
+	rec := h.do(user, http.MethodPost, "/api/v1/agent/runs", body)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("proposal status %d: %s", rec.Code, rec.Body.String())
+	}
+	var count int
+	if err := h.pool().QueryRow(context.Background(), `SELECT count(*) FROM agent_runs WHERE organization_id=$1`, org).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatal("denied proposal created a run")
 	}
 }

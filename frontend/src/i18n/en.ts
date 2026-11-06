@@ -1106,10 +1106,10 @@ export const en = {
   },
   assistant: {
     title: 'AI assistant', close: 'Close assistant', loginHint: 'Sign in to use the assistant.', login: 'Sign in',
-    limits: 'Each question is independent. General chat cannot access or change CRM records; verify its answers. Never send secrets or sensitive data.',
+    limits: 'Each question is independent. Permitted CRM data may be sent to the configured AI provider. Changes require review and approval; verify all AI answers.',
     noPermission: 'Your account does not have permission to use AI chat.', question: 'Your question', placeholder: 'Ask a question…',
     send: 'Send', working: 'Answering…', stop: 'Stop', answer: 'Answer', incomplete: 'The response was interrupted before completion.',
-    openPage: 'AI tools and settings', approvals: 'Review approvals',
+    openPage: 'AI tools and settings', approvals: 'Review approvals', proposed: 'The action is awaiting review and has not been executed.',
     crmMode: 'Read CRM data', crmHint: 'Uses one permitted read-only CRM tool. Your question is sent to the AI provider; the CRM result is displayed here without sending it to the model. This cannot make changes.',
   },
   ai: {
