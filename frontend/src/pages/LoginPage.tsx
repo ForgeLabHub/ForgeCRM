@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Alert } from '../components/ui'
 import { BrandMark } from '../components/BrandMark'
 import { LoginControls } from '../components/LoginControls'
@@ -27,6 +27,7 @@ export function LoginPage() {
   const { signIn, completeMFA } = useAuth()
   const { t, locale } = useI18n()
   const navigate = useNavigate()
+  const location = useLocation()
   const [searchParams] = useSearchParams()
   const [ssoProviders, setSsoProviders] = useState<SSOProvider[]>([])
   const ssoError = searchParams.get('sso_error')
@@ -109,7 +110,12 @@ export function LoginPage() {
           return
         }
       }
-      navigate('/', { replace: true })
+      // Return to the page that sent the visitor here, but only to an
+      // application path: an absolute URL in history state would be an open
+      // redirect, and the public site does not need signing in at all.
+      const from = (location.state as { from?: string } | null)?.from
+      const target = from && from.startsWith('/app') ? from : '/app'
+      navigate(target, { replace: true })
     } catch (error) {
       setErrors(fieldErrors(error))
       setFormError(error)

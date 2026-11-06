@@ -1,5 +1,5 @@
-import { lazy } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { lazy, type ReactNode } from 'react'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AppShell } from './components/AppShell'
 import { useAuth } from './hooks/useAuth'
 import { LoginPage } from './pages/LoginPage'
@@ -7,8 +7,8 @@ import { OverviewPage } from './pages/OverviewPage'
 import { ForbiddenPage, NotFoundPage } from './pages/ErrorPages'
 const AccountDetailPage = lazy(() => import('./pages/AccountsPage').then((m) => ({ default: m.AccountDetailPage })))
 const AccountsPage = lazy(() => import('./pages/AccountsPage').then((m) => ({ default: m.AccountsPage })))
-const ContactDetailPage = lazy(() => import('./pages/ContactsPage').then((m) => ({ default: m.ContactDetailPage })))
-const ContactsPage = lazy(() => import('./pages/ContactsPage').then((m) => ({ default: m.ContactsPage })))
+const CrmContactDetailPage = lazy(() => import('./pages/ContactsPage').then((m) => ({ default: m.ContactDetailPage })))
+const CrmContactsPage = lazy(() => import('./pages/ContactsPage').then((m) => ({ default: m.ContactsPage })))
 const LeadsPage = lazy(() => import('./pages/LeadsPage').then((m) => ({ default: m.LeadsPage })))
 const LeadDetailPage = lazy(() => import('./pages/LeadsPage').then((m) => ({ default: m.LeadDetailPage })))
 const DealDetailPage = lazy(() => import('./pages/DealsPage').then((m) => ({ default: m.DealDetailPage })))
@@ -47,6 +47,20 @@ const MCPCredentialsPage = lazy(() => import('./pages/admin/MCPCredentialsPage')
 const TenantSettingsPage = lazy(() => import('./pages/admin/TenantSettingsPage').then((m) => ({ default: m.TenantSettingsPage })))
 const AccountPage = lazy(() => import('./pages/AccountPage').then((m) => ({ default: m.AccountPage })))
 const AppearancePage = lazy(() => import('./pages/AppearancePage').then((m) => ({ default: m.AppearancePage })))
+
+const HomePage = lazy(() => import('./site/pages/HomePage').then((m) => ({ default: m.HomePage })))
+const ServicesPage = lazy(() => import('./site/pages/ServicesPage').then((m) => ({ default: m.ServicesPage })))
+const ServiceDetailPage = lazy(() => import('./site/pages/ServiceDetailPage').then((m) => ({ default: m.ServiceDetailPage })))
+const PricingPage = lazy(() => import('./site/pages/PricingPage').then((m) => ({ default: m.PricingPage })))
+const CasesPage = lazy(() => import('./site/pages/CasesPage').then((m) => ({ default: m.CasesPage })))
+const CaseDetailPage = lazy(() => import('./site/pages/CaseDetailPage').then((m) => ({ default: m.CaseDetailPage })))
+const BlogPage = lazy(() => import('./site/pages/BlogPage').then((m) => ({ default: m.BlogPage })))
+const ArticlePage = lazy(() => import('./site/pages/ArticlePage').then((m) => ({ default: m.ArticlePage })))
+const AboutPage = lazy(() => import('./site/pages/AboutPage').then((m) => ({ default: m.AboutPage })))
+const SiteContactsPage = lazy(() => import('./site/pages/ContactsPage').then((m) => ({ default: m.ContactsPage })))
+const PrivacyPage = lazy(() => import('./site/pages/PrivacyPage').then((m) => ({ default: m.PrivacyPage })))
+const SiteNotFoundPage = lazy(() => import('./site/pages/SiteNotFoundPage').then((m) => ({ default: m.SiteNotFoundPage })))
+const SiteLayout = lazy(() => import('./site/SiteLayout').then((m) => ({ default: m.SiteLayout })))
 import { RequirePermission } from './components/RequirePermission'
 
 function FullPageSkeleton() {
@@ -58,27 +72,50 @@ function FullPageSkeleton() {
   )
 }
 
-export function App() {
+/**
+ * Keeps the application behind a session while leaving the public site open.
+ *
+ * The marketing pages are readable by anyone, so the old top-level "anonymous
+ * means login only" branch cannot stay: it turned every public URL into a
+ * redirect. The check moves to the one boundary that actually needs it, and it
+ * remembers where the visitor was going so signing in does not dump them on the
+ * overview regardless of the link they followed.
+ */
+function SignedIn({ children }: { children: ReactNode }) {
   const { status } = useAuth()
-
-  // Nothing is rendered until the session is known, so a signed-in user is not
-  // shown a login form for a frame, and an anonymous user is not shown an
-  // empty shell.
+  const location = useLocation()
   if (status === 'loading') return <FullPageSkeleton />
-
   if (status === 'anonymous') {
-    return (
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
-    )
+    const from = location.pathname + location.search
+    return <Navigate to="/login" replace state={{ from }} />
   }
+  return <>{children}</>
+}
 
+/**
+ * The two halves of the product.
+ *
+ * The public site owns the root of the origin: services, prices, cases, the blog
+ * and the legal pages. The application lives behind `/app`, so a marketing URL
+ * never collides with a CRM route and a bookmarked board keeps working after the
+ * site changes.
+ */
+export function App() {
   return (
     <Routes>
-      <Route path="/login" element={<Navigate to="/" replace />} />
-      <Route element={<AppShell />}>
+      <Route path="/login" element={<LoginPage />} />
+
+      {/* The application. Everything below the shell needs a session: an
+          anonymous visitor is sent to the form, and the public site stays
+          reachable from the same origin. */}
+      <Route
+        path="app"
+        element={
+          <SignedIn>
+            <AppShell />
+          </SignedIn>
+        }
+      >
         <Route index element={<OverviewPage />} />
 
         <Route
@@ -101,7 +138,7 @@ export function App() {
           path="contacts"
           element={
             <RequirePermission permission="contacts.read">
-              <ContactsPage />
+              <CrmContactsPage />
             </RequirePermission>
           }
         />
@@ -109,7 +146,7 @@ export function App() {
           path="contacts/:id"
           element={
             <RequirePermission permission="contacts.read">
-              <ContactDetailPage />
+              <CrmContactDetailPage />
             </RequirePermission>
           }
         />
@@ -404,6 +441,21 @@ export function App() {
         <Route path="appearance" element={<AppearancePage />} />
         <Route path="forbidden" element={<ForbiddenPage />} />
         <Route path="*" element={<NotFoundPage />} />
+      </Route>
+      {/* The public site. */}
+      <Route element={<SiteLayout />}>
+        <Route index element={<HomePage />} />
+        <Route path="services" element={<ServicesPage />} />
+        <Route path="services/:slug" element={<ServiceDetailPage />} />
+        <Route path="pricing" element={<PricingPage />} />
+        <Route path="cases" element={<CasesPage />} />
+        <Route path="cases/:slug" element={<CaseDetailPage />} />
+        <Route path="blog" element={<BlogPage />} />
+        <Route path="blog/:slug" element={<ArticlePage />} />
+        <Route path="about" element={<AboutPage />} />
+        <Route path="contacts" element={<SiteContactsPage />} />
+        <Route path="privacy" element={<PrivacyPage />} />
+        <Route path="*" element={<SiteNotFoundPage />} />
       </Route>
     </Routes>
   )

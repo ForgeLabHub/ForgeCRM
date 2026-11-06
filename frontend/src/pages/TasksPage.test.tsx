@@ -64,10 +64,10 @@ function renderDetail() {
   })
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={['/tasks/task-1']}>
+      <MemoryRouter initialEntries={['/app/tasks/task-1']}>
         <AuthProvider>
           <Routes>
-            <Route path="/tasks/:id" element={<TaskDetailPage />} />
+            <Route path="/app/tasks/:id" element={<TaskDetailPage />} />
           </Routes>
         </AuthProvider>
       </MemoryRouter>
@@ -130,11 +130,11 @@ describe('TasksPage row navigation', () => {
     })
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={['/tasks']}>
+        <MemoryRouter initialEntries={['/app/tasks']}>
           <AuthProvider>
             <Routes>
-              <Route path="/tasks" element={<TasksPage />} />
-              <Route path="/tasks/:id" element={<div>Task detail page</div>} />
+              <Route path="/app/tasks" element={<TasksPage />} />
+              <Route path="/app/tasks/:id" element={<div>Task detail page</div>} />
             </Routes>
           </AuthProvider>
         </MemoryRouter>

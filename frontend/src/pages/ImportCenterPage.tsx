@@ -90,7 +90,7 @@ export function ImportCenterPage() {
         fetchPage={(params) => importsApi.list(params)}
                 columns={columns(t)}
         rowKey={(row) => row.id}
-        onRowClick={(row) => navigate(`/imports/${row.id}`)}
+        onRowClick={(row) => navigate(`/app/imports/${row.id}`)}
                 emptyTitle={t('imports.emptyTitle')}
                 emptyText={t('imports.emptyText')}
         searchable
@@ -115,7 +115,7 @@ export function ImportCenterPage() {
         onClose={() => setCreating(false)}
         onCreated={(job) => {
           setCreating(false)
-          navigate(`/imports/${job.id}`)
+          navigate(`/app/imports/${job.id}`)
         }}
       />
       <ExportDialog open={exporting} onClose={() => setExporting(false)} />

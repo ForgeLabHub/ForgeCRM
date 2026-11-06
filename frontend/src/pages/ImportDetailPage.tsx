@@ -182,7 +182,7 @@ export function ImportDetailPage() {
         }
         actions={
           <>
-            <Link to="/imports" className="btn btn--ghost btn--sm">
+            <Link to="/app/imports" className="btn btn--ghost btn--sm">
               {t('imports.back')}
                           </Link>
             {isBusy && canExecute ? (

@@ -86,7 +86,7 @@ export function AccountsPage() {
         fetchPage={(params) => accountsApi.list(params)}
         columns={accountColumns(t)}
         rowKey={(row) => row.id}
-        onRowClick={(row) => navigate(`/accounts/${row.id}`)}
+        onRowClick={(row) => navigate(`/app/accounts/${row.id}`)}
         emptyTitle={t('accounts.emptyTitle')}
         emptyText={t('accounts.emptyText')}
         searchable
@@ -116,7 +116,7 @@ export function AccountsPage() {
         onClose={() => setCreating(false)}
         onSaved={(account) => {
           setCreating(false)
-          navigate(`/accounts/${account.id}`)
+          navigate(`/app/accounts/${account.id}`)
         }}
       />
     </>
@@ -375,7 +375,7 @@ export function AccountDetailPage() {
     mutationFn: () => accountsApi.archive(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      navigate('/accounts')
+      navigate('/app/accounts')
     },
     onError: (error) => {
       setArchiving(false)
@@ -418,7 +418,7 @@ export function AccountDetailPage() {
     <>
       <PageHeader
         title={data.name}
-        breadcrumb={[{ label: t('nav.accounts'), to: '/accounts' }]}
+        breadcrumb={[{ label: t('nav.accounts'), to: '/app/accounts' }]}
         meta={
           <>
             {data.industry ? <>{data.industry} · </> : null}
@@ -497,7 +497,7 @@ export function AccountDetailPage() {
                   {contacts.data.items.map((contact) => (
                     <Link
                       key={contact.id}
-                      to={`/contacts/${contact.id}`}
+                      to={`/app/contacts/${contact.id}`}
                       className="row row--between"
                       style={{ color: 'inherit' }}
                     >
@@ -521,7 +521,7 @@ export function AccountDetailPage() {
                   {deals.data.items.map((deal) => (
                     <Link
                       key={deal.id}
-                      to={`/deals/${deal.id}`}
+                      to={`/app/deals/${deal.id}`}
                       className="row row--between"
                       style={{ color: 'inherit' }}
                     >

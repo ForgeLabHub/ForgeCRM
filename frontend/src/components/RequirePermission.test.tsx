@@ -58,7 +58,7 @@ function json(body: unknown, status = 200): Response {
   })
 }
 
-function renderApp(routes: Record<string, () => Response | Promise<Response>>, path = '/') {
+function renderApp(routes: Record<string, () => Response | Promise<Response>>, path = '/app') {
   stubFetch(routes)
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -72,7 +72,7 @@ function renderApp(routes: Record<string, () => Response | Promise<Response>>, p
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route
-              path="/"
+              path="/app"
               element={
                 <RequirePermission permission="contacts.read">
                   <div>Contacts workspace</div>
@@ -80,7 +80,7 @@ function renderApp(routes: Record<string, () => Response | Promise<Response>>, p
               }
             />
             <Route
-              path="/admin"
+              path="/app/admin"
               element={
                 <RequirePermission permission="users.manage">
                   <div>Admin workspace</div>
@@ -104,7 +104,7 @@ describe('RequirePermission', () => {
   })
 
   it('shows a refusal, not the page, when the permission is missing', async () => {
-    renderApp({ '/api/v1/auth/me': () => json(ME) }, '/admin')
+    renderApp({ '/api/v1/auth/me': () => json(ME) }, '/app/admin')
 
     expect(await screen.findByText(/do not have access/i)).toBeInTheDocument()
     // The permission is named so the user can ask for the right one.

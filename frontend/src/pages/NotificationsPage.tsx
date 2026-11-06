@@ -126,7 +126,7 @@ export function NotificationsPage() {
       />
       <p className="text-subtle text-sm" style={{ marginTop: 'var(--space-3)' }}>
         {t('notifications.approvalsPrompt')}
-        <Link to="/approvals">{t('notifications.approvalsLink')}</Link>.
+        <Link to="/app/approvals">{t('notifications.approvalsLink')}</Link>.
       </p>
     </>
   )

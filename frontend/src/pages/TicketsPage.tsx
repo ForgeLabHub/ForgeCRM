@@ -117,7 +117,7 @@ export function TicketsPage() {
         fetchPage={(params) => ticketsApi.list({ ...params, status: statusFilter || undefined })}
         columns={columns}
         rowKey={(row) => row.id}
-        onRowClick={(row) => navigate(`/tickets/${row.id}`)}
+        onRowClick={(row) => navigate(`/app/tickets/${row.id}`)}
         emptyTitle={t('tickets.emptyTitle')}
         emptyText={t('tickets.emptyText')}
         searchable
@@ -380,7 +380,7 @@ export function TicketDetailPage() {
     <>
       <PageHeader
         title={data.subject}
-        breadcrumb={[{ label: t('nav.support'), to: '/tickets' }]}
+        breadcrumb={[{ label: t('nav.support'), to: '/app/tickets' }]}
         meta={
           <>
             <StatusBadge status={data.status} /> · {t('common.updated')}{' '}
@@ -470,7 +470,7 @@ export function TicketDetailPage() {
             <dt>{t('contacts.accountField')}</dt>
             <dd>
               {data.account_id ? (
-                <Link to={`/accounts/${data.account_id}`}>{t('tickets.viewAccount')}</Link>
+                <Link to={`/app/accounts/${data.account_id}`}>{t('tickets.viewAccount')}</Link>
               ) : (
                 <span className="text-subtle">{t('common.notLinked')}</span>
               )}
@@ -478,7 +478,7 @@ export function TicketDetailPage() {
             <dt>{t('tickets.relatedContact')}</dt>
             <dd>
               {data.contact_id ? (
-                <Link to={`/contacts/${data.contact_id}`}>{t('tickets.viewContact')}</Link>
+                <Link to={`/app/contacts/${data.contact_id}`}>{t('tickets.viewContact')}</Link>
               ) : (
                 <span className="text-subtle">{t('common.notLinked')}</span>
               )}

@@ -163,7 +163,7 @@ export function TasksPage() {
         fetchPage={(params) => tasksApi.list({ ...params, status: statusFilter || undefined })}
         columns={columns}
         rowKey={(row) => row.id}
-        onRowClick={(row) => navigate(`/tasks/${row.id}`)}
+        onRowClick={(row) => navigate(`/app/tasks/${row.id}`)}
         emptyTitle={t('tasks.emptyTitle')}
         emptyText={t('tasks.emptyText')}
         searchable
@@ -496,7 +496,7 @@ export function TaskDetailPage() {
     <>
       <PageHeader
         title={data.title}
-        breadcrumb={[{ label: t('nav.tasks'), to: '/tasks' }]}
+        breadcrumb={[{ label: t('nav.tasks'), to: '/app/tasks' }]}
         meta={
           <>
             <StatusBadge status={data.status} /> · {t('common.updated')}{' '}
@@ -566,7 +566,7 @@ export function TaskDetailPage() {
             <dt>{t('contacts.accountField')}</dt>
             <dd>
               {data.account_id ? (
-                <Link to={`/accounts/${data.account_id}`}>{t('tasks.viewAccount')}</Link>
+                <Link to={`/app/accounts/${data.account_id}`}>{t('tasks.viewAccount')}</Link>
               ) : (
                 <span className="text-subtle">{t('common.notLinked')}</span>
               )}
@@ -574,7 +574,7 @@ export function TaskDetailPage() {
             <dt>{t('tasks.relatedContact')}</dt>
             <dd>
               {data.contact_id ? (
-                <Link to={`/contacts/${data.contact_id}`}>{t('tasks.viewContact')}</Link>
+                <Link to={`/app/contacts/${data.contact_id}`}>{t('tasks.viewContact')}</Link>
               ) : (
                 <span className="text-subtle">{t('common.notLinked')}</span>
               )}
@@ -582,7 +582,7 @@ export function TaskDetailPage() {
             <dt>{t('tasks.relatedDeal')}</dt>
             <dd>
               {data.deal_id ? (
-                <Link to={`/deals/${data.deal_id}`}>{t('tasks.viewDeal')}</Link>
+                <Link to={`/app/deals/${data.deal_id}`}>{t('tasks.viewDeal')}</Link>
               ) : (
                 <span className="text-subtle">{t('common.notLinked')}</span>
               )}

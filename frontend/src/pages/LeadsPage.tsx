@@ -81,7 +81,7 @@ export function LeadsPage() {
         fetchPage={(params) => leadsApi.list({ ...params, status: statusFilter || undefined })}
         columns={columns(t)}
         rowKey={(row) => row.id}
-        onRowClick={(row) => navigate(`/leads/${row.id}`)}
+        onRowClick={(row) => navigate(`/app/leads/${row.id}`)}
         emptyTitle={t('leads.emptyTitle')}
         emptyText={t('leads.emptyText')}
         searchable
@@ -418,7 +418,7 @@ export function LeadDetailPage() {
         }
         actions={
           <>
-            <Link to="/leads" className="btn btn--ghost btn--sm">
+            <Link to="/app/leads" className="btn btn--ghost btn--sm">
               Back
             </Link>
             {can('leads.update') ? (
@@ -446,12 +446,12 @@ export function LeadDetailPage() {
           <Alert tone="success">
             This lead is converted.{' '}
             {data.converted_account_id ? (
-              <Link to={`/accounts/${data.converted_account_id}`}>View the account</Link>
+              <Link to={`/app/accounts/${data.converted_account_id}`}>View the account</Link>
             ) : null}
             {data.converted_contact_id ? (
               <>
                 {' '}
-                <Link to={`/contacts/${data.converted_contact_id}`}>View the contact</Link>
+                <Link to={`/app/contacts/${data.converted_contact_id}`}>View the contact</Link>
               </>
             ) : null}
           </Alert>
@@ -532,7 +532,7 @@ export function LeadDetailPage() {
           text="An account and a contact were created from this lead. Open the account to keep working on it."
           confirmLabel="Open account"
           onConfirm={() => {
-            navigate(`/accounts/${converted.account}`)
+            navigate(`/app/accounts/${converted.account}`)
           }}
           onCancel={() => setConverted(null)}
         />

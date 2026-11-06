@@ -67,10 +67,10 @@ function renderDetail() {
   })
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={['/leads/lead-1']}>
+      <MemoryRouter initialEntries={['/app/leads/lead-1']}>
         <AuthProvider>
           <Routes>
-            <Route path="/leads/:id" element={<LeadDetailPage />} />
+            <Route path="/app/leads/:id" element={<LeadDetailPage />} />
           </Routes>
         </AuthProvider>
       </MemoryRouter>
@@ -161,11 +161,11 @@ describe('LeadsPage row navigation', () => {
     })
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={['/leads']}>
+        <MemoryRouter initialEntries={['/app/leads']}>
           <AuthProvider>
             <Routes>
-              <Route path="/leads" element={<LeadsPage />} />
-              <Route path="/leads/:id" element={<div>Lead detail page</div>} />
+              <Route path="/app/leads" element={<LeadsPage />} />
+              <Route path="/app/leads/:id" element={<div>Lead detail page</div>} />
             </Routes>
           </AuthProvider>
         </MemoryRouter>
@@ -187,10 +187,10 @@ describe('LeadsPage create form', () => {
     })
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={['/leads']}>
+        <MemoryRouter initialEntries={['/app/leads']}>
           <AuthProvider>
             <Routes>
-              <Route path="/leads" element={<LeadsPage />} />
+              <Route path="/app/leads" element={<LeadsPage />} />
             </Routes>
           </AuthProvider>
         </MemoryRouter>

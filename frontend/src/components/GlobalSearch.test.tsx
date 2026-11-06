@@ -34,13 +34,13 @@ function renderSearch(handler: (url: string) => Response) {
   })
   render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={['/']}>
+      <MemoryRouter initialEntries={['/app']}>
         <Routes>
-          <Route path="/" element={<GlobalSearch />} />
-          <Route path="/accounts/:id" element={<div>Account detail page</div>} />
-          <Route path="/deals/:id" element={<div>Deal detail page</div>} />
-          <Route path="/leads" element={<div>Leads list page</div>} />
-          <Route path="/tickets" element={<div>Tickets list page</div>} />
+          <Route path="/app" element={<GlobalSearch />} />
+          <Route path="/app/accounts/:id" element={<div>Account detail page</div>} />
+          <Route path="/app/deals/:id" element={<div>Deal detail page</div>} />
+          <Route path="/app/leads" element={<div>Leads list page</div>} />
+          <Route path="/app/tickets" element={<div>Tickets list page</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,

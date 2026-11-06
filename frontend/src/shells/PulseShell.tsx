@@ -90,14 +90,14 @@ export function PulseShell() {
     <div className="shell pulse">
       {!isPhone ? (
         <aside className="pulse-rail" aria-label={t('workspace.label')}>
-          <Link to="/" className="pulse-rail__brand" aria-label={t('brand.name')}>
+          <Link to="/app" className="pulse-rail__brand" aria-label={t('brand.name')}>
             F
           </Link>
           <div className="pulse-rail__scroll">
             <WorkspaceTiles />
           </div>
           <div className="pulse-rail__foot">
-            <Link to="/appearance" className="pulse-rail__tool" aria-label={t('nav.appearance')} title={t('nav.appearance')}>
+            <Link to="/app/appearance" className="pulse-rail__tool" aria-label={t('nav.appearance')} title={t('nav.appearance')}>
               <IconSliders size={17} />
             </Link>
             <AccountMenu avatarOnly />

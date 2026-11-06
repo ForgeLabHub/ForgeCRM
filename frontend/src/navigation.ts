@@ -73,58 +73,65 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     labelKey: 'nav.workspace',
     items: [
-      { to: '/', labelKey: 'nav.overview', icon: IconGrid },
-      { to: '/accounts', labelKey: 'nav.accounts', permission: 'accounts.read', icon: IconBuilding },
-      { to: '/contacts', labelKey: 'nav.contacts', permission: 'contacts.read', icon: IconUsers },
-      { to: '/leads', labelKey: 'nav.leads', permission: 'leads.read', icon: IconTarget },
-      { to: '/deals', labelKey: 'nav.deals', permission: 'deals.read', icon: IconKanban },
-      { to: '/tasks', labelKey: 'nav.tasks', permission: 'tasks.read', icon: IconCheckSquare },
-      { to: '/tickets', labelKey: 'nav.support', permission: 'tickets.read', icon: IconLifeBuoy },
-      { to: '/reports', labelKey: 'nav.reports', permission: 'reports.read', icon: IconChart },
-      { to: '/simulation', labelKey: 'nav.simulation', permission: 'simulation.read', icon: IconFlask },
-      { to: '/forecast', labelKey: 'nav.forecasting', permission: 'forecast.read', icon: IconTrendingUp },
-      { to: '/risk', labelKey: 'nav.risk', permission: 'risk.read', icon: IconShieldAlert },
+      { to: '/app', labelKey: 'nav.overview', icon: IconGrid },
+      { to: '/app/accounts', labelKey: 'nav.accounts', permission: 'accounts.read', icon: IconBuilding },
+      { to: '/app/contacts', labelKey: 'nav.contacts', permission: 'contacts.read', icon: IconUsers },
+      { to: '/app/leads', labelKey: 'nav.leads', permission: 'leads.read', icon: IconTarget },
+      { to: '/app/deals', labelKey: 'nav.deals', permission: 'deals.read', icon: IconKanban },
+      { to: '/app/tasks', labelKey: 'nav.tasks', permission: 'tasks.read', icon: IconCheckSquare },
+      { to: '/app/tickets', labelKey: 'nav.support', permission: 'tickets.read', icon: IconLifeBuoy },
+      { to: '/app/reports', labelKey: 'nav.reports', permission: 'reports.read', icon: IconChart },
+      { to: '/app/simulation', labelKey: 'nav.simulation', permission: 'simulation.read', icon: IconFlask },
+      { to: '/app/forecast', labelKey: 'nav.forecasting', permission: 'forecast.read', icon: IconTrendingUp },
+      { to: '/app/risk', labelKey: 'nav.risk', permission: 'risk.read', icon: IconShieldAlert },
     ],
   },
   {
     labelKey: 'nav.data',
     items: [
-      { to: '/imports', labelKey: 'nav.importCenter', permission: 'imports.read', icon: IconInbox },
-      { to: '/migrations', labelKey: 'nav.migrations', permission: 'migrations.read', icon: IconDatabase },
-      { to: '/integrations', labelKey: 'nav.integrations', permission: 'integrations.read', icon: IconPlug },
+      { to: '/app/imports', labelKey: 'nav.importCenter', permission: 'imports.read', icon: IconInbox },
+      { to: '/app/migrations', labelKey: 'nav.migrations', permission: 'migrations.read', icon: IconDatabase },
+      { to: '/app/integrations', labelKey: 'nav.integrations', permission: 'integrations.read', icon: IconPlug },
     ],
   },
   {
     labelKey: 'nav.platform',
     items: [
-      { to: '/webhooks', labelKey: 'nav.webhooks', permission: 'webhooks.manage', icon: IconWebhook },
-      { to: '/events', labelKey: 'nav.events', permission: 'events.read', icon: IconActivity },
-      { to: '/workflows', labelKey: 'nav.workflows', permission: 'workflows.read', icon: IconWorkflow },
-      { to: '/jobs', labelKey: 'nav.jobs', permission: 'jobs.read', icon: IconClock },
-      { to: '/approvals', labelKey: 'nav.approvals', permission: 'approvals.read', icon: IconBadgeCheck },
-      { to: '/notifications', labelKey: 'nav.notifications', permission: 'notifications.read', icon: IconBell },
-      { to: '/ai', labelKey: 'nav.ai', permission: 'ai.read', icon: IconSparkles },
+      { to: '/app/webhooks', labelKey: 'nav.webhooks', permission: 'webhooks.manage', icon: IconWebhook },
+      { to: '/app/events', labelKey: 'nav.events', permission: 'events.read', icon: IconActivity },
+      { to: '/app/workflows', labelKey: 'nav.workflows', permission: 'workflows.read', icon: IconWorkflow },
+      { to: '/app/jobs', labelKey: 'nav.jobs', permission: 'jobs.read', icon: IconClock },
+      { to: '/app/approvals', labelKey: 'nav.approvals', permission: 'approvals.read', icon: IconBadgeCheck },
+      { to: '/app/notifications', labelKey: 'nav.notifications', permission: 'notifications.read', icon: IconBell },
+      { to: '/app/ai', labelKey: 'nav.ai', permission: 'ai.read', icon: IconSparkles },
     ],
   },
   {
     labelKey: 'nav.administration',
     items: [
-      { to: '/admin/users', labelKey: 'nav.users', permission: 'users.read', icon: IconUserCog },
-      { to: '/admin/roles', labelKey: 'nav.roles', permission: 'roles.read', icon: IconKeyRound },
-      { to: '/admin/organizations', labelKey: 'nav.organizations', permission: 'organizations.read', icon: IconGlobe },
-      { to: '/admin/teams', labelKey: 'nav.teams', permission: 'teams.manage', icon: IconUsersRound },
-      { to: '/admin/email', labelKey: 'nav.email', permission: 'email.manage', icon: IconMail },
-      { to: '/admin/telegram', labelKey: 'nav.telegram', permission: 'email.manage', icon: IconSend },
-      { to: '/admin/consent', labelKey: 'nav.consent', permission: 'consent.read', icon: IconScroll },
-      { to: '/admin/sso', labelKey: 'nav.sso', permission: 'sso.read', icon: IconLock },
-      { to: '/admin/mcp-credentials', labelKey: 'nav.mcpCredentials', permission: 'mcp.credentials.read', icon: IconTerminal },
-      { to: '/admin/configuration', labelKey: 'nav.configuration', permission: 'tenant.settings.read', icon: IconSliders },
-      { to: '/admin/audit', labelKey: 'nav.audit', permission: 'audit.read', icon: IconClipboardCheck },
-      { to: '/admin/security', labelKey: 'nav.security', permission: 'security.read', icon: IconShield },
-      { to: '/admin/diagnostics', labelKey: 'nav.diagnostics', permission: 'logs.read', icon: IconStethoscope },
+      { to: '/app/admin/users', labelKey: 'nav.users', permission: 'users.read', icon: IconUserCog },
+      { to: '/app/admin/roles', labelKey: 'nav.roles', permission: 'roles.read', icon: IconKeyRound },
+      { to: '/app/admin/organizations', labelKey: 'nav.organizations', permission: 'organizations.read', icon: IconGlobe },
+      { to: '/app/admin/teams', labelKey: 'nav.teams', permission: 'teams.manage', icon: IconUsersRound },
+      { to: '/app/admin/email', labelKey: 'nav.email', permission: 'email.manage', icon: IconMail },
+      { to: '/app/admin/telegram', labelKey: 'nav.telegram', permission: 'email.manage', icon: IconSend },
+      { to: '/app/admin/consent', labelKey: 'nav.consent', permission: 'consent.read', icon: IconScroll },
+      { to: '/app/admin/sso', labelKey: 'nav.sso', permission: 'sso.read', icon: IconLock },
+      { to: '/app/admin/mcp-credentials', labelKey: 'nav.mcpCredentials', permission: 'mcp.credentials.read', icon: IconTerminal },
+      { to: '/app/admin/configuration', labelKey: 'nav.configuration', permission: 'tenant.settings.read', icon: IconSliders },
+      { to: '/app/admin/audit', labelKey: 'nav.audit', permission: 'audit.read', icon: IconClipboardCheck },
+      { to: '/app/admin/security', labelKey: 'nav.security', permission: 'security.read', icon: IconShield },
+      { to: '/app/admin/diagnostics', labelKey: 'nav.diagnostics', permission: 'logs.read', icon: IconStethoscope },
     ],
   },
 ]
+
+/**
+ * The CRM's home route. The public site owns `/`, so the application lives
+ * behind a prefix; naming it once means the shells, the lookup above and the
+ * redirect after sign-in cannot disagree about where "home" is.
+ */
+export const APP_HOME = '/app'
 
 /** Every route the shell knows, flattened, for lookups by path. */
 export const NAV_ENTRIES: NavEntry[] = NAV_GROUPS.flatMap((group) => group.items)

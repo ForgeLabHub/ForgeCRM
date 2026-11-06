@@ -65,10 +65,10 @@ function renderDetail() {
   })
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={['/tickets/ticket-1']}>
+      <MemoryRouter initialEntries={['/app/tickets/ticket-1']}>
         <AuthProvider>
           <Routes>
-            <Route path="/tickets/:id" element={<TicketDetailPage />} />
+            <Route path="/app/tickets/:id" element={<TicketDetailPage />} />
           </Routes>
         </AuthProvider>
       </MemoryRouter>
@@ -131,11 +131,11 @@ describe('TicketsPage row navigation', () => {
     })
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={['/tickets']}>
+        <MemoryRouter initialEntries={['/app/tickets']}>
           <AuthProvider>
             <Routes>
-              <Route path="/tickets" element={<TicketsPage />} />
-              <Route path="/tickets/:id" element={<div>Ticket detail page</div>} />
+              <Route path="/app/tickets" element={<TicketsPage />} />
+              <Route path="/app/tickets/:id" element={<div>Ticket detail page</div>} />
             </Routes>
           </AuthProvider>
         </MemoryRouter>
