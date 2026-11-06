@@ -24,6 +24,21 @@ import { WorkspaceProvider } from '../workspace/WorkspaceProvider'
 import { COOKIE_STORAGE_KEY, readCookieDecision } from './components/CookieConsent'
 import { SITE_VARIANT_KEY } from './components/SiteVariantSwitcher'
 
+const SESSION = {
+  user: {
+    id: 'u-1',
+    email: 'e2e@example.com',
+    display_name: 'E2E',
+    status: 'active',
+    is_platform_owner: false,
+    mfa_enabled: false,
+  },
+  organization: { id: 'o-1', name: 'Acme' },
+  permissions: ['accounts.read'],
+  teams: [],
+  csrf_token: 'csrf',
+}
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -147,6 +162,58 @@ describe('public routing', () => {
   it('offers the sign-in form at its own URL', async () => {
     renderSite('/login')
     await waitFor(() => expect(screen.getByLabelText(/email/i)).toBeInTheDocument())
+  })
+
+  it('signs in and lands in the application, not on the site 404', async () => {
+    // The regression this pins: with the site's catch-all placed before the
+    // application's tree, a signed-in visitor got the application shell AND the
+    // site's "no such page" underneath it. Both trees match, so order decides.
+    const user = userEvent.setup()
+    let authed = false
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url.includes('/auth/login')) {
+          authed = true
+          return Promise.resolve(json(SESSION))
+        }
+        if (url.includes('/auth/me')) {
+          return Promise.resolve(
+            authed ? json(SESSION) : json({ error: { code: 'unauthorized' } }, 401),
+          )
+        }
+        if (url.includes('/oidc/providers')) return Promise.resolve(json({ enabled: false, providers: [] }))
+        return Promise.resolve(json({}))
+      }),
+    )
+
+    renderSite('/login')
+    await user.type(await screen.findByLabelText(/email/i), 'e2e@example.com')
+    await user.type(screen.getByLabelText(/^password$/i), 'correct-horse-battery')
+    await user.click(screen.getByRole('button', { name: /sign in/i }))
+
+    expect(await screen.findByRole('heading', { level: 1, name: /welcome back/i })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { level: 1, name: 'Такой страницы нет' })).toBeNull()
+  })
+
+  it('renders an application route after signing in, without the site chrome', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url.includes('/auth/me')) return Promise.resolve(json(SESSION))
+        if (url.includes('/api/')) return Promise.resolve(json({ items: [], total: 0 }))
+        return Promise.resolve(json({}))
+      }),
+    )
+    renderSite('/app/accounts')
+
+    // Already signed in, so the deep link opens the page it names.
+    expect(await screen.findByRole('heading', { level: 1, name: /accounts/i })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { level: 1, name: 'Такой страницы нет' })).toBeNull()
+    // The site's own chrome must not wrap an application screen.
+    expect(screen.queryByRole('link', { name: /на главную/i })).toBeNull()
   })
 })
 
