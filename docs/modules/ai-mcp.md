@@ -40,6 +40,21 @@ OpenAI-совместимый) через `ai.Provider`.
 `FORGECRM_AI_MAX_REQUESTS_PER_MIN`. Ключ хранится зашифрованным
 (`FORGECRM_SECRET_KEY`); при выключенном флаге модуль не делает сетевых вызовов.
 
+Провайдер `openrouter` обслуживается тем же OpenAI-совместимым клиентом, что и
+`openai`/`openai_compatible`: шлюз говорит по протоколу chat completions. Для него
+достаточно ключа — базовый URL по умолчанию `https://openrouter.ai/api/v1`, модель
+`google/gemma-2-9b-it:free`; «голый» хост дополняется путём `/api/v1`. Принимаются
+алиасы `OPENROUTER_API_KEY`, `LLM_MODEL`, `LLM_BASE_URL` (имена `FORGECRM_AI_*`
+имеют приоритет), а один `OPENROUTER_API_KEY` сам включает `provider=openrouter`.
+`FORGECRM_AI_HTTP_REFERER` и `FORGECRM_AI_TITLE` — необязательные заголовки
+атрибуции (OpenRouter показывает их в панели); пустые не отправляются.
+
+Проверка соединения без записи в CRM:
+
+```bash
+./scripts/ai-smoke.sh "Привет"
+```
+
 ## 8. Сборка и отладка
 В составе API/worker. Локальная проверка протокола:
 

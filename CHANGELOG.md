@@ -10,6 +10,22 @@
 
 ### Added
 
+- **Провайдер OpenRouter для ИИ.** `FORGECRM_AI_PROVIDER=openrouter` подключается
+  тем же OpenAI-совместимым клиентом, что и `openai`/`openai_compatible`: шлюз
+  `https://openrouter.ai` говорит по протоколу chat completions. Для настройки
+  достаточно ключа — базовый URL по умолчанию `https://openrouter.ai/api/v1`,
+  модель `google/gemma-2-9b-it:free`. «Голый» хост (`https://openrouter.ai`)
+  дополняется путём `/api/v1`, иначе запрос ушёл бы на `/chat/completions` и вернул
+  404. Принимаются алиасы `OPENROUTER_API_KEY`, `LLM_MODEL`, `LLM_BASE_URL` (имена
+  `FORGECRM_AI_*` имеют приоритет), а один `OPENROUTER_API_KEY` сам включает
+  `provider=openrouter`. Неизвестное имя провайдера и включённый OpenRouter без
+  ключа теперь ошибка старта, а не тихо выключенный ИИ. Добавлены необязательные
+  заголовки атрибуции `FORGECRM_AI_HTTP_REFERER` (`HTTP-Referer`) и
+  `FORGECRM_AI_TITLE` (`X-Title`); пустые не отправляются.
+- **`scripts/ai-smoke.sh`** — проверка соединения с провайдером одним запросом
+  «Привет» без записи в CRM. Читает те же переменные, что и приложение, и никогда
+  не печатает ключ.
+
 - **Журналы доставки Telegram теперь под политикой хранения.** Таблицы
   `telegram_update_receipts` (одна строка на входящее обновление вебхука) и
   `telegram_task_delivery_receipts` (одна строка на уведомление задачи) росли

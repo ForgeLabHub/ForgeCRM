@@ -158,6 +158,7 @@ func (p *OpenAICompatibleProvider) StreamComplete(ctx context.Context, req Compl
 	if p.apiKey != "" {
 		httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
 	}
+	p.applyAttributionHeaders(httpReq.Header)
 
 	client := &http.Client{Timeout: p.timeout}
 	resp, err := client.Do(httpReq)

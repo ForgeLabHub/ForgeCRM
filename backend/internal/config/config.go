@@ -165,6 +165,12 @@ type AIConfig struct {
 	Model          string
 	Timeout        time.Duration
 	MaxRequestsMin int
+	// Referer and Title are attribution headers sent to gateways that ask for
+	// them. OpenRouter uses HTTP-Referer and X-Title to show an application's
+	// name and link in its dashboard; both are optional and omitted when empty.
+	// They carry no secret, so they are not marked as such in the env inventory.
+	Referer string
+	Title   string
 }
 
 // MCPConfig configures credentials for external MCP clients.
@@ -307,6 +313,39 @@ func env(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// defaultAIProvider returns the provider to use when FORGECRM_AI_PROVIDER is
+// unset. An OpenRouter key present in the environment selects OpenRouter, so a
+// deployment that only sets OPENROUTER_API_KEY still works; otherwise the
+// provider stays "none" and AI is off, which is the historical default.
+func defaultAIProvider() string {
+	if os.Getenv("OPENROUTER_API_KEY") != "" {
+		return "openrouter"
+	}
+	return "none"
+}
+
+// normalizeOpenRouterBaseURL fills in the versioned path OpenRouter serves its
+// OpenAI-compatible API under. OpenRouter's own documentation shows the bare host
+// (https://openrouter.ai), which would send requests to /chat/completions instead
+// of /api/v1/chat/completions; a caller who wrote a path (including /api/v1, or a
+// self-hosted proxy prefix) is returned unchanged. An unparseable value is left
+// as-is so Validate reports the real problem rather than a confusing rewrite.
+func normalizeOpenRouterBaseURL(raw string) string {
+	if raw == "" {
+		return "https://openrouter.ai/api/v1"
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	// A path of "/" or "" means the caller gave only a host.
+	if u.Path == "" || u.Path == "/" {
+		u.Path = "/api/v1"
+		return strings.TrimRight(u.String(), "/")
+	}
+	return strings.TrimRight(raw, "/")
 }
 
 func envIntOr(key string, def int) int {
@@ -470,15 +509,32 @@ func Load() (*Config, error) {
 	}
 
 	c.AI = AIConfig{
-		Enabled:        envBool("FORGECRM_AI_ENABLED", false),
-		Provider:       env("FORGECRM_AI_PROVIDER", "none"),
-		BaseURL:        env("FORGECRM_AI_BASE_URL", ""),
-		APIKey:         env("FORGECRM_AI_API_KEY", ""),
-		Model:          env("FORGECRM_AI_MODEL", ""),
+		Enabled: envBool("FORGECRM_AI_ENABLED", false),
+		// The provider may also be inferred from an OpenRouter key so that a
+		// deployment that only sets OPENROUTER_API_KEY still works without also
+		// spelling out the provider. An explicit FORGECRM_AI_PROVIDER always wins.
+		Provider: env("FORGECRM_AI_PROVIDER", defaultAIProvider()),
+		// Accept the conventional OPENROUTER_/LLM_ names as aliases so a caller can
+		// reuse an OpenRouter snippet verbatim; the FORGECRM_ name takes priority.
+		BaseURL: env("FORGECRM_AI_BASE_URL", env("LLM_BASE_URL", "")),
+		APIKey:  env("FORGECRM_AI_API_KEY", env("OPENROUTER_API_KEY", "")),
+		Model:   env("FORGECRM_AI_MODEL", env("LLM_MODEL", "")),
+		// Attribution headers for gateways that display them (OpenRouter's
+		// HTTP-Referer and X-Title). Optional; empty means "do not send".
+		Referer:        env("FORGECRM_AI_HTTP_REFERER", ""),
+		Title:          env("FORGECRM_AI_TITLE", ""),
 		MaxRequestsMin: envIntOr("FORGECRM_AI_MAX_REQUESTS_PER_MIN", 30),
 	}
 	if c.AI.Timeout, err = envDuration("FORGECRM_AI_TIMEOUT", 60*time.Second); err != nil {
 		return nil, err
+	}
+	// OpenRouter is OpenAI-compatible but serves the API under /api/v1, unlike the
+	// bare host a caller naturally writes (https://openrouter.ai). Fill in the
+	// versioned path when the caller gave only a host (or nothing), so the
+	// one-line snippet from OpenRouter's docs works unchanged. A caller who spelled
+	// out a path — including /api/v1, or a proxy prefix — is left alone.
+	if c.AI.Provider == "openrouter" {
+		c.AI.BaseURL = normalizeOpenRouterBaseURL(c.AI.BaseURL)
 	}
 	if c.AI.Provider == "none" || c.AI.Provider == "" {
 		c.AI.Enabled = false
@@ -689,6 +745,20 @@ func (c *Config) Validate() error {
 	}
 	if c.AI.Enabled && (c.AI.BaseURL == "" || c.AI.Model == "") {
 		return fmt.Errorf("AI enabled but FORGECRM_AI_BASE_URL or FORGECRM_AI_MODEL is empty")
+	}
+	// An unknown provider is rejected rather than silently ignored. Left unchecked it
+	// would leave the service with no provider and report AI as "off", so a typo in
+	// FORGECRM_AI_PROVIDER would look like AI was never enabled.
+	switch c.AI.Provider {
+	case "none", "", "ollama", "openai", "openai_compatible", "openrouter":
+	default:
+		return fmt.Errorf("FORGECRM_AI_PROVIDER must be one of none, ollama, openai, openai_compatible, openrouter; got %q", c.AI.Provider)
+	}
+	// OpenRouter authenticates with a bearer key. An enabled OpenRouter with no key
+	// would fail on the first request with a 401 from the gateway, which is harder to
+	// diagnose than a startup error next to the setting that caused it.
+	if c.AI.Enabled && c.AI.Provider == "openrouter" && c.AI.APIKey == "" {
+		return fmt.Errorf("FORGECRM_AI_PROVIDER is \"openrouter\" but FORGECRM_AI_API_KEY (or OPENROUTER_API_KEY) is empty")
 	}
 	// The limit is validated here so a bad value is a startup failure next to the
 	// setting, not a wiring error later. Zero means "do not limit"; a negative

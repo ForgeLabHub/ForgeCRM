@@ -175,12 +175,41 @@ The platform runs fully without a model provider. `ollama` keeps prompts local.
 | Name | Component | Required | Default | Description | Example | Secret | Production |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `FORGECRM_AI_ENABLED` | API, Worker | no | `false` | Enables AI features. Disabled when the provider is `none`. | `false` | no | no |
-| `FORGECRM_AI_PROVIDER` | API, Worker | no | `none` | Provider kind: `none`, `ollama`, `openai`, `openai_compatible`. | `ollama` | no | no |
-| `FORGECRM_AI_BASE_URL` | API, Worker | yes when enabled | none | Provider base URL. | `http://ollama:11434` | no | no |
-| `FORGECRM_AI_API_KEY` | API, Worker | no | none | Provider API key. | a secret string | yes | no |
-| `FORGECRM_AI_MODEL` | API, Worker | yes when enabled | none | Model name. | `llama3.1` | no | no |
+| `FORGECRM_AI_PROVIDER` | API, Worker | no | `none` | Provider kind: `none`, `ollama`, `openai`, `openai_compatible`, `openrouter`. Inferred as `openrouter` when `OPENROUTER_API_KEY` is set and this is unset. An unknown value is a startup error. | `ollama` | no | no |
+| `FORGECRM_AI_BASE_URL` | API, Worker | yes when enabled | none | Provider base URL. For `openrouter` a bare host is completed to `/api/v1`. Alias: `LLM_BASE_URL`. | `http://ollama:11434` | no | no |
+| `FORGECRM_AI_API_KEY` | API, Worker | yes for `openrouter` | none | Provider API key. Alias: `OPENROUTER_API_KEY`. | a secret string | yes | no |
+| `FORGECRM_AI_MODEL` | API, Worker | yes when enabled | none | Model name. Alias: `LLM_MODEL`. | `llama3.1` | no | no |
+| `FORGECRM_AI_HTTP_REFERER` | API, Worker | no | none | Sent as `HTTP-Referer` to gateways that display it (OpenRouter). Omitted when empty. | `https://forgecrm.example` | no | no |
+| `FORGECRM_AI_TITLE` | API, Worker | no | none | Sent as `X-Title` to gateways that display it (OpenRouter). Omitted when empty. | `ForgeCRM` | no | no |
 | `FORGECRM_AI_TIMEOUT` | API, Worker | no | `60s` | Per-request timeout. | `60s` | no | no |
 | `FORGECRM_AI_MAX_REQUESTS_PER_MIN` | API, Worker | no | `30` | AI requests allowed per organization per minute. Must not be negative. | `60` | no | no |
+
+### OpenRouter
+
+OpenRouter (`https://openrouter.ai`) is a hosted gateway to many models and speaks
+the OpenAI chat-completions protocol, so it uses the settings above with
+`FORGECRM_AI_PROVIDER=openrouter`. Only the API key is required; the base URL and
+model default to `https://openrouter.ai/api/v1` and `google/gemma-2-9b-it:free`.
+The conventional `OPENROUTER_API_KEY`, `LLM_MODEL` and `LLM_BASE_URL` names are
+accepted as aliases when the matching `FORGECRM_AI_*` name is unset, and setting
+`OPENROUTER_API_KEY` alone selects `provider=openrouter`. The `FORGECRM_AI_*` name
+always wins when both are set. A bare host (`https://openrouter.ai`) is completed
+to `/api/v1`, so the one-line snippet from OpenRouter's documentation works
+unchanged. `FORGECRM_AI_HTTP_REFERER` and `FORGECRM_AI_TITLE` are optional
+attribution headers OpenRouter shows in its dashboard; they are sent only when set.
+
+```bash
+FORGECRM_AI_ENABLED=true
+FORGECRM_AI_PROVIDER=openrouter
+FORGECRM_AI_API_KEY=sk-or-...
+FORGECRM_AI_MODEL=google/gemma-2-9b-it:free
+```
+
+Check the connection without touching CRM data:
+
+```bash
+./scripts/ai-smoke.sh "Привет"
+```
 
 ## Object storage (S3-compatible, optional)
 

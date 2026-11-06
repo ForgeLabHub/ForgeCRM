@@ -132,9 +132,17 @@ func NewService(cfg *config.AIConfig, db *database.DB, auditLog *audit.Logger, c
 		switch cfg.Provider {
 		case "ollama":
 			s.provider = &OllamaProvider{baseURL: cfg.BaseURL, model: cfg.Model, timeout: cfg.Timeout}
-		case "openai", "openai_compatible":
+		case "openai", "openai_compatible", "openrouter":
+			// OpenRouter speaks the OpenAI chat-completions protocol, so it shares this
+			// provider. The attribution headers are passed through only when set; the
+			// empty case sends none, which keeps a non-OpenRouter gateway unaffected.
+			name := cfg.Provider
+			if name == "openai" {
+				name = "openai_compatible"
+			}
 			s.provider = &OpenAICompatibleProvider{
 				baseURL: cfg.BaseURL, apiKey: cfg.APIKey, model: cfg.Model, timeout: cfg.Timeout,
+				referer: cfg.Referer, title: cfg.Title, name: name,
 			}
 		}
 	}
@@ -439,10 +447,36 @@ type OpenAICompatibleProvider struct {
 	apiKey  string
 	model   string
 	timeout time.Duration
+	// referer and title are optional attribution headers. OpenRouter reads
+	// HTTP-Referer and X-Title to label an application in its dashboard and to
+	// rank it for free-tier models; other gateways ignore them. They are sent only
+	// when non-empty so a deployment that does not need them sends nothing extra.
+	referer string
+	title   string
+	// name is the provider label reported to the admin page. It defaults to
+	// "openai_compatible" but is set to "openrouter" when that provider is
+	// configured, so the operator sees the gateway they actually chose.
+	name string
+}
+
+// applyAttributionHeaders sets the optional gateway attribution headers. It is a
+// single helper so the streaming, non-streaming and health paths cannot drift.
+func (p *OpenAICompatibleProvider) applyAttributionHeaders(h http.Header) {
+	if p.referer != "" {
+		h.Set("HTTP-Referer", p.referer)
+	}
+	if p.title != "" {
+		h.Set("X-Title", p.title)
+	}
 }
 
 // Name implements Provider.
-func (p *OpenAICompatibleProvider) Name() string { return "openai_compatible" }
+func (p *OpenAICompatibleProvider) Name() string {
+	if p.name != "" {
+		return p.name
+	}
+	return "openai_compatible"
+}
 
 // Model implements Provider.
 func (p *OpenAICompatibleProvider) Model() string { return p.model }
@@ -475,6 +509,7 @@ func (p *OpenAICompatibleProvider) Complete(ctx context.Context, req CompletionR
 	if p.apiKey != "" {
 		httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
 	}
+	p.applyAttributionHeaders(httpReq.Header)
 	resp, err := (&http.Client{Timeout: p.timeout}).Do(httpReq)
 	if err != nil {
 		return nil, err
@@ -522,6 +557,7 @@ func (p *OpenAICompatibleProvider) Healthy(ctx context.Context) error {
 	if p.apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+p.apiKey)
 	}
+	p.applyAttributionHeaders(req.Header)
 	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
 	if err != nil {
 		return err
