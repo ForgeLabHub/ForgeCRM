@@ -624,6 +624,59 @@ func TestRetentionSweepsMigrationReconciliations(t *testing.T) {
 	}
 }
 
+// TestRetentionSweepsStaleWorkerHeartbeats covers the worker liveness table: one
+// row per worker identity, upserted on every beat, which nothing pruned before the
+// policy was added.
+//
+// worker_id is a pod or container hostname, so a worker recreated under a new name
+// leaves its old row behind and the table grows with deployment churn rather than
+// with activity. A live worker refreshes last_seen_at every ten seconds, so only an
+// identity unseen for the whole window is removed; the fresh row here stands for a
+// live worker and must survive.
+func TestRetentionSweepsStaleWorkerHeartbeats(t *testing.T) {
+	db := connectOrSkip(t)
+	freshSchema(t, db)
+
+	ctx := context.Background()
+	old := time.Now().Add(-200 * 24 * time.Hour)
+	if _, err := db.Pool().Exec(ctx, `
+		INSERT INTO worker_heartbeats (worker_id, role, last_seen_at)
+		VALUES ('old-pod-abc123',  'worker', $1),
+		       ('live-pod-def456', 'worker', now())`,
+		old); err != nil {
+		t.Fatalf("insert heartbeats: %v", err)
+	}
+
+	runner := retention.New(db, audit.New(db), nil, retention.Options{Enabled: true, Delete: true})
+	results, err := runner.Run(ctx)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	res := resultFor(results, "worker_heartbeats")
+	if res.Error != "" {
+		t.Fatalf("worker_heartbeats policy failed: %s", res.Error)
+	}
+	if res.Deleted != 1 {
+		t.Errorf("worker_heartbeats deleted %d rows, want exactly the stale one", res.Deleted)
+	}
+
+	var n int64
+	if err := db.Pool().QueryRow(ctx, `SELECT count(*) FROM worker_heartbeats`).Scan(&n); err != nil {
+		t.Fatalf("count heartbeats: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("worker_heartbeats holds %d rows, want the live worker preserved", n)
+	}
+	var workerID string
+	if err := db.Pool().QueryRow(ctx, `SELECT worker_id FROM worker_heartbeats`).Scan(&workerID); err != nil {
+		t.Fatalf("read kept heartbeat: %v", err)
+	}
+	if workerID != "live-pod-def456" {
+		t.Errorf("kept heartbeat is %q, want the live worker", workerID)
+	}
+}
+
 func deletedFor(results []retention.Result, key string) int64 {
 	for _, r := range results {
 		if r.Key == key {
@@ -972,6 +1025,8 @@ func TestRetentionSweepIndexesExist(t *testing.T) {
 		// 0037: the Telegram receipt ledgers.
 		"telegram_update_receipts_finished_idx",
 		"telegram_task_delivery_receipts_finished_idx",
+		// 0031: the worker liveness table, swept on its last_seen_at column.
+		"worker_heartbeats_last_seen_idx",
 	}
 	for _, name := range want {
 		var exists bool

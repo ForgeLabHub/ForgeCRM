@@ -332,6 +332,18 @@ var policies = []Policy{
 			"status_changed_at index restricted to terminal rows exists for this " +
 			"sweep, and a condition that still holds is re-detected by the next scan",
 	},
+	{
+		Key: "worker_heartbeats", Table: "worker_heartbeats", TimeColumn: "last_seen_at",
+		Default: 30 * 24 * time.Hour, Min: 24 * time.Hour, BatchSize: 5000,
+		Reason: "one liveness row per worker identity, upserted on every beat. A worker " +
+			"whose hostname is a pod or container name leaves a row behind each time it is " +
+			"recreated, so the table grows with deployment churn rather than with activity and " +
+			"nothing removed the rows. A live worker refreshes last_seen_at every ten seconds " +
+			"and so is never past the cutoff; only an identity not seen for the whole window is " +
+			"removed, which is exactly the row the alive count already ignores. " +
+			"worker_heartbeats_last_seen_idx (migration 0031) leads with this column, so the " +
+			"sweep is indexed",
+	},
 
 	// --- Protected: audit and security evidence -----------------------------
 	//
