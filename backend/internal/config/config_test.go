@@ -243,6 +243,55 @@ func TestDatabaseURLFallbackAndPort(t *testing.T) {
 	}
 }
 
+// TestCSPDeliveryAndHSTSOptIn covers the two switches that change a browser
+// security header, and their defaults. Both default to the safe side — the CSP
+// is Report-Only and HSTS is off — because an enforcing policy that blocks the
+// bundle is an outage and HSTS is cached for its whole max-age. Nothing else
+// asserted these fields, so a change of default would have gone unnoticed.
+func TestCSPDeliveryAndHSTSOptIn(t *testing.T) {
+	t.Run("safe defaults", func(t *testing.T) {
+		baseEnv(t)
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		if cfg.CSPEnforce {
+			t.Errorf("CSPEnforce = true by default; the policy must ship Report-Only")
+		}
+		if cfg.HSTSMaxAge != 0 {
+			t.Errorf("HSTSMaxAge = %s by default; HSTS must be off", cfg.HSTSMaxAge)
+		}
+	})
+
+	t.Run("opt-in is honoured", func(t *testing.T) {
+		baseEnv(t)
+		t.Setenv("FORGECRM_CSP_ENFORCE", "true")
+		t.Setenv("FORGECRM_HSTS_MAX_AGE", "24h")
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		if !cfg.CSPEnforce {
+			t.Errorf("CSPEnforce = false, want true when FORGECRM_CSP_ENFORCE=true")
+		}
+		if cfg.HSTSMaxAge.Hours() != 24 {
+			t.Errorf("HSTSMaxAge = %s, want 24h", cfg.HSTSMaxAge)
+		}
+	})
+
+	t.Run("a negative max-age is rejected, not read as off", func(t *testing.T) {
+		baseEnv(t)
+		t.Setenv("FORGECRM_HSTS_MAX_AGE", "-1h")
+		_, err := Load()
+		if err == nil {
+			t.Fatal("Load accepted a negative FORGECRM_HSTS_MAX_AGE; it must be a startup error")
+		}
+		if !strings.Contains(err.Error(), "FORGECRM_HSTS_MAX_AGE") {
+			t.Errorf("error %q does not name FORGECRM_HSTS_MAX_AGE", err)
+		}
+	})
+}
+
 func TestCookieConfiguration(t *testing.T) {
 	for _, tc := range []struct {
 		name, sameSite, secure, partitioned string

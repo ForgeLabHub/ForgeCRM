@@ -16,6 +16,7 @@
 | OpenAPI не разошёлся с кодом | документация API генерируема и актуальна | `make openapi-check` | `ci.yml` → `backend` |
 | Факты о проекте не разошлись с кодом | числа в `docs/verification/project-facts.md` выводятся из исходников, а не поддерживаются вручную; RBAC-каталог, сид, симметрия миграций и уникальность маршрутов согласованы | `make facts-check` | `ci.yml` → `backend` |
 | Контрактные тесты API | маршрут без права/схемы ловится | `make test-unit` | `ci.yml` → `backend` |
+| Security-заголовки на реальном роутере | nosniff, X-Frame-Options, Referrer-Policy, COOP, Permissions-Policy и CSP доставляются корневым middleware на каждый ответ (включая SPA-документ), а не только когда middleware вызван напрямую; CSP — Report-Only, HSTS выключен по умолчанию, включение — осознанный выбор оператора | `make test-unit` (`internal/api`) | `ci.yml` → `backend` |
 | Интеграционные тесты | транзакции, RBAC, изоляция на реальной БД | `make test-integration` | `ci.yml` → `backend` |
 | Tenant isolation и RBAC | пользователи не получают чужие данные | `make test-integration` | `ci.yml` → `backend` |
 | Объектная авторизация (BOLA/IDOR) | запись, скрытая списком, не читается, не изменяется и не выгружается по прямому UUID; вложенные ресурсы (комментарии, теги, активности) не шире родительской записи; правило владельца/команды одинаково для сессии, MCP-токена, workflow и AI-агента | `make test-integration` (`internal/testsupport/object_authz_test.go`) | `ci.yml` → `backend` |
