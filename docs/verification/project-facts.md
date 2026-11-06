@@ -48,8 +48,8 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 | Пакеты Go (весь backend) | **57** | каталоги с хотя бы одним .go-файлом под backend/ |
 | Пакеты Go (backend/internal) | **52** | то же, ограничено backend/internal/** |
 | Go-файлы без тестов | **162** | *.go, кроме *_test.go |
-| Go тестовых файлов | **160** | *_test.go |
-| Тестовые функции Go | **953** | верхнеуровневые func TestXxx(*testing.T), TestMain исключён |
+| Go тестовых файлов | **159** | *_test.go |
+| Тестовые функции Go | **951** | верхнеуровневые func TestXxx(*testing.T), TestMain исключён |
 | Бенчмарки Go | **3** | func BenchmarkXxx |
 | Fuzz-тесты Go | **0** | func FuzzXxx |
 | Example-тесты Go | **0** | func ExampleXxx |
