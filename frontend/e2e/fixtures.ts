@@ -20,7 +20,7 @@ export async function signIn(page: Page, email = E2E_EMAIL, password = E2E_PASSW
   // The login page also renders an <h1>, so waiting on a heading alone can
   // return before the session exists. Wait for the route change and then for
   // the overview heading, which only appears once /auth/me has succeeded.
-  await expect(page).toHaveURL(/\/$/, { timeout: 15_000 })
+  await expect(page).toHaveURL(/\/app$/, { timeout: 15_000 })
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Welcome back', {
     timeout: 15_000,
   })
@@ -28,7 +28,7 @@ export async function signIn(page: Page, email = E2E_EMAIL, password = E2E_PASSW
 
 /** Creates an account through the interface and returns the name used. */
 export async function createAccount(page: Page, name: string) {
-  await page.goto('/accounts')
+  await page.goto('/app/accounts')
   await page.getByRole('button', { name: 'New account' }).click()
 
   const dialog = page.getByRole('dialog')
@@ -51,7 +51,7 @@ export async function createAccount(page: Page, name: string) {
  * tests address the contact by id and need the real one the server assigned.
  */
 export async function createContact(page: Page, firstName: string) {
-  await page.goto('/contacts')
+  await page.goto('/app/contacts')
   await page.getByRole('button', { name: 'New contact' }).click()
 
   const dialog = page.getByRole('dialog')

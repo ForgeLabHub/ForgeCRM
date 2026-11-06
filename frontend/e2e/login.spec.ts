@@ -133,7 +133,7 @@ test.describe('sign-in page', () => {
 
     // Account settings are authoritative after sign-in; the anonymous device
     // choice must not silently overwrite another person's saved preference.
-    await expect(page).toHaveURL(/\/$/, { timeout: 15_000 })
+    await expect(page).toHaveURL(/\/app$/, { timeout: 15_000 })
     await expect(page.locator('html')).toHaveAttribute('lang', 'ru')
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     const response = await page.request.get('/api/v1/auth/appearance')

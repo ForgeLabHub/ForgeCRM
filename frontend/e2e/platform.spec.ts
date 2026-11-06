@@ -8,7 +8,7 @@ import { test, expect, signIn, createAccount, createContact, RUN_ID, E2E_EMAIL }
 test.describe('authentication', () => {
   test('signs in with valid credentials and reaches the workspace', async ({ page }) => {
     await signIn(page)
-    await expect(page).toHaveURL(/\/$/)
+    await expect(page).toHaveURL(/\/app$/)
   })
 
   test('refuses a wrong password without revealing whether the account exists', async ({ page }) => {
@@ -24,7 +24,7 @@ test.describe('authentication', () => {
 
   test('rejects a request for a protected page when there is no session', async ({ page }) => {
     // The client-side guard should redirect, and the API would refuse anyway.
-    await page.goto('/accounts')
+    await page.goto('/app/accounts')
     await expect(page).toHaveURL(/\/login/)
   })
 
@@ -53,7 +53,7 @@ test.describe('accounts', () => {
     await createAccount(page, name)
 
     // Visible in the list...
-    await page.goto('/accounts')
+    await page.goto('/app/accounts')
     await expect(page.getByText(name)).toBeVisible()
 
     // ...and still there after a full reload, which proves it was stored rather
@@ -82,7 +82,7 @@ test.describe('accounts', () => {
     await createAccount(page, name)
 
     // Open the record from the list.
-    await page.goto('/accounts')
+    await page.goto('/app/accounts')
     await page.getByText(name).click()
     await expect(page.getByRole('heading', { level: 1 })).toContainText(name)
 
@@ -104,7 +104,7 @@ test.describe('accounts', () => {
     const name = `E2E Archive ${RUN_ID}`
     await createAccount(page, name)
 
-    await page.goto('/accounts')
+    await page.goto('/app/accounts')
     await page.getByText(name).click()
 
     await page.getByRole('button', { name: 'Archive' }).click()
@@ -114,7 +114,7 @@ test.describe('accounts', () => {
     await dialog.getByRole('button', { name: 'Archive' }).click()
     await expect(dialog).toBeHidden()
 
-    await page.goto('/accounts')
+    await page.goto('/app/accounts')
     await expect(page.getByText(name)).toHaveCount(0)
   })
 
@@ -127,7 +127,7 @@ test.describe('accounts', () => {
     await createAccount(page, first)
     await createAccount(page, second)
 
-    await page.goto('/accounts')
+    await page.goto('/app/accounts')
     await expect(page.getByText(first)).toBeVisible()
 
     // Select both by their row checkboxes. The row checkbox is labelled
@@ -152,7 +152,7 @@ test.describe('accounts', () => {
     await dialog.getByRole('button', { name: 'Archive 2' }).click()
     await expect(dialog).toBeHidden({ timeout: 15_000 })
 
-    await page.goto('/accounts')
+    await page.goto('/app/accounts')
     await expect(page.getByText(first)).toHaveCount(0)
     await expect(page.getByText(second)).toHaveCount(0)
   })
@@ -164,7 +164,7 @@ test.describe('accounts', () => {
     const name = `E2E Bulk Partial ${RUN_ID}`
     await createAccount(page, name)
 
-    await page.goto('/accounts')
+    await page.goto('/app/accounts')
     await page.getByRole('row').filter({ hasText: name }).getByLabel('Select row').check()
     await page.getByRole('button', { name: 'Archive 1 account' }).click()
     await page.getByRole('dialog').getByRole('button', { name: 'Archive 1' }).click()
@@ -233,7 +233,7 @@ test.describe('contextual AI', () => {
     const name = `E2E AI ${RUN_ID}`
     await createAccount(page, name)
 
-    await page.goto('/accounts')
+    await page.goto('/app/accounts')
     await page.getByText(name).click()
     await expect(page.getByRole('heading', { level: 1 })).toContainText(name)
 
@@ -260,7 +260,7 @@ test.describe('contextual AI', () => {
     const name = `E2E AI grounding ${RUN_ID}`
     await createAccount(page, name)
 
-    await page.goto('/accounts')
+    await page.goto('/app/accounts')
     await page.getByText(name).click()
     await expect(page.getByRole('heading', { level: 1 })).toContainText(name)
 
@@ -312,28 +312,28 @@ test.describe('contextual AI', () => {
 
 test.describe('workspace pages render live data', () => {
   const pages = [
-    { path: '/accounts', title: 'Accounts' },
-    { path: '/contacts', title: 'Contacts' },
-    { path: '/leads', title: 'Leads' },
-    { path: '/deals', title: 'Deals' },
-    { path: '/tasks', title: 'Tasks' },
-    { path: '/tickets', title: 'Support' },
-    { path: '/reports', title: 'Reports' },
-    { path: '/simulation', title: 'Simulation Lab' },
-    { path: '/forecast', title: 'Forecasting' },
-    { path: '/risk', title: 'Risk' },
-    { path: '/imports', title: 'Import Center' },
-    { path: '/integrations', title: 'Integrations' },
-    { path: '/webhooks', title: 'Webhooks' },
-    { path: '/events', title: 'Events' },
-    { path: '/workflows', title: 'Workflows' },
-    { path: '/jobs', title: 'Background jobs' },
-    { path: '/ai', title: 'AI & MCP' },
-    { path: '/approvals', title: 'Agent approvals' },
-    { path: '/admin/audit', title: 'Audit & logs' },
-    { path: '/admin/users', title: 'Users' },
-    { path: '/admin/sso', title: 'Single sign-on' },
-    { path: '/admin/configuration', title: 'Organization configuration' },
+    { path: '/app/accounts', title: 'Accounts' },
+    { path: '/app/contacts', title: 'Contacts' },
+    { path: '/app/leads', title: 'Leads' },
+    { path: '/app/deals', title: 'Deals' },
+    { path: '/app/tasks', title: 'Tasks' },
+    { path: '/app/tickets', title: 'Support' },
+    { path: '/app/reports', title: 'Reports' },
+    { path: '/app/simulation', title: 'Simulation Lab' },
+    { path: '/app/forecast', title: 'Forecasting' },
+    { path: '/app/risk', title: 'Risk' },
+    { path: '/app/imports', title: 'Import Center' },
+    { path: '/app/integrations', title: 'Integrations' },
+    { path: '/app/webhooks', title: 'Webhooks' },
+    { path: '/app/events', title: 'Events' },
+    { path: '/app/workflows', title: 'Workflows' },
+    { path: '/app/jobs', title: 'Background jobs' },
+    { path: '/app/ai', title: 'AI & MCP' },
+    { path: '/app/approvals', title: 'Agent approvals' },
+    { path: '/app/admin/audit', title: 'Audit & logs' },
+    { path: '/app/admin/users', title: 'Users' },
+    { path: '/app/admin/sso', title: 'Single sign-on' },
+    { path: '/app/admin/configuration', title: 'Organization configuration' },
   ]
 
   for (const { path, title } of pages) {
@@ -353,7 +353,7 @@ test.describe('migration sources', () => {
   test('the source picker offers the kinds the server can build, including MySQL', async ({
     authedPage: page,
   }) => {
-    await page.goto('/migrations')
+    await page.goto('/app/migrations')
     await page.getByRole('button', { name: 'New migration' }).click()
 
     // The picker must equal `migration_sources` on the server. A local list once
@@ -372,7 +372,7 @@ test.describe('webhook subscriptions', () => {
   test('the event picker offers the canonical event types the dispatcher matches', async ({
     authedPage: page,
   }) => {
-    await page.goto('/webhooks')
+    await page.goto('/app/webhooks')
     await page.getByRole('button', { name: 'New subscription' }).click()
 
     // The picker must offer the names the server actually emits. A shortened list
@@ -386,7 +386,7 @@ test.describe('webhook subscriptions', () => {
 
 test.describe('workflow automation', () => {
   test('a workflow can be created and run from the page', async ({ authedPage: page }) => {
-    await page.goto('/workflows')
+    await page.goto('/app/workflows')
     await page.getByRole('button', { name: 'New workflow' }).click()
 
     const dialog = page.getByRole('dialog')
@@ -420,7 +420,7 @@ test.describe('workflow automation', () => {
 
 test.describe('workflow templates', () => {
   test('a workflow can be created from a catalog template', async ({ authedPage: page }) => {
-    await page.goto('/workflows')
+    await page.goto('/app/workflows')
     await page.getByRole('button', { name: 'From a template' }).click()
 
     const picker = page.getByRole('dialog')
@@ -436,7 +436,7 @@ test.describe('workflow templates', () => {
   })
 
   test('a workflow can be exported and its document re-imported', async ({ authedPage: page }) => {
-    await page.goto('/workflows')
+    await page.goto('/app/workflows')
 
     // Create one to export.
     await page.getByRole('button', { name: 'New workflow' }).click()
@@ -458,7 +458,7 @@ test.describe('workflow templates', () => {
 
 test.describe('workflow triggers', () => {
   test('the event picker offers the canonical names the engine matches', async ({ authedPage: page }) => {
-    await page.goto('/workflows')
+    await page.goto('/app/workflows')
     await page.getByRole('button', { name: 'New workflow' }).click()
 
     const dialog = page.getByRole('dialog')
@@ -477,7 +477,7 @@ test.describe('simulation lab', () => {
   test('a scenario can be built, saved and run against the real pipeline', async ({
     authedPage: page,
   }) => {
-    await page.goto('/simulation')
+    await page.goto('/app/simulation')
 
     // Start from the catalog. The entry is offered only if the server registered
     // it, so this also checks the catalog endpoint is reachable.
@@ -510,7 +510,7 @@ test.describe('simulation lab', () => {
   test('previewing a scenario writes nothing but shows a comparison', async ({
     authedPage: page,
   }) => {
-    await page.goto('/simulation')
+    await page.goto('/app/simulation')
     await page.getByRole('button', { name: 'Revenue and terms' }).click()
     await page.getByRole('button', { name: 'Preview' }).click()
 
@@ -525,7 +525,7 @@ test.describe('simulation lab', () => {
 
 test.describe('forecasting', () => {
   test('a forecast is computed against the real revenue history', async ({ authedPage: page }) => {
-    await page.goto('/forecast')
+    await page.goto('/app/forecast')
 
     // Compute with the default method. The catalog is served by the API, so the
     // form only offers methods the core can actually compute.
@@ -546,7 +546,7 @@ test.describe('forecasting', () => {
 
 test.describe('risk', () => {
   test('a scan reconciles the signal list and the result is explained', async ({ authedPage: page }) => {
-    await page.goto('/risk')
+    await page.goto('/app/risk')
 
     await page.getByRole('button', { name: 'Scan now' }).click()
 
@@ -566,7 +566,7 @@ test.describe('risk', () => {
   })
 
   test('the thresholds form is present and saves', async ({ authedPage: page }) => {
-    await page.goto('/risk')
+    await page.goto('/app/risk')
 
     const stalled = page.getByLabel('Stalled deal (days)')
     await expect(stalled).toBeVisible()
@@ -584,7 +584,7 @@ test.describe('tags and comments', () => {
     const comment = `Called the buyer on ${RUN_ID}`
 
     await createAccount(page, name)
-    await page.goto('/accounts')
+    await page.goto('/app/accounts')
     await page.getByText(name).click()
     await expect(page.getByRole('heading', { level: 1 })).toContainText(name)
 
@@ -614,7 +614,7 @@ test.describe('custom fields', () => {
     const label = `Account tier ${RUN_ID}`
 
     await createAccount(page, name)
-    await page.goto('/accounts')
+    await page.goto('/app/accounts')
     await page.getByText(name).click()
     await expect(page.getByRole('heading', { level: 1 })).toContainText(name)
 
@@ -671,7 +671,7 @@ test.describe('notifications', () => {
     })
     expect(run.ok()).toBeTruthy()
 
-    await page.goto('/notifications')
+    await page.goto('/app/notifications')
     const row = page.getByText(title)
     await expect(row).toBeVisible({ timeout: 15_000 })
 
@@ -688,7 +688,7 @@ test.describe('platform settings', () => {
     authedPage: page,
   }) => {
     const key = `e2e.setting_${RUN_ID}`
-    await page.goto('/admin/diagnostics')
+    await page.goto('/app/admin/diagnostics')
 
     // The store starts empty in a scratch database, so the page offers no Edit
     // control until a key exists. Seed one through the API the client itself
@@ -729,7 +729,7 @@ test.describe('export', () => {
     const name = `E2E Export ${RUN_ID}`
     await createAccount(page, name)
 
-    await page.goto('/imports')
+    await page.goto('/app/imports')
     await page.getByRole('button', { name: 'Export' }).click()
 
     const download = page.waitForEvent('download')
@@ -751,7 +751,7 @@ test.describe('saved views', () => {
     authedPage: page,
   }) => {
     const viewName = `E2E view ${RUN_ID}`
-    await page.goto('/tasks')
+    await page.goto('/app/tasks')
 
     // Filter the list, then save that exact filter as a named view.
     await page.getByLabel('Status').selectOption('open')
@@ -775,7 +775,7 @@ test.describe('saved views', () => {
 
   test('a view can be deleted and disappears from the switcher', async ({ authedPage: page }) => {
     const viewName = `E2E delete ${RUN_ID}`
-    await page.goto('/tasks')
+    await page.goto('/app/tasks')
 
     await page.getByRole('button', { name: 'Save view' }).click()
     const dialog = page.getByRole('dialog')
@@ -794,7 +794,7 @@ test.describe('saved views', () => {
 test.describe('single sign-on administration', () => {
   test('an operator can register a provider and see it listed', async ({ authedPage: page }) => {
     const key = `e2e${RUN_ID}`.replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 24)
-    await page.goto('/admin/sso')
+    await page.goto('/app/admin/sso')
 
     // The redirect URL the provider must be configured with is shown, so an
     // operator does not have to reconstruct it.
@@ -824,7 +824,7 @@ test.describe('MCP client credentials', () => {
     request,
   }) => {
     const name = `E2E credential ${RUN_ID}`
-    await page.goto('/admin/mcp-credentials')
+    await page.goto('/app/admin/mcp-credentials')
 
     await page.getByRole('button', { name: 'New credential' }).click()
     const dialog = page.getByRole('dialog')
@@ -942,7 +942,7 @@ test.describe('consent', () => {
     // A distinct address per run, so a rerun does not see the previous grant.
     const address = `e2e-lead-${RUN_ID}@consent.test`
 
-    await page.goto('/admin/consent')
+    await page.goto('/app/admin/consent')
     await page.getByLabel('Email address').fill(address)
     await page.getByRole('button', { name: 'Look up' }).click()
 
@@ -980,7 +980,7 @@ test.describe('organization configuration', () => {
   test('an override chosen on the page reaches the API and reset restores the default', async ({
     authedPage: page,
   }) => {
-    await page.goto('/admin/configuration')
+    await page.goto('/app/admin/configuration')
 
     // The editor is built from the catalog, so the key the platform ships is
     // present without the interface having been told about it.

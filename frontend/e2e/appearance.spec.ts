@@ -13,7 +13,7 @@ test('appearance preview, account persistence and role-default reset', async ({ 
   const defaults = { style: null, mode: 'system', accent: 'theme', density: 'standard' }
   await set(defaults)
   try {
-    await page.goto('/appearance')
+    await page.goto('/app/appearance')
     await expect(page.getByRole('heading', { name: 'Appearance', exact: true })).toBeVisible()
     const before = await (await page.request.get('/api/v1/auth/appearance')).json()
     await expect(page.locator('html')).toHaveAttribute('data-style', before.default_style)
@@ -30,7 +30,7 @@ test('appearance preview, account persistence and role-default reset', async ({ 
       const second = await other.newPage()
       await signIn(second, E2E_EMAIL, E2E_PASSWORD)
       await expect(second.locator('html')).toHaveAttribute('data-style', 'glass')
-      await second.goto('/appearance')
+      await second.goto('/app/appearance')
       await expect(second.getByRole('button', { name: 'Reset to defaults' })).toBeVisible()
       expect(await second.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1)
       await second.getByRole('button', { name: 'Reset to defaults' }).click()
