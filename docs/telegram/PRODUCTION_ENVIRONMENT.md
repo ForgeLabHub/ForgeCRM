@@ -89,7 +89,7 @@ Supabase-проект, по условию, отсутствует. Основн
 - Отдельный Telegram username, bot ID, chat ID и отдельный frontend-токен в env: фактических читателей нет. Имена предполагаемых переменных намеренно не придумываются.
 - URL webhook, Mini App, Privacy Policy как новые env: текущий код их не читает; точные маршруты ещё не определены. `FORGECRM_BASE_URL` уже существует, но сам эти функции не создаёт.
 - Supabase URL, service-role/anon/API keys и отдельный Supabase PostgreSQL DSN: проект отсутствует и Telegram-медиа с ним не интегрированы.
-- `FORGECRM_API_URL`, `FORGECRM_E2E_EMAIL`, `FORGECRM_E2E_PASSWORD`, `FORGECRM_TEST_DATABASE_URL`, `FORGECRM_TEST_REDIS_URL`, `CI`, `FACTS_COMMIT` — dev/test/CI, не нужны production Telegram.
+- `FORGECRM_API_URL`, `FORGECRM_E2E_EMAIL`, `FORGECRM_E2E_PASSWORD`, `FORGECRM_TEST_DATABASE_URL`, `FORGECRM_TEST_REDIS_URL`, `CI` — dev/test/CI, не нужны production Telegram.
 - `RENDER_EXTERNAL_URL`, `RENDER_GIT_COMMIT` — fallback для Render, не настройка Blitz. Не добавлять на Blitz ради Telegram.
 - Новые bootstrap-пароли, второй `FORGECRM_SECRET_KEY`, SMTP/OIDC/AI параметры или новая PostgreSQL только ради Telegram.
 

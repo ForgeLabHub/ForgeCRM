@@ -89,11 +89,12 @@ jobs:
         # cmd/facts-gen. This gate fails when a metric in the committed document
         # drifts from the code, and also when independent sources disagree
         # (RBAC constants vs catalog, seeded permissions vs catalog, up/down
-        # migration symmetry, duplicate App.tsx route paths). FACTS_COMMIT stamps
-        # the checked-out SHA inside the auto block so the provenance is visible.
-        env:
-          FACTS_COMMIT: ${{ github.sha }}
-        run: go run ./cmd/facts-gen -repo .. -check
+        # migration symmetry, duplicate App.tsx route paths). The -commit flag
+        # stamps the checked-out SHA inside the auto block so the provenance is
+        # visible; it is a flag rather than an environment variable because the
+        # deployment host scans the repository for os.Getenv calls and reports
+        # every unrecognised name as a setting the app is waiting for.
+        run: go run ./cmd/facts-gen -repo .. -check -commit "${GITHUB_SHA}"
 
       - name: Unit tests
         run: go test -race -count=1 ./...

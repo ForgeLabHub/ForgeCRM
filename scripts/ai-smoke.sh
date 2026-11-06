@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# Проверка, что настроенный AI-провайдер отвечает. По умолчанию — OpenRouter с
-# моделью google/gemma-2-9b-it:free.
+# Проверка, что настроенный AI-провайдер отвечает. По умолчанию — OpenRouter.
+# Конкретная модель не «зашита»: id моделей на OpenRouter меняются, поэтому
+# скрипт берёт её из окружения (как и приложение) и без неё честно падает.
 #
 #   ./scripts/ai-smoke.sh              отправить «Привет» и напечатать ответ
 #   ./scripts/ai-smoke.sh "Как дела?"  отправить свой текст
@@ -9,7 +10,7 @@
 # Скрипт читает те же переменные, что и приложение, поэтому проверяет именно ту
 # конфигурацию, которую увидит сервер:
 #   FORGECRM_AI_BASE_URL  или LLM_BASE_URL   (по умолчанию https://openrouter.ai/api/v1)
-#   FORGECRM_AI_MODEL     или LLM_MODEL      (по умолчанию google/gemma-2-9b-it:free)
+#   FORGECRM_AI_MODEL     или LLM_MODEL      (обязательна; список: curl https://openrouter.ai/api/v1/models)
 #   FORGECRM_AI_API_KEY   или OPENROUTER_API_KEY
 #   FORGECRM_AI_HTTP_REFERER, FORGECRM_AI_TITLE — необязательные заголовки
 #
@@ -21,8 +22,14 @@ set -uo pipefail
 prompt="${1:-Привет}"
 
 base="${FORGECRM_AI_BASE_URL:-${LLM_BASE_URL:-https://openrouter.ai/api/v1}}"
-model="${FORGECRM_AI_MODEL:-${LLM_MODEL:-google/gemma-2-9b-it:free}}"
+model="${FORGECRM_AI_MODEL:-${LLM_MODEL:-}}"
 key="${FORGECRM_AI_API_KEY:-${OPENROUTER_API_KEY:-}}"
+
+if [ -z "$model" ]; then
+  echo "Не задана модель: установите FORGECRM_AI_MODEL (или LLM_MODEL)." >&2
+  echo "Актуальные id: curl -s https://openrouter.ai/api/v1/models | grep -o '\"[^\"]*:free\"'" >&2
+  exit 2
+fi
 
 # Тот же нормализатор, что и в config.go: если задан только хост, добавляем
 # версионный путь /api/v1, иначе запрос уйдёт на /chat/completions и вернёт 404.

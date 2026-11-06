@@ -13,15 +13,18 @@
 - **Провайдер OpenRouter для ИИ.** `FORGECRM_AI_PROVIDER=openrouter` подключается
   тем же OpenAI-совместимым клиентом, что и `openai`/`openai_compatible`: шлюз
   `https://openrouter.ai` говорит по протоколу chat completions. Для настройки
-  достаточно ключа — базовый URL по умолчанию `https://openrouter.ai/api/v1`,
-  модель `google/gemma-2-9b-it:free`. «Голый» хост (`https://openrouter.ai`)
-  дополняется путём `/api/v1`, иначе запрос ушёл бы на `/chat/completions` и вернул
-  404. Принимаются алиасы `OPENROUTER_API_KEY`, `LLM_MODEL`, `LLM_BASE_URL` (имена
-  `FORGECRM_AI_*` имеют приоритет), а один `OPENROUTER_API_KEY` сам включает
-  `provider=openrouter`. Неизвестное имя провайдера и включённый OpenRouter без
-  ключа теперь ошибка старта, а не тихо выключенный ИИ. Добавлены необязательные
-  заголовки атрибуции `FORGECRM_AI_HTTP_REFERER` (`HTTP-Referer`) и
-  `FORGECRM_AI_TITLE` (`X-Title`); пустые не отправляются.
+  достаточно ключа — базовый URL по умолчанию `https://openrouter.ai/api/v1`.
+  Модель задаётся явно: дефолта нет, потому что бесплатный ярус OpenRouter
+  ротируется и id вроде `google/gemma-2-9b-it:free` перестают существовать
+  (актуальный список — `curl https://openrouter.ai/api/v1/models`). «Голый» хост
+  (`https://openrouter.ai`) дополняется путём `/api/v1`, иначе запрос ушёл бы на
+  `/chat/completions` и вернул 404. Принимаются алиасы `OPENROUTER_API_KEY`,
+  `LLM_MODEL`, `LLM_BASE_URL` (имена `FORGECRM_AI_*` имеют приоритет), а один
+  `OPENROUTER_API_KEY` сам включает `provider=openrouter`. Неизвестное имя
+  провайдера и включённый OpenRouter без ключа теперь ошибка старта, а не тихо
+  выключенный ИИ. Добавлены необязательные заголовки атрибуции
+  `FORGECRM_AI_HTTP_REFERER` (`HTTP-Referer`) и `FORGECRM_AI_TITLE` (`X-Title`);
+  пустые не отправляются.
 - **`scripts/ai-smoke.sh`** — проверка соединения с провайдером одним запросом
   «Привет» без записи в CRM. Читает те же переменные, что и приложение, и никогда
   не печатает ключ.
@@ -202,6 +205,14 @@
 
 ### Fixed
 
+- **Панель Blitz больше не требует `FACTS_COMMIT`.** blitz.cloud статически
+  сканирует репозиторий на вызовы `os.Getenv` и выставляет любое незнакомое имя
+  как «настройку, которую приложение ждёт». `backend/cmd/facts-gen` (генератор
+  документации, которого нет в runtime-образе) читал `FACTS_COMMIT` — имя вне
+  пространства `FORGECRM_*`, поэтому панель показывала `Needs you: FACTS_COMMIT`
+  и блокировала старт. Штамп SHA теперь передаётся флагом `-commit` (CI передаёт
+  checked-out SHA), переменная окружения не читается вовсе. Покрыто
+  `TestCommitStampPrefersFlag`.
 - **Хеш CSP-политики и inline-bootstrap темы снова сверяются автоматически.**
   Политика пинит единственный inline-скрипт `frontend/index.html`
   (до-отрисовочное восстановление темы и режима интерфейса) по `sha256`.
