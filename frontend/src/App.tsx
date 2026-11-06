@@ -49,19 +49,6 @@ const TenantSettingsPage = lazy(() => import('./pages/admin/TenantSettingsPage')
 const AccountPage = lazy(() => import('./pages/AccountPage').then((m) => ({ default: m.AccountPage })))
 const AppearancePage = lazy(() => import('./pages/AppearancePage').then((m) => ({ default: m.AppearancePage })))
 
-const HomePage = lazy(() => import('./site/pages/HomePage').then((m) => ({ default: m.HomePage })))
-const ServicesPage = lazy(() => import('./site/pages/ServicesPage').then((m) => ({ default: m.ServicesPage })))
-const ServiceDetailPage = lazy(() => import('./site/pages/ServiceDetailPage').then((m) => ({ default: m.ServiceDetailPage })))
-const PricingPage = lazy(() => import('./site/pages/PricingPage').then((m) => ({ default: m.PricingPage })))
-const CasesPage = lazy(() => import('./site/pages/CasesPage').then((m) => ({ default: m.CasesPage })))
-const CaseDetailPage = lazy(() => import('./site/pages/CaseDetailPage').then((m) => ({ default: m.CaseDetailPage })))
-const BlogPage = lazy(() => import('./site/pages/BlogPage').then((m) => ({ default: m.BlogPage })))
-const ArticlePage = lazy(() => import('./site/pages/ArticlePage').then((m) => ({ default: m.ArticlePage })))
-const AboutPage = lazy(() => import('./site/pages/AboutPage').then((m) => ({ default: m.AboutPage })))
-const SiteContactsPage = lazy(() => import('./site/pages/ContactsPage').then((m) => ({ default: m.ContactsPage })))
-const PrivacyPage = lazy(() => import('./site/pages/PrivacyPage').then((m) => ({ default: m.PrivacyPage })))
-const SiteNotFoundPage = lazy(() => import('./site/pages/SiteNotFoundPage').then((m) => ({ default: m.SiteNotFoundPage })))
-const SiteLayout = lazy(() => import('./site/SiteLayout').then((m) => ({ default: m.SiteLayout })))
 import { RequirePermission } from './components/RequirePermission'
 
 function FullPageSkeleton() {
@@ -74,13 +61,11 @@ function FullPageSkeleton() {
 }
 
 /**
- * Keeps the application behind a session while leaving the public site open.
+ * Keeps the application behind a session.
  *
- * The marketing pages are readable by anyone, so the old top-level "anonymous
- * means login only" branch cannot stay: it turned every public URL into a
- * redirect. The check moves to the one boundary that actually needs it, and it
- * remembers where the visitor was going so signing in does not dump them on the
- * overview regardless of the link they followed.
+ * The check lives at the one boundary that needs it — `/app` — and remembers
+ * where the visitor was going, so signing in does not dump them on the overview
+ * regardless of the link they followed.
  */
 function SignedIn({ children }: { children: ReactNode }) {
   const { status } = useAuth()
@@ -94,371 +79,356 @@ function SignedIn({ children }: { children: ReactNode }) {
 }
 
 /**
- * The two halves of the product.
- *
- * The public site owns the root of the origin: services, prices, cases, the blog
- * and the legal pages. The application lives behind `/app`, so a marketing URL
- * never collides with a CRM route and a bookmarked board keeps working after the
- * site changes.
+ * The product is one application. Every URL is an application URL: `/app` holds
+ * the workspace behind a session, `/login` is the form, and anything else lands
+ * on the workspace, which sends an anonymous visitor to the form. There is no
+ * second site on this origin.
  */
 export function App() {
   return (
     <>
     <Routes>
-      {/* The public site. Its routes are unprefixed and end in the catch-all,
-          so an unknown URL anywhere outside /app lands on the site's 404. */}
-      <Route element={<SiteLayout />}>
-          <Route index element={<HomePage />} />
-          <Route path="services" element={<ServicesPage />} />
-          <Route path="services/:slug" element={<ServiceDetailPage />} />
-          <Route path="pricing" element={<PricingPage />} />
-          <Route path="cases" element={<CasesPage />} />
-          <Route path="cases/:slug" element={<CaseDetailPage />} />
-          <Route path="blog" element={<BlogPage />} />
-          <Route path="blog/:slug" element={<ArticlePage />} />
-          <Route path="about" element={<AboutPage />} />
-          <Route path="contacts" element={<SiteContactsPage />} />
-          <Route path="privacy" element={<PrivacyPage />} />
-          <Route path="*" element={<SiteNotFoundPage />} />
-        </Route>
-
-
       <Route path="/login" element={<LoginPage />} />
 
       <Route
         path="app"
+        element={
+          <SignedIn>
+            <AppShell />
+          </SignedIn>
+        }
+      >
+        <Route index element={<OverviewPage />} />
+
+        <Route
+          path="/app/accounts"
           element={
-            <SignedIn>
-              <AppShell />
-            </SignedIn>
+            <RequirePermission permission="accounts.read">
+              <AccountsPage />
+            </RequirePermission>
           }
-        >
-          <Route index element={<OverviewPage />} />
+        />
+        <Route
+          path="/app/accounts/:id"
+          element={
+            <RequirePermission permission="accounts.read">
+              <AccountDetailPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/contacts"
+          element={
+            <RequirePermission permission="contacts.read">
+              <CrmContactsPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/contacts/:id"
+          element={
+            <RequirePermission permission="contacts.read">
+              <CrmContactDetailPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/leads"
+          element={
+            <RequirePermission permission="leads.read">
+              <LeadsPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/leads/:id"
+          element={
+            <RequirePermission permission="leads.read">
+              <LeadDetailPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/deals"
+          element={
+            <RequirePermission permission="deals.read">
+              <DealsPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/deals/:id"
+          element={
+            <RequirePermission permission="deals.read">
+              <DealDetailPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/tasks"
+          element={
+            <RequirePermission permission="tasks.read">
+              <TasksPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/tasks/:id"
+          element={
+            <RequirePermission permission="tasks.read">
+              <TaskDetailPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/tickets"
+          element={
+            <RequirePermission permission="tickets.read">
+              <TicketsPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/tickets/:id"
+          element={
+            <RequirePermission permission="tickets.read">
+              <TicketDetailPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/reports"
+          element={
+            <RequirePermission permission="reports.read">
+              <ReportsPage />
+            </RequirePermission>
+          }
+        />
 
-          <Route
-            path="/app/accounts"
-            element={
-              <RequirePermission permission="accounts.read">
-                <AccountsPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/accounts/:id"
-            element={
-              <RequirePermission permission="accounts.read">
-                <AccountDetailPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/contacts"
-            element={
-              <RequirePermission permission="contacts.read">
-                <CrmContactsPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/contacts/:id"
-            element={
-              <RequirePermission permission="contacts.read">
-                <CrmContactDetailPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/leads"
-            element={
-              <RequirePermission permission="leads.read">
-                <LeadsPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/leads/:id"
-            element={
-              <RequirePermission permission="leads.read">
-                <LeadDetailPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/deals"
-            element={
-              <RequirePermission permission="deals.read">
-                <DealsPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/deals/:id"
-            element={
-              <RequirePermission permission="deals.read">
-                <DealDetailPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/tasks"
-            element={
-              <RequirePermission permission="tasks.read">
-                <TasksPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/tasks/:id"
-            element={
-              <RequirePermission permission="tasks.read">
-                <TaskDetailPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/tickets"
-            element={
-              <RequirePermission permission="tickets.read">
-                <TicketsPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/tickets/:id"
-            element={
-              <RequirePermission permission="tickets.read">
-                <TicketDetailPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/reports"
-            element={
-              <RequirePermission permission="reports.read">
-                <ReportsPage />
-              </RequirePermission>
-            }
-          />
+        <Route
+          path="/app/imports"
+          element={
+            <RequirePermission permission="imports.read">
+              <ImportCenterPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/imports/:id"
+          element={
+            <RequirePermission permission="imports.read">
+              <ImportDetailPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/migrations"
+          element={
+            <RequirePermission permission="migrations.read">
+              <MigrationsPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/integrations"
+          element={
+            <RequirePermission permission="integrations.read">
+              <IntegrationsPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/webhooks"
+          element={
+            <RequirePermission permission="webhooks.manage">
+              <WebhooksPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/events"
+          element={
+            <RequirePermission permission="events.read">
+              <EventsPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/workflows"
+          element={
+            <RequirePermission permission="workflows.read">
+              <WorkflowsPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/simulation"
+          element={
+            <RequirePermission permission="simulation.read">
+              <SimulationPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/forecast"
+          element={
+            <RequirePermission permission="forecast.read">
+              <ForecastPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/risk"
+          element={
+            <RequirePermission permission="risk.read">
+              <RiskPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/jobs"
+          element={
+            <RequirePermission permission="jobs.read">
+              <JobsPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/ai"
+          element={
+            <RequirePermission permission="ai.read">
+              <AiPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/approvals"
+          element={
+            <RequirePermission permission="approvals.read">
+              <ApprovalsPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/notifications"
+          element={
+            <RequirePermission permission="notifications.read">
+              <NotificationsPage />
+            </RequirePermission>
+          }
+        />
 
-          <Route
-            path="/app/imports"
-            element={
-              <RequirePermission permission="imports.read">
-                <ImportCenterPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/imports/:id"
-            element={
-              <RequirePermission permission="imports.read">
-                <ImportDetailPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/migrations"
-            element={
-              <RequirePermission permission="migrations.read">
-                <MigrationsPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/integrations"
-            element={
-              <RequirePermission permission="integrations.read">
-                <IntegrationsPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/webhooks"
-            element={
-              <RequirePermission permission="webhooks.manage">
-                <WebhooksPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/events"
-            element={
-              <RequirePermission permission="events.read">
-                <EventsPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/workflows"
-            element={
-              <RequirePermission permission="workflows.read">
-                <WorkflowsPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/simulation"
-            element={
-              <RequirePermission permission="simulation.read">
-                <SimulationPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/forecast"
-            element={
-              <RequirePermission permission="forecast.read">
-                <ForecastPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/risk"
-            element={
-              <RequirePermission permission="risk.read">
-                <RiskPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/jobs"
-            element={
-              <RequirePermission permission="jobs.read">
-                <JobsPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/ai"
-            element={
-              <RequirePermission permission="ai.read">
-                <AiPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/approvals"
-            element={
-              <RequirePermission permission="approvals.read">
-                <ApprovalsPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/notifications"
-            element={
-              <RequirePermission permission="notifications.read">
-                <NotificationsPage />
-              </RequirePermission>
-            }
-          />
+        <Route
+          path="/app/admin/users"
+          element={
+            <RequirePermission permission="users.read">
+              <UsersPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/admin/roles"
+          element={
+            <RequirePermission permission="roles.read">
+              <RolesPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/admin/organizations"
+          element={
+            <RequirePermission permission="organizations.read">
+              <OrganizationsPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/admin/teams"
+          element={
+            <RequirePermission permission="teams.manage">
+              <TeamsPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/admin/audit"
+          element={
+            <RequirePermission permission="audit.read">
+              <AuditPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/admin/consent"
+          element={
+            <RequirePermission permission="consent.read">
+              <ConsentPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/admin/security"
+          element={
+            <RequirePermission permission="security.read">
+              <SecurityPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/admin/diagnostics"
+          element={
+            <RequirePermission permission="logs.read">
+              <DiagnosticsPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/admin/email"
+          element={
+            <RequirePermission permission="email.manage">
+              <EmailPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/admin/telegram"
+          element={<TelegramPage />}
+        />
+        <Route
+          path="/app/admin/sso"
+          element={
+            <RequirePermission permission="sso.read">
+              <SSOPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/admin/mcp-credentials"
+          element={
+            <RequirePermission permission="mcp.credentials.read">
+              <MCPCredentialsPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/app/admin/configuration"
+          element={
+            <RequirePermission permission="tenant.settings.read">
+              <TenantSettingsPage />
+            </RequirePermission>
+          }
+        />
 
-          <Route
-            path="/app/admin/users"
-            element={
-              <RequirePermission permission="users.read">
-                <UsersPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/admin/roles"
-            element={
-              <RequirePermission permission="roles.read">
-                <RolesPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/admin/organizations"
-            element={
-              <RequirePermission permission="organizations.read">
-                <OrganizationsPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/admin/teams"
-            element={
-              <RequirePermission permission="teams.manage">
-                <TeamsPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/admin/audit"
-            element={
-              <RequirePermission permission="audit.read">
-                <AuditPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/admin/consent"
-            element={
-              <RequirePermission permission="consent.read">
-                <ConsentPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/admin/security"
-            element={
-              <RequirePermission permission="security.read">
-                <SecurityPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/admin/diagnostics"
-            element={
-              <RequirePermission permission="logs.read">
-                <DiagnosticsPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/admin/email"
-            element={
-              <RequirePermission permission="email.manage">
-                <EmailPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/admin/telegram"
-            element={<TelegramPage />}
-          />
-          <Route
-            path="/app/admin/sso"
-            element={
-              <RequirePermission permission="sso.read">
-                <SSOPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/admin/mcp-credentials"
-            element={
-              <RequirePermission permission="mcp.credentials.read">
-                <MCPCredentialsPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/app/admin/configuration"
-            element={
-              <RequirePermission permission="tenant.settings.read">
-                <TenantSettingsPage />
-              </RequirePermission>
-            }
-          />
+        <Route path="/app/account" element={<AccountPage />} />
+        <Route path="/app/appearance" element={<AppearancePage />} />
+        <Route path="/app/forbidden" element={<ForbiddenPage />} />
+        <Route path="/app/*" element={<NotFoundPage />} />
+      </Route>
 
-          <Route path="/app/account" element={<AccountPage />} />
-          <Route path="/app/appearance" element={<AppearancePage />} />
-          <Route path="/app/forbidden" element={<ForbiddenPage />} />
-          <Route path="/app/*" element={<NotFoundPage />} />
-        </Route>
+      {/* The root and any URL the application does not name belong to the
+          workspace. An anonymous visitor is forwarded from /app to the form by
+          the session boundary above, so "/" still asks for a sign-in. */}
+      <Route path="*" element={<Navigate to="/app" replace />} />
     </Routes>
     <AiAssistantLauncher />
     </>
