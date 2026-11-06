@@ -1,0 +1,2 @@
+DROP INDEX IF EXISTS telegram_task_delivery_receipts_finished_idx;
+DROP INDEX IF EXISTS telegram_update_receipts_finished_idx;

@@ -254,6 +254,42 @@ var policies = []Policy{
 			"sender's retry horizon, and a failed event is kept because it may still " +
 			"be reprocessed",
 	},
+	// --- Telegram delivery ledgers ------------------------------------------
+	//
+	// These two tables exist for idempotency, not for data: nothing but the row
+	// itself references them, so removing an old row cannot orphan CRM data. The
+	// worker's Telegram sweep already bounds the encrypted reply bodies (it nulls
+	// a body older than seven days) and the one-time link codes, but it keeps the
+	// receipt rows themselves forever, so a deployment with Telegram enabled grows
+	// both tables by one row per incoming update and per task notification without
+	// bound. The sweep here removes the finished rows; an in-flight row is never
+	// touched, so an update whose reply has not been delivered and a notification
+	// whose job has not finished are both kept.
+	{
+		Key: "telegram_update_receipts", Table: "telegram_update_receipts",
+		TimeColumn:      "processed_at",
+		StatusPredicate: "finished_at IS NOT NULL",
+		Default:         90 * 24 * time.Hour, Min: 7 * 24 * time.Hour, BatchSize: 5000,
+		Reason: "an update receipt is an anti-replay record, kept only as long as " +
+			"Telegram may redeliver the update. The window is far longer than the " +
+			"worker's seven-day reply-body horizon, so it is the update id that is " +
+			"retained and the body that is dropped first; a receipt whose reply is " +
+			"still pending has finished_at IS NULL and is never swept, and Telegram " +
+			"stops redelivering an update long before ninety days",
+	},
+	{
+		Key: "telegram_task_delivery_receipts", Table: "telegram_task_delivery_receipts",
+		TimeColumn:      "created_at",
+		StatusPredicate: "finished_at IS NOT NULL",
+		Default:         90 * 24 * time.Hour, Min: 7 * 24 * time.Hour, BatchSize: 5000,
+		Reason: "a delivery receipt deduplicates a task notification so a redelivered " +
+			"outbox event does not send twice. It must outlive the outbox's retry " +
+			"window and the overdue scan's lookback, which is why the window is " +
+			"measured in months; the notification's own history survives in the jobs " +
+			"queue and the audit log, so the receipt is the duplicate guard and not " +
+			"the record that a notification happened. A receipt whose job has not " +
+			"finished has finished_at IS NULL and is never swept",
+	},
 	{
 		Key: "tenant_setting_revisions", Table: "tenant_setting_revisions",
 		TimeColumn: "created_at",

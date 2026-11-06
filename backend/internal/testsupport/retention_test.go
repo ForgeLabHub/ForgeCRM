@@ -968,6 +968,9 @@ func TestRetentionSweepIndexesExist(t *testing.T) {
 		"mcp_credentials_created_at_idx",
 		// 0026: the migration reconciliation history.
 		"migration_recon_created_at_idx",
+		// 0037: the Telegram receipt ledgers.
+		"telegram_update_receipts_finished_idx",
+		"telegram_task_delivery_receipts_finished_idx",
 	}
 	for _, name := range want {
 		var exists bool
@@ -978,5 +981,101 @@ func TestRetentionSweepIndexesExist(t *testing.T) {
 		if !exists {
 			t.Errorf("retention sweep index %s is missing; the sweep for its table would scan the whole table", name)
 		}
+	}
+}
+
+// TestRetentionSweepsSettledTelegramUpdateReceipts covers the anti-replay ledger
+// for incoming Telegram updates. A settled receipt past the window is removed; a
+// settled receipt inside the window and a receipt whose reply has not yet been
+// delivered (finished_at IS NULL) are both kept, because an in-flight update must
+// never lose its replay guard.
+func TestRetentionSweepsSettledTelegramUpdateReceipts(t *testing.T) {
+	db := connectOrSkip(t)
+	freshSchema(t, db)
+
+	ctx := context.Background()
+	if _, err := db.Pool().Exec(ctx, `
+INSERT INTO telegram_update_receipts (update_id, processed_at, finished_at, outcome)
+VALUES (1, now() - interval '100 days', now() - interval '100 days', 'accepted'),
+       (2, now() - interval '50 days',  now() - interval '50 days',  'accepted'),
+       (3, now(),                       now(),                      'accepted'),
+       (4, now() - interval '100 days', NULL,                       NULL)`); err != nil {
+		t.Fatalf("insert update receipts: %v", err)
+	}
+
+	runner := retention.New(db, audit.New(db), nil, retention.Options{Enabled: true, Delete: true})
+	results, err := runner.Run(ctx)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	res := resultFor(results, "telegram_update_receipts")
+	if res.Error != "" {
+		t.Fatalf("telegram_update_receipts policy failed: %s", res.Error)
+	}
+	if res.Deleted != 1 {
+		t.Fatalf("telegram_update_receipts deleted %d rows, want exactly the settled one past the window", res.Deleted)
+	}
+
+	var remaining int64
+	if err := db.Pool().QueryRow(ctx, `SELECT count(*) FROM telegram_update_receipts`).Scan(&remaining); err != nil {
+		t.Fatalf("count update receipts: %v", err)
+	}
+	if remaining != 3 {
+		t.Fatalf("telegram_update_receipts holds %d rows, want 3 (in-window, in-flight and fresh kept)", remaining)
+	}
+	// The in-flight receipt must survive: it is still a replay guard.
+	var inFlight int64
+	if err := db.Pool().QueryRow(ctx, `SELECT count(*) FROM telegram_update_receipts WHERE update_id = 4`).Scan(&inFlight); err != nil {
+		t.Fatalf("count in-flight receipt: %v", err)
+	}
+	if inFlight != 1 {
+		t.Fatalf("the in-flight receipt was swept; an undelivered update lost its replay guard")
+	}
+}
+
+// TestRetentionSweepsFinishedTelegramTaskDeliveryReceipts covers the duplicate
+// guard for task notifications. A finished receipt past the window is removed; a
+// finished receipt inside the window and a receipt whose job has not finished are
+// both kept, so a redelivered event is still de-duplicated.
+func TestRetentionSweepsFinishedTelegramTaskDeliveryReceipts(t *testing.T) {
+	db := connectOrSkip(t)
+	freshSchema(t, db)
+
+	ctx := context.Background()
+	if _, err := db.Pool().Exec(ctx, `
+INSERT INTO telegram_task_delivery_receipts (dedupe_key, created_at, finished_at, outcome)
+VALUES ('old:finished',   now() - interval '100 days', now() - interval '100 days', 'sent'),
+       ('mid:finished',   now() - interval '50 days',  now() - interval '50 days',  'sent'),
+       ('fresh:finished', now(),                       now(),                       'sent'),
+       ('old:in-flight',  now() - interval '100 days', NULL,                       NULL)`); err != nil {
+		t.Fatalf("insert delivery receipts: %v", err)
+	}
+
+	runner := retention.New(db, audit.New(db), nil, retention.Options{Enabled: true, Delete: true})
+	results, err := runner.Run(ctx)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	res := resultFor(results, "telegram_task_delivery_receipts")
+	if res.Error != "" {
+		t.Fatalf("telegram_task_delivery_receipts policy failed: %s", res.Error)
+	}
+	if res.Deleted != 1 {
+		t.Fatalf("telegram_task_delivery_receipts deleted %d rows, want exactly the finished one past the window", res.Deleted)
+	}
+
+	var remaining int64
+	if err := db.Pool().QueryRow(ctx, `SELECT count(*) FROM telegram_task_delivery_receipts`).Scan(&remaining); err != nil {
+		t.Fatalf("count delivery receipts: %v", err)
+	}
+	if remaining != 3 {
+		t.Fatalf("telegram_task_delivery_receipts holds %d rows, want 3 (in-window, in-flight and fresh kept)", remaining)
+	}
+	var inFlight int64
+	if err := db.Pool().QueryRow(ctx, `SELECT count(*) FROM telegram_task_delivery_receipts WHERE dedupe_key = 'old:in-flight'`).Scan(&inFlight); err != nil {
+		t.Fatalf("count in-flight receipt: %v", err)
+	}
+	if inFlight != 1 {
+		t.Fatalf("an unfinished delivery receipt was swept; a redelivered event could send twice")
 	}
 }

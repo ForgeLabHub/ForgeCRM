@@ -282,9 +282,16 @@ webhook зарегистрирован в Bot API на `https://<host>/api/v1/te
   задать `FORGECRM_METRICS_TOKEN` и мониторить `workers_alive` + глубину очереди.
 - **N-3 (token из env, не из зашифрованной записи).** Bot token читается из
   `FORGECRM_TELEGRAM_BOT_TOKEN`; требование ТЗ о шифрованном хранении не выполнено.
-- **N-4 (retention ledger/update-receipts).** Таблицы `telegram_update_receipts`
-  и `telegram_task_delivery_receipts` растут; worker чистит коды >1 сут и тела
-  ответов >7 сут, но политику retention самих receipts надо мониторить.
+- **N-4 (retention ledger/update-receipts) — ЗАКРЫТО.** Таблицы
+  `telegram_update_receipts` и `telegram_task_delivery_receipts` росли: worker
+  чистит коды >1 сут и тела ответов >7 сут, но сами receipt-строки не удалялись.
+  Теперь в `internal/retention` есть по политике на каждую таблицу (миграция
+  `0037` добавляет частичные индексы, ведущие с временного столбца), обметающие
+  **только завершённые** строки (`finished_at IS NOT NULL`), окно по умолчанию 90
+  дней. In-flight строка никогда не удаляется, поэтому anti-replay и дедупликация
+  не теряются. Покрыто `TestRetentionSweepsSettledTelegramUpdateReceipts`,
+  `TestRetentionSweepsFinishedTelegramTaskDeliveryReceipts` и
+  `TestRetentionSweepIndexesExist`.
 - **N-5 (неатомарность сеть↔БД).** Сбой после принятия Telegram, но до commit →
   возможна повторная доставка ответа (описано в PHASE2_STATUS). At-least-once.
 - **N-6 (SSO).** `docs/security/SSO_AUTHENTIK.md` — SSO не включать (вне Telegram).
