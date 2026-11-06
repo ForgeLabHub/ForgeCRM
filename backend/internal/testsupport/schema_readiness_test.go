@@ -93,6 +93,44 @@ func TestMigrateUpReportsVersionAndIsIdempotent(t *testing.T) {
 	}
 }
 
+// TestMigrateUpToleratesADatabaseAheadOfThisBuild is the regression test for the
+// production crash loop: a database already at a newer version than the binary's
+// embedded migrations made migrate.Up fail with "no migration found for version
+// N", and since it runs before the listener opens, the process exited on every
+// start. A rollback to an earlier build must leave such a database alone rather
+// than take the service down, and checkVersion already treats applied > expected
+// as ready, so the runner must agree.
+func TestMigrateUpToleratesADatabaseAheadOfThisBuild(t *testing.T) {
+	db := connectOrSkip(t)
+	ctx := context.Background()
+	freshSchema(t, db)
+
+	expected, err := migrate.ExpectedVersion()
+	if err != nil {
+		t.Fatalf("read the expected version: %v", err)
+	}
+	// A version this build does not embed stands in for a schema a newer deploy
+	// applied and this build has no migration for.
+	if _, err := db.Pool().Exec(ctx,
+		`UPDATE schema_migrations SET version = $1, dirty = false`, expected+1); err != nil {
+		t.Fatalf("push the recorded version ahead of this build: %v", err)
+	}
+
+	applied, err := migrate.Up(testdb.URL(t), slog.Default())
+	if err != nil {
+		t.Fatalf("migrate.Up failed on a database ahead of this build: %v", err)
+	}
+	if applied != 0 {
+		t.Fatalf("migrate.Up applied %d migrations on a database ahead of this build, want 0", applied)
+	}
+
+	// The schema gate the API runs next must also pass, so the two agree that an
+	// ahead database is serveable.
+	if err := migrate.Check(ctx, db.Pool()); err != nil {
+		t.Fatalf("the schema check refused a database ahead of this build: %v", err)
+	}
+}
+
 // TestBootstrapCreatesTheFirstOwnerOnce verifies the bootstrap contract: it
 // creates the owner when there is none, is a no-op afterwards, and never
 // overwrites. The second call deliberately supplies a different address, which

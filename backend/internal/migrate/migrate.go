@@ -62,6 +62,19 @@ func Up(databaseURL string, log *slog.Logger) (int, error) {
 			"inspect the failed migration and repair it before retrying (migrations never delete data)", before)
 	}
 
+	// A database ahead of this build is not a failure. It happens when a deploy
+	// rolls back to an earlier binary while the schema a newer build already
+	// applied stays in place, and there is nothing left to apply. Asking
+	// golang-migrate to move forward from a version its embedded source does not
+	// contain fails with "no migration found for version N", which would take the
+	// process down on every start — the outage this guard prevents. checkVersion
+	// already treats applied > expected as ready, so the runner agrees with the gate.
+	if expected, expErr := ExpectedVersion(); expErr == nil && before > expected {
+		log.Info("database schema is ahead of this build; nothing to apply",
+			"applied", before, "expected", expected)
+		return 0, nil
+	}
+
 	if err := m.Up(); err != nil {
 		if errors.Is(err, migrate.ErrNoChange) {
 			log.Info("schema up to date", "version", before)
