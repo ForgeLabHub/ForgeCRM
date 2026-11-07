@@ -76,7 +76,7 @@ func TestAIProviderCatalogMatchesTheAcceptedSet(t *testing.T) {
 // provider is accepted and the validation error otherwise.
 func probeProviderAccepted(name string) error {
 	cfg := &config.Config{AI: config.AIConfig{
-		Enabled: true,
+		Enabled:  true,
 		Provider: name,
 		BaseURL:  "https://example.test/v1",
 		Model:    "test-model",
