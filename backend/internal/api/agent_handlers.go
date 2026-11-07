@@ -119,7 +119,7 @@ func (s *Server) handleStartAgentRun(w http.ResponseWriter, r *http.Request) {
 	// Only explicit, known write tools may be proposed by this route. The model
 	// supplies neither the risk tier nor the identity, and it can never approve.
 	switch req.ToolName {
-	case "create_task", "create_ticket", "update_deal_stage":
+	case "create_account", "create_task", "create_ticket", "update_deal_stage":
 	default:
 		httpx.WriteError(w, r, httpx.ValidationError(map[string]string{"tool_name": "unsupported agent action"}))
 		return

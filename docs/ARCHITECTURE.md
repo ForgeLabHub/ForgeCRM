@@ -221,7 +221,7 @@ loopback, link-local, приватные, multicast и облачные мета
   `OpenAICompatibleProvider`. Выбор провайдера, тайм-ауты, ограничения запросов и
   метаданные стоимости — это конфигурация; CRM полностью работает при отключённом ИИ.
 - Инструменты MCP (`search_accounts`, `account_summary`, `list_tasks`,
-  `pipeline_overview`, `create_task`, `create_ticket`, `update_deal_stage`,
+  `pipeline_overview`, `create_account`, `create_task`, `create_ticket`, `update_deal_stage`,
   `get_report`) — тонкие обёртки над **теми же** доменными сервисами и **теми же**
   проверками авторизации, что и REST API. Ни сырой SQL, ни shell, ни файловая
   система, ни неограниченный экспорт не выставляются.

@@ -51,7 +51,7 @@ func RiskTier(toolName string) agent.RiskTier {
 	switch toolName {
 	case "search_accounts", "account_summary", "list_tasks", "pipeline_overview", "get_report":
 		return agent.TierSafe
-	case "create_task", "create_ticket", "update_deal_stage":
+	case "create_account", "create_task", "create_ticket", "update_deal_stage":
 		return agent.TierConfirm
 	default:
 		// An unrecognised tool is treated as the most restrictive tier. A new tool

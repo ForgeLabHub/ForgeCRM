@@ -108,8 +108,8 @@ grep -rhoE '\b(Get|Post|Put|Patch|Delete)\("(/[^"]*)"' backend/internal/api/*.go
 
 ### 1.5 MCP
 
-`internal/ai/mcp.go` реализует **8 инструментов**: `search_accounts`,
-`account_summary`, `list_tasks`, `pipeline_overview`, `create_task`,
+`internal/ai/mcp.go` реализует **9 инструментов**: `search_accounts`,
+`account_summary`, `list_tasks`, `pipeline_overview`, `create_account`, `create_task`,
 `create_ticket`, `update_deal_stage`, `get_report`.
 
 Инструменты вызывают методы `crm.Service` напрямую — тот же путь кода, что и HTTP,
