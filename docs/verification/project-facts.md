@@ -39,7 +39,7 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 код изменился, а документ не перегенерировали.
 
 <!-- FACTS:AUTO BEGIN — генерируется backend/cmd/facts-gen, не редактировать вручную -->
-<!-- измерено на HEAD `7ca4dd2de9c72f95d0ef3886ef263999ed51017a` -->
+<!-- измерено на HEAD `7a25ad0f9a71828e994ed933113d71a7e9c2b479` -->
 
 ## Backend / Architecture
 

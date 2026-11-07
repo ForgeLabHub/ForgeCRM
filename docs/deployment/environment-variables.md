@@ -210,7 +210,7 @@ attribution headers OpenRouter shows in its dashboard; they are sent only when s
 FORGECRM_AI_ENABLED=true
 FORGECRM_AI_PROVIDER=openrouter
 FORGECRM_AI_API_KEY=sk-or-...
-FORGECRM_AI_MODEL=google/gemma-4-31b-it:free
+FORGECRM_AI_MODEL=nvidia/nemotron-3-ultra-550b-a55b:free
 ```
 
 Check the connection without touching CRM data:

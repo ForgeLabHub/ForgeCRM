@@ -44,8 +44,11 @@ OpenAI-совместимый) через `ai.Provider`.
 `openai`/`openai_compatible`: шлюз говорит по протоколу chat completions. Для него
 достаточно ключа — базовый URL по умолчанию `https://openrouter.ai/api/v1`. Модель
 задаётся явно (`FORGECRM_AI_MODEL`); дефолта нет, потому что бесплатный ярус
-OpenRouter ротируется и id вроде `google/gemma-2-9b-it:free` со временем
-перестают существовать (актуальный список — `curl https://openrouter.ai/api/v1/models`).
+OpenRouter ротируется и id со временем перестают существовать (актуальный
+список — `curl https://openrouter.ai/api/v1/models`). Рекомендуемая бесплатная
+модель — `nvidia/nemotron-3-ultra-550b-a55b:free` (проверено в каталоге
+OpenRouter: контекст 1M, поддержка tool calling, цена 0); бесплатный endpoint
+всегда несёт суффикс `:free`.
 «Голый» хост дополняется путём `/api/v1`. Принимаются
 алиасы `OPENROUTER_API_KEY`, `LLM_MODEL`, `LLM_BASE_URL` (имена `FORGECRM_AI_*`
 имеют приоритет), а один `OPENROUTER_API_KEY` сам включает `provider=openrouter`.
