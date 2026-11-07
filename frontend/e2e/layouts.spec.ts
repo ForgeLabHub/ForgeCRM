@@ -85,4 +85,28 @@ test.describe('interface experiences', () => {
     await page.getByRole('button', { name: /^Sales/ }).first().click()
     await expect(page.locator('html')).toHaveAttribute('data-workspace', 'sales')
   })
+
+  // The rail switcher lives in desktop chrome that the Slate and Stratus shells
+  // drop on a phone, so those two must expose the workspace picker inside the
+  // drawer instead. This is the real-browser proof that a phone user of either
+  // frame can still change workspace, not only the jsdom markup test.
+  for (const layout of ['slate', 'stratus'] as const) {
+    test(`a phone user of the ${layout} frame switches workspace from the drawer`, async ({
+      authedPage: page,
+    }) => {
+      await page.setViewportSize({ width: 390, height: 844 })
+      await page.addInitScript((value) => localStorage.setItem('forgecrm.layout', value), layout)
+      await signIn(page)
+      await expect(page.locator(`.shell.${layout}`)).toBeVisible()
+
+      // The desktop switcher is not reachable on a phone; the drawer is the way.
+      await expect(page.locator('.workspace-switcher')).toBeHidden()
+      await page.getByRole('button', { name: 'Menu' }).click()
+      const drawer = page.getByRole('dialog', { name: 'Main navigation' })
+      await expect(drawer).toBeVisible()
+
+      await drawer.getByRole('button', { name: /^Sales/ }).first().click()
+      await expect(page.locator('html')).toHaveAttribute('data-workspace', 'sales')
+    })
+  }
 })

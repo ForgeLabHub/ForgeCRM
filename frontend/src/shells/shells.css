@@ -68,6 +68,10 @@
 }
 
 .mobile-drawer__tiles { padding-bottom: var(--space-3); }
+/* The phone workspace picker: a plain list of options inside the drawer, shown
+   where a shell hides its rail switcher on a narrow viewport. */
+.mobile-drawer__workspaces { padding-bottom: var(--space-3); }
+.mobile-drawer__workspaces .workspace-option { padding-inline: var(--space-2); }
 .mobile-drawer__nav .nav-item { margin-block-end: 1px; }
 
 /* The compact search affordance drops the field-width so it can sit in a slim

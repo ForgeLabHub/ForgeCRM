@@ -352,6 +352,50 @@ export function WorkspaceSwitcher() {
 }
 
 /**
+ * The workspace picker for a phone drawer.
+ *
+ * The rail switcher lives in the desktop chrome, which the Slate and Stratus
+ * shells drop on a phone: the sidebar becomes a drawer and the header keeps only
+ * the toggle, the brand and search. Without this the phone user of those two
+ * experiences could not change workspace at all — a workspace is a lens on the
+ * navigation, and losing the lens is losing the feature. It renders the same
+ * options the popover does, as a plain list inside the drawer.
+ */
+export function MobileWorkspacePicker({ onPick }: { onPick?: () => void }) {
+  const { t } = useI18n()
+  const { workspace, setWorkspace } = useWorkspace()
+  return (
+    <div className="mobile-drawer__workspaces">
+      <div className="sidebar__group-label">{t('workspace.label')}</div>
+      <div role="group" aria-label={t('workspace.switchLabel')}>
+        {WORKSPACE_DEFINITIONS.map((definition) => (
+          <button
+            key={definition.id}
+            type="button"
+            className={
+              definition.id === workspace
+                ? 'workspace-option workspace-option--active'
+                : 'workspace-option'
+            }
+            aria-pressed={definition.id === workspace}
+            onClick={() => {
+              setWorkspace(definition.id)
+              onPick?.()
+            }}
+          >
+            <span className="workspace-option__glyph" aria-hidden="true">{definition.glyph}</span>
+            <span className="workspace-option__text">
+              <span className="workspace-option__name">{t(definition.labelKey)}</span>
+              <span className="workspace-option__desc">{t(definition.descriptionKey)}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/**
  * The search affordance styled by each shell: it reads as a quiet field on
  * light chrome and as a command hint on dark chrome. Opens the shared palette.
  */

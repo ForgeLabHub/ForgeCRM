@@ -179,3 +179,31 @@ describe('slate anatomy', () => {
     expect(container.querySelector('.slate-top__crumb')?.textContent).toContain('ForgeCRM')
   })
 })
+
+describe('phone workspace switching', () => {
+  // The rail switcher sits in desktop chrome that the Slate and Stratus shells
+  // drop on a phone, so without a drawer affordance those users could not change
+  // workspace at all.
+  it.each(['slate', 'stratus'] as const)(
+    'the %s drawer offers the workspace picker and switches the active workspace',
+    async (layout) => {
+      vi.stubGlobal('matchMedia', vi.fn(() => ({
+        matches: true,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })))
+      const user = userEvent.setup()
+      const { container } = renderShell(layout)
+
+      // The desktop switcher is gone on a phone; the drawer is the only path.
+      expect(container.querySelector('.workspace-switcher')).toBeNull()
+      await user.click(screen.getByRole('button', { name: /^menu$/i }))
+
+      const picker = container.querySelector('.mobile-drawer__workspaces')
+      expect(picker).not.toBeNull()
+
+      await user.click(screen.getByRole('button', { name: /^Support/ }))
+      expect(document.documentElement.getAttribute('data-workspace')).toBe('support')
+    },
+  )
+})

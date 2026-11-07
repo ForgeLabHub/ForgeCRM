@@ -22,6 +22,7 @@ import { NAV_GROUPS } from '../navigation'
 import {
   AccountMenu,
   MobileNavDrawer,
+  MobileWorkspacePicker,
   SearchPaletteLayer,
   ShellCanvas,
   WorkspaceSwitcher,
@@ -207,7 +208,12 @@ export function StratusShell() {
         ) : null}
       </header>
 
-      <MobileNavDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} groups={groups} />
+      <MobileNavDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        groups={groups}
+        header={<MobileWorkspacePicker onPick={() => setDrawerOpen(false)} />}
+      />
 
       <ShellCanvas className="content--stratus" />
 

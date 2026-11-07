@@ -18,6 +18,7 @@ import { useI18n } from '../i18n'
 import {
   AccountMenu,
   MobileNavDrawer,
+  MobileWorkspacePicker,
   SearchPaletteLayer,
   ShellCanvas,
   WorkspaceSwitcher,
@@ -132,7 +133,12 @@ export function SlateShell() {
         </header>
 
         {isPhone ? (
-          <MobileNavDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} groups={groups} />
+          <MobileNavDrawer
+            open={drawerOpen}
+            onClose={() => setDrawerOpen(false)}
+            groups={groups}
+            header={<MobileWorkspacePicker onPick={() => setDrawerOpen(false)} />}
+          />
         ) : null}
 
         <ShellCanvas className="content--slate" />
