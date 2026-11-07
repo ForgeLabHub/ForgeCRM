@@ -274,6 +274,41 @@ No implementation was performed; this document is analysis only.
 
 ---
 
+## Обновление 2026-11-07: production спит, и квота сборки исчерпана
+
+Read-only проверка (Blitz MCP `apps_get`, `usage_get` и HTTP-проба). Ничего в
+production не менялось, секреты не печатались.
+
+- `apps_get forgecrm`: `asleep: true`, `desiredState: "running"`, `keepAwake:
+  false`, `keepAwakeAllowed: false`, `pro: false`, `lastTrafficAt:
+  2026-11-07T00:47Z`; сообщение платформы: «Nobody visited for 15 minutes, so
+  its pages are asleep. worker keeps running.»
+- HTTP: `/health` и `/ready` → **503** `x-blitz-gate: asleep` — и на
+  `forgecrm.forgecrm.blitz.cloud`, и на `forgecrm.forgecrm.prod.page`.
+- Развёрнутый коммит на момент проверки: `29d906f` («docs(blitz): record the
+  sleep/wake verdict and wake options»).
+- `usage_get`: `plan: "free"`, `buildMinutes: { used: 306, limit: 300,
+  resetsOn: "2026-12-01" }` — **квота минут сборки исчерпана до 2026-12-01**,
+  поэтому новый деплой на бесплатном тарифе до этой даты невозможен.
+
+Вывод: приложение не «падает» и не ломается — платформа усыпляет web-часть
+после 15 минут без посетителей (это поведение (c) из раздела 3), а отдельно
+исчерпана месячная квота сборки. Чтобы «починить production», нужно одно из:
+
+1. открыть приложение в браузере — это разбудит web-часть (worker всё это время
+   продолжает работать);
+2. дождаться сброса квоты сборки (2026-12-01) или перейти на платный план
+   Blitz (`keepAwake` и больше минут сборки);
+3. перейти на хостинг, где web-часть не масштабируется в ноль (например,
+   Render со `starter`-планом; `render.yaml` уже есть).
+
+Код приложения при этом исправен: 2026-11-07 локально собрали production-образ
+из корневого `Dockerfile`, применили миграции 0→39 на чистой БД и проверили
+`/health`, `/ready`, SPA-fallback и статику — всё отвечает 200. Подробности — в
+отчёте аудита.
+
+---
+
 ## Appendix — raw probe transcript (secret-free)
 
 ```
