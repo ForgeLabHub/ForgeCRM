@@ -39,7 +39,7 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 код изменился, а документ не перегенерировали.
 
 <!-- FACTS:AUTO BEGIN — генерируется backend/cmd/facts-gen, не редактировать вручную -->
-<!-- измерено на HEAD `4351eea646af23fbe44600623aa120993d81cecc` -->
+<!-- измерено на HEAD `64968b01c33b936187eb0fd1b8754d008c16f9fd` -->
 
 ## Backend / Architecture
 
@@ -49,7 +49,7 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 | Пакеты Go (backend/internal) | **52** | то же, ограничено backend/internal/** |
 | Go-файлы без тестов | **162** | *.go, кроме *_test.go |
 | Go тестовых файлов | **165** | *_test.go |
-| Тестовые функции Go | **991** | верхнеуровневые func TestXxx(*testing.T), TestMain исключён |
+| Тестовые функции Go | **992** | верхнеуровневые func TestXxx(*testing.T), TestMain исключён |
 | Бенчмарки Go | **3** | func BenchmarkXxx |
 | Fuzz-тесты Go | **0** | func FuzzXxx |
 | Example-тесты Go | **0** | func ExampleXxx |
@@ -92,7 +92,7 @@ openapi.json генерируется из живого роутера (`cmd/ope
 |---|---|---|
 | Файлы src (.ts/.tsx) | **148** | frontend/src/**, включая тестовые |
 | Тестовые файлы src | **48** | *.test.ts(x)/.spec.ts(x) в frontend/src |
-| Объявления it()/test() в src | **311** | запускаемые кейсы vitest; test.describe вычитается |
+| Объявления it()/test() в src | **315** | запускаемые кейсы vitest; test.describe вычитается |
 | Файлы страниц | **39** | компоненты в frontend/src/pages (без admin/, без тестов) |
 | Тесты страниц | **21** | *.test.tsx рядом со страницами |
 | Маршрутов <Route path> | **47** | объявления в frontend/src/App.tsx (регистр маршрутизации SPA) |
