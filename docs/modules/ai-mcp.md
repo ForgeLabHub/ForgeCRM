@@ -80,8 +80,9 @@ Unit: `ai/assist_test.go`, `mcp_protocol_test.go`, `prompt_test.go`,
 `ai_assist_cache_test.go`.
 
 ## 10. Наблюдаемость и ошибки
-Каждый вызов пишется в `ai_tasks`; действия — в `agent_runs`/`agent_actions`; отказы
-и подтверждения — в `audit_log`. Ошибки: `not_configured`, `rate_limited`,
+Каждый вызов пишется в `ai_tasks` без текста запроса (старые записи до изменения
+политики могут содержать его начало); действия — в `agent_runs`/`agent_actions`;
+отказы и подтверждения — в `audit_log`. Ошибки: `not_configured`, `rate_limited`,
 `provider_error`, `approval_required`. Метрики: число вызовов, задержка, доля отказов.
 
 ## 11. Ограничения и готовность

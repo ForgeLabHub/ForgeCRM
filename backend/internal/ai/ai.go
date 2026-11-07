@@ -198,9 +198,7 @@ func (s *Service) Status(ctx context.Context) map[string]any {
 }
 
 // Complete runs a completion, enforcing the rate cap and recording the operation.
-//
-// The prompt is summarised rather than stored in full, so the AI task log does
-// not become a second copy of customer data.
+// The technical task log must not retain user or CRM content.
 func (s *Service) Complete(ctx context.Context, p principalLike, req CompletionRequest) (*CompletionResponse, error) {
 	if !s.Enabled() {
 		return nil, ErrDisabled
@@ -300,17 +298,13 @@ func (s *Service) finishTask(ctx context.Context, id uuid.UUID, status string,
 	_, _ = s.db.Pool().Exec(ctx, q, id, status, inTokens, outTokens, latencyMS, errText)
 }
 
-// summarisePrompt stores a short, non-sensitive description of the request.
+// summarisePrompt deliberately omits request contents: even a short prefix can
+// contain personal data or CRM records, and the task log is not conversation history.
 func summarisePrompt(req CompletionRequest) string {
 	if len(req.Messages) == 0 {
 		return ""
 	}
-	last := req.Messages[len(req.Messages)-1].Content
-	last = strings.TrimSpace(last)
-	if len(last) > 200 {
-		last = last[:200] + "..."
-	}
-	return last
+	return "[content omitted]"
 }
 
 // ListTasks returns recent AI task records.
