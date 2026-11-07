@@ -188,6 +188,39 @@ type AIConfig struct {
 	Title   string
 }
 
+// AI provider kinds accepted by FORGECRM_AI_PROVIDER. The set is closed: a value
+// outside it builds no provider at all, which leaves the subsystem reading as
+// "on" while every call reports the provider unavailable. Validation turns that
+// into a startup error instead.
+const (
+	AIProviderNone             = "none"
+	AIProviderOllama           = "ollama"
+	AIProviderOpenAI           = "openai"
+	AIProviderOpenAICompatible = "openai_compatible"
+	AIProviderOpenRouter       = "openrouter"
+)
+
+// AIProviderKinds is the closed set, in the order the error message lists it. It
+// is exported so the API can publish the same set instead of keeping a second
+// list that drifts: the provider catalog on /ai/providers and the values
+// FORGECRM_AI_PROVIDER accepts are then the same list by construction.
+func AIProviderKinds() []string {
+	return []string{
+		AIProviderNone, AIProviderOllama, AIProviderOpenAI,
+		AIProviderOpenAICompatible, AIProviderOpenRouter,
+	}
+}
+
+// validAIProvider reports whether name is a kind the AI layer can build.
+func validAIProvider(name string) bool {
+	for _, kind := range AIProviderKinds() {
+		if name == kind {
+			return true
+		}
+	}
+	return false
+}
+
 // MCPConfig configures credentials for external MCP clients.
 type MCPConfig struct {
 	// RequestsPerMin bounds tool calls made through one credential, per minute. It is
@@ -773,10 +806,8 @@ func (c *Config) Validate() error {
 	// An unknown provider is rejected rather than silently ignored. Left unchecked it
 	// would leave the service with no provider and report AI as "off", so a typo in
 	// FORGECRM_AI_PROVIDER would look like AI was never enabled.
-	switch c.AI.Provider {
-	case "none", "", "ollama", "openai", "openai_compatible", "openrouter":
-	default:
-		return fmt.Errorf("FORGECRM_AI_PROVIDER must be one of none, ollama, openai, openai_compatible, openrouter; got %q", c.AI.Provider)
+	if !validAIProvider(c.AI.Provider) {
+		return fmt.Errorf("FORGECRM_AI_PROVIDER must be one of %s, got %q", strings.Join(AIProviderKinds(), ", "), c.AI.Provider)
 	}
 	// OpenRouter authenticates with a bearer key. An enabled OpenRouter with no key
 	// would fail on the first request with a 401 from the gateway, which is harder to

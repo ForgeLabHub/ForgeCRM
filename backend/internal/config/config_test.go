@@ -319,3 +319,57 @@ func TestCookieConfiguration(t *testing.T) {
 		})
 	}
 }
+
+// A deployment that names the provider and a key but omits the base URL must
+// still reach OpenRouter: the base URL has a provider default, so naming the
+// provider is enough. The aliases and the key requirement are covered in
+// openrouter_test.go; these pin the remaining default-and-override behaviour.
+func TestOpenRouterProviderFillsInItsPublicEndpoint(t *testing.T) {
+	baseEnv(t)
+	t.Setenv("FORGECRM_AI_ENABLED", "true")
+	t.Setenv("FORGECRM_AI_PROVIDER", "openrouter")
+	t.Setenv("FORGECRM_AI_API_KEY", "sk-or-test")
+	t.Setenv("FORGECRM_AI_MODEL", "google/gemma-4-31b-it:free")
+	t.Setenv("FORGECRM_AI_BASE_URL", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.AI.BaseURL != "https://openrouter.ai/api/v1" {
+		t.Fatalf("openrouter base URL = %q, want the public endpoint", cfg.AI.BaseURL)
+	}
+}
+
+func TestExplicitAIBaseURLOverridesTheOpenRouterDefault(t *testing.T) {
+	baseEnv(t)
+	t.Setenv("FORGECRM_AI_ENABLED", "true")
+	t.Setenv("FORGECRM_AI_PROVIDER", "openrouter")
+	t.Setenv("FORGECRM_AI_API_KEY", "sk-or-test")
+	t.Setenv("FORGECRM_AI_MODEL", "google/gemma-4-31b-it:free")
+	t.Setenv("FORGECRM_AI_BASE_URL", "https://gateway.internal.example/v1")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.AI.BaseURL != "https://gateway.internal.example/v1" {
+		t.Fatalf("explicit base URL was ignored: %q", cfg.AI.BaseURL)
+	}
+}
+
+func TestAIProviderNoneIsAcceptedAndDisablesAI(t *testing.T) {
+	baseEnv(t)
+	// Enabled is asked for, but a "none" provider must still switch the layer off
+	// rather than build nothing and report itself on.
+	t.Setenv("FORGECRM_AI_ENABLED", "true")
+	t.Setenv("FORGECRM_AI_PROVIDER", "none")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.AI.Enabled {
+		t.Fatal("AI stayed enabled with provider=none")
+	}
+}

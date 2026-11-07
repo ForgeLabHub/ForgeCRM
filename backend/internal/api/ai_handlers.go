@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/geff1778/forgecrm/internal/ai"
+	"github.com/geff1778/forgecrm/internal/config"
 	"github.com/geff1778/forgecrm/internal/httpx"
 	"github.com/geff1778/forgecrm/internal/rbac"
 )
@@ -29,27 +30,30 @@ func (s *Server) handleAIStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 // aiProviderCatalog describes the provider kinds the platform can be configured
-// with, keyed by the value FORGECRM_AI_PROVIDER takes. The list is the same set
-// config.Validate accepts, so the endpoint cannot advertise a kind the config
-// layer rejects or hide one it accepts. "none" is a valid setting but not a
-// provider, so it is absent here.
-var aiProviderCatalog = []struct {
-	Name        string
+// with, keyed by the value FORGECRM_AI_PROVIDER takes. The kinds themselves come
+// from config.AIProviderKinds, so the catalog cannot advertise a provider the
+// config layer would reject, nor hide one it accepts. "none" is a valid setting
+// but not a provider, so it has no entry here.
+var aiProviderCatalog = map[string]struct {
 	Description string
 	RequiresKey bool
 }{
-	{"ollama", "A local model served by Ollama", false},
-	{"openai", "OpenAI's hosted chat completions API", true},
-	{"openai_compatible", "Any OpenAI-compatible chat completions API", true},
-	{"openrouter", "OpenRouter's hosted gateway to many models", true},
+	config.AIProviderOllama:           {"A local model served by Ollama", false},
+	config.AIProviderOpenAI:           {"OpenAI's hosted chat completions API", true},
+	config.AIProviderOpenAICompatible: {"Any OpenAI-compatible chat completions API", true},
+	config.AIProviderOpenRouter:       {"OpenRouter's hosted gateway to many models", true},
 }
 
 // handleAIProviders lists the provider kinds the platform can be configured with.
 func (s *Server) handleAIProviders(w http.ResponseWriter, r *http.Request) {
 	items := make([]map[string]any, 0, len(aiProviderCatalog))
-	for _, p := range aiProviderCatalog {
+	for _, kind := range config.AIProviderKinds() {
+		entry, ok := aiProviderCatalog[kind]
+		if !ok {
+			continue
+		}
 		items = append(items, map[string]any{
-			"name": p.Name, "description": p.Description, "requires_api_key": p.RequiresKey,
+			"name": kind, "description": entry.Description, "requires_api_key": entry.RequiresKey,
 		})
 	}
 	httpx.WriteJSON(w, map[string]any{
