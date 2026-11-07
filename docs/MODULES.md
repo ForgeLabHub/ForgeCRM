@@ -51,16 +51,33 @@
 
 ### cmd/forgecrm-worker
 - **Ответственность:** фоновый процесс. Движет доставку вебхуков, прогоны workflow,
-  хранение, очередь заданий, импорты, разбор outbox и уведомления.
+  хранение, очередь заданий, импорты, разбор outbox и уведомления. Логика Telegram
+  делегирована в `internal/telegram`, поэтому worker обрабатывает только те задания,
+  которые не берёт на себя отдельный сервис бота.
 - **Public API:** только `main`.
 - **Internal deps:** `agent, ai, audit, config, crm, database, events, importx,
-  integrations, jobs, logging, notify, outbox, rbac, retention, secrets, workflow`.
+  integrations, jobs, logging, notify, outbox, rbac, retention, secrets, telegram,
+  workflow`.
 - **External deps:** `github.com/google/uuid`.
 - **Fake:** нет.
 - **Tests:** нет напрямую; компоненты, которыми он движет, тестируются в `testsupport`.
 - **Extract:** `no` — корень композиции.
 - **Cut lines:** остаётся; рецепт конструктора, которому нужна фоновая работа,
   генерирует собственную точку входа воркера.
+
+### cmd/forgecrm-telegram
+- **Ответственность:** самостоятельный сервис бота. Long-polling `getUpdates` не
+  требует входящего порта и публичного URL; при включённой доставке сам отправляет
+  уведомления; обслуживает `/healthz` и `/readyz`; завершается по сигналу.
+- **Public API:** только `main`.
+- **Internal deps:** `config, database, jobs, logging, telegram`.
+- **External deps:** нет сверх stdlib.
+- **Fake:** нет.
+- **Tests:** нет напрямую; пакет `internal/telegram` покрыт unit- и
+  интеграционными тестами, включая mock Bot API.
+- **Extract:** `no` — точка входа, а не компонент.
+- **Cut lines:** остаётся с монолитом; использует тот же диспетчер, что и webhook,
+  поэтому правила доступа, согласия и идемпотентности совпадают для обоих путей.
 
 ### cmd/openapi-gen
 - **Ответственность:** перегенерировать `docs/api/openapi.json` из живого роутера;
@@ -388,6 +405,32 @@
   отправлять. Прежнее «понадобится интерфейс `Mailer`» было неверным: транспорты уже
   терпят nil-получатель и возвращают `ErrDisabled`.
 - **Cut lines:** для извлекаемости понадобился бы интерфейс `Mailer`.
+
+### internal/telegram  — самостоятельный сервис бота
+- **Ответственность:** весь Telegram-бот как отдельный сервис. Транспорт-нейтральный
+  диспетчер разбирает Update и решает доступ, согласие и идемпотентность; один и тот
+  же код обслуживает и webhook, и long-polling. Клиент Bot API (getMe, getUpdates с
+  offset, sendMessage, sendPhoto, 429/backoff), цикл опроса, цикл доставки уведомлений,
+  обслуживание и graceful shutdown; CRM-команды `/tasks`, `/overdue`, `/deals`,
+  `/pipeline`, `/search`.
+- **Public API:** `Service`, `Dispatcher`, `NewService`, `NewDispatcher`, интерфейс
+  `UpdateProcessor`; типы конфигурации/ответа. Команды чтения CRM принимают
+  `*rbac.Principal` и переиспользуют `crm.Service`, поэтому границы доступа те же,
+  что в веб-приложении.
+- **Internal deps:** `audit, config, crm, database, httpx, jobs, notify, outbox,
+  rbac, telegramtext`.
+- **External deps:** `github.com/google/uuid`.
+- **Fake:** интерфейс `UpdateProcessor` отделяет транспорт от производства ответа;
+  `botapi_test.go` поднимает mock Bot API (getMe/getUpdates, отслеживание offset,
+  429/backoff), а тесты цикла опроса используют фейковый процессор.
+- **Tests:** `botapi_test.go`, `commands_test.go`, `lookup_test.go`, `service_test.go`
+  и `lookup_integration_test.go` на реальной PostgreSQL (границы организации и RBAC).
+- **Extract:** `no` — пока не выделен: нет `scripts/extract-test/telegram/`, поэтому
+  независимость не доказана. В списке `modules.txt` его нет, и документ это честно
+  отражает. Границы для будущего выделения уже очерчены (см. Cut lines).
+- **Cut lines:** интерфейс `UpdateProcessor` — граница между транспортом и логикой;
+  `crm.Service` подключается через интерфейс `lookupOperations`, поэтому пакет можно
+  унести, не забирая доменное ядро.
 
 ### internal/oidc  — единый вход
 - **Ответственность:** поток authorization-code OpenID Connect с PKCE и nonce и
@@ -837,8 +880,8 @@ E2E в `frontend/e2e/platform.spec.ts` — 61 тест, из них часть �
 
 ## Сводка
 
-- **Пакетов бэкенда в инвентаризации:** 38 (каталоги `internal/*`; `importx` несёт два
-  подпакета, поэтому `go list` сообщает 39), плюс 3 команды.
+- **Пакетов бэкенда в инвентаризации:** 39 (каталоги `internal/*`; `importx` несёт два
+  подпакета, поэтому `go list` сообщает 40), плюс 4 команды.
 - **Слоёв фронтенда в инвентаризации:** 20.
 - **Циклы:** нет (проверено `go list` + DFS; см. `DEPENDENCY_MAP.md`).
 - **Пакеты с ≥8 внутренними зависимостями:** `api` (26), `wiring` (22), `importx` (10),

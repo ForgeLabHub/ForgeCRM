@@ -93,6 +93,57 @@ services:
       - key: FORGECRM_DATABASE_MAX_CONNS
         value: "4"
 
+  # Telegram bot: the same image, the third binary. It long-polls the Bot API, so
+  # it needs no public URL and no inbound traffic. It is opt-in: Render creates
+  # the service, but the bot does nothing until FORGECRM_TELEGRAM_ENABLED and a
+  # bot token are set. To enable it, set FORGECRM_TELEGRAM_ENABLED=true here and
+  # add FORGECRM_TELEGRAM_BOT_TOKEN as a secret in the dashboard; without a token
+  # the binary exits, which keeps a half-configured deployment from running.
+  #
+  # Delete this block if the deployment does not use Telegram.
+  - type: worker
+    name: forgecrm-telegram
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # The image entrypoint defaults to the API; this names the bot binary and
+    # FORGECRM_ROLE makes the choice explicit regardless of how Render passes the
+    # command. Either signal alone is enough; both are set so the bot can never
+    # come up as a second API instance.
+    dockerCommand: /usr/local/bin/forgecrm-telegram
+    region: oregon
+    plan: starter
+    envVars:
+      - key: FORGECRM_ENV
+        value: production
+      - key: FORGECRM_ROLE
+        value: telegram
+      - key: FORGECRM_TELEGRAM_ENABLED
+        value: "false"
+      - key: FORGECRM_LOG_LEVEL
+        value: info
+      - key: FORGECRM_LOG_FORMAT
+        value: json
+      - key: FORGECRM_DATABASE_URL
+        fromDatabase:
+          name: forgecrm-db
+          property: connectionString
+      # The bot runs the same production config validation as the API, which
+      # requires an https base URL. A worker service has no RENDER_EXTERNAL_URL of
+      # its own, so it takes the API's public URL.
+      - key: FORGECRM_BASE_URL
+        fromService:
+          type: web
+          name: forgecrm-api
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: FORGECRM_SECRET_KEY
+        fromService:
+          type: web
+          name: forgecrm-api
+          envVarKey: FORGECRM_SECRET_KEY
+      - key: FORGECRM_DATABASE_MAX_CONNS
+        value: "2"
+
 databases:
   - name: forgecrm-db
     databaseName: forgecrm

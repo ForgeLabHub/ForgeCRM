@@ -163,8 +163,13 @@ the sweep reports the rows a real run would remove and deletes nothing until
 
 | Name | Component | Required | Default | Description | Example | Secret | Production |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `FORGECRM_TELEGRAM_ENABLED` | API, Worker | no | `false` | Enables the Telegram bot. With no token it disables itself rather than breaking startup. | `false` | no | no |
-| `FORGECRM_TELEGRAM_BOT_TOKEN` | API, Worker | yes when enabled | none | Bot token from BotFather. | `123456:ABC-...` | yes | no |
+| `FORGECRM_TELEGRAM_ENABLED` | API, Worker, Telegram | no | `false` | Enables the Telegram bot. With no token it disables itself rather than breaking startup. | `false` | no | no |
+| `FORGECRM_TELEGRAM_BOT_TOKEN` | API, Worker, Telegram | yes when enabled | none | Bot token from BotFather. | `123456:ABC-...` | yes | no |
+| `FORGECRM_TELEGRAM_POLL_TIMEOUT` | Telegram | no | `30s` | How long the standalone bot holds a long-poll `getUpdates` request open. | `30s` | no | no |
+| `FORGECRM_TELEGRAM_POLL_INTERVAL` | Telegram | no | `1s` | Pause between polls when Telegram returns no updates. | `1s` | no | no |
+| `FORGECRM_TELEGRAM_DELIVER_IN_SERVICE` | Telegram | no | `true` | Makes the standalone bot send queued task notifications itself. Set to `false` to keep delivery in the worker. | `true` | no | no |
+| `FORGECRM_TELEGRAM_HEALTH_ADDR` | Telegram | no | none | Address for the bot's `/healthz` and `/readyz` server. Empty disables it. | `:8090` | no | no |
+| `FORGECRM_TELEGRAM_API_BASE` | API, Worker, Telegram | no | none | Overrides the Bot API root. Leave empty for the public API; a proxy or a test points it elsewhere. | `https://api.telegram.org` | no | no |
 | `FORGECRM_TELEGRAM_WEBHOOK_ENABLED` | API | no | `false` | Opt-in for the incoming webhook; configuration does not register it with Telegram or prove reachability. | `false` | no | no |
 | `FORGECRM_TELEGRAM_WEBHOOK_SECRET` | API | yes when webhook enabled | none | Independent secret, 32–256 characters using letters, digits, `_` or `-`; verified against the Telegram header. | `<independent secret>` | yes | no |
 

@@ -244,6 +244,37 @@ func (q *Queue) Claim(ctx context.Context, workerID string) (*Job, error) {
 	return job, nil
 }
 
+// ClaimKind claims one queued job of a specific kind.
+//
+// A service that owns a single job kind (the Telegram bot owns only task
+// notifications) uses this instead of Claim, so it never takes an import or an
+// export away from the worker that is meant to run it.
+func (q *Queue) ClaimKind(ctx context.Context, workerID, kind string) (*Job, error) {
+	const sql = `
+		UPDATE jobs SET
+			status = 'running',
+			attempts = attempts + 1,
+			locked_at = now(),
+			locked_by = $1,
+			started_at = COALESCE(started_at, now())
+		WHERE id = (
+			SELECT id FROM jobs
+			WHERE status = 'queued' AND run_after <= now() AND NOT cancel_requested AND kind = $2
+			ORDER BY priority ASC, run_after ASC
+			FOR UPDATE SKIP LOCKED
+			LIMIT 1
+		)
+		RETURNING ` + jobColumns
+	job, err := scanJob(q.db.Pool().QueryRow(ctx, sql, workerID, kind))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("claim job by kind: %w", err)
+	}
+	return job, nil
+}
+
 // Complete marks a job succeeded and stores its result.
 func (q *Queue) Complete(ctx context.Context, jobID uuid.UUID, result any) error {
 	payload, err := json.Marshal(nonNil(result))

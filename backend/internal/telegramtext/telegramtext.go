@@ -128,6 +128,24 @@ const (
 	BtnNotifDueChanged Key = "btn_notif_due_changed"
 	BtnNotifOverdue    Key = "btn_notif_overdue"
 	BtnNotifCompleted  Key = "btn_notif_completed"
+	// CRM lookup commands. These make the bot useful for reading the CRM, not
+	// only for managing the caller's own tasks.
+	KeySearchUsage    Key = "search_usage"
+	KeySearchHeader   Key = "search_header"
+	KeySearchEmpty    Key = "search_empty"
+	KeyDealsHeader    Key = "deals_header"
+	KeyDealsEmpty     Key = "deals_empty"
+	KeyDealLine       Key = "deal_line"
+	KeyPipelineHeader Key = "pipeline_header"
+	KeyPipelineEmpty  Key = "pipeline_empty"
+	KeyPipelineLine   Key = "pipeline_line"
+	KeyUsageSearch    Key = "usage_search"
+	KeyUsageDeals     Key = "usage_deals"
+	KeyUsagePipeline  Key = "usage_pipeline"
+	// Menu button labels for the CRM commands.
+	BtnSearch   Key = "btn_search"
+	BtnDeals    Key = "btn_deals"
+	BtnPipeline Key = "btn_pipeline"
 )
 
 // Catalog maps a key to its translation per locale.

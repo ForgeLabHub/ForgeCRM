@@ -82,7 +82,11 @@ RUN set -eu; \
     && CGO_ENABLED=0 GOOS=linux go build \
         -trimpath \
         -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${revision}" \
-        -o /out/forgecrm-worker ./cmd/forgecrm-worker
+        -o /out/forgecrm-worker ./cmd/forgecrm-worker \
+    && CGO_ENABLED=0 GOOS=linux go build \
+        -trimpath \
+        -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${revision}" \
+        -o /out/forgecrm-telegram ./cmd/forgecrm-telegram
 
 # ---------------------------------------------------------------------------
 # Stage 4: minimal runtime image, non-root, no shell.
@@ -101,12 +105,13 @@ RUN mkdir -p /var/lib/forgecrm/imports /var/lib/forgecrm/tmp /app/public \
 
 COPY --from=build /out/forgecrm-api /usr/local/bin/forgecrm-api
 COPY --from=build /out/forgecrm-worker /usr/local/bin/forgecrm-worker
+COPY --from=build /out/forgecrm-telegram /usr/local/bin/forgecrm-telegram
 COPY --from=frontend /web/dist /app/public
 
-# The entrypoint chooses the binary. One image holds both, and a platform that
-# sets its "docker command" to the worker path appends it to the entrypoint
-# rather than replacing it, so the dispatcher turns that into the worker instead
-# of a second API process. See deploy/entrypoint.sh.
+# The entrypoint chooses the binary. One image holds all three, and a platform
+# that sets its "docker command" to the worker or bot path appends it to the
+# entrypoint rather than replacing it, so the dispatcher turns that into the
+# right process instead of a second API. See deploy/entrypoint.sh.
 COPY deploy/entrypoint.sh /usr/local/bin/forgecrm-entrypoint
 RUN chmod 0755 /usr/local/bin/forgecrm-entrypoint
 

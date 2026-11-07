@@ -17,6 +17,9 @@ var english = map[Key]string{
 		"What I can do:\n" +
 		"• /tasks — your open tasks\n" +
 		"• /overdue — your overdue tasks\n" +
+		"• /deals [open|won|lost] — recent deals\n" +
+		"• /pipeline [name] — open pipeline by stage\n" +
+		"• /search <term> — search accounts, contacts, leads, deals, tickets\n" +
 		"• /profile — your linked account\n" +
 		"• /notifications — your recent notifications\n" +
 		"• /settings — choose which notifications you get\n" +
@@ -83,4 +86,19 @@ var english = map[Key]string{
 	BtnNotifDueChanged:    "Due date changed",
 	BtnNotifOverdue:       "Overdue",
 	BtnNotifCompleted:     "Completed",
+	KeySearchUsage:        "Send /search <term> — at least 2 characters — to look across accounts, contacts, leads, deals and tickets you can read.",
+	KeySearchHeader:       "Search results:",
+	KeySearchEmpty:        "Nothing matched that search.",
+	KeyDealsHeader:        "Deals matching “%s”:",
+	KeyDealsEmpty:         "No deals matched that filter.",
+	KeyDealLine:           "%s — %s %s",
+	KeyPipelineHeader:     "%s (open pipeline):",
+	KeyPipelineEmpty:      "No open deals in this pipeline.",
+	KeyPipelineLine:       "%s: %d · %s",
+	KeyUsageSearch:        "Usage: /search <term>",
+	KeyUsageDeals:         "Usage: /deals [status] (open, won, lost)",
+	KeyUsagePipeline:      "Usage: /pipeline [name]",
+	BtnSearch:             "🔎 Search",
+	BtnDeals:              "💼 Deals",
+	BtnPipeline:           "📈 Pipeline",
 }
