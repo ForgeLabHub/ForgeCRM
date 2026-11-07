@@ -1,0 +1,48 @@
+name: workflow
+version: 1.0.0
+purpose: >-
+  Package workflow implements the workflow automation engine.
+language: go
+runtime: library
+entry_points: []
+public_api:
+  - func RegisterKnownEvents
+  - func ValidateCatalog
+  - func ParseCron
+  - type Condition
+  - type Config
+  - type CreateInput
+  - type Definition
+  - type Engine
+  - type EvalContext
+  - type ExportDocument
+  - type OrgDefaults
+  - type Run
+  - type RunResult
+  - type Step
+  - type StepRun
+  - type Store
+  - type Template
+  - type TemplateRef
+  - type Workflow
+depends_on:
+  - audit
+  - crm
+  - database
+  - httpx
+  - logging
+  - outbox
+  - rbac
+external_deps:
+  - github.com/google/uuid
+  - github.com/jackc/pgx/v5
+requires_env: []
+database:
+  tables: []            # владение данными — логическое, см. audit/DEPENDENCY_MAP.md
+  migrations: []        # общие встроенные миграции internal/migrations
+events:
+  emits: []
+  consumes: []
+api: []                 # HTTP-маршруты объявлены в internal/api (композиция)
+portable: true          # доказано scripts/extract-test
+extract_status: verified

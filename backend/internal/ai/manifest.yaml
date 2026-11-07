@@ -1,0 +1,62 @@
+name: ai
+version: 1.0.0
+purpose: >-
+  Package ai implements the AI layer and the MCP tool surface.
+language: go
+runtime: library
+entry_points: []
+public_api:
+  - func AssembleSystemPrompt
+  - func DeniedToolNames
+  - func HTTPErrorFrom
+  - func RiskTier
+  - type AgentExecutor
+  - type AssistRequest
+  - type CompletionRequest
+  - type CompletionResponse
+  - type Confidence
+  - type ContextBlock
+  - type DeltaFunc
+  - type Disclosure
+  - type Draft
+  - type EntityType
+  - type Fact
+  - type Insight
+  - type Kind
+  - type MCPServer
+  - type Message
+  - type OllamaProvider
+  - type OpenAICompatibleProvider
+  - type PromptInput
+  - type Provider
+  - type RPCError
+  - type Request
+  - type Response
+  - type Service
+  - type StreamProvider
+  - type Tool
+  - type ToolDescriptor
+  - type ToolRegistry
+  - type Trust
+depends_on:
+  - agent
+  - audit
+  - config
+  - crm
+  - database
+  - httpx
+  - logging
+  - ratelimit
+  - rbac
+external_deps:
+  - github.com/google/uuid
+requires_env: []
+database:
+  tables: []            # владение данными — логическое, см. audit/DEPENDENCY_MAP.md
+  migrations: []        # общие встроенные миграции internal/migrations
+events:
+  emits: []
+  consumes: []
+api: []                 # HTTP-маршруты объявлены в internal/api (композиция)
+portable: true          # доказано scripts/extract-test
+extract_status: verified

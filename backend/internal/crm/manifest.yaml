@@ -1,0 +1,71 @@
+name: crm
+version: 1.0.0
+purpose: >-
+  Package crm implements the CRM domain: accounts, contacts, leads, pipelines, deals, tasks, activities, tickets, tags, comments, custom fields, search and reports.
+language: go
+runtime: library
+entry_points: []
+public_api:
+  - func ObjectScopeFilter
+  - type Account
+  - type AccountInput
+  - type AccountObservationData
+  - type Activity
+  - type ActivityInput
+  - type BaselineData
+  - type BaselineInput
+  - type BulkArchiveFailure
+  - type BulkArchiveInput
+  - type BulkArchiveResult
+  - type Comment
+  - type Contact
+  - type ContactInput
+  - type CustomFieldDefinition
+  - type Deal
+  - type DealInput
+  - type DealObservationData
+  - type JSONMap
+  - type Lead
+  - type LeadInput
+  - type ListQuery
+  - type MonthlyRevenuePoint
+  - type Notification
+  - type OrgDefaults
+  - type PeriodConversion
+  - type Pipeline
+  - type PipelineReport
+  - type PipelineStage
+  - type PipelineStageStat
+  - type RevenueHistory
+  - type RevenueHistoryInput
+  - type RiskObservationSet
+  - type SalesSummaryReport
+  - type SearchResult
+  - type Service
+  - type StageBaseline
+  - type SupportSummaryReport
+  - type Tag
+  - type Task
+  - type TaskInput
+  - type TaskObservationData
+  - type Ticket
+  - type TicketInput
+depends_on:
+  - audit
+  - database
+  - httpx
+  - outbox
+  - rbac
+external_deps:
+  - github.com/google/uuid
+  - github.com/jackc/pgx/v5
+requires_env: []
+database:
+  tables: []            # владение данными — логическое, см. audit/DEPENDENCY_MAP.md
+  migrations: []        # общие встроенные миграции internal/migrations
+events:
+  emits: []
+  consumes: []
+api: []                 # HTTP-маршруты объявлены в internal/api (композиция)
+portable: true          # доказано scripts/extract-test
+extract_status: verified

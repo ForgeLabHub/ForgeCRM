@@ -1,0 +1,37 @@
+name: authn
+version: 1.0.0
+purpose: >-
+  Package authn implements authentication: password login, opaque sessions, CSRF, TOTP MFA, account lockout and password reset.
+language: go
+runtime: library
+entry_points: []
+public_api:
+  - func CorrelationContext
+  - func ValidatePassword
+  - type LoginRequest
+  - type LoginResult
+  - type Service
+  - type Session
+  - type User
+depends_on:
+  - audit
+  - config
+  - database
+  - logging
+  - rbac
+  - secrets
+external_deps:
+  - github.com/google/uuid
+  - github.com/jackc/pgx/v5
+  - github.com/pquerna/otp
+  - github.com/pquerna/otp/totp
+requires_env: []
+database:
+  tables: []            # владение данными — логическое, см. audit/DEPENDENCY_MAP.md
+  migrations: []        # общие встроенные миграции internal/migrations
+events:
+  emits: []
+  consumes: []
+api: []                 # HTTP-маршруты объявлены в internal/api (композиция)
+portable: true          # доказано scripts/extract-test
+extract_status: verified

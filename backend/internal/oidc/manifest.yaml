@@ -1,0 +1,41 @@
+name: oidc
+version: 1.0.0
+purpose: >-
+  Package oidc implements corporate single sign-on over OpenID Connect.
+language: go
+runtime: library
+entry_points: []
+public_api:
+  - func IsBindingConflict
+  - func IsBindingError
+  - func IsNoAccount
+  - func SafeReturnTo
+  - type BindingError
+  - type Identity
+  - type LinkedIdentity
+  - type Provider
+  - type ProviderInput
+  - type ProviderScope
+  - type PublicProvider
+  - type Service
+depends_on:
+  - audit
+  - config
+  - database
+  - secrets
+external_deps:
+  - github.com/coreos/go-oidc/v3/oidc
+  - github.com/google/uuid
+  - github.com/jackc/pgx/v5
+  - github.com/jackc/pgx/v5/pgconn
+  - golang.org/x/oauth2
+requires_env: []
+database:
+  tables: []            # владение данными — логическое, см. audit/DEPENDENCY_MAP.md
+  migrations: []        # общие встроенные миграции internal/migrations
+events:
+  emits: []
+  consumes: []
+api: []                 # HTTP-маршруты объявлены в internal/api (композиция)
+portable: true          # доказано scripts/extract-test
+extract_status: verified

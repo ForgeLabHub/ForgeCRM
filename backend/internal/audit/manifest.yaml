@@ -1,0 +1,30 @@
+name: audit
+version: 1.0.0
+purpose: >-
+  Package audit records user actions and security events.
+language: go
+runtime: library
+entry_points: []
+public_api:
+  - func StrPtr
+  - func UUIDPtr
+  - type Action
+  - type Entry
+  - type Logger
+  - type SecurityEvent
+  - type VerificationResult
+depends_on:
+  - database
+  - logging
+external_deps:
+  - github.com/google/uuid
+requires_env: []
+database:
+  tables: []            # владение данными — логическое, см. audit/DEPENDENCY_MAP.md
+  migrations: []        # общие встроенные миграции internal/migrations
+events:
+  emits: []
+  consumes: []
+api: []                 # HTTP-маршруты объявлены в internal/api (композиция)
+portable: true          # доказано scripts/extract-test
+extract_status: verified

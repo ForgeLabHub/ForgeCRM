@@ -1,0 +1,28 @@
+name: outbox
+version: 1.0.0
+purpose: >-
+  Package outbox implements the transactional outbox pattern.
+language: go
+runtime: library
+entry_points: []
+public_api:
+  - func EventTypes
+  - type Envelope
+  - type Event
+  - type Store
+depends_on:
+  - database
+  - logging
+external_deps:
+  - github.com/google/uuid
+  - github.com/jackc/pgx/v5
+requires_env: []
+database:
+  tables: []            # владение данными — логическое, см. audit/DEPENDENCY_MAP.md
+  migrations: []        # общие встроенные миграции internal/migrations
+events:
+  emits: []
+  consumes: []
+api: []                 # HTTP-маршруты объявлены в internal/api (композиция)
+portable: true          # доказано scripts/extract-test
+extract_status: verified

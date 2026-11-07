@@ -1,0 +1,42 @@
+name: migratex
+version: 1.0.0
+purpose: >-
+  Package migratex implements data migration from external systems.
+language: go
+runtime: library
+entry_points: []
+public_api:
+  - func Implemented
+  - func ImplementedSources
+  - type ColumnInfo
+  - type ConnectionConfig
+  - type CreateRequest
+  - type JSONMap
+  - type MigrationJob
+  - type Reconciliation
+  - type Service
+  - type Source
+  - type SourceKind
+  - type TableSchema
+depends_on:
+  - audit
+  - database
+  - httpx
+  - integrations
+  - rbac
+  - secrets
+external_deps:
+  - github.com/go-sql-driver/mysql
+  - github.com/google/uuid
+  - github.com/jackc/pgx/v5
+  - modernc.org/sqlite
+requires_env: []
+database:
+  tables: []            # владение данными — логическое, см. audit/DEPENDENCY_MAP.md
+  migrations: []        # общие встроенные миграции internal/migrations
+events:
+  emits: []
+  consumes: []
+api: []                 # HTTP-маршруты объявлены в internal/api (композиция)
+portable: true          # доказано scripts/extract-test
+extract_status: verified

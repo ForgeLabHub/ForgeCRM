@@ -1,0 +1,23 @@
+name: netguard
+version: 1.0.0
+purpose: >-
+  Package netguard holds the outbound-destination guard shared by every part of ForgeCRM that opens a connection to an operator- or user-supplied address: the Integration Hub, the outbound webhook sender, the migration connectors and the S3-compatible object store.
+language: go
+runtime: library
+entry_points: []
+public_api:
+  - func IsBlockedIP
+  - func ValidateOutboundURL
+  - type GuardedClient
+depends_on: []
+external_deps: []
+requires_env: []
+database:
+  tables: []            # владение данными — логическое, см. audit/DEPENDENCY_MAP.md
+  migrations: []        # общие встроенные миграции internal/migrations
+events:
+  emits: []
+  consumes: []
+api: []                 # HTTP-маршруты объявлены в internal/api (композиция)
+portable: true          # доказано scripts/extract-test
+extract_status: verified

@@ -1,0 +1,26 @@
+name: constructor
+version: 1.0.0
+purpose: >-
+  Package constructor turns a recipe into a standalone Go project.
+language: go
+runtime: library
+entry_points: []
+public_api:
+  - type EnvVar
+  - type File
+  - type Options
+  - type Recipe
+  - type Result
+depends_on: []
+external_deps:
+  - go.yaml.in/yaml/v3
+requires_env: []
+database:
+  tables: []            # владение данными — логическое, см. audit/DEPENDENCY_MAP.md
+  migrations: []        # общие встроенные миграции internal/migrations
+events:
+  emits: []
+  consumes: []
+api: []                 # HTTP-маршруты объявлены в internal/api (композиция)
+portable: true          # доказано scripts/extract-test
+extract_status: verified

@@ -1,0 +1,38 @@
+name: agent
+version: 1.0.0
+purpose: >-
+  Package agent implements the human-in-the-loop execution model described in ADR 0005.
+language: go
+runtime: library
+entry_points: []
+public_api:
+  - func ArgumentsHash
+  - func CanonicalArguments
+  - type Action
+  - type Approval
+  - type Config
+  - type Decider
+  - type Decision
+  - type ExecutionFunc
+  - type Executor
+  - type Proposal
+  - type RiskTier
+  - type Run
+  - type Service
+depends_on:
+  - audit
+  - database
+  - httpx
+external_deps:
+  - github.com/google/uuid
+  - github.com/jackc/pgx/v5
+requires_env: []
+database:
+  tables: []            # владение данными — логическое, см. audit/DEPENDENCY_MAP.md
+  migrations: []        # общие встроенные миграции internal/migrations
+events:
+  emits: []
+  consumes: []
+api: []                 # HTTP-маршруты объявлены в internal/api (композиция)
+portable: true          # доказано scripts/extract-test
+extract_status: verified

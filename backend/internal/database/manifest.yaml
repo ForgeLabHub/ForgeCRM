@@ -1,0 +1,32 @@
+name: database
+version: 1.0.0
+purpose: >-
+  Package database manages the PostgreSQL connection pool and transactions.
+language: go
+runtime: library
+entry_points: []
+public_api:
+  - func IsCheckViolation
+  - func IsForeignKeyViolation
+  - func IsNoRows
+  - func IsUniqueViolation
+  - func RedactDSN
+  - func WithTx
+  - type DB
+  - type Querier
+  - type Tx
+depends_on: []
+external_deps:
+  - github.com/jackc/pgx/v5
+  - github.com/jackc/pgx/v5/pgconn
+  - github.com/jackc/pgx/v5/pgxpool
+requires_env: []
+database:
+  tables: []            # владение данными — логическое, см. audit/DEPENDENCY_MAP.md
+  migrations: []        # общие встроенные миграции internal/migrations
+events:
+  emits: []
+  consumes: []
+api: []                 # HTTP-маршруты объявлены в internal/api (композиция)
+portable: true          # доказано scripts/extract-test
+extract_status: verified

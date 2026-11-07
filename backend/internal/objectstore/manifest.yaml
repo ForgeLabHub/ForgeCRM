@@ -1,0 +1,34 @@
+name: objectstore
+version: 1.0.0
+purpose: >-
+  Package objectstore is the object-storage layer of ForgeCRM, on its own.
+language: go
+runtime: library
+entry_points: []
+public_api:
+  - func IsAllowedContentType
+  - func IsSafeExtension
+  - func NormaliseContentType
+  - func ObjectKey
+  - type Memory
+  - type ObjectInfo
+  - type ObjectMeta
+  - type ObjectStore
+  - type S3
+  - type S3Config
+depends_on:
+  - netguard
+external_deps:
+  - github.com/google/uuid
+  - github.com/minio/minio-go/v7
+  - github.com/minio/minio-go/v7/pkg/credentials
+requires_env: []
+database:
+  tables: []            # владение данными — логическое, см. audit/DEPENDENCY_MAP.md
+  migrations: []        # общие встроенные миграции internal/migrations
+events:
+  emits: []
+  consumes: []
+api: []                 # HTTP-маршруты объявлены в internal/api (композиция)
+portable: true          # доказано scripts/extract-test
+extract_status: verified

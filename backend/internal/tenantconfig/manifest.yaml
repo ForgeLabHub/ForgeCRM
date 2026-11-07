@@ -1,0 +1,31 @@
+name: tenantconfig
+version: 1.0.0
+purpose: >-
+  Package tenantconfig stores an organization's own configuration: the defaults it chooses for itself, layered over the ones the platform ships.
+language: go
+runtime: library
+entry_points: []
+public_api:
+  - func Keys
+  - type Definition
+  - type Kind
+  - type Revision
+  - type Service
+  - type Setting
+  - type ValidationError
+depends_on:
+  - audit
+  - database
+  - rbac
+external_deps:
+  - github.com/google/uuid
+requires_env: []
+database:
+  tables: []            # владение данными — логическое, см. audit/DEPENDENCY_MAP.md
+  migrations: []        # общие встроенные миграции internal/migrations
+events:
+  emits: []
+  consumes: []
+api: []                 # HTTP-маршруты объявлены в internal/api (композиция)
+portable: true          # доказано scripts/extract-test
+extract_status: verified

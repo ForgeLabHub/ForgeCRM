@@ -1,0 +1,50 @@
+name: analytics
+version: 1.0.0
+purpose: >-
+  Package analytics is the pure calculation core of the intelligence platform.
+language: go
+runtime: library
+entry_points: []
+public_api:
+  - func FloatPercent
+  - func PercentString
+  - func SortPeriods
+  - func SortSignals
+  - type AccountObservation
+  - type Baseline
+  - type Comparison
+  - type ConversionPeriodObservation
+  - type DealObservation
+  - type Evidence
+  - type Forecast
+  - type ForecastMethod
+  - type ForecastParams
+  - type ForecastPoint
+  - type ForecastQuality
+  - type FunnelParams
+  - type Kind
+  - type Metric
+  - type Money
+  - type PeriodPoint
+  - type Ratio
+  - type RetentionParams
+  - type RevenueParams
+  - type RiskSeverity
+  - type RiskSignal
+  - type RiskSignalType
+  - type RiskThresholds
+  - type StageSnapshot
+  - type TaskObservation
+  - type Unit
+depends_on: []
+external_deps: []
+requires_env: []
+database:
+  tables: []            # владение данными — логическое, см. audit/DEPENDENCY_MAP.md
+  migrations: []        # общие встроенные миграции internal/migrations
+events:
+  emits: []
+  consumes: []
+api: []                 # HTTP-маршруты объявлены в internal/api (композиция)
+portable: true          # доказано scripts/extract-test
+extract_status: verified

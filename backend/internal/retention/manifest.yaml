@@ -1,0 +1,27 @@
+name: retention
+version: 1.0.0
+purpose: >-
+  Package retention prunes records past a configured retention window.
+language: go
+runtime: library
+entry_points: []
+public_api:
+  - func ValidateWindows
+  - type Options
+  - type Policy
+  - type Result
+  - type Runner
+depends_on:
+  - audit
+  - database
+external_deps: []
+requires_env: []
+database:
+  tables: []            # владение данными — логическое, см. audit/DEPENDENCY_MAP.md
+  migrations: []        # общие встроенные миграции internal/migrations
+events:
+  emits: []
+  consumes: []
+api: []                 # HTTP-маршруты объявлены в internal/api (композиция)
+portable: true          # доказано scripts/extract-test
+extract_status: verified

@@ -1,0 +1,41 @@
+name: events
+version: 1.0.0
+purpose: >-
+  Package events implements the inbound event gateway and outbound webhooks.
+language: go
+runtime: library
+entry_points: []
+public_api:
+  - func CorrelationIDFrom
+  - func SignInboundForTest
+  - type CreateSubscriptionRequest
+  - type Delivery
+  - type DeliverySender
+  - type Dispatcher
+  - type Gateway
+  - type InboundEvent
+  - type Poster
+  - type Subscription
+depends_on:
+  - audit
+  - database
+  - httpx
+  - integrations
+  - logging
+  - outbox
+  - rbac
+  - secrets
+  - tracectx
+external_deps:
+  - github.com/google/uuid
+  - github.com/jackc/pgx/v5
+requires_env: []
+database:
+  tables: []            # владение данными — логическое, см. audit/DEPENDENCY_MAP.md
+  migrations: []        # общие встроенные миграции internal/migrations
+events:
+  emits: []
+  consumes: []
+api: []                 # HTTP-маршруты объявлены в internal/api (композиция)
+portable: true          # доказано scripts/extract-test
+extract_status: verified

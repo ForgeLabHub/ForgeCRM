@@ -1,0 +1,38 @@
+name: storage
+version: 1.0.0
+purpose: >-
+  Package storage implements CRM file attachments on an S3-compatible object store.
+language: go
+runtime: library
+entry_points: []
+public_api:
+  - type Config
+  - type Document
+  - type Memory
+  - type ObjectInfo
+  - type ObjectMeta
+  - type ObjectStore
+  - type ReconcileReport
+  - type S3
+  - type S3Config
+  - type Service
+  - type UploadInput
+depends_on:
+  - audit
+  - database
+  - httpx
+  - objectstore
+  - rbac
+external_deps:
+  - github.com/google/uuid
+  - github.com/jackc/pgx/v5
+requires_env: []
+database:
+  tables: []            # владение данными — логическое, см. audit/DEPENDENCY_MAP.md
+  migrations: []        # общие встроенные миграции internal/migrations
+events:
+  emits: []
+  consumes: []
+api: []                 # HTTP-маршруты объявлены в internal/api (композиция)
+portable: true          # доказано scripts/extract-test
+extract_status: verified

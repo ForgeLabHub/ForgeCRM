@@ -1,0 +1,20 @@
+name: migrations
+version: 1.0.0
+purpose: >-
+  Package migrations embeds the SQL migration files.
+language: go
+runtime: library
+entry_points: []
+public_api: []
+depends_on: []
+external_deps: []
+requires_env: []
+database:
+  tables: []            # владение данными — логическое, см. audit/DEPENDENCY_MAP.md
+  migrations: []        # общие встроенные миграции internal/migrations
+events:
+  emits: []
+  consumes: []
+api: []                 # HTTP-маршруты объявлены в internal/api (композиция)
+portable: true          # доказано scripts/extract-test
+extract_status: verified

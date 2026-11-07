@@ -1,0 +1,53 @@
+name: httpx
+version: 1.0.0
+purpose: >-
+  Package httpx provides HTTP plumbing shared by every handler: a uniform error envelope, JSON helpers, pagination, correlation IDs, rate limiting and security headers.
+language: go
+runtime: library
+entry_points: []
+public_api:
+  - func AccessLogMiddleware
+  - func ClientIP
+  - func ClientIPFrom
+  - func ClientIPMiddleware
+  - func DecodeJSON
+  - func OutboundTraceHeader
+  - func PathParam
+  - func RateLimitMiddleware
+  - func RecoverMiddleware
+  - func RequestID
+  - func RequestIDMiddleware
+  - func SecurityHeadersMiddleware
+  - func SecurityHeadersMiddlewareWithOptions
+  - func TraceMiddleware
+  - func WriteError
+  - func WriteJSON
+  - func WriteJSONList
+  - func WriteJSONStatus
+  - func WriteRateLimitHeaders
+  - type APIError
+  - type ErrorCode
+  - type ListResponse
+  - type Pagination
+  - type RateLimitOptions
+  - type SecurityHeadersOptions
+  - type SortSpec
+  - type SubjectFunc
+  - type TrustedProxies
+depends_on:
+  - logging
+  - ratelimit
+  - tracectx
+external_deps:
+  - github.com/go-chi/chi/v5
+  - github.com/google/uuid
+requires_env: []
+database:
+  tables: []            # владение данными — логическое, см. audit/DEPENDENCY_MAP.md
+  migrations: []        # общие встроенные миграции internal/migrations
+events:
+  emits: []
+  consumes: []
+api: []                 # HTTP-маршруты объявлены в internal/api (композиция)
+portable: true          # доказано scripts/extract-test
+extract_status: verified

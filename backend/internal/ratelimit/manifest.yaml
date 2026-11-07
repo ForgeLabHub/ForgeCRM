@@ -1,0 +1,29 @@
+name: ratelimit
+version: 1.0.0
+purpose: >-
+  Package ratelimit holds the shared state a request limiter needs when more than one API replica serves traffic.
+language: go
+runtime: library
+entry_points: []
+public_api:
+  - type Decision
+  - type FailMode
+  - type Limiter
+  - type MemoryStore
+  - type Policy
+  - type RedisOptions
+  - type RedisStore
+  - type Store
+depends_on: []
+external_deps:
+  - github.com/redis/go-redis/v9
+requires_env: []
+database:
+  tables: []            # владение данными — логическое, см. audit/DEPENDENCY_MAP.md
+  migrations: []        # общие встроенные миграции internal/migrations
+events:
+  emits: []
+  consumes: []
+api: []                 # HTTP-маршруты объявлены в internal/api (композиция)
+portable: true          # доказано scripts/extract-test
+extract_status: verified

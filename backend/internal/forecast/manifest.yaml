@@ -1,0 +1,30 @@
+name: forecast
+version: 1.0.0
+purpose: >-
+  Package forecast implements the Forecasting half of the Forecasting & Risk Lab: computing a revenue forecast from the organization's observed history and storing it so it can be reviewed and re-run.
+language: go
+runtime: library
+entry_points: []
+public_api:
+  - type CatalogEntry
+  - type Run
+  - type RunInput
+  - type Service
+depends_on:
+  - analytics
+  - audit
+  - crm
+  - database
+  - rbac
+external_deps:
+  - github.com/google/uuid
+requires_env: []
+database:
+  tables: []            # владение данными — логическое, см. audit/DEPENDENCY_MAP.md
+  migrations: []        # общие встроенные миграции internal/migrations
+events:
+  emits: []
+  consumes: []
+api: []                 # HTTP-маршруты объявлены в internal/api (композиция)
+portable: true          # доказано scripts/extract-test
+extract_status: verified

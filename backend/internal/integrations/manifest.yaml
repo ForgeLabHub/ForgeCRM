@@ -1,0 +1,43 @@
+name: integrations
+version: 1.0.0
+purpose: >-
+  Модуль ForgeCRM (документация пакета не задана в коде).
+language: go
+runtime: library
+entry_points: []
+public_api:
+  - func IsBlockedIP
+  - func ValidateOutboundURL
+  - type Adapter
+  - type Column
+  - type CreateRequest
+  - type GuardedClient
+  - type Hub
+  - type Integration
+  - type ReadRequest
+  - type Record
+  - type Run
+  - type Schema
+  - type Status
+  - type Table
+  - type WriteResult
+depends_on:
+  - audit
+  - database
+  - httpx
+  - netguard
+  - rbac
+  - secrets
+external_deps:
+  - github.com/google/uuid
+  - github.com/jackc/pgx/v5
+requires_env: []
+database:
+  tables: []            # владение данными — логическое, см. audit/DEPENDENCY_MAP.md
+  migrations: []        # общие встроенные миграции internal/migrations
+events:
+  emits: []
+  consumes: []
+api: []                 # HTTP-маршруты объявлены в internal/api (композиция)
+portable: true          # доказано scripts/extract-test
+extract_status: verified

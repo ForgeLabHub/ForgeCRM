@@ -179,6 +179,14 @@ if ! ./scripts/check-doc-claims.sh; then
   failures=$((failures + 1))
 fi
 
+printf '\nМетаданные переносимости модулей\n'
+# Каждый модуль, который харнесс извлечения поднимает из монолита, обязан нести
+# manifest.yaml и MODULE.md. Проверка живёт в отдельном скрипте, чтобы её можно
+# было запускать и в одиночку; здесь она подключается к общему прогону.
+if ! ./scripts/module-docs-check.sh; then
+  failures=$((failures + 1))
+fi
+
 printf '\n'
 if [ "$failures" -gt 0 ]; then printf '\033[31m%d проблем в документации\033[0m\n' "$failures"; exit 1; fi
 printf '\033[32mДокументация согласована\033[0m\n'

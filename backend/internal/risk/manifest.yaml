@@ -1,0 +1,31 @@
+name: risk
+version: 1.0.0
+purpose: >-
+  Package risk implements the Risk half of the Forecasting & Risk Lab: scanning the organization's CRM for explainable risk conditions and keeping the signals an operator works through.
+language: go
+runtime: library
+entry_points: []
+public_api:
+  - type ListFilter
+  - type ScanResult
+  - type Service
+  - type Signal
+  - type Thresholds
+depends_on:
+  - analytics
+  - audit
+  - crm
+  - database
+  - rbac
+external_deps:
+  - github.com/google/uuid
+requires_env: []
+database:
+  tables: []            # владение данными — логическое, см. audit/DEPENDENCY_MAP.md
+  migrations: []        # общие встроенные миграции internal/migrations
+events:
+  emits: []
+  consumes: []
+api: []                 # HTTP-маршруты объявлены в internal/api (композиция)
+portable: true          # доказано scripts/extract-test
+extract_status: verified

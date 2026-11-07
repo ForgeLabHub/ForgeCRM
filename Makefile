@@ -44,7 +44,7 @@ COMPOSE_UP_ARGS ?=
         test test-unit test-frontend test-integration test-bench test-e2e test-visual \
         migrate migrate-status compose-up compose-down compose-logs smoke-test \
         blitz-verify \
-        backup restore docs-check docs-claims verify clean package
+        backup restore docs-check docs-claims module-docs-check verify clean package
 
 help: ## Показать список целей
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -122,6 +122,9 @@ facts-check: ## Убедиться, что project-facts.md не разошёл�
 
 docs-check: ## Проверить структуру документации, ссылки и матрицу проверок
 	@./scripts/docs-check.sh
+
+module-docs-check: ## Проверить, что у каждого извлекаемого модуля есть manifest.yaml и MODULE.md
+	@./scripts/module-docs-check.sh
 
 docs-claims: ## Проверить, что числа и статусы в документации совпадают с кодом
 	@./scripts/check-doc-claims.sh

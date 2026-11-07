@@ -1,0 +1,30 @@
+name: views
+version: 1.0.0
+purpose: >-
+  Package views implements saved list views: named, reusable filter/sort/column selections for the CRM list screens.
+language: go
+runtime: library
+entry_points: []
+public_api:
+  - type EntityType
+  - type FilterSet
+  - type Input
+  - type Service
+  - type ValidationError
+  - type View
+depends_on:
+  - audit
+  - database
+  - rbac
+external_deps:
+  - github.com/google/uuid
+requires_env: []
+database:
+  tables: []            # владение данными — логическое, см. audit/DEPENDENCY_MAP.md
+  migrations: []        # общие встроенные миграции internal/migrations
+events:
+  emits: []
+  consumes: []
+api: []                 # HTTP-маршруты объявлены в internal/api (композиция)
+portable: true          # доказано scripts/extract-test
+extract_status: verified

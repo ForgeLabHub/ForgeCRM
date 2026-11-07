@@ -1,0 +1,45 @@
+name: importx
+version: 1.0.0
+purpose: >-
+  Package importx implements the Data Import & Migration Center.
+language: go
+runtime: library
+entry_points: []
+public_api:
+  - func FieldList
+  - type AnalysisResult
+  - type CreateRequest
+  - type Job
+  - type JobPayload
+  - type MappingEntry
+  - type Options
+  - type ReclaimReport
+  - type Report
+  - type RowError
+  - type Service
+  - type ValidationIssue
+  - type ValidationReport
+depends_on:
+  - audit
+  - config
+  - crm
+  - database
+  - httpx
+  - jobs
+  - outbox
+  - parsers
+  - rbac
+  - safe
+external_deps:
+  - github.com/google/uuid
+  - github.com/jackc/pgx/v5
+requires_env: []
+database:
+  tables: []            # владение данными — логическое, см. audit/DEPENDENCY_MAP.md
+  migrations: []        # общие встроенные миграции internal/migrations
+events:
+  emits: []
+  consumes: []
+api: []                 # HTTP-маршруты объявлены в internal/api (композиция)
+portable: true          # доказано scripts/extract-test
+extract_status: verified

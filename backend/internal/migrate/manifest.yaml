@@ -1,0 +1,36 @@
+name: migrate
+version: 1.0.0
+purpose: >-
+  Package migrate runs embedded SQL migrations and reports schema readiness.
+language: go
+runtime: library
+entry_points: []
+public_api:
+  - func Check
+  - func Down
+  - func ExpectedVersion
+  - func IsSchemaNotReady
+  - func Up
+  - func WaitForSchema
+  - type Queryer
+  - type SchemaBehindError
+  - type SchemaDirtyError
+  - type SchemaNotReadyError
+  - type State
+depends_on:
+  - migrations
+external_deps:
+  - github.com/golang-migrate/migrate/v4
+  - github.com/golang-migrate/migrate/v4/database/postgres
+  - github.com/golang-migrate/migrate/v4/source/iofs
+  - github.com/jackc/pgx/v5
+requires_env: []
+database:
+  tables: []            # владение данными — логическое, см. audit/DEPENDENCY_MAP.md
+  migrations: []        # общие встроенные миграции internal/migrations
+events:
+  emits: []
+  consumes: []
+api: []                 # HTTP-маршруты объявлены в internal/api (композиция)
+portable: true          # доказано scripts/extract-test
+extract_status: verified
