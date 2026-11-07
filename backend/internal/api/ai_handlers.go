@@ -28,13 +28,32 @@ func (s *Server) handleAIStatus(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, s.deps.AI.Status(r.Context()))
 }
 
+// aiProviderCatalog describes the provider kinds the platform can be configured
+// with, keyed by the value FORGECRM_AI_PROVIDER takes. The list is the same set
+// config.Validate accepts, so the endpoint cannot advertise a kind the config
+// layer rejects or hide one it accepts. "none" is a valid setting but not a
+// provider, so it is absent here.
+var aiProviderCatalog = []struct {
+	Name        string
+	Description string
+	RequiresKey bool
+}{
+	{"ollama", "A local model served by Ollama", false},
+	{"openai", "OpenAI's hosted chat completions API", true},
+	{"openai_compatible", "Any OpenAI-compatible chat completions API", true},
+	{"openrouter", "OpenRouter's hosted gateway to many models", true},
+}
+
 // handleAIProviders lists the provider kinds the platform can be configured with.
 func (s *Server) handleAIProviders(w http.ResponseWriter, r *http.Request) {
+	items := make([]map[string]any, 0, len(aiProviderCatalog))
+	for _, p := range aiProviderCatalog {
+		items = append(items, map[string]any{
+			"name": p.Name, "description": p.Description, "requires_api_key": p.RequiresKey,
+		})
+	}
 	httpx.WriteJSON(w, map[string]any{
-		"items": []map[string]any{
-			{"name": "ollama", "description": "A local model served by Ollama", "requires_api_key": false},
-			{"name": "openai_compatible", "description": "Any OpenAI-compatible chat completions API", "requires_api_key": true},
-		},
+		"items":      items,
 		"configured": s.deps.AI.ProviderName(),
 		"note":       "configure a provider with FORGECRM_AI_PROVIDER and the matching settings; no provider is required",
 	})
