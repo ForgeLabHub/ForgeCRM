@@ -12,3 +12,15 @@ services:
     env_file: !override
       - path: ${FORGECRM_ENV_FILE:?run with start.sh}
         required: true
+  # The bot is a separate service and shares the API image, so it needs the same
+  # isolated config. Without this override it keeps the base `env_file: .env`,
+  # which start.sh does not create, and the bot exits for a missing database URL.
+  # It is also moved behind a profile: it is inert without a bot token and exits
+  # immediately, and `start.sh` runs `up --wait`, so an always-on bot would make
+  # the local start fail. Blitz reads docker-compose.yml alone, so the part stays
+  # always-on there; only the local stack leaves it out unless asked for.
+  telegram:
+    profiles: ["telegram"]
+    env_file: !override
+      - path: ${FORGECRM_ENV_FILE:?run with start.sh}
+        required: true
