@@ -1,6 +1,7 @@
 # Консолидация Git-веток ForgeCRM в `main`
 
-Дата: 2026-11-07. Итоговый `main`: `b0393c0fdd2f92ca4d9f2ddbf7df77159ae401b1`.
+Дата: 2026-11-07. Консолидация кода завершена на `b0393c0`; финальный tip
+`main` (с этим отчётом) — `23709a1`. Обе точки синхронизированы с `origin/main`.
 
 Статусы: VERIFIED · INTEGRATED · PARTIAL · NOT INTEGRATED · DELETED.
 
