@@ -173,6 +173,50 @@ type AIConfig struct {
 	Title   string
 }
 
+// AI provider kinds accepted by FORGECRM_AI_PROVIDER. The set is closed: a value
+// outside it builds no provider at all, which leaves the subsystem reading as
+// "on" while every call reports the provider unavailable. Validation turns that
+// into a startup error instead.
+const (
+	AIProviderNone             = "none"
+	AIProviderOllama           = "ollama"
+	AIProviderOpenAI           = "openai"
+	AIProviderOpenAICompatible = "openai_compatible"
+	AIProviderOpenRouter       = "openrouter"
+	AIProviderGroq             = "groq"
+)
+
+// aiProviderBaseURLs holds the public endpoint of a hosted provider, so a
+// deployment that names only the provider still reaches it. Ollama is absent on
+// purpose: it is self-hosted, and only the operator knows its address. OpenRouter
+// is absent too: normalizeOpenRouterBaseURL fills its endpoint and also accepts
+// the bare host its documentation shows.
+var aiProviderBaseURLs = map[string]string{
+	AIProviderOpenAI: "https://api.openai.com/v1",
+	AIProviderGroq:   "https://api.groq.com/openai/v1",
+}
+
+// AIProviderKinds is the closed set, in the order the error message lists it. It
+// is exported so the API can publish the same set instead of keeping a second
+// list that drifts: the provider catalog on /ai/providers and the values
+// FORGECRM_AI_PROVIDER accepts are then the same list by construction.
+func AIProviderKinds() []string {
+	return []string{
+		AIProviderNone, AIProviderOllama, AIProviderOpenAI,
+		AIProviderOpenAICompatible, AIProviderOpenRouter, AIProviderGroq,
+	}
+}
+
+// validAIProvider reports whether name is a kind the AI layer can build.
+func validAIProvider(name string) bool {
+	for _, kind := range AIProviderKinds() {
+		if name == kind {
+			return true
+		}
+	}
+	return false
+}
+
 // MCPConfig configures credentials for external MCP clients.
 type MCPConfig struct {
 	// RequestsPerMin bounds tool calls made through one credential, per minute. It is
@@ -513,7 +557,8 @@ func Load() (*Config, error) {
 		// The provider may also be inferred from an OpenRouter key so that a
 		// deployment that only sets OPENROUTER_API_KEY still works without also
 		// spelling out the provider. An explicit FORGECRM_AI_PROVIDER always wins.
-		Provider: env("FORGECRM_AI_PROVIDER", defaultAIProvider()),
+		// The value is normalised so "GROQ " and "Groq" are the same kind.
+		Provider: strings.ToLower(strings.TrimSpace(env("FORGECRM_AI_PROVIDER", defaultAIProvider()))),
 		// Accept the conventional OPENROUTER_/LLM_ names as aliases so a caller can
 		// reuse an OpenRouter snippet verbatim; the FORGECRM_ name takes priority.
 		BaseURL: env("FORGECRM_AI_BASE_URL", env("LLM_BASE_URL", "")),
@@ -528,15 +573,17 @@ func Load() (*Config, error) {
 	if c.AI.Timeout, err = envDuration("FORGECRM_AI_TIMEOUT", 60*time.Second); err != nil {
 		return nil, err
 	}
-	// OpenRouter is OpenAI-compatible but serves the API under /api/v1, unlike the
-	// bare host a caller naturally writes (https://openrouter.ai). Fill in the
-	// versioned path when the caller gave only a host (or nothing), so the
-	// one-line snippet from OpenRouter's docs works unchanged. A caller who spelled
-	// out a path — including /api/v1, or a proxy prefix — is left alone.
-	if c.AI.Provider == "openrouter" {
+	// A hosted provider has one public endpoint, so naming the provider is enough.
+	// An explicit FORGECRM_AI_BASE_URL still wins, which is what points at a
+	// self-hosted gateway that speaks the same protocol. OpenRouter additionally
+	// accepts the bare host its documentation shows, so normalizeOpenRouterBaseURL
+	// runs whether the URL came from the environment or the default table.
+	if c.AI.Provider == AIProviderOpenRouter {
 		c.AI.BaseURL = normalizeOpenRouterBaseURL(c.AI.BaseURL)
+	} else if c.AI.BaseURL == "" {
+		c.AI.BaseURL = aiProviderBaseURLs[c.AI.Provider]
 	}
-	if c.AI.Provider == "none" || c.AI.Provider == "" {
+	if c.AI.Provider == AIProviderNone || c.AI.Provider == "" {
 		c.AI.Enabled = false
 	}
 
@@ -743,16 +790,15 @@ func (c *Config) Validate() error {
 	if c.Email.Enabled && (c.Email.Host == "" || c.Email.From == "") {
 		return fmt.Errorf("SMTP enabled but FORGECRM_SMTP_HOST or FORGECRM_SMTP_FROM is empty")
 	}
+	// The provider kind is a closed set, so an unrecognised value is rejected
+	// rather than falling through to "no provider": the AI layer builds nothing
+	// for an unknown name, yet FORGECRM_AI_ENABLED still reads as on, and the
+	// failure surfaces only as "provider unavailable" on every call.
+	if !validAIProvider(c.AI.Provider) {
+		return fmt.Errorf("FORGECRM_AI_PROVIDER must be one of %s, got %q", strings.Join(AIProviderKinds(), ", "), c.AI.Provider)
+	}
 	if c.AI.Enabled && (c.AI.BaseURL == "" || c.AI.Model == "") {
 		return fmt.Errorf("AI enabled but FORGECRM_AI_BASE_URL or FORGECRM_AI_MODEL is empty")
-	}
-	// An unknown provider is rejected rather than silently ignored. Left unchecked it
-	// would leave the service with no provider and report AI as "off", so a typo in
-	// FORGECRM_AI_PROVIDER would look like AI was never enabled.
-	switch c.AI.Provider {
-	case "none", "", "ollama", "openai", "openai_compatible", "openrouter":
-	default:
-		return fmt.Errorf("FORGECRM_AI_PROVIDER must be one of none, ollama, openai, openai_compatible, openrouter; got %q", c.AI.Provider)
 	}
 	// OpenRouter authenticates with a bearer key. An enabled OpenRouter with no key
 	// would fail on the first request with a 401 from the gateway, which is harder to

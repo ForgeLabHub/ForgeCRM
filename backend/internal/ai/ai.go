@@ -130,12 +130,13 @@ func NewService(cfg *config.AIConfig, db *database.DB, auditLog *audit.Logger, c
 	s := &Service{cfg: cfg, db: db, audit: auditLog, crm: crmSvc, log: log, now: time.Now, limiter: limiter}
 	if cfg != nil && cfg.Enabled {
 		switch cfg.Provider {
-		case "ollama":
+		case config.AIProviderOllama:
 			s.provider = &OllamaProvider{baseURL: cfg.BaseURL, model: cfg.Model, timeout: cfg.Timeout}
-		case "openai", "openai_compatible", "openrouter":
-			// OpenRouter speaks the OpenAI chat-completions protocol, so it shares this
-			// provider. The attribution headers are passed through only when set; the
-			// empty case sends none, which keeps a non-OpenRouter gateway unaffected.
+		case "openai", "openai_compatible", "openrouter", config.AIProviderGroq:
+			// Groq and OpenRouter speak the OpenAI chat-completions protocol, so they
+			// share this provider. The attribution headers are passed through only when
+			// set; the empty case sends none, which keeps a non-OpenRouter gateway
+			// unaffected.
 			name := cfg.Provider
 			if name == "openai" {
 				name = "openai_compatible"

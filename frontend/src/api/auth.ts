@@ -103,6 +103,18 @@ export interface SSOProvidersResponse {
   providers: SSOProvider[]
 }
 
+/** One provider identity an account has deliberately bound to itself. */
+export interface LinkedIdentity {
+  id: string
+  provider_id: string
+  provider_key: string
+  provider_name: string
+  subject: string
+  email?: string
+  created_at: string
+  last_login_at: string
+}
+
 export const ssoApi = {
   /**
    * Lists the providers the sign-in page may offer. Anonymous by design: the
@@ -120,8 +132,31 @@ export const ssoApi = {
     window.location.assign(`/api/v1/auth/oidc/start?${params.toString()}`)
   },
 
-  /** The caller's own linked identities. */
-  identities: () => api.get<ListResponse<Record<string, unknown>>>('/api/v1/auth/identities'),
+  /**
+   * The caller's own linked identities.
+   *
+   * A bare {items} collection, not a paginated ListResponse: the set is small and
+   * bounded, and the handler sends no total/limit/offset.
+   */
+  identities: () => api.get<{ items: LinkedIdentity[] }>('/api/v1/auth/identities'),
+
+  /**
+   * Begins an explicit binding of a provider identity to the signed-in account.
+   *
+   * It is a POST returning the authorization URL rather than a top-level
+   * navigation: the request must carry the session cookie and a CSRF token, so a
+   * third-party page cannot silently bind an attacker's identity to a signed-in
+   * visitor. The caller then navigates to the returned URL.
+   */
+  async link(providerKey: string): Promise<void> {
+    const result = await api.post<{ authorization_url: string }>('/api/v1/auth/identities/link', {
+      provider: providerKey,
+    })
+    window.location.assign(result.authorization_url)
+  },
+
+  /** Removes one of the caller's own provider links. */
+  unlink: (id: string) => api.delete(`/api/v1/auth/identities/${id}`),
 }
 
 export const usersApi = {

@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -174,8 +175,13 @@ func TestMCPScenarioAgentCreatesViaBearerCredentialAndIsAudited(t *testing.T) {
 		t.Fatalf("tools/list with a credential: status %d", code)
 	}
 	names := mcpToolNames(t, listResp)
-	if len(names) != 8 {
-		t.Errorf("the agent discovered %d tools, want 8: %v", len(names), names)
+	if len(names) != 9 {
+		t.Errorf("the agent discovered %d tools, want 9: %v", len(names), names)
+	}
+	// create_account is the newest write tool; a discovery list that omits it would
+	// hide a capability the registry advertises.
+	if !slices.Contains(names, "create_account") {
+		t.Errorf("the agent did not discover create_account: %v", names)
 	}
 
 	// 2. Read: account_summary returns what the credential may read and withholds the

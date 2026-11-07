@@ -101,3 +101,11 @@ func nonceOption(nonce string) oauth2.AuthCodeOption {
 // IsNoAccount reports whether an error is the "no linked account" case, so a
 // handler can answer with guidance rather than a generic failure.
 func IsNoAccount(err error) bool { return errors.Is(err, ErrNoAccount) }
+
+// IsBindingConflict reports whether an error is an explicit-binding conflict:
+// the subject is already linked elsewhere, or the account already has a different
+// subject at this provider. The callback lands these on the Security Center, where
+// the binding was started, rather than on the sign-in page.
+func IsBindingConflict(err error) bool {
+	return errors.Is(err, ErrIdentityAlreadyLinked) || errors.Is(err, ErrIdentityInUse)
+}
