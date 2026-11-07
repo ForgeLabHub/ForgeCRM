@@ -288,7 +288,10 @@ func (r *ToolRegistry) buildTools() []*Tool {
 				if err != nil {
 					return nil, err
 				}
-				limit := intArg(args, "limit", 10)
+				limit, err := boundedLimit(args, 10)
+				if err != nil {
+					return nil, err
+				}
 				res, err := r.crm.Search(ctx, p, q, limit)
 				if err != nil {
 					return nil, err
@@ -304,7 +307,7 @@ func (r *ToolRegistry) buildTools() []*Tool {
 		},
 		{
 			Name:        "account_summary",
-			Description: "Summarise a client organisation: open deals, recent activity and open tickets.",
+			Description: "Summarise a client organisation with recent deals, activity and tickets. Recent lists may be incomplete; totals are counts, not monetary totals.",
 			Permission:  rbac.PermAccountsRead,
 			InputSchema: objectSchema(map[string]any{
 				"account_id": map[string]any{"type": "string", "description": "account UUID"},
@@ -330,14 +333,10 @@ func (r *ToolRegistry) buildTools() []*Tool {
 						AccountID: &id, Pagination: httpx.Pagination{Limit: 10},
 					})
 					if err == nil {
-						var openValue float64
-						for _, d := range deals {
-							if d.Status == "open" {
-								openValue += d.Amount
-							}
-						}
+						// A page of deals cannot give a reliable total value, and amounts
+						// may use different currencies. Expose the page and its coverage.
 						summary["deals"] = map[string]any{
-							"total": total, "recent": deals, "open_value": openValue,
+							"total": total, "recent": deals, "recent_is_complete": int64(len(deals)) == total,
 						}
 					}
 				}
@@ -369,7 +368,10 @@ func (r *ToolRegistry) buildTools() []*Tool {
 				"limit":  map[string]any{"type": "integer", "minimum": 1, "maximum": 50},
 			}, nil),
 			Handler: func(ctx context.Context, p *rbac.Principal, args map[string]any) (any, error) {
-				limit := intArg(args, "limit", 20)
+				limit, err := boundedLimit(args, 20)
+				if err != nil {
+					return nil, err
+				}
 				status, _ := args["status"].(string)
 				tasks, total, err := r.crm.ListTasks(ctx, p, crm.ListQuery{
 					Status: status, Pagination: httpx.Pagination{Limit: limit},
@@ -642,24 +644,27 @@ func stringArg(args map[string]any, key, def string) string {
 	return strings.TrimSpace(s)
 }
 
-func intArg(args map[string]any, key string, def int) int {
-	v, ok := args[key]
+// boundedLimit enforces the advertised schema even for direct MCP clients.
+func boundedLimit(args map[string]any, def int) (int, error) {
+	v, ok := args["limit"]
 	if !ok {
-		return def
+		return def, nil
 	}
+	var n int64
 	switch t := v.(type) {
 	case float64:
-		return int(t)
-	case int:
-		return t
-	case json.Number:
-		n, err := t.Int64()
-		if err != nil {
-			return def
+		if t >= 1 && t <= 50 && t == float64(int64(t)) {
+			n = int64(t)
 		}
-		return int(n)
+	case int:
+		n = int64(t)
+	case json.Number:
+		n, _ = t.Int64()
 	}
-	return def
+	if n < 1 || n > 50 {
+		return 0, httpx.ValidationError(map[string]string{"limit": "must be an integer between 1 and 50"})
+	}
+	return int(n), nil
 }
 
 func uuidArg(args map[string]any, key string) (uuid.UUID, error) {

@@ -43,54 +43,27 @@ export function AiPage() {
             <Alert tone="error">{errorMessage(status.error)}</Alert>
           ) : status.data?.enabled ? (
             <div className="stack">
-              <div className="row">
-                <Badge tone="success">{t('ai.enabled')}</Badge>
-                <span className="text-muted text-sm">
-                  {t('ai.providerCount', { count: status.data.providers?.length ?? 0 })}
-                </span>
+              <div className="row"><Badge tone="success">{t('ai.enabled')}</Badge></div>
+              <div className="table-wrap">
+                <table className="table--stack">
+                  <thead><tr>
+                    <th>{t('ai.columnProvider')}</th><th>{t('ai.columnModel')}</th>
+                    <th>{t('ai.columnHealth')}</th><th>{t('ai.columnLastError')}</th>
+                  </tr></thead>
+                  <tbody><tr>
+                    <td className="table__primary" data-label={t('ai.columnProvider')}>{status.data.provider}</td>
+                    <td className="mono" data-label={t('ai.columnModel')}>{status.data.model || '—'}</td>
+                    <td data-label={t('ai.columnHealth')}>
+                      {status.data.healthy === undefined ? <span className="text-subtle">{t('ai.unknown')}</span>
+                        : status.data.healthy ? <Badge tone="success">{t('ai.healthy')}</Badge>
+                          : <Badge tone="danger">{t('ai.unhealthy')}</Badge>}
+                    </td>
+                    <td className="truncate" style={{ maxWidth: 260 }} data-label={t('ai.columnLastError')}>
+                      {status.data.error ?? <span className="text-subtle">—</span>}
+                    </td>
+                  </tr></tbody>
+                </table>
               </div>
-              {status.data.providers?.length ? (
-                <div className="table-wrap">
-                  <table className="table--stack">
-                    <thead>
-                      <tr>
-                        <th>{t('ai.columnProvider')}</th>
-                        <th>{t('ai.columnModel')}</th>
-                        <th>{t('ai.columnHealth')}</th>
-                        <th>{t('ai.columnLastError')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {status.data.providers.map((provider) => (
-                        <tr key={provider.key}>
-                          <td className="table__primary" data-label={t('ai.columnProvider')}>
-                            {provider.name}
-                          </td>
-                          <td className="mono" data-label={t('ai.columnModel')}>
-                            {provider.model ?? '—'}
-                          </td>
-                          <td data-label={t('ai.columnHealth')}>
-                            {provider.healthy === undefined ? (
-                              <span className="text-subtle">{t('ai.unknown')}</span>
-                            ) : provider.healthy ? (
-                              <Badge tone="success">{t('ai.healthy')}</Badge>
-                            ) : (
-                              <Badge tone="danger">{t('ai.unhealthy')}</Badge>
-                            )}
-                          </td>
-                          <td
-                            className="truncate"
-                            style={{ maxWidth: 260 }}
-                            data-label={t('ai.columnLastError')}
-                          >
-                            {provider.last_error ?? <span className="text-subtle">—</span>}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
             </div>
           ) : (
             <div className="stack">
@@ -165,8 +138,8 @@ export function AiPage() {
                         {task.model ?? '—'}
                       </td>
                       <td className="numeric" data-label={t('ai.columnTokens')}>
-                        {task.tokens_in !== undefined || task.tokens_out !== undefined
-                          ? `${task.tokens_in ?? 0} / ${task.tokens_out ?? 0}`
+                        {task.input_tokens != null || task.output_tokens != null
+                          ? `${task.input_tokens ?? 0} / ${task.output_tokens ?? 0}`
                           : '—'}
                       </td>
                       <td data-label={t('common.created')}>

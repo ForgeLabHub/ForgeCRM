@@ -331,6 +331,36 @@ func TestMCPAccountSummaryIncludesSectionsWhenPermitted(t *testing.T) {
 	}
 }
 
+// A partial list must not be presented as a complete monetary total.
+func TestMCPAccountSummaryReportsPartialDealPage(t *testing.T) {
+	c := newCredHarness(t)
+	token, _ := c.mint(t, "deal reader", []string{
+		"accounts.read", "deals.read", "ai.tools.execute",
+	})
+	account := c.seedAccount(c.org, "Paged Client")
+	pipelineID, stage, _ := c.seedPipelineAndStages(t)
+	for i := 0; i < 11; i++ {
+		c.seedDeal(t, pipelineID, stage, account, "Deal")
+	}
+	resp, code := c.mcpBearerJSONRPC(token,
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"account_summary","arguments":{"account_id":"`+account.String()+`"}}}`)
+	if code != http.StatusOK {
+		t.Fatalf("account_summary: status %d", code)
+	}
+	summary := mcpResultObject(t, resp)
+	deals, ok := summary["deals"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing deals: %v", summary)
+	}
+	recent, ok := deals["recent"].([]any)
+	if !ok || len(recent) != 10 || deals["total"] != float64(11) || deals["recent_is_complete"] != false {
+		t.Fatalf("unexpected deal page: %v", deals)
+	}
+	if _, ok := deals["open_value"]; ok {
+		t.Fatal("a partial, potentially multi-currency page must not be called an open value total")
+	}
+}
+
 // TestMCPEveryMutatingToolRefusesWithoutConfirmation covers all three write tools,
 // not just create_task. The scenario test shows each mutation succeeding with
 // confirm=true; this one shows the other half of the rule — that a missing
