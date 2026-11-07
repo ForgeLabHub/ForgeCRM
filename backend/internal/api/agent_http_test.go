@@ -620,3 +620,43 @@ func TestAgentProposalChecksToolPermission(t *testing.T) {
 		t.Fatal("denied proposal created a run")
 	}
 }
+
+func TestAgentProposedAccountNeedsApproval(t *testing.T) {
+	h := newHarness(t)
+	org := h.seedOrganization("Proposed account")
+	userID := h.seedUser("proposal-account@example.test", "Agent-Sales-2026!", "Sales Manager")
+	h.joinOrganization(userID, org, "sales_manager")
+	user := h.login("proposal-account@example.test", "Agent-Sales-2026!")
+	if !h.hasPermission(user, rbac.PermAgentRun) || !h.hasPermission(user, rbac.PermAccountsCreate) || !h.hasPermission(user, rbac.PermApprovalsDecide) {
+		t.Fatal("fixture is missing required rights")
+	}
+	body := `{"goal":"create account","budget_tokens":2048,"tool_name":"create_account","arguments":{"name":"New account"}}`
+	rec := h.do(user, http.MethodPost, "/api/v1/agent/runs", body)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("proposal: %d %s", rec.Code, rec.Body.String())
+	}
+	var response struct {
+		Action agent.Action `json:"action"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Action.Status != agent.ActionProposed || response.Action.RiskTier != agent.TierConfirm {
+		t.Fatalf("unexpected proposal: %+v", response.Action)
+	}
+	if h.countAccountsIn(org) != 0 {
+		t.Fatal("account was created before approval")
+	}
+	decision := `{"approve":true,"arguments_hash":"` + response.Action.ArgumentsHash + `"}`
+	rec = h.do(user, http.MethodPost, "/api/v1/agent/actions/"+response.Action.ID.String()+"/decide", decision)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("decide: %d %s", rec.Code, rec.Body.String())
+	}
+	if h.countAccountsIn(org) != 1 {
+		t.Fatal("approved account was not created exactly once")
+	}
+	rec = h.do(user, http.MethodPost, "/api/v1/agent/actions/"+response.Action.ID.String()+"/decide", decision)
+	if rec.Code == http.StatusOK || h.countAccountsIn(org) != 1 {
+		t.Fatal("replayed approval executed twice")
+	}
+}

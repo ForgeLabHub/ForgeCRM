@@ -411,6 +411,39 @@ func (r *ToolRegistry) buildTools() []*Tool {
 			},
 		},
 		{
+			Name:        "create_account",
+			Description: "Create a client organisation. Requires confirmation because it writes data.",
+			Permission:  rbac.PermAccountsCreate,
+			Dangerous:   true,
+			InputSchema: objectSchema(map[string]any{
+				"name":     map[string]any{"type": "string"},
+				"email":    map[string]any{"type": "string"},
+				"phone":    map[string]any{"type": "string"},
+				"website":  map[string]any{"type": "string"},
+				"industry": map[string]any{"type": "string"},
+			}, []string{"name"}),
+			Handler: func(ctx context.Context, p *rbac.Principal, args map[string]any) (any, error) {
+				name, err := requiredString(args, "name")
+				if err != nil {
+					return nil, err
+				}
+				in := crm.AccountInput{Name: name}
+				if v := stringArg(args, "email", ""); v != "" {
+					in.Email = &v
+				}
+				if v := stringArg(args, "phone", ""); v != "" {
+					in.Phone = &v
+				}
+				if v := stringArg(args, "website", ""); v != "" {
+					in.Website = &v
+				}
+				if v := stringArg(args, "industry", ""); v != "" {
+					in.Industry = &v
+				}
+				return r.crm.CreateAccount(ctx, p, in)
+			},
+		},
+		{
 			Name:        "create_task",
 			Description: "Create a task. Requires confirmation because it writes data.",
 			Permission:  rbac.PermTasksCreate,
