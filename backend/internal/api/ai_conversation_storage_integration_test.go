@@ -22,7 +22,11 @@ func TestConversationStorageIsPrivateAndCascades(t *testing.T) {
 	owner := h.seedUser("conv-owner@example.test", "Secret-2026!", "Owner")
 	other := h.seedUser("conv-other@example.test", "Secret-2026!", "Other")
 	h.joinOrganization(owner, org, "sales_manager")
-	h.joinOrganization(other, org, "sales_manager")
+	// joinOrganization creates an org-scoped role, so add the second member
+	// without trying to create the same role a second time.
+	if _, err := h.db.Pool().Exec(context.Background(), `INSERT INTO memberships (user_id, organization_id, status) VALUES ($1,$2,'active')`, other, org); err != nil {
+		t.Fatal(err)
+	}
 	h.joinOrganization(owner, otherOrg, "sales_manager")
 	principal := func(user, organization uuid.UUID, perms ...rbac.Permission) *rbac.Principal {
 		return rbac.NewPrincipal(user, "", "", organization, perms)
