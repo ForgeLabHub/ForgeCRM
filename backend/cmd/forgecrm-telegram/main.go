@@ -176,7 +176,9 @@ func startHealthServer(ctx context.Context, addr string, db *database.DB, log *s
 	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		// ctx is already cancelled here, so the drain window is derived from it with
+		// WithoutCancel: Shutdown still needs a live context to bound the drain.
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
 		_ = srv.Shutdown(shutdownCtx)
 	}()

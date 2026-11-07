@@ -57,3 +57,6 @@ frontend/playwright/.cache/
 
 # Состояние forge.sh/forge.bat: PID-файлы и логи запусков
 .run/
+
+# gosec JSON report produced by the security gate (regenerated each run)
+/backend/gosec-report.json

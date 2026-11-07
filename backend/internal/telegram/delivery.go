@@ -202,6 +202,18 @@ func (h *DeliveryHandler) Handle(ctx context.Context, queue *jobs.Queue, job *jo
 			result.Status = "forbidden"
 			return nil
 		}
+		// A per-account preference silences one type without touching consent or
+		// RBAC. An unknown kind (a notification type with no toggle) stays enabled.
+		if notify.IsNotificationKind(payload.Kind) {
+			enabled, err := h.Telegram.NotificationEnabled(ctx, *job.OrganizationID, payload.UserID, notify.NotificationKind(payload.Kind))
+			if err != nil {
+				return err
+			}
+			if !enabled {
+				result.Status = "muted"
+				return nil
+			}
+		}
 		result, err = h.Telegram.NotifyTask(ctx, *job.OrganizationID, payload.UserID, notify.TaskCard{Kind: payload.Kind, Locale: locale, Title: title, Priority: priority, DueAt: due})
 		return err
 	})

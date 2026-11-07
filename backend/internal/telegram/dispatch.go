@@ -302,6 +302,28 @@ func (d *Dispatcher) command(ctx context.Context, chatID int64, username, text s
 			b.WriteString("\n• " + safeTitle(n.Title))
 		}
 		return &reply{ChatID: chatID, Text: b.String(), Buttons: menuRows(loc), OrgID: &principal.OrganizationID, UserID: &principal.UserID}, nil
+	case "/settings":
+		principal, ok, err := d.resolveLinked(ctx, chatID)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return system(telegramtext.KeyNotLinked), nil
+		}
+		prefs, err := d.Telegram.NotificationPreferences(ctx, chatID)
+		if err != nil {
+			return nil, err
+		}
+		return &reply{ChatID: chatID, Text: telegramtext.T(loc, telegramtext.KeyNotifSettings), Buttons: notificationRows(loc, prefs), OrgID: &principal.OrganizationID, UserID: &principal.UserID}, nil
+	case "/unlink":
+		principal, ok, err := d.resolveLinked(ctx, chatID)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return system(telegramtext.KeyNotLinked), nil
+		}
+		return &reply{ChatID: chatID, Text: telegramtext.T(loc, telegramtext.KeyUnlinkConfirm), Buttons: unlinkRows(loc), OrgID: &principal.OrganizationID, UserID: &principal.UserID}, nil
 	case "/tasks", "/today", "/overdue", "/task", "/done", "/due":
 		principal, ok, err := d.resolveLinked(ctx, chatID)
 		if err != nil {
@@ -369,6 +391,50 @@ func (d *Dispatcher) callback(ctx context.Context, callbackID string, fromID int
 		return replyFn(telegramtext.T(loc, telegramtext.KeyHelp), [][]notify.InlineButton{{{Text: telegramtext.T(loc, telegramtext.BtnMenu), Data: "menu:home"}}}), nil
 	case data == "menu:language":
 		return replyFn(telegramtext.T(loc, telegramtext.KeyChooseLanguage), languageRows()), nil
+	case data == "menu:settings":
+		return d.command(ctx, fromID, username, "/settings")
+	case data == "menu:unlink":
+		return d.command(ctx, fromID, username, "/unlink")
+	case strings.HasPrefix(data, "notif:"):
+		// A toggle is only meaningful for a linked account; an unknown kind is
+		// refused rather than stored, so a malformed payload cannot invent a row.
+		principal, ok, err := d.resolveLinked(ctx, fromID)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return replyFn(telegramtext.T(loc, telegramtext.KeyNotLinked), nil), nil
+		}
+		kind := strings.TrimPrefix(data, "notif:")
+		if !notify.IsNotificationKind(kind) {
+			return replyFn(telegramtext.T(loc, telegramtext.KeyUnknownCommand), menuRows(loc)), nil
+		}
+		prefs, err := d.Telegram.NotificationPreferences(ctx, fromID)
+		if err != nil {
+			return nil, err
+		}
+		next := !prefs[notify.NotificationKind(kind)]
+		if err := d.Telegram.SetNotificationPreference(ctx, fromID, notify.NotificationKind(kind), next); err != nil {
+			return nil, err
+		}
+		prefs[notify.NotificationKind(kind)] = next
+		return &reply{ChatID: chatID, Text: telegramtext.T(loc, telegramtext.KeyNotifSettings), Buttons: notificationRows(loc, prefs), CallbackID: callbackID, OrgID: &principal.OrganizationID, UserID: &principal.UserID}, nil
+	case data == "unlink:cancel":
+		return replyFn(telegramtext.T(loc, telegramtext.KeyMenuTitle), menuRows(loc)), nil
+	case data == "unlink:confirm":
+		principal, ok, err := d.resolveLinked(ctx, fromID)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return replyFn(telegramtext.T(loc, telegramtext.KeyNotLinked), nil), nil
+		}
+		if err := d.Telegram.Unlink(ctx, principal); err != nil {
+			return nil, err
+		}
+		// The account is no longer linked, so this reply must travel the system path:
+		// the linked consent gate would refuse it now that the link is gone.
+		return replyFn(telegramtext.T(loc, telegramtext.KeyUnlinkDone), nil), nil
 	case data == "menu:tasks", data == "menu:overdue", data == "menu:profile", data == "menu:notifications", data == "menu:deals", data == "menu:pipeline", data == "menu:search":
 		return d.command(ctx, fromID, username, "/"+strings.TrimPrefix(data, "menu:"))
 	case strings.HasPrefix(data, "task:"), strings.HasPrefix(data, "done:"):
@@ -430,7 +496,34 @@ func menuRows(loc telegramtext.Locale) [][]notify.InlineButton {
 		{{Text: telegramtext.T(loc, telegramtext.BtnDeals), Data: "menu:deals"}, {Text: telegramtext.T(loc, telegramtext.BtnPipeline), Data: "menu:pipeline"}},
 		{{Text: telegramtext.T(loc, telegramtext.BtnSearch), Data: "menu:search"}},
 		{{Text: telegramtext.T(loc, telegramtext.BtnProfile), Data: "menu:profile"}, {Text: telegramtext.T(loc, telegramtext.BtnLanguage), Data: "menu:language"}},
+		{{Text: telegramtext.T(loc, telegramtext.BtnSettings), Data: "menu:settings"}, {Text: telegramtext.T(loc, telegramtext.BtnUnlink), Data: "menu:unlink"}},
 		{{Text: telegramtext.T(loc, telegramtext.BtnHelp), Data: "menu:help"}},
+	}
+}
+
+// notificationRows renders the per-type toggles. Each button carries the current
+// state in its label, so the menu is readable and a tap flips exactly the type it
+// names.
+func notificationRows(loc telegramtext.Locale, prefs map[notify.NotificationKind]bool) [][]notify.InlineButton {
+	label := func(kind notify.NotificationKind, key telegramtext.Key) string {
+		state := telegramtext.T(loc, telegramtext.KeyNotifOff)
+		if prefs[kind] {
+			state = telegramtext.T(loc, telegramtext.KeyNotifOn)
+		}
+		return telegramtext.T(loc, key) + " — " + state
+	}
+	return [][]notify.InlineButton{
+		{{Text: label(notify.KindAssignment, telegramtext.BtnNotifAssignment), Data: "notif:assignment"}, {Text: label(notify.KindDueChanged, telegramtext.BtnNotifDueChanged), Data: "notif:due_changed"}},
+		{{Text: label(notify.KindOverdue, telegramtext.BtnNotifOverdue), Data: "notif:overdue"}, {Text: label(notify.KindCompleted, telegramtext.BtnNotifCompleted), Data: "notif:completed"}},
+		{{Text: telegramtext.T(loc, telegramtext.BtnMenu), Data: "menu:home"}},
+	}
+}
+
+// unlinkRows renders the unlink confirmation, so revoking the link is a
+// deliberate two-step action rather than an accidental tap.
+func unlinkRows(loc telegramtext.Locale) [][]notify.InlineButton {
+	return [][]notify.InlineButton{
+		{{Text: telegramtext.T(loc, telegramtext.BtnUnlinkConfirm), Data: "unlink:confirm"}, {Text: telegramtext.T(loc, telegramtext.BtnUnlinkCancel), Data: "unlink:cancel"}},
 	}
 }
 
