@@ -15,12 +15,12 @@
 //   - Everything the provider asserts about a person arrives as an ID token. The
 //     signature, the issuer, the audience, the expiry and the nonce are all
 //     verified before any claim is read. See provider.go.
-//   - An email claim is only used to find an existing account when the provider
-//     says the address is verified and the address is inside the configured
-//     domains. Otherwise a provider that lets a user set an arbitrary unverified
-//     address would be an account-takeover path.
-//   - A local account is identified by (provider, subject), never by email. Email
-//     addresses change and providers recycle them.
+//   - An email claim never selects an existing local account. It may gate
+//     just-in-time provisioning through the configured domains, but a verified
+//     address is not proof the account holder consented, so adopting an existing
+//     account by address would be an account-takeover path. A local account is
+//     identified by (provider, subject) alone, and binding a new subject to an
+//     existing account is a deliberate act by that signed-in account holder.
 //
 // # Sessions
 //
@@ -32,7 +32,10 @@ package oidc
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -593,22 +596,22 @@ func validateProviderInput(in ProviderInput) error {
 // instead of resolving a different one. The caller must have authenticated as that
 // user; the service re-reads the account on the callback so a deleted user cannot
 // be linked.
-func (s *Service) Begin(ctx context.Context, providerKey, returnTo string, linkUserID uuid.UUID) (string, error) {
+func (s *Service) Begin(ctx context.Context, providerKey, returnTo string, linkUserID uuid.UUID) (string, string, error) {
 	if !s.Enabled() {
-		return "", ErrDisabled
+		return "", "", ErrDisabled
 	}
 	provider, err := s.resolveByKey(ctx, providerKey)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	state, err := randomString(32)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	nonce, err := randomString(32)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	verifier := generateVerifier()
 
@@ -621,21 +624,38 @@ func (s *Service) Begin(ctx context.Context, providerKey, returnTo string, linkU
 		linkArg = linkUserID
 	}
 
+	// Bind the state to a random secret the browser must echo back on the
+	// callback. Only its hash is stored, so a reader of oidc_login_states cannot
+	// reconstruct a usable binding. The raw value is returned for the caller to set
+	// as an HttpOnly cookie on the redirect.
+	browserBinding, err := randomString(32)
+	if err != nil {
+		return "", "", err
+	}
+
 	const q = `
-		INSERT INTO oidc_login_states (state, provider_id, nonce, code_verifier, return_to, link_user_id, expires_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7)`
+		INSERT INTO oidc_login_states (state, provider_id, nonce, code_verifier, return_to, link_user_id, browser_binding_hash, expires_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`
 	if _, err := s.db.Q(ctx).Exec(ctx, q, state, provider.ID, nonce, verifier,
-		safeReturn, linkArg, time.Now().Add(StateTTL)); err != nil {
-		return "", fmt.Errorf("record the sign-in request: %w", err)
+		safeReturn, linkArg, hashBinding(browserBinding), time.Now().Add(StateTTL)); err != nil {
+		return "", "", fmt.Errorf("record the sign-in request: %w", err)
 	}
 
 	cfg := s.oauthConfig(ctx, provider)
-	return cfg.AuthCodeURL(state, nonceOption(nonce), s256ChallengeOption(verifier)), nil
+	return cfg.AuthCodeURL(state, nonceOption(nonce), s256ChallengeOption(verifier)), browserBinding, nil
+}
+
+// hashBinding derives the stored form of a browser-binding secret. SHA-256 is
+// enough: the secret is 32 bytes from crypto/rand, so it is not guessable and
+// does not need a slow KDF.
+func hashBinding(secret string) string {
+	sum := sha256.Sum256([]byte(secret))
+	return hex.EncodeToString(sum[:])
 }
 
 // Complete finishes an authorization request: it exchanges the code, verifies the
 // ID token, and resolves the local account. It does not create a session.
-func (s *Service) Complete(ctx context.Context, code, state, ip, userAgent string) (*Identity, error) {
+func (s *Service) Complete(ctx context.Context, code, state, browserBinding, ip, userAgent string) (*Identity, error) {
 	if !s.Enabled() {
 		return nil, ErrDisabled
 	}
@@ -646,22 +666,33 @@ func (s *Service) Complete(ctx context.Context, code, state, ip, userAgent strin
 	// Claim the state row atomically. A second use of the same state finds no row,
 	// which closes the replay window on a stolen authorization response.
 	var (
-		providerID uuid.UUID
-		nonce      string
-		verifier   string
-		linkUserID *uuid.UUID
+		providerID         uuid.UUID
+		nonce              string
+		verifier           string
+		linkUserID         *uuid.UUID
+		browserBindingHash *string
 	)
 	const claimQ = `
 		UPDATE oidc_login_states
 		SET consumed_at = now()
 		WHERE state = $1 AND consumed_at IS NULL AND expires_at > now()
-		RETURNING provider_id, nonce, code_verifier, link_user_id`
-	err := s.db.Q(ctx).QueryRow(ctx, claimQ, state).Scan(&providerID, &nonce, &verifier, &linkUserID)
+		RETURNING provider_id, nonce, code_verifier, link_user_id, browser_binding_hash`
+	err := s.db.Q(ctx).QueryRow(ctx, claimQ, state).Scan(&providerID, &nonce, &verifier, &linkUserID, &browserBindingHash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrStateInvalid
 	}
 	if err != nil {
 		return nil, fmt.Errorf("claim the sign-in request: %w", err)
+	}
+
+	// The callback must arrive in the same browser that began the flow. The state
+	// is accepted only when the HttpOnly binding cookie it was issued with comes
+	// back, which a state handed to another browser cannot carry. A NULL stored
+	// hash means the state predates this check; refuse it rather than skip the
+	// comparison, so a state with no binding never completes.
+	if browserBindingHash == nil ||
+		subtle.ConstantTimeCompare([]byte(*browserBindingHash), []byte(hashBinding(browserBinding))) != 1 {
+		return nil, ErrStateInvalid
 	}
 
 	provider, err := s.GetByID(ctx, providerID)

@@ -24,6 +24,51 @@ type ssoProvidersResponse struct {
 	Providers []oidc.PublicProvider `json:"providers"`
 }
 
+// ssoStateCookieName carries the browser binding for a sign-in that is in flight.
+// It is separate from the session cookie: it is short lived and is cleared as soon
+// as the callback reads it.
+const ssoStateCookieName = "forgecrm_sso_state"
+
+// setSSOStateCookie records the binding secret the callback must see again. It is
+// HttpOnly so script cannot read it, and its lifetime matches the state row.
+func (s *Server) setSSOStateCookie(w http.ResponseWriter, value string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     ssoStateCookieName,
+		Value:    value,
+		Path:     "/",
+		Domain:   s.deps.Config.CookieDomain,
+		MaxAge:   int(oidc.StateTTL.Seconds()),
+		HttpOnly: true,
+		Secure:   s.deps.Config.CookieSecure,
+		SameSite: s.ssoStateCookieSameSite(),
+	})
+}
+
+// clearSSOStateCookie removes the binding cookie. It is called on every callback,
+// success or failure, so a completed or rejected state leaves nothing behind.
+func (s *Server) clearSSOStateCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     ssoStateCookieName,
+		Value:    "",
+		Path:     "/",
+		Domain:   s.deps.Config.CookieDomain,
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   s.deps.Config.CookieSecure,
+		SameSite: s.ssoStateCookieSameSite(),
+	})
+}
+
+// ssoStateCookieSameSite never returns Strict: the identity provider sends the
+// browser back with a cross-site top-level navigation, and a Strict cookie is
+// withheld on that navigation, which would break every sign-in.
+func (s *Server) ssoStateCookieSameSite() http.SameSite {
+	if s.deps.Config.CookieSameSite == "none" {
+		return http.SameSiteNoneMode
+	}
+	return http.SameSiteLaxMode
+}
+
 func (s *Server) handleListSSOProviders(w http.ResponseWriter, r *http.Request) {
 	if !s.deps.OIDC.Enabled() {
 		httpx.WriteJSON(w, ssoProvidersResponse{Enabled: false, Providers: []oidc.PublicProvider{}})
@@ -55,11 +100,14 @@ func (s *Server) handleOIDCStart(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, httpx.ValidationError(map[string]string{"provider": "the provider query parameter is required"}))
 		return
 	}
-	target, err := s.deps.OIDC.Begin(r.Context(), providerKey, r.URL.Query().Get("return_to"), uuid.Nil)
+	target, binding, err := s.deps.OIDC.Begin(r.Context(), providerKey, r.URL.Query().Get("return_to"), uuid.Nil)
 	if err != nil {
 		s.respondOIDCError(w, r, err)
 		return
 	}
+	// The browser must present this cookie when the provider redirects back, so a
+	// state captured from this flow cannot be completed in another browser.
+	s.setSSOStateCookie(w, binding)
 	http.Redirect(w, r, target, http.StatusFound)
 }
 
@@ -99,11 +147,12 @@ func (s *Server) handleOIDCLinkStart(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, httpx.ValidationError(map[string]string{"provider": "the provider is required"}))
 		return
 	}
-	target, err := s.deps.OIDC.Begin(r.Context(), providerKey, "/admin/security", sess.UserID)
+	target, binding, err := s.deps.OIDC.Begin(r.Context(), providerKey, "/admin/security", sess.UserID)
 	if err != nil {
 		s.respondOIDCError(w, r, err)
 		return
 	}
+	s.setSSOStateCookie(w, binding)
 	httpx.WriteJSON(w, oidcLinkStartResponse{AuthorizationURL: target})
 }
 
@@ -123,7 +172,16 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	identity, err := s.deps.OIDC.Complete(r.Context(), q.Get("code"), q.Get("state"),
+	// Read the binding before anything else can clear it, then drop the cookie so
+	// it cannot be replayed. The service compares it against the hash stored with
+	// the state; a state presented without its cookie is refused.
+	binding := ""
+	if c, err := r.Cookie(ssoStateCookieName); err == nil {
+		binding = c.Value
+	}
+	s.clearSSOStateCookie(w)
+
+	identity, err := s.deps.OIDC.Complete(r.Context(), q.Get("code"), q.Get("state"), binding,
 		httpx.ClientIP(r), r.UserAgent())
 	if err != nil {
 		if oidc.IsBindingError(err) {

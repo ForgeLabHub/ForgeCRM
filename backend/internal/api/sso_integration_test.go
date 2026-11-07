@@ -237,13 +237,15 @@ func (h *harness) createProvider(a *actor, idp *fakeIDP, body string) {
 	}
 }
 
-// startSignIn begins the flow and returns the authorization URL.
+// startSignIn begins the flow and returns the authorization URL. The binding
+// cookie the start set is remembered so the callback can replay it.
 func (h *harness) startSignIn(providerKey string) *url.URL {
 	h.t.Helper()
 	rec := h.do(nil, http.MethodGet, "/api/v1/auth/oidc/start?provider="+providerKey, "")
 	if rec.Code != http.StatusFound {
 		h.t.Fatalf("start sign-in: status %d, body %s", rec.Code, rec.Body.String())
 	}
+	h.captureSSOStateCookie(rec)
 	loc, err := url.Parse(rec.Header().Get("Location"))
 	if err != nil {
 		h.t.Fatalf("parse the authorization URL: %v", err)
@@ -251,11 +253,27 @@ func (h *harness) startSignIn(providerKey string) *url.URL {
 	return loc
 }
 
-// completeSignIn drives the callback and returns the recorder.
+// captureSSOStateCookie records the browser-binding cookie a start response set.
+func (h *harness) captureSSOStateCookie(rec *httptest.ResponseRecorder) {
+	h.t.Helper()
+	h.ssoStateCookie = nil
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == ssoStateCookieName {
+			h.ssoStateCookie = c
+			return
+		}
+	}
+}
+
+// completeSignIn drives the callback, replaying the binding cookie the start
+// issued, and returns the recorder.
 func (h *harness) completeSignIn(state, code string) *httptest.ResponseRecorder {
 	h.t.Helper()
 	req := httptest.NewRequest(http.MethodGet,
 		"/api/v1/auth/oidc/callback?state="+url.QueryEscape(state)+"&code="+url.QueryEscape(code), nil)
+	if h.ssoStateCookie != nil {
+		req.AddCookie(h.ssoStateCookie)
+	}
 	rec := httptest.NewRecorder()
 	h.server.ServeHTTP(rec, req)
 	return rec
@@ -533,6 +551,7 @@ func (h *harness) startLink(a *actor, providerKey string) *url.URL {
 	if rec.Code != http.StatusOK {
 		h.t.Fatalf("begin linking: status %d, body %s", rec.Code, rec.Body.String())
 	}
+	h.captureSSOStateCookie(rec)
 	var body struct {
 		AuthorizationURL string `json:"authorization_url"`
 	}
@@ -575,8 +594,8 @@ func TestSSODoesNotAdoptAnExistingAccountByVerifiedEmail(t *testing.T) {
 	}
 
 	// No session was issued and no identity was attached.
-	if c := rec.Result().Cookies(); len(c) != 0 {
-		t.Fatalf("the callback issued a session for a refused sign-in: %v", c)
+	if h.issuedSessionCookie(rec) {
+		t.Fatalf("the callback issued a session for a refused sign-in: %v", rec.Result().Cookies())
 	}
 	var (
 		users      int
@@ -837,5 +856,131 @@ func TestSSOIsInertWhenNotConfigured(t *testing.T) {
 	rec = h.do(nil, http.MethodGet, "/api/v1/auth/oidc/start?provider=acme", "")
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("start when disabled: status %d, want 503", rec.Code)
+	}
+}
+
+// completeSignInWithoutCookie drives the callback with no binding cookie, as a
+// browser that received only the callback URL would.
+func (h *harness) completeSignInWithoutCookie(state, code string) *httptest.ResponseRecorder {
+	h.t.Helper()
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/v1/auth/oidc/callback?state="+url.QueryEscape(state)+"&code="+url.QueryEscape(code), nil)
+	rec := httptest.NewRecorder()
+	h.server.ServeHTTP(rec, req)
+	return rec
+}
+
+// issuedSessionCookie reports whether a response set the session cookie, the only
+// cookie that marks a completed sign-in. The callback also clears the binding
+// cookie, so counting every cookie would mistake that cleanup for a session.
+func (h *harness) issuedSessionCookie(rec *httptest.ResponseRecorder) bool {
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == h.cfg.SessionCookieName && c.Value != "" && c.MaxAge >= 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// TestSSOStartSetsAnHttpOnlyBindingCookie pins the cookie the callback depends on.
+func TestSSOStartSetsAnHttpOnlyBindingCookie(t *testing.T) {
+	h := ssoHarness(t)
+	idp := newFakeIDP(t)
+
+	org := h.seedOrganization("Cookie")
+	admin := h.seedUser("cookie-admin@acme.test", "Admin-Passw0rd-2026!!!", "Admin")
+	h.joinOrganization(admin, org, "platform_admin")
+	a := h.login("cookie-admin@acme.test", "Admin-Passw0rd-2026!!!")
+	h.createProvider(a, idp, "")
+
+	rec := h.do(nil, http.MethodGet, "/api/v1/auth/oidc/start?provider=acme", "")
+	if rec.Code != http.StatusFound {
+		t.Fatalf("start sign-in: status %d, body %s", rec.Code, rec.Body.String())
+	}
+	var found *http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == ssoStateCookieName {
+			found = c
+		}
+	}
+	if found == nil {
+		t.Fatal("the start response set no browser-binding cookie")
+	}
+	if found.Value == "" {
+		t.Fatal("the binding cookie is empty")
+	}
+	if !found.HttpOnly {
+		t.Fatal("the binding cookie is readable by script")
+	}
+	if found.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("binding cookie SameSite = %v, want Lax", found.SameSite)
+	}
+}
+
+// TestSSOCallbackWithoutTheBindingCookieIsRefused is the login-CSRF guard: a
+// state captured from one flow and presented from another browser — which cannot
+// carry the HttpOnly cookie — must not complete.
+func TestSSOCallbackWithoutTheBindingCookieIsRefused(t *testing.T) {
+	h := ssoHarness(t)
+	idp := newFakeIDP(t)
+
+	org := h.seedOrganization("NoCookie")
+	admin := h.seedUser("nocookie-admin@acme.test", "Admin-Passw0rd-2026!!!", "Admin")
+	h.joinOrganization(admin, org, "platform_admin")
+	a := h.login("nocookie-admin@acme.test", "Admin-Passw0rd-2026!!!")
+	h.createProvider(a, idp, "")
+
+	authURL := h.startSignIn("acme")
+	state := authURL.Query().Get("state")
+	idp.setNonce(authURL.Query().Get("nonce"))
+
+	// The attacker's browser presents the state, but the binding cookie is absent.
+	rec := h.completeSignInWithoutCookie(state, "code-nocookie")
+	if rec.Code != http.StatusFound {
+		t.Fatalf("callback: status %d, body %s", rec.Code, rec.Body.String())
+	}
+	if loc := rec.Header().Get("Location"); !strings.Contains(loc, "sso_error=") {
+		t.Fatalf("a callback without its binding cookie was accepted: %q", loc)
+	}
+	if h.issuedSessionCookie(rec) {
+		t.Fatalf("a session was issued without the binding cookie: %v", rec.Result().Cookies())
+	}
+	var identities int
+	if err := h.pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM user_identities WHERE subject = 'subject-abc'`).Scan(&identities); err != nil {
+		t.Fatalf("count identities: %v", err)
+	}
+	if identities != 0 {
+		t.Fatalf("an identity was attached without the binding cookie: %d", identities)
+	}
+}
+
+// TestSSOCallbackWithAMismatchedBindingCookieIsRefused checks that a present but
+// wrong cookie is refused too, not merely a missing one.
+func TestSSOCallbackWithAMismatchedBindingCookieIsRefused(t *testing.T) {
+	h := ssoHarness(t)
+	idp := newFakeIDP(t)
+
+	org := h.seedOrganization("Mismatch")
+	admin := h.seedUser("mismatch-admin@acme.test", "Admin-Passw0rd-2026!!!", "Admin")
+	h.joinOrganization(admin, org, "platform_admin")
+	a := h.login("mismatch-admin@acme.test", "Admin-Passw0rd-2026!!!")
+	h.createProvider(a, idp, "")
+
+	authURL := h.startSignIn("acme")
+	state := authURL.Query().Get("state")
+	idp.setNonce(authURL.Query().Get("nonce"))
+
+	// Replace the genuine cookie with one from an unrelated flow.
+	h.ssoStateCookie = &http.Cookie{Name: ssoStateCookieName, Value: "not-the-binding"}
+	rec := h.completeSignIn(state, "code-mismatch")
+	if rec.Code != http.StatusFound {
+		t.Fatalf("callback: status %d, body %s", rec.Code, rec.Body.String())
+	}
+	if loc := rec.Header().Get("Location"); !strings.Contains(loc, "sso_error=") {
+		t.Fatalf("a callback with a mismatched binding cookie was accepted: %q", loc)
+	}
+	if h.issuedSessionCookie(rec) {
+		t.Fatalf("a session was issued with a mismatched binding cookie: %v", rec.Result().Cookies())
 	}
 }
