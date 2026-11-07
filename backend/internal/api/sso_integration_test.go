@@ -523,9 +523,35 @@ func TestSSOWithoutJITRefusesAnUnknownAccount(t *testing.T) {
 	}
 }
 
-// TestSSOLinksAnExistingAccountByVerifiedEmail checks the linking path: an account
-// that already exists is linked rather than duplicated.
-func TestSSOLinksAnExistingAccountByVerifiedEmail(t *testing.T) {
+// startLink begins an explicit binding as the signed-in account holder and
+// returns the authorization URL the browser must visit.
+func (h *harness) startLink(a *actor, providerKey string) *url.URL {
+	h.t.Helper()
+
+	rec := h.do(a, http.MethodPost, "/api/v1/auth/identities/link",
+		fmt.Sprintf(`{"provider":%q}`, providerKey))
+	if rec.Code != http.StatusOK {
+		h.t.Fatalf("begin linking: status %d, body %s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		AuthorizationURL string `json:"authorization_url"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		h.t.Fatalf("decode the linking URL: %v (body %s)", err, rec.Body.String())
+	}
+	loc, err := url.Parse(body.AuthorizationURL)
+	if err != nil {
+		h.t.Fatalf("parse the linking URL: %v", err)
+	}
+	return loc
+}
+
+// TestSSODoesNotAdoptAnExistingAccountByVerifiedEmail pins the security property
+// this flow was rebuilt around: a verified address from the provider is not proof
+// of ownership, so a sign-in never attaches a subject to an account that merely
+// carries that address. The account is left untouched and the sign-in is refused
+// with guidance to link explicitly.
+func TestSSODoesNotAdoptAnExistingAccountByVerifiedEmail(t *testing.T) {
 	h := ssoHarness(t)
 	idp := newFakeIDP(t)
 
@@ -535,6 +561,7 @@ func TestSSOLinksAnExistingAccountByVerifiedEmail(t *testing.T) {
 	a := h.login("link-admin@acme.test", "Admin-Passw0rd-2026!!!")
 	h.createProvider(a, idp, "")
 
+	// The provider will assert ada@acme.test, and an account already carries it.
 	existing := h.seedUser("ada@acme.test", "Ada-Passw0rd-2026!!!!!", "Ada")
 	h.joinOrganization(existing, org, "sales_representative")
 
@@ -542,13 +569,18 @@ func TestSSOLinksAnExistingAccountByVerifiedEmail(t *testing.T) {
 	state := authURL.Query().Get("state")
 	idp.setNonce(authURL.Query().Get("nonce"))
 
-	if rec := h.completeSignIn(state, "code-link"); rec.Code != http.StatusFound {
-		t.Fatalf("callback: status %d", rec.Code)
+	rec := h.completeSignIn(state, "code-link")
+	if loc := rec.Header().Get("Location"); !strings.Contains(loc, "sso_error=account_exists") {
+		t.Fatalf("an existing account was adopted or misreported: %q", loc)
 	}
 
+	// No session was issued and no identity was attached.
+	if c := rec.Result().Cookies(); len(c) != 0 {
+		t.Fatalf("the callback issued a session for a refused sign-in: %v", c)
+	}
 	var (
-		linkedUser uuid.UUID
 		users      int
+		identities int
 	)
 	if err := h.pool().QueryRow(context.Background(),
 		`SELECT count(*) FROM users WHERE email = 'ada@acme.test'`).Scan(&users); err != nil {
@@ -558,11 +590,171 @@ func TestSSOLinksAnExistingAccountByVerifiedEmail(t *testing.T) {
 		t.Fatalf("users with that address = %d, want 1 (a duplicate was created)", users)
 	}
 	if err := h.pool().QueryRow(context.Background(),
-		`SELECT user_id FROM user_identities WHERE subject = 'subject-abc'`).Scan(&linkedUser); err != nil {
+		`SELECT count(*) FROM user_identities WHERE subject = 'subject-abc'`).Scan(&identities); err != nil {
+		t.Fatalf("count identities: %v", err)
+	}
+	if identities != 0 {
+		t.Fatalf("an identity was attached to the existing account: %d", identities)
+	}
+}
+
+// TestSSOExplicitBindingAttachesIdentityToTheSignedInAccount is the linking path:
+// the account holder, already signed in, deliberately binds the provider identity
+// to their own account. The provider asserts ada@acme.test and an account carries
+// that address, but the binding attaches to the signed-in caller, not to the
+// address-matching account.
+func TestSSOExplicitBindingAttachesIdentityToTheSignedInAccount(t *testing.T) {
+	h := ssoHarness(t)
+	idp := newFakeIDP(t)
+
+	org := h.seedOrganization("Bind")
+	admin := h.seedUser("bind-admin@acme.test", "Admin-Passw0rd-2026!!!", "Admin")
+	h.joinOrganization(admin, org, "platform_admin")
+	a := h.login("bind-admin@acme.test", "Admin-Passw0rd-2026!!!")
+	h.createProvider(a, idp, "")
+
+	holder := h.seedUser("ada@acme.test", "Ada-Passw0rd-2026!!!!!", "Ada")
+	h.joinOrganization(holder, org, "sales_representative")
+
+	authURL := h.startLink(a, "acme")
+	state := authURL.Query().Get("state")
+	if state == "" {
+		t.Fatal("the linking URL carries no state")
+	}
+	idp.setNonce(authURL.Query().Get("nonce"))
+
+	rec := h.completeSignIn(state, "code-bind")
+	if rec.Code != http.StatusFound {
+		t.Fatalf("callback: status %d, body %s", rec.Code, rec.Body.String())
+	}
+	if loc := rec.Header().Get("Location"); !strings.Contains(loc, "identity_linked=1") {
+		t.Fatalf("a successful binding did not land on the Security Center: %q", loc)
+	}
+
+	var linked uuid.UUID
+	if err := h.pool().QueryRow(context.Background(),
+		`SELECT user_id FROM user_identities WHERE subject = 'subject-abc'`).Scan(&linked); err != nil {
 		t.Fatalf("read the identity link: %v", err)
 	}
-	if linkedUser != existing {
-		t.Fatalf("the identity was linked to %s, want the existing account %s", linkedUser, existing)
+	if linked != a.userID {
+		t.Fatalf("the identity was linked to %s, want the signed-in account %s", linked, a.userID)
+	}
+	// The account that merely carried the address was not touched.
+	var holderLinks int
+	if err := h.pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM user_identities WHERE user_id = $1`, holder).Scan(&holderLinks); err != nil {
+		t.Fatalf("count the address holder's links: %v", err)
+	}
+	if holderLinks != 0 {
+		t.Fatalf("the address holder gained a link it did not ask for: %d", holderLinks)
+	}
+}
+
+// TestSSOBindingRefusesASubjectAlreadyLinkedElsewhere refuses a second link for a
+// subject that already has an owner: one subject must not mean two accounts.
+func TestSSOBindingRefusesASubjectAlreadyLinkedElsewhere(t *testing.T) {
+	h := ssoHarness(t)
+	idp := newFakeIDP(t)
+
+	org := h.seedOrganization("Conflict")
+	admin := h.seedUser("conflict-admin@acme.test", "Admin-Passw0rd-2026!!!", "Admin")
+	h.joinOrganization(admin, org, "platform_admin")
+	a := h.login("conflict-admin@acme.test", "Admin-Passw0rd-2026!!!")
+	h.createProvider(a, idp, "")
+
+	other := h.seedUser("owner@acme.test", "Owner-Passw0rd-2026!!!!!", "Owner")
+	h.joinOrganization(other, org, "sales_representative")
+	if _, err := h.pool().Exec(context.Background(),
+		`INSERT INTO user_identities (user_id, provider_id, subject, last_login_at)
+		 SELECT $1, id, 'subject-abc', now() FROM oidc_providers WHERE key = 'acme'`, other); err != nil {
+		t.Fatalf("seed the existing link: %v", err)
+	}
+
+	authURL := h.startLink(a, "acme")
+	state := authURL.Query().Get("state")
+	idp.setNonce(authURL.Query().Get("nonce"))
+
+	rec := h.completeSignIn(state, "code-conflict")
+	if loc := rec.Header().Get("Location"); !strings.Contains(loc, "sso_error=identity_conflict") {
+		t.Fatalf("a duplicate link was accepted or misreported: %q", loc)
+	}
+
+	var owner uuid.UUID
+	if err := h.pool().QueryRow(context.Background(),
+		`SELECT user_id FROM user_identities WHERE subject = 'subject-abc'`).Scan(&owner); err != nil {
+		t.Fatalf("read the identity link: %v", err)
+	}
+	if owner != other {
+		t.Fatalf("the existing link moved to %s, want %s", owner, other)
+	}
+}
+
+// TestSSOUnlinkRemovesOnlyTheCallersOwnIdentity covers the removal path and its
+// ownership predicate: a caller can only remove a link they own.
+func TestSSOUnlinkRemovesOnlyTheCallersOwnIdentity(t *testing.T) {
+	h := ssoHarness(t)
+	idp := newFakeIDP(t)
+
+	org := h.seedOrganization("Unlink")
+	admin := h.seedUser("unlink-admin@acme.test", "Admin-Passw0rd-2026!!!", "Admin")
+	h.joinOrganization(admin, org, "platform_admin")
+	a := h.login("unlink-admin@acme.test", "Admin-Passw0rd-2026!!!")
+	h.createProvider(a, idp, "")
+
+	var identityID uuid.UUID
+	if err := h.pool().QueryRow(context.Background(),
+		`INSERT INTO user_identities (user_id, provider_id, subject, last_login_at)
+		 SELECT $1, id, 'subject-unlink', now() FROM oidc_providers WHERE key = 'acme'
+		 RETURNING id`, a.userID).Scan(&identityID); err != nil {
+		t.Fatalf("seed a link: %v", err)
+	}
+
+	rec := h.do(a, http.MethodGet, "/api/v1/auth/identities", "")
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "subject-unlink") {
+		t.Fatalf("the identity was not listed: status %d, body %s", rec.Code, rec.Body.String())
+	}
+
+	other := h.seedUser("other@acme.test", "Other-Passw0rd-2026!!!!!", "Other")
+	h.joinOrganization(other, org, "sales_representative")
+	b := h.login("other@acme.test", "Other-Passw0rd-2026!!!!!")
+	if rec := h.do(b, http.MethodDelete, "/api/v1/auth/identities/"+identityID.String(), ""); rec.Code != http.StatusNotFound {
+		t.Fatalf("another account removed the link: status %d, body %s", rec.Code, rec.Body.String())
+	}
+
+	if rec := h.do(a, http.MethodDelete, "/api/v1/auth/identities/"+identityID.String(), ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("the owner could not remove the link: status %d, body %s", rec.Code, rec.Body.String())
+	}
+	var count int
+	if err := h.pool().QueryRow(context.Background(),
+		`SELECT count(*) FROM user_identities WHERE id = $1`, identityID).Scan(&count); err != nil {
+		t.Fatalf("count identities: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("the link still exists after unlinking: %d", count)
+	}
+}
+
+// TestSSOBindingRequiresCSRF proves the binding route is CSRF-checked: a request
+// with a session but no token is refused, which is what stops a third-party page
+// from silently binding an attacker's identity to a signed-in victim.
+func TestSSOBindingRequiresCSRF(t *testing.T) {
+	h := ssoHarness(t)
+	idp := newFakeIDP(t)
+
+	org := h.seedOrganization("CSRF")
+	admin := h.seedUser("csrf-admin@acme.test", "Admin-Passw0rd-2026!!!", "Admin")
+	h.joinOrganization(admin, org, "platform_admin")
+	a := h.login("csrf-admin@acme.test", "Admin-Passw0rd-2026!!!")
+	h.createProvider(a, idp, "")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/identities/link",
+		strings.NewReader(`{"provider":"acme"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: h.cfg.SessionCookieName, Value: a.token})
+	rec := httptest.NewRecorder()
+	h.server.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("the binding route accepted a request without CSRF: status %d, body %s", rec.Code, rec.Body.String())
 	}
 }
 
