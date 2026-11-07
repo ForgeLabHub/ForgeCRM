@@ -32,8 +32,7 @@ func (s *Server) handleAIStatus(w http.ResponseWriter, r *http.Request) {
 // aiProviderCatalog describes the provider kinds the platform can be configured
 // with, keyed by the value FORGECRM_AI_PROVIDER takes. The kinds themselves come
 // from config.AIProviderKinds, so the catalog cannot advertise a provider the
-// config layer would reject, nor hide one it accepts. "none" is a valid setting
-// but not a provider, so it has no entry here.
+// config layer would reject, nor hide one it accepts.
 var aiProviderCatalog = map[string]struct {
 	Description string
 	RequiresKey bool
@@ -41,7 +40,8 @@ var aiProviderCatalog = map[string]struct {
 	config.AIProviderOllama:           {"A local model served by Ollama", false},
 	config.AIProviderOpenAI:           {"OpenAI's hosted chat completions API", true},
 	config.AIProviderOpenAICompatible: {"Any OpenAI-compatible chat completions API", true},
-	config.AIProviderOpenRouter:       {"OpenRouter's hosted gateway to many models", true},
+	config.AIProviderOpenRouter:       {"OpenRouter's OpenAI-compatible gateway", true},
+	config.AIProviderGroq:             {"Groq's OpenAI-compatible chat completions API", true},
 }
 
 // handleAIProviders lists the provider kinds the platform can be configured with.
@@ -50,6 +50,7 @@ func (s *Server) handleAIProviders(w http.ResponseWriter, r *http.Request) {
 	for _, kind := range config.AIProviderKinds() {
 		entry, ok := aiProviderCatalog[kind]
 		if !ok {
+			// "none" is a valid setting but not a provider, so it is not listed.
 			continue
 		}
 		items = append(items, map[string]any{

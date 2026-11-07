@@ -8,14 +8,12 @@
 import { api, type ListResponse, type PaginationParams } from './client'
 
 export interface AIProviderStatus {
-  key: string
-  name: string
-  kind: string
   enabled: boolean
-  configured: boolean
+  provider: string
+  model: string
   healthy?: boolean
-  model?: string
-  last_error?: string
+  error?: string
+  reason?: string
 }
 
 export interface AITask {
@@ -27,8 +25,8 @@ export interface AITask {
   result?: string
   provider?: string
   model?: string
-  tokens_in?: number
-  tokens_out?: number
+  input_tokens?: number | null
+  output_tokens?: number | null
   error?: string
   created_by?: string
   created_at: string
@@ -36,16 +34,16 @@ export interface AITask {
 }
 
 export const aiApi = {
-  /** Whether AI is available at all, and with which providers. */
-  status: () => api.get<{ enabled: boolean; providers?: AIProviderStatus[] }>('/api/v1/ai/status'),
+  /** Whether AI is configured and whether the configured provider is healthy. */
+  status: () => api.get<AIProviderStatus>('/api/v1/ai/status'),
 
-  providers: () => api.get<{ items: AIProviderStatus[] }>('/api/v1/ai/providers'),
+  providers: () => api.get<{ items: { name: string; description: string; requires_api_key: boolean }[]; configured: string; note: string }>('/api/v1/ai/providers'),
 
   tasks: (params?: PaginationParams & { status?: string }) =>
     api.get<ListResponse<AITask>>('/api/v1/ai/tasks', params),
 
-  createTask: (body: { kind: string; prompt?: string; input?: Record<string, unknown> }) =>
-    api.post<AITask>('/api/v1/ai/tasks', body),
+  createTask: (body: { prompt: string; system?: string; max_tokens?: number; temperature?: number }) =>
+    api.post<{ content: string; model: string; input_tokens: number; output_tokens: number }>('/api/v1/ai/tasks', body),
 }
 
 export interface MCPTool {

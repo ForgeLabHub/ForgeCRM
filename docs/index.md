@@ -24,6 +24,7 @@
 | Как устроены данные и миграции | `database/` |
 | Какие есть API и контракты | `api/`, `docs/api/openapi.json` |
 | Что делает конкретный модуль | `modules/` |
+| Аудит и поэтапный план AI Workspace 2.0 | [AI_WORKSPACE_2_AUDIT.md](AI_WORKSPACE_2_AUDIT.md) |
 | Как эксплуатировать и обновлять | `operations/`, `deployment/` |
 | Модель угроз, права, tenant isolation | `security/` |
 | Чем доказано, что это работает | `verification/matrix.md`, CI |

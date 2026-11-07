@@ -39,7 +39,7 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 код изменился, а документ не перегенерировали.
 
 <!-- FACTS:AUTO BEGIN — генерируется backend/cmd/facts-gen, не редактировать вручную -->
-<!-- измерено на HEAD `27d7412499976868883b451a4cee646f04eaa801` -->
+<!-- измерено на HEAD `b63e773d97e43cbde225330592cf451fbfaa2566` -->
 
 ## Backend / Architecture
 
@@ -48,8 +48,8 @@ go run ./cmd/facts-gen -repo .. -check    # проверить, ничего н�
 | Пакеты Go (весь backend) | **59** | каталоги с хотя бы одним .go-файлом под backend/ |
 | Пакеты Go (backend/internal) | **53** | то же, ограничено backend/internal/** |
 | Go-файлы без тестов | **168** | *.go, кроме *_test.go |
-| Go тестовых файлов | **168** | *_test.go |
-| Тестовые функции Go | **1005** | верхнеуровневые func TestXxx(*testing.T), TestMain исключён |
+| Go тестовых файлов | **171** | *_test.go |
+| Тестовые функции Go | **1015** | верхнеуровневые func TestXxx(*testing.T), TestMain исключён |
 | Бенчмарки Go | **3** | func BenchmarkXxx |
 | Fuzz-тесты Go | **0** | func FuzzXxx |
 | Example-тесты Go | **0** | func ExampleXxx |
@@ -90,11 +90,11 @@ openapi.json генерируется из живого роутера (`cmd/ope
 
 | Метрика | Значение | Определение |
 |---|---|---|
-| Файлы src (.ts/.tsx) | **148** | frontend/src/**, включая тестовые |
-| Тестовые файлы src | **48** | *.test.ts(x)/.spec.ts(x) в frontend/src |
-| Объявления it()/test() в src | **311** | запускаемые кейсы vitest; test.describe вычитается |
+| Файлы src (.ts/.tsx) | **150** | frontend/src/**, включая тестовые |
+| Тестовые файлы src | **50** | *.test.ts(x)/.spec.ts(x) в frontend/src |
+| Объявления it()/test() в src | **318** | запускаемые кейсы vitest; test.describe вычитается |
 | Файлы страниц | **39** | компоненты в frontend/src/pages (без admin/, без тестов) |
-| Тесты страниц | **21** | *.test.tsx рядом со страницами |
+| Тесты страниц | **22** | *.test.tsx рядом со страницами |
 | Маршрутов <Route path> | **47** | объявления в frontend/src/App.tsx (регистр маршрутизации SPA) |
 | Уникальных путей маршрутов | **47** | различающиеся path по всем <Routes>-деревьям App.tsx; повторения внутри одного дерева запрещены (гейт route_paths_unique) |
 | E2E спецификации | **8** | *.spec.ts в frontend/e2e |

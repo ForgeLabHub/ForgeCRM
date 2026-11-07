@@ -176,12 +176,16 @@ the sweep reports the rows a real run would remove and deletes nothing until
 ## AI provider (optional)
 
 The platform runs fully without a model provider. `ollama` keeps prompts local.
+Naming a hosted provider (`openai`, `groq`) is enough: its public endpoint is
+filled in unless `FORGECRM_AI_BASE_URL` overrides it. `ollama` and
+`openai_compatible` always need an explicit base URL. The provider kind is a
+closed set; an unrecognised value is rejected at startup.
 
 | Name | Component | Required | Default | Description | Example | Secret | Production |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `FORGECRM_AI_ENABLED` | API, Worker | no | `false` | Enables AI features. Disabled when the provider is `none`. | `false` | no | no |
-| `FORGECRM_AI_PROVIDER` | API, Worker | no | `none` | Provider kind: `none`, `ollama`, `openai`, `openai_compatible`, `openrouter`. Inferred as `openrouter` when `OPENROUTER_API_KEY` is set and this is unset. An unknown value is a startup error. | `ollama` | no | no |
-| `FORGECRM_AI_BASE_URL` | API, Worker | yes when enabled | none | Provider base URL. For `openrouter` a bare host is completed to `/api/v1`. Alias: `LLM_BASE_URL`. | `http://ollama:11434` | no | no |
+| `FORGECRM_AI_PROVIDER` | API, Worker | no | `none` | Provider kind: `none`, `ollama`, `openai`, `openai_compatible`, `openrouter`, `groq`. Inferred as `openrouter` when `OPENROUTER_API_KEY` is set and this is unset. An unknown value is a startup error. | `ollama` | no | no |
+| `FORGECRM_AI_BASE_URL` | API, Worker | yes when enabled | none | Provider base URL. Implied for `openai` and `groq`; for `openrouter` a bare host is completed to `/api/v1`. Alias: `LLM_BASE_URL`. | `http://ollama:11434` | no | no |
 | `FORGECRM_AI_API_KEY` | API, Worker | yes for `openrouter` | none | Provider API key. Alias: `OPENROUTER_API_KEY`. | a secret string | yes | no |
 | `FORGECRM_AI_MODEL` | API, Worker | yes when enabled | none | Model name. Alias: `LLM_MODEL`. | `llama3.1` | no | no |
 | `FORGECRM_AI_HTTP_REFERER` | API, Worker | no | none | Sent as `HTTP-Referer` to gateways that display it (OpenRouter). Omitted when empty. | `https://forgecrm.example` | no | no |

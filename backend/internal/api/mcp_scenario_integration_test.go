@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -174,8 +175,13 @@ func TestMCPScenarioAgentCreatesViaBearerCredentialAndIsAudited(t *testing.T) {
 		t.Fatalf("tools/list with a credential: status %d", code)
 	}
 	names := mcpToolNames(t, listResp)
-	if len(names) != 8 {
-		t.Errorf("the agent discovered %d tools, want 8: %v", len(names), names)
+	if len(names) != 9 {
+		t.Errorf("the agent discovered %d tools, want 9: %v", len(names), names)
+	}
+	// create_account is the newest write tool; a discovery list that omits it would
+	// hide a capability the registry advertises.
+	if !slices.Contains(names, "create_account") {
+		t.Errorf("the agent did not discover create_account: %v", names)
 	}
 
 	// 2. Read: account_summary returns what the credential may read and withholds the
@@ -322,6 +328,36 @@ func TestMCPAccountSummaryIncludesSectionsWhenPermitted(t *testing.T) {
 		if _, ok := summary[section]; !ok {
 			t.Errorf("account_summary omitted %q though the credential held the read permission: %v", section, summary)
 		}
+	}
+}
+
+// A partial list must not be presented as a complete monetary total.
+func TestMCPAccountSummaryReportsPartialDealPage(t *testing.T) {
+	c := newCredHarness(t)
+	token, _ := c.mint(t, "deal reader", []string{
+		"accounts.read", "deals.read", "ai.tools.execute",
+	})
+	account := c.seedAccount(c.org, "Paged Client")
+	pipelineID, stage, _ := c.seedPipelineAndStages(t)
+	for i := 0; i < 11; i++ {
+		c.seedDeal(t, pipelineID, stage, account, "Deal")
+	}
+	resp, code := c.mcpBearerJSONRPC(token,
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"account_summary","arguments":{"account_id":"`+account.String()+`"}}}`)
+	if code != http.StatusOK {
+		t.Fatalf("account_summary: status %d", code)
+	}
+	summary := mcpResultObject(t, resp)
+	deals, ok := summary["deals"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing deals: %v", summary)
+	}
+	recent, ok := deals["recent"].([]any)
+	if !ok || len(recent) != 10 || deals["total"] != float64(11) || deals["recent_is_complete"] != false {
+		t.Fatalf("unexpected deal page: %v", deals)
+	}
+	if _, ok := deals["open_value"]; ok {
+		t.Fatal("a partial, potentially multi-currency page must not be called an open value total")
 	}
 }
 

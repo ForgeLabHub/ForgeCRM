@@ -320,41 +320,22 @@ func TestCookieConfiguration(t *testing.T) {
 	}
 }
 
-// A deployment that names the provider and a key but omits the base URL must
-// still reach OpenRouter: the base URL has a provider default, so naming the
-// provider is enough. The aliases and the key requirement are covered in
-// openrouter_test.go; these pin the remaining default-and-override behaviour.
-func TestOpenRouterProviderFillsInItsPublicEndpoint(t *testing.T) {
+// The AI provider kind is a closed set. An unrecognised value used to build no
+// provider at all while FORGECRM_AI_ENABLED still read as on, so the subsystem
+// looked configured and answered "provider unavailable" on every call. These
+// tests pin the validation that turns that into a startup error, and the default
+// base URL that lets a hosted provider be named without repeating its endpoint.
+
+func TestUnknownAIProviderIsRejectedByTheClosedSet(t *testing.T) {
 	baseEnv(t)
-	t.Setenv("FORGECRM_AI_ENABLED", "true")
-	t.Setenv("FORGECRM_AI_PROVIDER", "openrouter")
-	t.Setenv("FORGECRM_AI_API_KEY", "sk-or-test")
-	t.Setenv("FORGECRM_AI_MODEL", "google/gemma-4-31b-it:free")
-	t.Setenv("FORGECRM_AI_BASE_URL", "")
+	t.Setenv("FORGECRM_AI_PROVIDER", "grok")
 
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
+	_, err := Load()
+	if err == nil {
+		t.Fatal("an unknown AI provider was accepted; the AI layer would build nothing while reading as enabled")
 	}
-	if cfg.AI.BaseURL != "https://openrouter.ai/api/v1" {
-		t.Fatalf("openrouter base URL = %q, want the public endpoint", cfg.AI.BaseURL)
-	}
-}
-
-func TestExplicitAIBaseURLOverridesTheOpenRouterDefault(t *testing.T) {
-	baseEnv(t)
-	t.Setenv("FORGECRM_AI_ENABLED", "true")
-	t.Setenv("FORGECRM_AI_PROVIDER", "openrouter")
-	t.Setenv("FORGECRM_AI_API_KEY", "sk-or-test")
-	t.Setenv("FORGECRM_AI_MODEL", "google/gemma-4-31b-it:free")
-	t.Setenv("FORGECRM_AI_BASE_URL", "https://gateway.internal.example/v1")
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
-	}
-	if cfg.AI.BaseURL != "https://gateway.internal.example/v1" {
-		t.Fatalf("explicit base URL was ignored: %q", cfg.AI.BaseURL)
+	if !strings.Contains(err.Error(), "FORGECRM_AI_PROVIDER") {
+		t.Fatalf("the error does not name the setting: %v", err)
 	}
 }
 
@@ -371,5 +352,80 @@ func TestAIProviderNoneIsAcceptedAndDisablesAI(t *testing.T) {
 	}
 	if cfg.AI.Enabled {
 		t.Fatal("AI stayed enabled with provider=none")
+	}
+}
+
+func TestGroqProviderFillsInItsPublicEndpoint(t *testing.T) {
+	baseEnv(t)
+	t.Setenv("FORGECRM_AI_ENABLED", "true")
+	t.Setenv("FORGECRM_AI_PROVIDER", "groq")
+	t.Setenv("FORGECRM_AI_MODEL", "openai/gpt-oss-20b")
+	// Deliberately leave FORGECRM_AI_BASE_URL unset: naming the provider is enough.
+	t.Setenv("FORGECRM_AI_BASE_URL", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.AI.BaseURL != "https://api.groq.com/openai/v1" {
+		t.Fatalf("groq base URL = %q, want the public endpoint", cfg.AI.BaseURL)
+	}
+	if !cfg.AI.Enabled {
+		t.Fatal("AI is not enabled with a groq provider and a model")
+	}
+}
+
+func TestExplicitAIBaseURLOverridesTheProviderDefault(t *testing.T) {
+	baseEnv(t)
+	t.Setenv("FORGECRM_AI_ENABLED", "true")
+	t.Setenv("FORGECRM_AI_PROVIDER", "groq")
+	t.Setenv("FORGECRM_AI_MODEL", "openai/gpt-oss-20b")
+	// A self-hosted gateway that speaks the same protocol must win over the
+	// hosted default.
+	t.Setenv("FORGECRM_AI_BASE_URL", "https://gateway.internal.example/v1")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.AI.BaseURL != "https://gateway.internal.example/v1" {
+		t.Fatalf("explicit base URL was ignored: %q", cfg.AI.BaseURL)
+	}
+}
+
+func TestAIProviderIsNormalised(t *testing.T) {
+	baseEnv(t)
+	t.Setenv("FORGECRM_AI_ENABLED", "true")
+	t.Setenv("FORGECRM_AI_PROVIDER", "  Groq ")
+	t.Setenv("FORGECRM_AI_MODEL", "openai/gpt-oss-20b")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v; the value should be trimmed and lowercased, not rejected", err)
+	}
+	if cfg.AI.Provider != "groq" {
+		t.Fatalf("provider = %q, want groq", cfg.AI.Provider)
+	}
+}
+
+// TestOpenRouterProviderFillsInItsPublicEndpoint pins the OpenRouter-specific
+// default: a deployment that names the provider and a key but omits the base URL
+// must still reach OpenRouter. The groq default and the generic override are
+// covered above; this is the one hosted provider whose endpoint the loader
+// normalises rather than reading from the base-URL table.
+func TestOpenRouterProviderFillsInItsPublicEndpoint(t *testing.T) {
+	baseEnv(t)
+	t.Setenv("FORGECRM_AI_ENABLED", "true")
+	t.Setenv("FORGECRM_AI_PROVIDER", "openrouter")
+	t.Setenv("FORGECRM_AI_API_KEY", "sk-or-test")
+	t.Setenv("FORGECRM_AI_MODEL", "google/gemma-4-31b-it:free")
+	t.Setenv("FORGECRM_AI_BASE_URL", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.AI.BaseURL != "https://openrouter.ai/api/v1" {
+		t.Fatalf("openrouter base URL = %q, want the public endpoint", cfg.AI.BaseURL)
 	}
 }

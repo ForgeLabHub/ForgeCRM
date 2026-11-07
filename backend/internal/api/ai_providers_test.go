@@ -15,12 +15,13 @@ import (
 )
 
 // TestAIProviderCatalogMatchesTheAcceptedSet pins the provider catalog the API
-// publishes against the set config.Validate accepts for FORGECRM_AI_PROVIDER.
+// publishes against the closed set config validates FORGECRM_AI_PROVIDER against.
 //
 // The catalog once listed only "ollama" and "openai_compatible" while config also
-// accepted "openai" and "openrouter", so the endpoint that is meant to tell an
-// operator what can be configured omitted kinds that work. This test fails if a
-// kind is added to one side and not the other.
+// accepted "openai" and "groq", so the endpoint that is supposed to tell an
+// operator what can be configured omitted kinds that work. Deriving the list from
+// config.AIProviderKinds makes them the same list by construction; this test fails
+// if a future kind is added to one place and not the other.
 func TestAIProviderCatalogMatchesTheAcceptedSet(t *testing.T) {
 	srv := newTestServer(t, &Deps{
 		Config: &config.Config{},
@@ -55,19 +56,27 @@ func TestAIProviderCatalogMatchesTheAcceptedSet(t *testing.T) {
 		listed[it.Name] = true
 	}
 
-	// Every advertised kind must be one config.Validate accepts, or the endpoint
-	// tells an operator to set a value that fails at startup.
-	for _, name := range []string{"ollama", "openai", "openai_compatible", "openrouter"} {
-		if !listed[name] {
-			t.Errorf("provider %q is accepted by config but missing from the catalog", name)
+	for _, kind := range config.AIProviderKinds() {
+		if kind == config.AIProviderNone {
+			continue
 		}
-		if err := probeProviderAccepted(name); err != nil {
-			t.Errorf("catalog lists %q but config rejects it: %v", name, err)
+		if !listed[kind] {
+			t.Errorf("provider %q is accepted by config but missing from the catalog", kind)
+		}
+		// The endpoint and config.Validate must agree end to end: a kind the catalog
+		// advertises has to survive Validate with the fields a real deployment sets,
+		// or an operator is told to configure a value that fails at startup.
+		if err := probeProviderAccepted(kind); err != nil {
+			t.Errorf("catalog lists %q but config rejects it: %v", kind, err)
 		}
 	}
-	// "none" is a setting, not a provider, and must not be advertised as one.
-	if listed["none"] {
-		t.Error(`the catalog lists "none", which is a setting, not a provider`)
+	for name := range listed {
+		if name == config.AIProviderNone {
+			t.Errorf(`the catalog lists "none", which is a setting, not a provider`)
+		}
+	}
+	if !listed[config.AIProviderGroq] {
+		t.Error("groq is not advertised; a hosted OpenAI-compatible provider must be listed")
 	}
 }
 
