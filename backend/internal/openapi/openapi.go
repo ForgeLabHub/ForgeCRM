@@ -200,6 +200,8 @@ var SessionOnly = map[string]string{
 	"POST /api/v1/auth/logout":              "Sign out and revoke the current session.",
 	"GET /api/v1/auth/sessions":             "The caller's own active sessions.",
 	"GET /api/v1/auth/identities":           "The caller's own linked single sign-on identities.",
+	"POST /api/v1/auth/identities/link":     "Begin explicitly linking a single sign-on identity to the caller's own account, returning the authorization URL to visit.",
+	"DELETE /api/v1/auth/identities/{id}":   "Remove one of the caller's own linked single sign-on identities.",
 	"DELETE /api/v1/auth/sessions/{id}":     "Revoke one of the caller's own sessions.",
 	"POST /api/v1/auth/password/change":     "Change the caller's own password.",
 	"POST /api/v1/auth/mfa/enroll":          "Begin enrolling a second factor for the caller.",

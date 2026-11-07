@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -21,6 +22,51 @@ import (
 type ssoProvidersResponse struct {
 	Enabled   bool                  `json:"enabled"`
 	Providers []oidc.PublicProvider `json:"providers"`
+}
+
+// ssoStateCookieName carries the browser binding for a sign-in that is in flight.
+// It is separate from the session cookie: it is short lived and is cleared as soon
+// as the callback reads it.
+const ssoStateCookieName = "forgecrm_sso_state"
+
+// setSSOStateCookie records the binding secret the callback must see again. It is
+// HttpOnly so script cannot read it, and its lifetime matches the state row.
+func (s *Server) setSSOStateCookie(w http.ResponseWriter, value string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     ssoStateCookieName,
+		Value:    value,
+		Path:     "/",
+		Domain:   s.deps.Config.CookieDomain,
+		MaxAge:   int(oidc.StateTTL.Seconds()),
+		HttpOnly: true,
+		Secure:   s.deps.Config.CookieSecure,
+		SameSite: s.ssoStateCookieSameSite(),
+	})
+}
+
+// clearSSOStateCookie removes the binding cookie. It is called on every callback,
+// success or failure, so a completed or rejected state leaves nothing behind.
+func (s *Server) clearSSOStateCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     ssoStateCookieName,
+		Value:    "",
+		Path:     "/",
+		Domain:   s.deps.Config.CookieDomain,
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   s.deps.Config.CookieSecure,
+		SameSite: s.ssoStateCookieSameSite(),
+	})
+}
+
+// ssoStateCookieSameSite never returns Strict: the identity provider sends the
+// browser back with a cross-site top-level navigation, and a Strict cookie is
+// withheld on that navigation, which would break every sign-in.
+func (s *Server) ssoStateCookieSameSite() http.SameSite {
+	if s.deps.Config.CookieSameSite == "none" {
+		return http.SameSiteNoneMode
+	}
+	return http.SameSiteLaxMode
 }
 
 func (s *Server) handleListSSOProviders(w http.ResponseWriter, r *http.Request) {
@@ -44,18 +90,70 @@ func (s *Server) handleListSSOProviders(w http.ResponseWriter, r *http.Request) 
 //
 // It is a redirect rather than a JSON response because the browser must leave the
 // application for the provider's own sign-in page.
+//
+// This route is anonymous: it only ever starts a sign-in, never a binding, so a
+// request that carries a session still resolves the account by subject alone. The
+// explicit-binding entry point is handleOIDCLinkStart, which is POST and CSRF-checked.
 func (s *Server) handleOIDCStart(w http.ResponseWriter, r *http.Request) {
 	providerKey := strings.TrimSpace(r.URL.Query().Get("provider"))
 	if providerKey == "" {
 		httpx.WriteError(w, r, httpx.ValidationError(map[string]string{"provider": "the provider query parameter is required"}))
 		return
 	}
-	target, err := s.deps.OIDC.Begin(r.Context(), providerKey, r.URL.Query().Get("return_to"))
+	target, binding, err := s.deps.OIDC.Begin(r.Context(), providerKey, r.URL.Query().Get("return_to"), uuid.Nil)
 	if err != nil {
 		s.respondOIDCError(w, r, err)
 		return
 	}
+	// The browser must present this cookie when the provider redirects back, so a
+	// state captured from this flow cannot be completed in another browser.
+	s.setSSOStateCookie(w, binding)
 	http.Redirect(w, r, target, http.StatusFound)
+}
+
+// oidcLinkStartRequest asks for the authorization URL that binds a provider to the
+// caller's own account.
+type oidcLinkStartRequest struct {
+	Provider string `json:"provider"`
+}
+
+// oidcLinkStartResponse carries the URL the browser must visit to complete the
+// binding at the provider.
+type oidcLinkStartResponse struct {
+	AuthorizationURL string `json:"authorization_url"`
+}
+
+// handleOIDCLinkStart begins an explicit binding: the caller, already signed in,
+// asks to attach a provider identity to their own account.
+//
+// It is a POST that returns the URL rather than a redirect, so the request carries
+// the session cookie *and* a CSRF token. A top-level GET navigation would send the
+// cookie under the SameSite=Lax default without proving the user's intent, which is
+// exactly the shape of an attack that binds an attacker's identity to a victim's
+// account.
+func (s *Server) handleOIDCLinkStart(w http.ResponseWriter, r *http.Request) {
+	sess, ok := sessionFrom(r.Context())
+	if !ok {
+		httpx.WriteError(w, r, httpx.ErrUnauth)
+		return
+	}
+	var req oidcLinkStartRequest
+	if err := decodeBody(w, r, &req); err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	providerKey := strings.TrimSpace(req.Provider)
+	if providerKey == "" {
+		httpx.WriteError(w, r, httpx.ValidationError(map[string]string{"provider": "the provider is required"}))
+		return
+	}
+	target, binding, err := s.deps.OIDC.Begin(r.Context(), providerKey, "/admin/security", sess.UserID)
+	if err != nil {
+		s.respondOIDCError(w, r, err)
+		return
+	}
+	s.setSSOStateCookie(w, binding)
+	httpx.WriteJSON(w, oidcLinkStartResponse{AuthorizationURL: target})
 }
 
 // handleOIDCCallback completes the flow: it exchanges the code, verifies the ID
@@ -74,10 +172,30 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	identity, err := s.deps.OIDC.Complete(r.Context(), q.Get("code"), q.Get("state"),
+	// Read the binding before anything else can clear it, then drop the cookie so
+	// it cannot be replayed. The service compares it against the hash stored with
+	// the state; a state presented without its cookie is refused.
+	binding := ""
+	if c, err := r.Cookie(ssoStateCookieName); err == nil {
+		binding = c.Value
+	}
+	s.clearSSOStateCookie(w)
+
+	identity, err := s.deps.OIDC.Complete(r.Context(), q.Get("code"), q.Get("state"), binding,
 		httpx.ClientIP(r), r.UserAgent())
 	if err != nil {
+		if oidc.IsBindingError(err) {
+			s.redirectSSOBindingFailure(w, r, ssoErrorCode(err))
+			return
+		}
 		s.redirectSSOFailure(w, r, ssoErrorCode(err))
+		return
+	}
+
+	if identity.Bound {
+		// An explicit binding. The caller was already signed in and keeps that
+		// session; issuing a new one would only churn sessions for no gain.
+		http.Redirect(w, r, "/admin/security?identity_linked=1", http.StatusFound)
 		return
 	}
 
@@ -104,7 +222,7 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		Message: "single sign-on login succeeded",
 		Metadata: map[string]any{
 			"provider":    identity.ProviderKey,
-			"linked":      identity.Linked,
+			"linked":      identity.IdentityExists,
 			"provisioned": identity.Provisioned,
 		},
 		IP: httpx.ClientIP(r), UserAgent: r.UserAgent(),
@@ -116,9 +234,17 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 // redirectSSOFailure sends the browser back to the sign-in page with a code the
-// interface maps to a message.
+// interface maps to a message. A binding failure takes the other path, through
+// redirectSSOBindingFailure, because the user is still signed in.
 func (s *Server) redirectSSOFailure(w http.ResponseWriter, r *http.Request, code string) {
 	http.Redirect(w, r, "/login?sso_error="+code, http.StatusFound)
+}
+
+// redirectSSOBindingFailure lands a failed binding on the Security Center, where
+// the user started it, instead of on the sign-in page. The user is still signed in
+// (binding never re-authenticates), so sending them to sign in would be confusing.
+func (s *Server) redirectSSOBindingFailure(w http.ResponseWriter, r *http.Request, code string) {
+	http.Redirect(w, r, "/admin/security?sso_error="+code, http.StatusFound)
 }
 
 // safeSSOReturn validates the return target again on the way out, so a value that
@@ -134,6 +260,10 @@ func ssoErrorCode(err error) string {
 	switch {
 	case oidc.IsNoAccount(err):
 		return "no_account"
+	case oidc.IsBindingConflict(err):
+		return "identity_conflict"
+	case errors.Is(err, oidc.ErrAccountExists):
+		return "account_exists"
 	case strings.Contains(err.Error(), "not active"):
 		return "account_inactive"
 	default:
@@ -145,7 +275,7 @@ func (s *Server) respondOIDCError(w http.ResponseWriter, r *http.Request, err er
 	switch {
 	case err == oidc.ErrDisabled:
 		httpx.WriteError(w, r, httpx.ErrDisabled)
-	case err == oidc.ErrUnknownProvider:
+	case err == oidc.ErrUnknownProvider, err == oidc.ErrProviderNotInScope:
 		httpx.WriteError(w, r, httpx.NewError(404, httpx.CodeNotFound, err.Error()))
 	case err == oidc.ErrStateInvalid:
 		httpx.WriteError(w, r, httpx.NewError(400, httpx.CodeBadRequest, err.Error()))
@@ -153,6 +283,10 @@ func (s *Server) respondOIDCError(w http.ResponseWriter, r *http.Request, err er
 		httpx.WriteError(w, r, httpx.NewError(401, httpx.CodeUnauthorized, err.Error()))
 	case err == oidc.ErrNoAccount:
 		httpx.WriteError(w, r, httpx.NewError(403, httpx.CodeForbidden, err.Error()))
+	case err == oidc.ErrIdentityAlreadyLinked, err == oidc.ErrIdentityInUse:
+		httpx.WriteError(w, r, httpx.NewError(409, httpx.CodeConflict, err.Error()))
+	case err == oidc.ErrIdentityNotFound:
+		httpx.WriteError(w, r, httpx.NewError(404, httpx.CodeNotFound, err.Error()))
 	case err == oidc.ErrProviderUnreachable:
 		httpx.WriteError(w, r, httpx.NewError(502, httpx.CodeInternal, err.Error()))
 	default:
@@ -269,14 +403,12 @@ func (s *Server) handleCreateOIDCProvider(w http.ResponseWriter, r *http.Request
 		httpx.WriteError(w, r, err)
 		return
 	}
-	// A provider created by a tenant administrator is scoped to that tenant unless
-	// the caller is a platform owner, who may create a platform-wide one.
-	in := req.toServiceInput()
-	if in.OrganizationID == nil && !p.IsPlatformOwner {
-		orgID := p.OrganizationID
-		in.OrganizationID = &orgID
-	}
-	provider, err := s.deps.OIDC.Create(r.Context(), in, p.UserID)
+	// A tenant administrator creates a provider inside their own organization
+	// whatever the body asked for; only a platform owner may create the
+	// platform-wide provider every tenant signs in through. The scope is passed to
+	// the service so the decision does not depend on the handler alone.
+	scope := oidc.ProviderScope{OrgID: p.OrganizationID, IsPlatformOwner: p.IsPlatformOwner}
+	provider, err := s.deps.OIDC.Create(r.Context(), req.toServiceInput(), scope, p.UserID)
 	if err != nil {
 		s.respondOIDCError(w, r, err)
 		return
@@ -303,8 +435,8 @@ func (s *Server) handleUpdateOIDCProvider(w http.ResponseWriter, r *http.Request
 		httpx.WriteError(w, r, err)
 		return
 	}
-	in := req.toServiceInput()
-	provider, err := s.deps.OIDC.Update(r.Context(), id, in, p.UserID)
+	scope := oidc.ProviderScope{OrgID: p.OrganizationID, IsPlatformOwner: p.IsPlatformOwner}
+	provider, err := s.deps.OIDC.Update(r.Context(), id, req.toServiceInput(), scope, p.UserID)
 	if err != nil {
 		s.respondOIDCError(w, r, err)
 		return
@@ -326,7 +458,8 @@ func (s *Server) handleDeleteOIDCProvider(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
-	if err := s.deps.OIDC.Delete(r.Context(), id); err != nil {
+	scope := oidc.ProviderScope{OrgID: p.OrganizationID, IsPlatformOwner: p.IsPlatformOwner}
+	if err := s.deps.OIDC.Delete(r.Context(), id, scope); err != nil {
 		s.respondOIDCError(w, r, err)
 		return
 	}
@@ -349,8 +482,25 @@ func (s *Server) handleListMyIdentities(w http.ResponseWriter, r *http.Request) 
 		s.respondDomainError(w, r, err)
 		return
 	}
-	if identities == nil {
-		identities = []map[string]any{}
+	httpx.WriteJSONList(w, identities)
+}
+
+// handleUnlinkMyIdentity removes one of the caller's own provider links. The user
+// id comes from the session and is part of the delete predicate, so a caller can
+// only remove a link they own.
+func (s *Server) handleUnlinkMyIdentity(w http.ResponseWriter, r *http.Request) {
+	sess, ok := sessionFrom(r.Context())
+	if !ok {
+		httpx.WriteError(w, r, httpx.ErrUnauth)
+		return
 	}
-	httpx.WriteJSON(w, map[string]any{"items": identities})
+	id, ok := pathUUID(w, r, "id")
+	if !ok {
+		return
+	}
+	if err := s.deps.OIDC.UnlinkIdentity(r.Context(), sess.UserID, id, httpx.ClientIP(r), r.UserAgent()); err != nil {
+		s.respondOIDCError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
