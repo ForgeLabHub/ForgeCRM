@@ -154,6 +154,21 @@ type TelegramConfig struct {
 	BotToken       string
 	WebhookSecret  string
 	WebhookEnabled bool
+	// PollTimeout is how long the standalone bot holds getUpdates open. Long
+	// polling is the default transport because it needs no public webhook.
+	PollTimeout time.Duration
+	// PollInterval is the pause between polls when there are no updates.
+	PollInterval time.Duration
+	// APIBase overrides the Bot API root. Empty means the public API. It exists so
+	// a deployment (or a test) can point the client at a mock without code changes.
+	APIBase string
+	// DeliverInService makes the standalone bot service send queued task
+	// notifications. It defaults to true; set it false to keep delivery in the
+	// worker. Both paths share one handler and the queue claim makes them safe.
+	DeliverInService bool
+	// HealthAddr is the address the service serves /healthz and /readyz on. An
+	// empty value disables the health server.
+	HealthAddr string
 }
 
 // AIConfig configures the optional AI layer.
@@ -463,6 +478,15 @@ func Load() (*Config, error) {
 		BotToken:       env("FORGECRM_TELEGRAM_BOT_TOKEN", ""),
 		WebhookSecret:  env("FORGECRM_TELEGRAM_WEBHOOK_SECRET", ""),
 		WebhookEnabled: envBool("FORGECRM_TELEGRAM_WEBHOOK_ENABLED", false),
+		APIBase:        env("FORGECRM_TELEGRAM_API_BASE", ""),
+		HealthAddr:     env("FORGECRM_TELEGRAM_HEALTH_ADDR", ""),
+	}
+	c.Telegram.DeliverInService = envBool("FORGECRM_TELEGRAM_DELIVER_IN_SERVICE", true)
+	if c.Telegram.PollTimeout, err = envDuration("FORGECRM_TELEGRAM_POLL_TIMEOUT", 30*time.Second); err != nil {
+		return nil, err
+	}
+	if c.Telegram.PollInterval, err = envDuration("FORGECRM_TELEGRAM_POLL_INTERVAL", time.Second); err != nil {
+		return nil, err
 	}
 	if c.Telegram.Enabled && c.Telegram.BotToken == "" {
 		// A token-less bot disables itself rather than breaking startup.

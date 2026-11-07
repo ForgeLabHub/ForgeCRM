@@ -1,4 +1,4 @@
-package api
+package telegram
 
 import (
 	"context"
@@ -15,10 +15,10 @@ import (
 	"github.com/geff1778/forgecrm/internal/telegramtext"
 )
 
-// telegramTaskOperations is the narrow, ownership-enforcing CRM interface. Callers must resolve
-// the principal from the active Telegram link for each update, not trust an ID
-// or a principal supplied in the message.
-type telegramTaskOperations interface {
+// taskOperations is the narrow, ownership-enforcing CRM interface. Callers must
+// resolve the principal from the active Telegram link for each update, not trust
+// an ID or a principal supplied in the message.
+type taskOperations interface {
 	ListMyOpenTasks(context.Context, *rbac.Principal, *time.Time, *time.Time, int) ([]crm.Task, error)
 	ListMyOverdueTasks(context.Context, *rbac.Principal, time.Time, int) ([]crm.Task, error)
 	GetMyTask(context.Context, *rbac.Principal, uuid.UUID) (*crm.Task, error)
@@ -26,11 +26,42 @@ type telegramTaskOperations interface {
 	RescheduleMyTask(context.Context, *rbac.Principal, uuid.UUID, time.Time) (*crm.Task, error)
 }
 
-// handleTelegramTaskCommand returns a localized reply and its inline keyboard, or
-// an error. The transport must translate errors into generic responses and never
+// trackedTasks wraps a taskOperations and records the tasks it returned, so
+// delivery can revalidate each one under a row lock before the reply is sent.
+type trackedTasks struct {
+	taskOperations
+	snapshots []taskSnapshot
+}
+
+func (t *trackedTasks) ListMyOpenTasks(ctx context.Context, p *rbac.Principal, from, before *time.Time, limit int) ([]crm.Task, error) {
+	items, err := t.taskOperations.ListMyOpenTasks(ctx, p, from, before, limit)
+	for _, item := range items {
+		t.snapshots = append(t.snapshots, taskSnapshot{ID: item.ID, UpdatedAt: item.UpdatedAt})
+	}
+	return items, err
+}
+
+func (t *trackedTasks) ListMyOverdueTasks(ctx context.Context, p *rbac.Principal, now time.Time, limit int) ([]crm.Task, error) {
+	items, err := t.taskOperations.ListMyOverdueTasks(ctx, p, now, limit)
+	for _, item := range items {
+		t.snapshots = append(t.snapshots, taskSnapshot{ID: item.ID, UpdatedAt: item.UpdatedAt})
+	}
+	return items, err
+}
+
+func (t *trackedTasks) GetMyTask(ctx context.Context, p *rbac.Principal, id uuid.UUID) (*crm.Task, error) {
+	item, err := t.taskOperations.GetMyTask(ctx, p, id)
+	if err == nil && item != nil {
+		t.snapshots = append(t.snapshots, taskSnapshot{ID: item.ID, UpdatedAt: item.UpdatedAt})
+	}
+	return item, err
+}
+
+// handleTaskCommand returns a localized reply and its inline keyboard, or an
+// error. The transport must translate errors into generic responses and never
 // expose or log the incoming text.
 // /today uses UTC explicitly; /due requires an RFC3339 timestamp with timezone.
-func handleTelegramTaskCommand(ctx context.Context, tasks telegramTaskOperations, p *rbac.Principal, text string, now time.Time, loc telegramtext.Locale) (string, [][]notify.InlineButton, error) {
+func handleTaskCommand(ctx context.Context, tasks taskOperations, p *rbac.Principal, text string, now time.Time, loc telegramtext.Locale) (string, [][]notify.InlineButton, error) {
 	parts := strings.Fields(text)
 	if len(parts) == 0 {
 		return telegramtext.T(loc, telegramtext.KeyUsageTask), nil, nil

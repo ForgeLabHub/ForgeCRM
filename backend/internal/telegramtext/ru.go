@@ -17,6 +17,9 @@ var russian = map[Key]string{
 		"Что я умею:\n" +
 		"• /tasks — твои активные задачи\n" +
 		"• /overdue — твои просроченные задачи\n" +
+		"• /deals [open|won|lost] — последние сделки\n" +
+		"• /pipeline [имя] — открытая воронка по этапам\n" +
+		"• /search <запрос> — поиск по аккаунтам, контактам, лидам, сделкам, тикетам\n" +
 		"• /profile — твой привязанный аккаунт\n" +
 		"• /language — сменить язык\n" +
 		"• /help — эта справка\n\n" +
@@ -62,4 +65,19 @@ var russian = map[Key]string{
 	KeyDuePrefix:          "срок %s",
 	KeyOpenTaskWithID:     "Открой задачу командой /task и её ID.",
 	KeyTaskLine:           "%s — %s",
+	KeySearchUsage:        "Отправь /search <запрос> — минимум 2 символа — чтобы искать по аккаунтам, контактам, лидам, сделкам и тикетам, которые тебе доступны.",
+	KeySearchHeader:       "Результаты поиска:",
+	KeySearchEmpty:        "По этому запросу ничего не найдено.",
+	KeyDealsHeader:        "Сделки по фильтру «%s»:",
+	KeyDealsEmpty:         "По этому фильтру сделок нет.",
+	KeyDealLine:           "%s — %s %s",
+	KeyPipelineHeader:     "%s (открытая воронка):",
+	KeyPipelineEmpty:      "В этой воронке нет открытых сделок.",
+	KeyPipelineLine:       "%s: %d · %s",
+	KeyUsageSearch:        "Использование: /search <запрос>",
+	KeyUsageDeals:         "Использование: /deals [статус] (open, won, lost)",
+	KeyUsagePipeline:      "Использование: /pipeline [имя]",
+	BtnSearch:             "🔎 Поиск",
+	BtnDeals:              "💼 Сделки",
+	BtnPipeline:           "📈 Воронка",
 }

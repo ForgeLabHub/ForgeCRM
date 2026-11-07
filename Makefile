@@ -25,6 +25,7 @@ FRONTEND_DIR    := frontend
 BIN_DIR         := bin
 API_BIN         := $(BIN_DIR)/forgecrm-api
 WORKER_BIN      := $(BIN_DIR)/forgecrm-worker
+TELEGRAM_BIN    := $(BIN_DIR)/forgecrm-telegram
 TEST_DATABASE_URL ?= postgres://forgecrm:forgecrm@127.0.0.1:5432/forgecrm_test?sslmode=disable
 # Redis нужен распределённому лимитеру и тестам кросс-репличности. Раньше эти
 # тесты молча пропускались без него; теперь integration-прогон их требует, потому
@@ -85,7 +86,7 @@ test: test-unit test-frontend ## Unit-тесты backend + frontend
 
 ## --- Уровень B: артефакты --------------------------------------------------
 
-build: build-api build-worker build-frontend ## Собрать все артефакты локально
+build: build-api build-worker build-telegram build-frontend ## Собрать все артефакты локально
 
 build-api: ## Собрать бинарник API
 	@mkdir -p $(BIN_DIR)
@@ -96,6 +97,11 @@ build-worker: ## Собрать бинарник worker
 	@mkdir -p $(BIN_DIR)
 	cd $(BACKEND_DIR) && CGO_ENABLED=0 go build -trimpath -o ../$(WORKER_BIN) ./cmd/forgecrm-worker
 	@echo "built $(WORKER_BIN)"
+
+build-telegram: ## Собрать бинарник отдельного сервиса Telegram
+	@mkdir -p $(BIN_DIR)
+	cd $(BACKEND_DIR) && CGO_ENABLED=0 go build -trimpath -o ../$(TELEGRAM_BIN) ./cmd/forgecrm-telegram
+	@echo "built $(TELEGRAM_BIN)"
 
 build-frontend: ## Production-сборка React
 	cd $(FRONTEND_DIR) && npm ci && npm run build

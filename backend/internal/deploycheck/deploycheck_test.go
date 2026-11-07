@@ -136,10 +136,12 @@ func TestBlueprintProductionServicesHaveABaseURL(t *testing.T) {
 }
 
 // TestBlueprintWorkerRunsTheWorkerBinary guards the second defect: the image's
-// entrypoint defaults to the API, so a worker service must select the worker
+// entrypoint defaults to the API, so a worker service must select a non-API
 // binary either through its command or through FORGECRM_ROLE. Without one of
 // them the "worker" service runs a second API and no background jobs are
-// processed.
+// processed. More than one non-API binary exists now (the worker and the
+// standalone Telegram bot), so the check accepts any of them by name and falls
+// back to a non-empty role.
 func TestBlueprintWorkerRunsTheWorkerBinary(t *testing.T) {
 	bp := loadBlueprint(t)
 
@@ -153,15 +155,40 @@ func TestBlueprintWorkerRunsTheWorkerBinary(t *testing.T) {
 		cmd := strings.TrimSpace(svc.DockerCommand)
 		role, _, _ := svc.envValue("FORGECRM_ROLE")
 
-		namesWorker := strings.Contains(cmd, "forgecrm-worker")
-		roleWorker := role == "worker"
-		if !namesWorker && !roleWorker {
-			t.Errorf("render.yaml worker %q neither names the worker binary in dockerCommand nor sets "+
-				"FORGECRM_ROLE=worker; it would start a second API instance instead", svc.Name)
+		namesNonAPI := strings.Contains(cmd, "forgecrm-worker") || strings.Contains(cmd, "forgecrm-telegram")
+		roleSet := role != ""
+		if !namesNonAPI && !roleSet {
+			t.Errorf("render.yaml worker %q neither names a non-API binary in dockerCommand nor sets "+
+				"FORGECRM_ROLE; it would start a second API instance instead", svc.Name)
 		}
 	}
 	if workers == 0 {
 		t.Fatal("render.yaml declares no worker service")
+	}
+}
+
+// TestBlueprintTelegramRunsTheTelegramBinary guards the same defect for the
+// standalone bot: it must name its own binary and set a role, so it never comes
+// up as a second API on a platform that drops one of the two signals.
+func TestBlueprintTelegramRunsTheTelegramBinary(t *testing.T) {
+	bp := loadBlueprint(t)
+
+	var telegram *blueprintService
+	for i := range bp.Services {
+		if bp.Services[i].Name == "forgecrm-telegram" {
+			telegram = &bp.Services[i]
+			break
+		}
+	}
+	if telegram == nil {
+		t.Fatal("render.yaml declares no forgecrm-telegram service")
+	}
+
+	if !strings.Contains(telegram.DockerCommand, "forgecrm-telegram") {
+		t.Errorf("render.yaml service %q does not name the telegram binary in dockerCommand", telegram.Name)
+	}
+	if role, _, _ := telegram.envValue("FORGECRM_ROLE"); role != "telegram" {
+		t.Errorf("render.yaml service %q sets FORGECRM_ROLE=%q, want telegram", telegram.Name, role)
 	}
 }
 
@@ -363,5 +390,48 @@ func TestComposeWorkerSelectsTheWorkerBinary(t *testing.T) {
 			"at least two are needed, because a platform that ignores `entrypoint` and `environment` "+
 			"would start a second API on this part and process no background job",
 			signals, roleWorker, commandWorker, entrypointWorker)
+	}
+}
+
+// TestComposeTelegramSelectsTheTelegramBinary is the same guard for the
+// standalone bot: the image ENTRYPOINT defaults to the API, so the telegram
+// service must select its own binary by at least two signals, or a platform that
+// drops one of them runs a second API instead of the bot.
+func TestComposeTelegramSelectsTheTelegramBinary(t *testing.T) {
+	root := repoRoot(t)
+
+	data, err := os.ReadFile(filepath.Join(root, "docker-compose.yml"))
+	if err != nil {
+		t.Fatalf("read docker-compose.yml: %v", err)
+	}
+	var cf composeFile
+	if err := yaml.Unmarshal(data, &cf); err != nil {
+		t.Fatalf("parse docker-compose.yml: %v", err)
+	}
+
+	bot, ok := cf.Services["telegram"]
+	if !ok {
+		t.Fatal("docker-compose.yml declares no telegram service")
+	}
+
+	role := bot.Environment["FORGECRM_ROLE"]
+	roleTelegram := role == "telegram"
+	commandTelegram := len(bot.Command) > 0 && (bot.Command[0] == "telegram" ||
+		strings.HasSuffix(bot.Command[0], "forgecrm-telegram"))
+	entrypointTelegram := len(bot.Entrypoint) > 0 &&
+		strings.Contains(strings.Join(bot.Entrypoint, " "), "forgecrm-entrypoint")
+
+	signals := 0
+	for _, set := range []bool{roleTelegram, commandTelegram, entrypointTelegram} {
+		if set {
+			signals++
+		}
+	}
+	if signals < 2 {
+		t.Errorf("docker-compose.yml telegram selects the bot binary by %d signal(s) "+
+			"(FORGECRM_ROLE=telegram: %v, command names the bot: %v, entrypoint is the dispatcher: %v); "+
+			"at least two are needed, because a platform that ignores `entrypoint` and `environment` "+
+			"would start a second API on this part",
+			signals, roleTelegram, commandTelegram, entrypointTelegram)
 	}
 }

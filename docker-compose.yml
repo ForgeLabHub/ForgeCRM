@@ -128,6 +128,51 @@ services:
     volumes:
       - importdata:/var/lib/forgecrm
 
+  # The Telegram bot runs as its own service so it can be deployed, scaled and
+  # restarted without the API or the worker. It long-polls the Bot API, so it
+  # needs no public webhook and no published port. It is inert unless
+  # FORGECRM_TELEGRAM_ENABLED=true and a bot token are set; without a token the
+  # binary exits, which keeps a half-configured deployment from running an
+  # unauthenticated process.
+  #
+  #   FORGECRM_TELEGRAM_ENABLED=true
+  #   FORGECRM_TELEGRAM_BOT_TOKEN=<secret>
+  telegram:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${FORGECRM_VERSION:-dev}
+        COMMIT: ${FORGECRM_COMMIT:-}
+    restart: unless-stopped
+    # The entrypoint dispatcher reads FORGECRM_ROLE or its first argument and
+    # starts the bot. Both signals are set for the same reason as the worker:
+    # platforms differ in what they carry over from this file.
+    entrypoint: ["/usr/local/bin/forgecrm-entrypoint"]
+    command: ["telegram"]
+    environment:
+      FORGECRM_ROLE: telegram
+      # A health server so an orchestrator can restart a wedged bot. It is bound
+      # to the container only; it is not published.
+      FORGECRM_TELEGRAM_HEALTH_ADDR: ":8090"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8090/readyz"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 20s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        # The API applies migrations; the bot must not poll before the schema is
+        # ready (it also waits for it, but ordering avoids a needless retry loop).
+        condition: service_healthy
+    env_file:
+      - path: .env
+        required: false
+    stop_grace_period: 20s
+
   # Optional reverse proxy. Enable with: docker compose --profile proxy up -d
   nginx:
     image: nginx:1.27-alpine
